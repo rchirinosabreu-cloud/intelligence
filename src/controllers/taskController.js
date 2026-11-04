@@ -22,6 +22,7 @@ import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/ta
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 import { taskWorkCorrectionService } from '../services/taskWorkCorrectionService.js';
 import { checkTaskUpdate } from '../services/taskUpdateGate.js';
+import { reorderTaskSelection } from '../services/taskOrderService.js';
 import { needsDeclaredTime, declareTaskTime } from '../services/declaredTimeService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
@@ -238,28 +239,11 @@ export const requestTaskFocusExtension = async (req, res) => {
 
 export const reorderTasks = async (req, res) => {
     try {
-        const role = req.user?.role;
-        if (role !== 'ADMIN' && role !== 'PROJECT_MANAGER' && role !== 'PM') {
-            return res.status(403).json({ error: "No tienes permisos de Project Manager o Administrador para reordenar tareas" });
-        }
-
-        const { reorderList } = req.body; // Array of { id: string, sortOrder: number }
-        if (!Array.isArray(reorderList)) {
-            return res.status(400).json({ error: "reorderList must be an array" });
-        }
-
-        // Run updates inside a transaction
-        await prisma.$transaction(
-            reorderList.map(item =>
-                prisma.task.update({
-                    where: { id: item.id },
-                    data: { sortOrder: item.sortOrder }
-                })
-            )
-        );
-
-        res.json({ success: true });
+        const order = await reorderTaskSelection({ db: prisma, user: req.user, reorderList: req.body?.reorderList, previousIds: req.body?.previousIds });
+        res.json({ success: true, order });
     } catch (error) {
+        console.error('[TaskController] Failed to reorder tasks:', error.response?.data || error);
+        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
         res.status(500).json({ error: "Failed to reorder tasks", details: error.message });
     }
 };

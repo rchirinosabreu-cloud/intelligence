@@ -48,9 +48,11 @@ test('al pasar a En proceso una tarea con equipo: aviso con dos botones, sin abr
     assert.match(notice, /\/work\/start/);
     // El éxito se anuncia después de la respuesta del servidor.
     assert.ok(notice.indexOf('await fetch') < notice.indexOf("toast.success"));
-    // En el tablero: sin reloj optimista para tareas con equipo y el aviso solo tras confirmar el servidor.
-    assert.match(board, /newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso' && !isTeamTask/);
-    assert.ok(board.indexOf('setTeamStartTask(movedTask)') > board.indexOf('throw Object.assign(new Error("Failed to update status in backend")'));
+    // El tablero ya no inventa relojes: vuelve a leer el estado confirmado para todo el equipo.
+    const drag = board.slice(board.indexOf('const onDragEnd'), board.indexOf('const handle', board.indexOf('const onDragEnd')));
+    assert.doesNotMatch(drag, /startedAt\s*=|completedAt\s*=/);
+    assert.match(board, /isTeamTask && viewerInTeam && destinationColumnId === 'en-proceso'/);
+    assert.ok(board.indexOf('setTeamStartTask({ ...targetTask, status: savedTask.status') > board.indexOf('throw Object.assign(new Error("Failed to update status in backend")'));
 });
 
 test('el filtro por persona del tablero incluye las tareas donde colabora', async () => {
