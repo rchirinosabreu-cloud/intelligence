@@ -34,6 +34,7 @@ const fakeDb = ({ leads = [], activities = [], members = [{ id: 'tm1', isActive:
     crmActivity: {
       findUnique: async ({ where }) => state.activities.find(item => item.authorId === where.authorId_requestId?.authorId && item.requestId === where.authorId_requestId?.requestId) || null,
       create: async ({ data }) => { const item = { id: `act-${state.activities.length + 1}`, createdAt: NOW, ...data }; state.activities.push(item); state.calls.push(['activity.create', data]); return item; },
+      createMany: async ({ data }) => { data.forEach(row => state.activities.push({ id: `act-${state.activities.length + 1}`, createdAt: NOW, ...row })); return { count: data.length }; },
       update: async ({ where, data }) => { const item = state.activities.find(entry => entry.id === where.id); Object.assign(item, data); return item; },
       findMany: async () => state.activities
     },
@@ -189,6 +190,31 @@ test('archivar conserva los datos, saca de la lista y se deshace con desarchivar
   assert.deepEqual((await listLeads(db, {}, NOW)).items, []);
   await assert.rejects(archiveLeads(db, [], actor, NOW), /al menos una/);
   await assert.rejects(archiveLeads(db, Array.from({ length: 201 }, (_, index) => `L${index}`), actor, NOW), /200/);
+});
+
+test('la bitácora dice quién archivó y quién desarchivó, sin contar como gestión con el cliente', async () => {
+  const lastActivityAt = new Date('2026-09-01T12:00:00Z');
+  const db = fakeDb({ leads: [
+    { id: 'A', company: 'Alfa', stage: 'PROPUESTA_ENVIADA', origin: 'LINKEDIN', priority: 'MEDIA', enteredAt: NOW, lastActivityAt },
+    { id: 'B', company: 'Beta', stage: 'CONTACTADO', origin: 'OTRO', priority: 'MEDIA', enteredAt: NOW },
+    { id: 'C', company: 'Gamma', stage: 'CONTACTADO', origin: 'OTRO', priority: 'MEDIA', enteredAt: NOW, archivedAt: new Date('2026-09-02T12:00:00Z') }
+  ] });
+  const log = id => db.state.activities.filter(item => item.leadId === id).map(item => [item.type, item.note, item.authorId]);
+
+  const filed = await archiveLead(db, 'A', { userId: 'u-francys' }, NOW);
+  assert.deepEqual(log('A'), [['NOTA', 'Oportunidad archivada.', 'u-francys']]);
+  assert.equal(filed.activities[0].note, 'Oportunidad archivada.', 'la ficha archivada ya la muestra');
+  assert.equal(filed.lastActivityAt.toISOString(), lastActivityAt.toISOString(), 'archivar no es una gestión: no toca el semáforo ni la cuenta de días');
+
+  await unarchiveLead(db, 'A', { userId: 'u-rodny' }, NOW);
+  assert.deepEqual(log('A').at(-1), ['NOTA', 'Oportunidad desarchivada.', 'u-rodny']);
+  await unarchiveLead(db, 'A', { userId: 'u-rodny' }, NOW);
+  assert.equal(log('A').length, 2, 'desarchivar lo que ya está vigente no deja registro');
+
+  await archiveLeads(db, ['A', 'B', 'C'], { userId: 'u-francys' }, NOW);
+  assert.deepEqual(log('B'), [['NOTA', 'Oportunidad archivada.', 'u-francys']]);
+  assert.equal(log('A').length, 3);
+  assert.deepEqual(log('C'), [], 'la que ya estaba archivada no suma nada');
 });
 
 test('el tablero lista lo recién registrado a mano sin primer contacto, aparte de lo urgente y del formulario', async () => {
