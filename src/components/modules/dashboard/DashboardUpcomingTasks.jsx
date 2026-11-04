@@ -3,6 +3,7 @@ import { ArrowUpRight, CalendarClock } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { cn } from '@/lib/utils';
+import { taskDueDay } from '@/lib/taskDeadlines';
 
 const BOGOTA = 'America/Bogota';
 
@@ -44,7 +45,7 @@ export const groupTasksByDay = (tasks = [], now = new Date()) => {
   const today = dayKeyOf(now);
   const groups = new Map();
   for (const task of tasks) {
-    const dayKey = dayKeyOf(task.dueDate);
+    const dayKey = taskDueDay(task.dueDate);
     if (!dayKey) continue;
     if (!groups.has(dayKey)) groups.set(dayKey, []);
     groups.get(dayKey).push(task);

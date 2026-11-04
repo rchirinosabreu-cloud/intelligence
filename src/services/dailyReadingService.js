@@ -33,6 +33,7 @@ import { createBriaConversationRepository } from './briaConversationRepository.j
 import { clientOperationsService } from './clientOperationsService.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { createNotification } from './notificationService.js';
+import { isTaskOverdue, taskDueDay, TASK_DEADLINE_POLICY } from '../lib/taskDeadlines.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { alertByWhatsApp } from './whatsappAlertSender.js';
 import { dailyAlert } from '../lib/whatsappAlerts.js';
@@ -212,21 +213,37 @@ export const createDailyReadingService = ({
       const [ops, items, open, closed, sessions, members] = await Promise.all([
         operations.listOperations(),
         db.contentItem.findMany({ where: { deletedAt: null, status: { not: 'PUBLICADO' }, publishDate: { gte: new Date(end.getTime() - 45 * DAY) }, plan: { deletedAt: null, status: { not: 'FINALIZADO' } } }, select: { status: true, revisionRequestedAt: true, plan: { select: { clientId: true } } }, take: 5000 }),
-        db.task.findMany({ where: { status: { in: OPEN } }, select: { status: true, dueDate: true, assigneeId: true, clientId: true }, take: 5000 }),
+        db.task.findMany({ where: { status: { in: OPEN } }, select: { id: true, status: true, dueDate: true, focusDeadlineAt: true, assigneeId: true, creatorId: true, clientId: true, collaborators: { select: { memberId: true } } }, take: 5000 }),
         db.task.findMany({ where: { status: 'REALIZADA', completedAt: { gte: start, lt: end } }, select: { assigneeId: true, clientId: true }, take: 3000 }),
         db.taskWorkSession.findMany({ where: { startedAt: { gte: start, lt: end }, endedAt: { not: null }, isOverlapping: false }, select: { workerId: true, durationMs: true, closeReason: true, correctedAt: true, task: { select: { clientId: true } } }, take: 10000 }),
-        db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, user: { select: { role: true } } } })
+        db.teamMember.findMany({ where: { isActive: true }, select: { id: true, userId: true, name: true, user: { select: { role: true } } } })
       ]);
       const awaiting = new Map(), returnedPieces = new Map();
       for (const item of items) { const id = item.plan?.clientId; if (awaitsClient(item)) count(awaiting, id); if (item.status === 'DEVUELTO') count(returnedPieces, id); }
       const returnedTasks = new Map(), closedBy = { client: new Map(), person: new Map() }, hoursBy = { client: new Map(), person: new Map() };
       const personOpen = new Map(), personProgress = new Map(), personOverdue = new Map(), personReturned = new Map();
+      const memberOfUser = new Map(members.filter(m => m.userId).map(m => [m.userId, m.id]));
+      const deadlineEvidence = new Map(members.map(m => [m.id, {
+        policy: TASK_DEADLINE_POLICY, capturedAt: at.toISOString(), complete: open.length < 5000, tasks: []
+      }]));
       for (const task of open) {
-        const due = task.dueDate ? bogotaDate(task.dueDate) : null;
-        if (task.status === 'DEVUELTA') { count(returnedTasks, task.clientId); count(personReturned, task.assigneeId); }
-        count(personOpen, task.assigneeId);
-        if (task.status === 'EN_CURSO') count(personProgress, task.assigneeId);
-        if (due && due < today) count(personOverdue, task.assigneeId);
+        // A returned task waits for its creator, not for its former assignee.
+        if (task.status === 'DEVUELTA') {
+          count(returnedTasks, task.clientId);
+          const creator = memberOfUser.get(task.creatorId);
+          count(personReturned, creator); count(personOpen, creator);
+          continue;
+        }
+        const owners = new Set([task.assigneeId, ...(task.collaborators || []).map(c => c.memberId)].filter(Boolean));
+        for (const id of owners) {
+          count(personOpen, id);
+          if (task.status === 'EN_CURSO') count(personProgress, id);
+          const overdue = isTaskOverdue(task, at);
+          if (overdue) count(personOverdue, id);
+          deadlineEvidence.get(id)?.tasks.push({ id: task.id, status: task.status, dueDay: taskDueDay(task.dueDate),
+            focusDeadlineAt: task.focusDeadlineAt ? new Date(task.focusDeadlineAt).toISOString() : null,
+            role: id === task.assigneeId ? 'ASSIGNEE' : 'COLLABORATOR', overdue });
+        }
       }
       for (const task of closed) { count(closedBy.client, task.clientId); count(closedBy.person, task.assigneeId); }
       for (const session of sessions) {
@@ -238,7 +255,7 @@ export const createDailyReadingService = ({
       const clients = ops.map((op) => clientSnapshot(op, { awaitingApproval: awaiting.get(op.id), returnedPieces: returnedPieces.get(op.id), returnedTasks: returnedTasks.get(op.id), closedTasks: closedBy.client.get(op.id), hoursMs: hoursBy.client.get(op.id) }));
       // El equipo son las personas activas que no administran, como en el cierre del día.
       const people = members.filter((m) => String(m.user?.role || '').toUpperCase() !== 'ADMIN').map((m) => personSnapshot(m, {
-        open: personOpen.get(m.id), inProgress: personProgress.get(m.id), overdue: personOverdue.get(m.id), returned: personReturned.get(m.id), closedTasks: closedBy.person.get(m.id), hoursMs: hoursBy.person.get(m.id)
+        open: personOpen.get(m.id), inProgress: personProgress.get(m.id), overdue: personOverdue.get(m.id), returned: personReturned.get(m.id), closedTasks: closedBy.person.get(m.id), hoursMs: hoursBy.person.get(m.id), deadlineEvidence: deadlineEvidence.get(m.id)
       }));
       return { today, clients, people };
     },

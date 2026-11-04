@@ -55,7 +55,8 @@ export const clientSnapshot = (operation, extra = {}) => {
 /** La foto de una persona: su carga en números. Nada de esto es una calificación. */
 export const personSnapshot = (member, extra = {}) => ({
   id: member.id, name: member.name,
-  metrics: { open: extra.open || 0, inProgress: extra.inProgress || 0, overdue: extra.overdue || 0, returned: extra.returned || 0, closedTasks: extra.closedTasks || 0, hoursMs: extra.hoursMs || 0 }
+  metrics: { open: extra.open || 0, inProgress: extra.inProgress || 0, overdue: extra.overdue || 0, returned: extra.returned || 0, closedTasks: extra.closedTasks || 0, hoursMs: extra.hoursMs || 0,
+    ...(extra.deadlineEvidence ? { deadlineEvidence: extra.deadlineEvidence } : {}) }
 });
 
 /** Cuántos valores seguidos, contando desde el último hacia atrás, cumplen `test`. Un hueco (null) corta la racha. */

@@ -92,10 +92,10 @@ const fakeDb = () => {
       calls.push(['tasks', args]);
       if (args.where.status === 'REALIZADA') return [{ assigneeId: 'm1', clientId: 'c2' }, { assigneeId: 'm1', clientId: 'c2' }];
       return [
-        { status: 'PENDIENTE', dueDate: new Date('2026-10-15T17:00:00Z'), assigneeId: 'm1', clientId: 'c1' },
-        { status: 'DEVUELTA', dueDate: new Date('2026-10-14T17:00:00Z'), assigneeId: 'm1', clientId: 'c1' },
-        { status: 'EN_CURSO', dueDate: new Date('2026-10-25T17:00:00Z'), assigneeId: 'm2', clientId: 'c3' },
-        { status: 'PENDIENTE', dueDate: null, assigneeId: 'admin-member', clientId: 'c3' }
+        { id: 't1', status: 'PENDIENTE', dueDate: new Date('2026-10-15T17:00:00Z'), assigneeId: 'm1', clientId: 'c1' },
+        { id: 't2', status: 'DEVUELTA', dueDate: new Date('2026-10-14T17:00:00Z'), assigneeId: 'm1', creatorId: 'u2', clientId: 'c1' },
+        { id: 't3', status: 'EN_CURSO', dueDate: new Date('2026-10-25T17:00:00Z'), assigneeId: 'm2', clientId: 'c3' },
+        { id: 't4', status: 'PENDIENTE', dueDate: null, assigneeId: 'admin-member', clientId: 'c3' }
       ];
     } },
     taskWorkSession: { findMany: async (args) => { calls.push(['sessions', args]); return [
@@ -103,8 +103,8 @@ const fakeDb = () => {
       { workerId: 'm2', durationMs: 9 * H, task: { clientId: 'c3' } }
     ]; } },
     teamMember: { findMany: async () => [
-      { id: 'm1', name: 'Melissa Ruiz', user: { role: 'EDITOR' } },
-      { id: 'm2', name: 'Jesús Pérez', user: { role: 'EDITOR' } },
+      { id: 'm1', userId: 'u1', name: 'Melissa Ruiz', user: { role: 'EDITOR' } },
+      { id: 'm2', userId: 'u2', name: 'Jesús Pérez', user: { role: 'EDITOR' } },
       { id: 'admin-member', name: 'Rodny Chirinos', user: { role: 'ADMIN' } }
     ] }
   };
@@ -240,7 +240,11 @@ test('the photo of the day: what waits for the client, returns, overdue and yest
   assert.equal(c2.hoursMs, 2 * H);
   assert.equal(c3.hoursMs, 0, 'a nine-hour session is a forgotten clock and does not count');
   assert.deepEqual(people.map((p) => p.id), ['m1', 'm2'], 'the team without admins');
-  assert.deepEqual(people[0].metrics, { open: 2, inProgress: 0, overdue: 2, returned: 1, closedTasks: 2, hoursMs: 2 * H });
+  const { deadlineEvidence, ...metrics } = people[0].metrics;
+  assert.deepEqual(metrics, { open: 1, inProgress: 0, overdue: 1, returned: 0, closedTasks: 2, hoursMs: 2 * H });
+  assert.equal(people[1].metrics.returned, 1);
+  assert.equal(deadlineEvidence.policy, 'task-calendar-v1');
+  assert.deepEqual(deadlineEvidence.tasks.map(t => t.id), ['t1']);
 });
 
 test('6:00 photo every day, 6:30 reading and 7:30 message on business days, each once', async () => {
@@ -543,7 +547,7 @@ test('in the chat, Bria reads the day and a history, inside the same scope as th
   assert.match(camila.data.persona.mensaje, /módulo Manager/);
   assert.equal(camila.data.resumen, null, 'the agency summary is for direction');
   const person = await tool.run({ persona: 'melissa' }, { user: RODNY });
-  assert.equal(person.data.persona.serie.at(-1).vencidas, 2);
+  assert.equal(person.data.persona.serie.at(-1).vencidas, 1);
   assert.deepEqual(createDailyReadingTools(null), []);
 });
 

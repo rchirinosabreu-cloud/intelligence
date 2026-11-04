@@ -6,6 +6,8 @@ import { createNotification } from './notificationService.js';
 import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
 import { hasModulePermission } from '../config/security.js';
 import { isActionableStage, stageLabel } from '../lib/crmRules.js';
+import { isTaskOverdue, taskDueDay } from '../lib/taskDeadlines.js';
+import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const DASHBOARD_MEETING_HORIZON_DAYS = 7;
@@ -168,11 +170,7 @@ const summarizeTaskCounts = (tasks, now) => {
   return {
     activeTasks: activeTasks.length,
     returnedTasks: activeTasks.filter((task) => task.status === 'DEVUELTA').length,
-    overdueTasks: activeTasks.filter((task) => (
-      task.status !== 'DEVUELTA'
-      && task.dueDate
-      && new Date(task.dueDate) < now
-    )).length
+    overdueTasks: activeTasks.filter((task) => isTaskOverdue(task, now)).length
   };
 };
 
@@ -208,7 +206,7 @@ const buildClientSummaries = (tasks, now) => {
 
     if (ACTIVE_STATUSES.includes(task.status)) current.activeTasks += 1;
     if (task.status === 'DEVUELTA') current.returnedTasks += 1;
-    if (task.dueDate && new Date(task.dueDate) < now && ACTIVE_STATUSES.includes(task.status)) current.overdueTasks += 1;
+    if (isTaskOverdue(task, now)) current.overdueTasks += 1;
     byClient.set(task.client.id, current);
   }
   return Array.from(byClient.values()).sort((a, b) => b.activeTasks - a.activeTasks).slice(0, 6);
@@ -350,15 +348,13 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
   const activeTasks = Array.from(new Map(
     [...assignedActiveTasks, ...returnedTasks].map((task) => [task.id, task])
   ).values());
-  const overdueTasks = assignedActiveTasks.filter((task) => {
-    const dueDate = toDate(task.dueDate);
-    return dueDate && dueDate < now;
-  });
-  const todayTasks = assignedActiveTasks.filter((task) => isSameBogotaDay(toDate(task.dueDate), now));
+  const today = bogotaDate(now);
+  const overdueTasks = assignedActiveTasks.filter((task) => isTaskOverdue(task, now));
+  const todayTasks = assignedActiveTasks.filter((task) => taskDueDay(task.dueDate) === today);
   const upcomingTasks = assignedActiveTasks
     .filter((task) => {
-      const dueDate = toDate(task.dueDate);
-      return dueDate && dueDate > now && !isSameBogotaDay(dueDate, now);
+      const day = taskDueDay(task.dueDate);
+      return day && day > today && !isTaskOverdue(task, now);
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
     .slice(0, 8);
@@ -656,7 +652,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
             select: {
               id: true,
               status: true,
-              dueDate: true
+              dueDate: true,
+              focusDeadlineAt: true
             }
           }
         }

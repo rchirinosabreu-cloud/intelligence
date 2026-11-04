@@ -48,7 +48,7 @@ export const openWindowOf = (dayKey) => ({
  * `firstOpener`: quién dejó la primera huella en la plataforma desde las 8:00 (`{ memberId, name, at }`; `null` si
  * nadie; `undefined` sin lectura) y `memberId`, para saber si fue esta persona.
  */
-export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, returnedToday = null, firstOpener } = {}) {
+export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener } = {}) {
   const habits = {}, evidence = {}, extras = {};
 
   // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
@@ -69,7 +69,7 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   // Al día: la foto de las 6:00.
   if (overdueAtDawn === null || overdueAtDawn === undefined) {
     habits.AL_DIA = null;
-    evidence.AL_DIA = 'Sin foto de las 6:00 ese día.';
+    evidence.AL_DIA = dawnEvidenceReason || 'Sin foto de las 6:00 ese día.';
   } else {
     habits.AL_DIA = Number(overdueAtDawn) === 0;
     evidence.AL_DIA = Number(overdueAtDawn) === 0 ? 'Amaneció sin vencidas.' : `Amaneció con ${plural(Number(overdueAtDawn), 'vencida', 'vencidas')}.`;

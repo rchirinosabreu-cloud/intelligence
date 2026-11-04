@@ -120,7 +120,21 @@ const fakeRepo = (seed = []) => {
   };
 };
 
-const snapshots = { snapshot: async (dayKey) => (dayKey === DAY ? { people: [{ id: 'm-rodny', metrics: { overdue: 0 } }, { id: 'm-helen', metrics: { overdue: 2 } }, { id: 'm-jesu', metrics: { overdue: 0 } }] } : { people: [] }) };
+const snapshotPerson = (id, overdue) => ({ id, metrics: { overdue, deadlineEvidence: {
+  policy: 'task-calendar-v1', complete: true, capturedAt: `${DAY}T11:02:00Z`,
+  tasks: Array.from({ length: overdue }, (_, i) => ({ id: `task-${i}`, overdue: true }))
+} } });
+const snapshots = { snapshot: async (dayKey) => (dayKey === DAY ? { people: [snapshotPerson('m-rodny', 0), snapshotPerson('m-helen', 2), snapshotPerson('m-jesu', 0)] } : { people: [] }) };
+
+test('old or incomplete dawn counts cannot penalize or reward Al día', async () => {
+  for (const deadlineEvidence of [undefined, { policy: 'task-calendar-v1', complete: false }]) {
+    const service = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(),
+      snapshots: { snapshot: async () => ({ people: [{ id: 'm-rodny', metrics: { overdue: 4, deadlineEvidence } }] }) }, now: () => at(`${DAY}T19:00:00Z`) });
+    const result = await service.leagueFor({ userId: 'u-rodny' });
+    assert.equal(result.today.habits.AL_DIA, null);
+    assert.match(result.today.evidence.AL_DIA, /no permite comprobar/i);
+  }
+});
 
 test('live habits can change without reducing confirmed points, including gifts and awards received today', async () => {
   const repo = fakeRepo([{ day_key: '2026-11-02', member_id: 'm-rodny', habits: { RELOJ: true }, extras: {} }]);
