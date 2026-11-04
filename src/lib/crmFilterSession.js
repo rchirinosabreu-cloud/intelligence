@@ -1,7 +1,8 @@
 export const CRM_FILTERS_KEY = 'brainstudio:crm-filters:v1';
 
 // `silence`: alertas comerciales (26 de octubre de 2026) — «SIN_RESPUESTA» desde el primer recordatorio, «REVISION» desde la revisión.
-const KEYS = ['search', 'stage', 'group', 'origin', 'priority', 'ownerId', 'trafficLight', 'bucket', 'request', 'silence', 'from', 'to'];
+// `archived`: «SOLO» las archivadas, «TODAS» mezcladas; vacío, solo vigentes (reunión del 4 de noviembre de 2026).
+const KEYS = ['search', 'stage', 'group', 'origin', 'priority', 'ownerId', 'trafficLight', 'bucket', 'request', 'silence', 'archived', 'from', 'to'];
 
 export const defaultCrmFilters = () => Object.fromEntries(KEYS.map(key => [key, '']));
 

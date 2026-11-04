@@ -11,10 +11,13 @@ const smtpConfig = () => {
   return { host: process.env.SMTP_HOST || 'smtp.gmail.com', port, secure: port === 465, auth: { user, pass }, from: process.env.CRM_REQUEST_FROM || process.env.SMTP_FROM || user };
 };
 
-export const sendPlainEmail = async ({ to, subject, text }, { transporterFactory = null } = {}) => {
+/** Un correo con texto, HTML opcional y adjuntos opcionales (`{ filename, content, contentType }`). */
+export const sendEmail = async ({ to, subject, text, html = null, attachments = [] }, { transporterFactory = null } = {}) => {
   const config = smtpConfig();
   if (!config || !to) return { sent: false, reason: config ? 'no-recipient' : 'smtp-not-configured' };
   if (!cachedTransporter) cachedTransporter = transporterFactory ? transporterFactory(config) : nodemailer.createTransport({ host: config.host, port: config.port, secure: config.secure, auth: config.auth });
-  await cachedTransporter.sendMail({ from: config.from, to, subject, text });
+  await cachedTransporter.sendMail({ from: config.from, to, subject, text, ...(html ? { html } : {}), ...(attachments.length ? { attachments } : {}) });
   return { sent: true };
 };
+
+export const sendPlainEmail = async ({ to, subject, text }, options = {}) => sendEmail({ to, subject, text }, options);

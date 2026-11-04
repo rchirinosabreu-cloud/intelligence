@@ -1,5 +1,5 @@
-import React from 'react';
-import { Users, Target, CheckCircle2, Trophy, AlertTriangle, CalendarClock, Clock, TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText } from '@/components/ui/icons';
+import React, { useState } from 'react';
+import { Users, Target, CheckCircle2, Trophy, AlertTriangle, CalendarClock, Clock, TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, Search, Plus } from '@/components/ui/icons';
 import { SERVICE_CATEGORIES } from '@/lib/commercialRequestForm';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -52,9 +52,27 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
   const funnel = metrics?.funnel;
   const total = metrics?.total || 0;
   const lights = metrics?.byTrafficLight || { VERDE: 0, AMARILLO: 0, ROJO: 0 };
+  // Buscar por nombre donde Francys entra primero (reunión del 4 de noviembre de 2026): el Dashboard no listaba todo,
+  // así que la búsqueda salta a Oportunidades con el texto puesto.
+  const [search, setSearch] = useState('');
+  const submitSearch = event => {
+    event.preventDefault();
+    const text = search.trim();
+    if (!text) return;
+    onFiltersChange({ ...filters, search: text });
+    onShowTab?.('oportunidades');
+  };
 
   return (
     <div className="space-y-6">
+      <form onSubmit={submitSearch} role="search" aria-label="Buscar oportunidades" className="flex items-center gap-2" data-crm-dashboard-search>
+        <span className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar una oportunidad por empresa, contacto, correo o código…" aria-label="Buscar una oportunidad" className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-9 pr-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500" />
+        </span>
+        <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900">Buscar</button>
+      </form>
+
       <CrmFilters filters={filters} onChange={onFiltersChange} team={team} show={['stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'dates']} />
 
       {error && (
@@ -82,6 +100,31 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
                         <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{leadSubtitle(lead) || lead.email || lead.code} · {(lead.request?.services || []).map(value => SERVICE_CATEGORIES.find(item => item.value === value)?.label || value).join(', ') || lead.serviceInterest}</span>
+                      </span>
+                      <span className="shrink-0 text-right text-[11px] text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {metrics.fresh > 0 && (
+            <section className="rounded-2xl border border-brand-cyan/30 bg-brand-cyan/[0.06] p-5 dark:bg-brand-cyan/10" aria-label="Registradas sin primer contacto" data-crm-fresh>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-cyan text-white"><Plus className="h-4 w-4" /></span>
+                  {metrics.fresh === 1 ? '1 oportunidad registrada sin primer contacto' : `${metrics.fresh} oportunidades registradas sin primer contacto`}
+                </h2>
+                <button type="button" onClick={() => { onFiltersChange({ ...filters, stage: 'POR_GESTIONAR' }); onShowTab?.('oportunidades'); }} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep transition-colors hover:bg-brand-cyan/10 dark:text-brand-cyan">Ver todas <ArrowRight className="h-3.5 w-3.5" /></button>
+              </div>
+              <ul className="grid gap-2 md:grid-cols-2">
+                {metrics.recentFresh.map(lead => (
+                  <li key={lead.id}>
+                    <button type="button" onClick={() => onOpenLead?.(lead.id)} className="flex w-full items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition-colors hover:border-brand-cyan/40 dark:border-zinc-800 dark:bg-zinc-950">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
+                        <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{[leadSubtitle(lead) || lead.email, originLabel(lead.origin), lead.serviceInterest].filter(Boolean).join(' · ')}</span>
                       </span>
                       <span className="shrink-0 text-right text-[11px] text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
                     </button>

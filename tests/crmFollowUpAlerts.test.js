@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, dueFollowUpAlert, followUpAlertMessage, followUpSilence,
+    DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, dueFollowUpAlert, followUpAlertMessage, followUpSilence, proposalReference,
     markFollowUpAlertSent, normalizeFollowUpAlertDays
 } from '../src/lib/crmFollowUpAlerts.js';
 
@@ -66,9 +66,14 @@ test('los días los fija un administrador, ordenados y con la revisión después
     assert.equal(dueFollowUpAlert(lead(), [], day('2026-10-08'), custom).kind, 'REVIEW');
 });
 
-test('el aviso dice quién, cuántos días y qué cotización, en una línea', () => {
+test('el aviso dice quién, cuántos días y qué propuesta, en una línea', () => {
     const base = { company: 'Café Altura', contactName: 'Laura' };
     assert.equal(followUpAlertMessage(base, { kind: 'REMINDER', days: 10 }, 'COT-0042'), 'Café Altura lleva 10 días sin responder la COT-0042. Haz seguimiento.');
     assert.equal(followUpAlertMessage({ contactName: 'Laura' }, { kind: 'REMINDER', days: 5 }, null), 'Laura lleva 5 días sin responder la propuesta. Haz seguimiento.');
     assert.equal(followUpAlertMessage(base, { kind: 'REVIEW', days: 30 }, 'COT-0042'), 'Café Altura lleva 30 días sin responder la COT-0042: revisa si sigue o se cierra.');
+    // Lo importado del Excel no tiene cotización en la plataforma: se dice la fecha de la propuesta y que no la hay
+    // (reunión del 4 de noviembre de 2026, «¿cómo sé yo qué propuesta es esa?»).
+    const imported = { company: 'Andino', proposalSentAt: new Date('2026-04-09T17:00:00Z') };
+    assert.equal(followUpAlertMessage(imported, { kind: 'REVIEW', days: 271 }, null), 'Andino lleva 271 días sin responder la propuesta del 9 de abril de 2026 (sin cotización en la plataforma): revisa si sigue o se cierra.');
+    assert.equal(proposalReference(imported, 'COT-0042'), 'la COT-0042', 'con cotización, manda la cotización');
 });

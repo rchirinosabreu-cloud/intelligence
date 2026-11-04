@@ -438,6 +438,31 @@ export const archiveLead = async (db, id, actor = {}, now = new Date()) => {
   return serializeLead(updated, now);
 };
 
+// Archivar no borra ni cierra (reunión del 4 de noviembre de 2026, Pacho: «que la opción sea como archivar y queden
+// sus datos»): la oportunidad sale de listas, métricas y avisos, y vuelve tal cual con «Desarchivar».
+export const unarchiveLead = async (db, id, actor = {}, now = new Date()) => {
+  const lead = await db.crmLead.findUnique({ where: { id }, include: leadInclude });
+  if (!lead) throw notFound();
+  if (!lead.archivedAt) return serializeLead(lead, now);
+  const updated = await db.crmLead.update({ where: { id }, data: { archivedAt: null, updatedAt: now }, include: leadInclude });
+  return serializeLead(updated, now);
+};
+
+export const ARCHIVE_BATCH_MAX = 200;
+
+/** Varias de una vez, desde la lista filtrada: las que ya estaban archivadas o no existen se cuentan aparte. */
+export const archiveLeads = async (db, ids = [], actor = {}, now = new Date()) => {
+  const wanted = [...new Set((Array.isArray(ids) ? ids : []).map(value => String(value || '').trim()).filter(Boolean))];
+  if (!wanted.length) throw new CrmValidationError('Elige al menos una oportunidad.');
+  if (wanted.length > ARCHIVE_BATCH_MAX) throw new CrmValidationError(`Como máximo ${ARCHIVE_BATCH_MAX} oportunidades de una vez.`);
+  const found = await db.crmLead.findMany({ where: { id: { in: wanted }, archivedAt: null }, select: { id: true } });
+  const archivable = found.map(lead => lead.id);
+  if (archivable.length) {
+    await db.crmLead.updateMany({ where: { id: { in: archivable }, archivedAt: null }, data: { archivedAt: now, updatedAt: now } });
+  }
+  return { archived: archivable.length, skipped: wanted.length - archivable.length, ids: archivable };
+};
+
 // ---- lists and aggregates -------------------------------------------------------------------------------
 
 const BUCKET_RANK = { VENCIDO: 0, HOY: 1, SEMANA: 2, FUTURO: 3, SIN_FECHA: 4 };
@@ -502,16 +527,22 @@ const matchesFilters = (lead, query, alertDays = null) => {
   return true;
 };
 
-const fetchLeads = async (db, { includeArchived = false } = {}) => {
-  const where = includeArchived ? {} : { archivedAt: null };
+const fetchLeads = async (db, { includeArchived = false, onlyArchived = false } = {}) => {
+  const where = onlyArchived ? { archivedAt: { not: null } } : includeArchived ? {} : { archivedAt: null };
   return db.crmLead.findMany({ where, include: leadInclude, orderBy: { enteredAt: 'desc' } });
 };
 
+// `archived`: «SOLO» lista las archivadas, «TODAS» las mezcla con las vigentes; sin el filtro, solo vigentes.
+// Las archivadas se ordenan por fecha de archivo, la última primero: es lo que se busca al querer desarchivar.
+const archivedSort = (a, b) => new Date(b.archivedAt || 0) - new Date(a.archivedAt || 0);
+
 export const listLeads = async (db, query = {}, now = new Date()) => {
-  const includeArchived = query.includeArchived === true || query.includeArchived === 'true';
-  const raw = await fetchLeads(db, { includeArchived });
+  const archived = text(query.archived);
+  const onlyArchived = archived === 'SOLO';
+  const includeArchived = archived === 'TODAS' || query.includeArchived === true || query.includeArchived === 'true';
+  const raw = await fetchLeads(db, { includeArchived, onlyArchived });
   const alertDays = await readFollowUpAlertDays(db);
-  const items = raw.map(lead => serializeLead(lead, now)).filter(lead => matchesFilters(lead, query, alertDays)).sort(urgencySort);
+  const items = raw.map(lead => serializeLead(lead, now)).filter(lead => matchesFilters(lead, query, alertDays)).sort(onlyArchived ? archivedSort : urgencySort);
   const pageSize = Math.min(Math.max(Number(query.pageSize) || 200, 1), 500);
   const page = Math.max(Number(query.page) || 1, 1);
   const start = (page - 1) * pageSize;
@@ -544,9 +575,16 @@ export const metricsFor = async (db, query = {}, now = new Date()) => {
     .sort(urgencySort)
     .slice(0, Math.min(Math.max(Number(query.priorityLimit) || 10, 1), 50))
     .map(lead => ({ ...lead, activities: undefined }));
+  // Lo recién registrado a mano y sin primer contacto (reunión del 4 de noviembre de 2026: las de LinkedIn de ayer no
+  // salían en el Dashboard, que solo lista lo urgente). Las del formulario tienen su propio bloque.
+  const fresh = leads
+    .filter(lead => lead.stage === 'POR_GESTIONAR' && !lead.firstContactAt && !isNewRequest(lead))
+    .sort((a, b) => new Date(b.enteredAt || 0) - new Date(a.enteredAt || 0));
   return {
     ...metrics,
     priorities,
+    fresh: fresh.length,
+    recentFresh: fresh.slice(0, 8).map(lead => ({ ...lead, activities: undefined, request: undefined })),
     newRequests: newRequests.length,
     recentRequests: newRequests.slice(0, 8).map(lead => ({ ...lead, activities: undefined, request: lead.request ? { services: lead.request.services, receivedAt: lead.request.receivedAt } : null })),
     generatedAt: now,

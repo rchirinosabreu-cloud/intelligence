@@ -456,6 +456,11 @@ const QuotationForm = () => {
                         ? (isEditing ? "Cotización actualizada" : "Cotización generada con éxito")
                         : "Borrador guardado"
             );
+            // Al emitir sale sola por correo (reunión del 4 de noviembre de 2026); si no salió, se dice y queda «Reenviar».
+            if (data.delivery) {
+                if (data.delivery.sent) toast.success('Enviada por correo al cliente con el PDF');
+                else if (data.delivery.reason !== 'sin-correo') toast.error(data.delivery.message || 'El correo al cliente no salió');
+            }
         } catch (error) {
             console.error("[QuotationForm] Save failed:", error);
             toast.error(error.message || "Fallo al guardar la cotización");

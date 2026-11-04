@@ -5,6 +5,7 @@
 //
 // Lógica pura: la usan el servidor, la banda y las pruebas.
 import { bogotaDateKey } from './crmRules.js';
+import { proposalReference } from './crmFollowUpAlerts.js';
 
 export const NOTICE_LEVELS = Object.freeze({
     IMPORTANTE: Object.freeze({ rank: 0, color: 'coral' }),
@@ -32,10 +33,14 @@ export const FOLLOW_UP_CHANNELS = Object.freeze([
 export const isFollowUpChannel = (value) => FOLLOW_UP_CHANNELS.some((channel) => channel.value === value);
 
 // «No sigue», en la revisión: las dos etapas de cierre del CRM. Perdida, el cliente no la tomó; descartada, no sigue por
-// decisión nuestra (Rodny, 26 de octubre de 2026).
+// decisión nuestra (Rodny, 26 de octubre de 2026). Reunión del 4 de noviembre de 2026: con Andy «sí se hizo» —la
+// propuesta terminó en trabajo— y faltaba poder decirlo; y Pacho pidió archivar lo que ya no contesta tras cinco
+// llamadas, conservando sus datos. Las dos salidas nuevas salen de la banda sin volver a avisar.
 export const REVIEW_OUTCOMES = Object.freeze([
-    Object.freeze({ value: 'PERDIDO', label: 'Perdida', stage: 'Perdido' }),
-    Object.freeze({ value: 'DESCARTADO', label: 'Descartada', stage: 'Descartado' })
+    Object.freeze({ value: 'PERDIDO', label: 'Perdida', stage: 'Perdido', done: 'La oportunidad pasó a Perdido' }),
+    Object.freeze({ value: 'DESCARTADO', label: 'Descartada', stage: 'Descartado', done: 'La oportunidad pasó a Descartado' }),
+    Object.freeze({ value: 'GANADO', label: 'Ya es cliente', stage: 'Ganado', done: 'La oportunidad pasó a Ganado' }),
+    Object.freeze({ value: 'ARCHIVAR', label: 'Archivar', stage: 'archivada', done: 'La oportunidad quedó archivada; sus datos se conservan' })
 ]);
 
 export const isReviewOutcome = (value) => REVIEW_OUTCOMES.some((outcome) => outcome.value === value);
@@ -75,11 +80,11 @@ export const pickCurrentNotice = (notices = [], lastDecisionAt = null, now = new
     return { notice: open[0] || null, nextAt };
 };
 
-/** Lo que dice la banda de una alerta comercial: quién, cuántos días y qué cotización, sin la orden del final. */
+/** Lo que dice la banda de una alerta comercial: quién, cuántos días y qué propuesta, sin la orden del final. */
 export const followUpNoticeText = (lead, alert, quotationCode = null) => {
     const who = lead.company || lead.contactName || 'La oportunidad';
-    const what = quotationCode ? `la ${quotationCode}` : 'la propuesta';
+    const what = proposalReference(lead, quotationCode);
     return alert.kind === 'REVIEW'
-        ? { kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: `Revisión · ${alert.step ?? alert.days} días`, message: `${who} lleva ${alert.days} días sin responder: ¿sigue o no?` }
+        ? { kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: `Revisión · ${alert.step ?? alert.days} días`, message: `${who} lleva ${alert.days} días sin responder ${what}: ¿sigue o no?` }
         : { kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', label: 'Seguimiento comercial', message: `${who} lleva ${alert.days} días sin responder ${what}` };
 };

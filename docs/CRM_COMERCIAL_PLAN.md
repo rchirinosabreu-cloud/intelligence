@@ -19,6 +19,19 @@ Sin `--confirm-target` igual al host de `DATABASE_URL` el script no escribe. Es 
 
 Laboratorio local sin base de datos: `npm run preview:crm` levanta las pantallas reales sobre el servicio real con datos de ejemplo en memoria (`tests/fixtures/crmData.js`). La prueba de navegador `tests/browser/crm.mjs` deja capturas en `output/crm/`.
 
+### Lo que pidió el equipo comercial el 4 de noviembre de 2026
+
+Reunión de Francys, Pacho y Rodny (transcripción «Conversación CRM» en el Drive). Qué se construyó y por qué:
+
+- **Archivar y desarchivar.** El botón «Archivar» existía, pero no había dónde ver las archivadas ni forma de volver. Ahora el filtro «Archivadas» de Oportunidades las lista (la más reciente primero), la ficha muestra «Archivada el …» y «Desarchivar», y la lista permite marcar varias y archivarlas de una vez. Archivar no cambia la etapa ni borra nada; solo saca la oportunidad de listas, métricas, semáforo, alertas y banda. Es la salida para lo que no contesta tras cinco llamadas, sin perder sus datos.
+- **La banda de revisión** («No sigue») ofrece Perdida, Descartada, Ya es cliente y Archivar. «Ya es cliente» pasa la oportunidad a Ganado: con Andy la propuesta sí terminó en trabajo y la única opción era perderla.
+- **La banda dice qué propuesta es:** la cotización si existe en la plataforma; si no, «la propuesta del 9 de abril de 2026 (sin cotización en la plataforma)». Todo lo importado del Excel está en ese caso.
+- **Buscar por nombre en el Dashboard**, que salta a Oportunidades con el texto, y un bloque «registradas sin primer contacto» con lo que se agregó a mano y nadie ha tocado. Antes el Dashboard solo listaba lo urgente, por eso lo de LinkedIn de ayer «no salía». El buscador general de arriba se llama «Buscar tareas» porque es lo único que busca.
+- **La propuesta sale sola por correo al emitirla** (enlace para aceptar y PDF adjunto) y desde el historial se reenvía o se manda por WhatsApp con el mensaje ya escrito. Las dos quedan en la bitácora como «Propuesta enviada». Pendiente: WhatsApp por la API de Meta a clientes (plantillas y cobro por mensaje).
+- **Instagram** es un origen.
+
+Queda para otra ronda: integración automática de leads de Instagram y LinkedIn, y varios responsables por oportunidad.
+
 ## 1. Qué hay hoy en el Excel
 
 | Hoja | Contenido | Qué se conserva |

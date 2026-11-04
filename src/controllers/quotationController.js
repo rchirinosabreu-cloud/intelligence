@@ -28,6 +28,7 @@ import {
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import { syncLeadStageFromQuotation } from '../services/quotationDraftService.js';
 import { linkQuotationParty, readQuotationParty } from '../services/quotationPartyService.js';
+import { emailQuotation, sendQuotationByChannel } from '../services/quotationDeliveryService.js';
 
 // A quotation born from the CRM moves its opportunity forward; a CRM hiccup never undoes the quotation itself.
 const syncLeadStage = async (quotation, event) => {
@@ -237,11 +238,15 @@ export const createQuotation = async (req, res) => {
         // Format for response if needed
         const formattedConsecutive = `COT-${String(quotation.consecutive).padStart(4, '0')}`;
         const party = await linkParty(quotation, req.user);
+        const linked = { ...quotation, lead_id: party?.leadId || quotation.lead_id };
+        // Una propuesta que nace emitida sale sola por correo, igual que al emitir un borrador.
+        const delivery = quotation.status === 'ACTIVA' ? await emailQuotation(prisma, linked, EMISORES_DATA[quotation.emisor_type], { actor: req.user }) : null;
 
         res.status(201).json({
             ...quotation,
             ...(party ? { lead_id: party.leadId } : {}),
             party,
+            delivery,
             consecutive_formatted: formattedConsecutive
         });
     } catch (error) {
@@ -361,12 +366,17 @@ export const updateQuotation = async (req, res) => {
 
         // Ligar antes de mover la etapa: una propuesta que se emite por primera vez también avanza su oportunidad.
         const party = await linkParty(quotation, req.user);
-        if (existing.status === 'BORRADOR' && targetStatus === 'ACTIVA') await syncLeadStage({ ...quotation, lead_id: party?.leadId || quotation.lead_id }, 'ISSUED');
+        const linked = { ...quotation, lead_id: party?.leadId || quotation.lead_id };
+        const issued = existing.status !== 'ACTIVA' && targetStatus === 'ACTIVA';
+        if (existing.status === 'BORRADOR' && targetStatus === 'ACTIVA') await syncLeadStage(linked, 'ISSUED');
+        // Al emitir (o reactivar) sale sola por correo con el enlace y el PDF; si no sale, se dice y se puede reenviar.
+        const delivery = issued ? await emailQuotation(prisma, linked, EMISORES_DATA[quotation.emisor_type], { actor: req.user }) : null;
 
         res.json({
             ...quotation,
             ...(party ? { lead_id: party.leadId } : {}),
             party,
+            delivery,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`
         });
 
@@ -448,6 +458,18 @@ export const acceptPublicQuotation = async (req, res) => {
  * aprobó por WhatsApp, por correo o en una reunión, no desde su enlace. Pasa por la misma aprobación que el enlace —la
  * misma versión, el mismo escenario elegido, los mismos totales— y abre la misma formalización.
  */
+/** POST /api/quotations/:id/send: reenviar por correo, o registrar que se mandó por WhatsApp desde el teléfono. */
+export const sendQuotation = async (req, res) => {
+    try {
+        const result = await sendQuotationByChannel(prisma, req.params.id, String(req.body?.channel || '').toUpperCase(), EMISORES_DATA, req.user);
+        res.json(result);
+    } catch (error) {
+        if (error?.statusCode) return res.status(error.statusCode).json({ error: error.message });
+        console.error('[QuotationController] Send failed:', error);
+        return res.status(500).json({ error: 'No pudimos enviar la propuesta.' });
+    }
+};
+
 export const acceptQuotationInternally = async (req, res) => {
     try {
         const existing = await prisma.quotation.findUnique({ where: { id: req.params.id }, select: { uuid_slug: true } });

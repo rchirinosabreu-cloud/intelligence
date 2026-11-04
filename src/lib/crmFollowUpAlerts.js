@@ -102,10 +102,23 @@ export const followUpDigest = (kind, count, settings = DEFAULT_FOLLOW_UP_ALERT_D
     ? { message: `${count} oportunidades llevan ${settings.review} días o más sin respuesta: revisa cuáles siguen y cuáles se cierran.`, url: '/crm?tab=oportunidades&silence=REVISION' }
     : { message: `${count} oportunidades piden seguimiento: llevan ${settings.reminders[0]} días o más sin respuesta.`, url: '/crm?tab=oportunidades&silence=SIN_RESPUESTA' });
 
-/** La línea del aviso: quién, cuántos días y qué cotización. */
+/**
+ * Qué propuesta es (reunión del 4 de noviembre de 2026, Pacho sobre Andy: «¿cómo sé yo qué propuesta es esa?»): la
+ * cotización si existe en la plataforma; si no —todo lo importado del Excel—, la fecha en que se envió, y que no hay
+ * cotización aquí.
+ */
+export const proposalReference = (lead, quotationCode = null) => {
+    if (quotationCode) return `la ${quotationCode}`;
+    const sent = toDate(lead?.proposalSentAt);
+    if (!sent) return 'la propuesta';
+    const day = sent.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'long', year: 'numeric' });
+    return `la propuesta del ${day} (sin cotización en la plataforma)`;
+};
+
+/** La línea del aviso: quién, cuántos días y qué propuesta. */
 export const followUpAlertMessage = (lead, alert, quotationCode = null) => {
     const who = lead.company || lead.contactName || 'La oportunidad';
-    const what = quotationCode ? `la ${quotationCode}` : 'la propuesta';
+    const what = proposalReference(lead, quotationCode);
     return alert.kind === 'REVIEW'
         ? `${who} lleva ${alert.days} días sin responder ${what}: revisa si sigue o se cierra.`
         : `${who} lleva ${alert.days} días sin responder ${what}. Haz seguimiento.`;
