@@ -63,7 +63,13 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
       <CrmFilters filters={filters} onChange={onFiltersChange} team={team} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-zinc-500 dark:text-zinc-400">
-        <span>{isLoading ? 'Cargando…' : `${data?.total ?? 0} ${data?.total === 1 ? 'oportunidad' : 'oportunidades'} · ${viewingArchived ? 'la archivada más reciente primero' : 'ordenadas por urgencia'}`}</span>
+        <span className="flex flex-wrap items-center gap-3">
+          <span>{isLoading ? 'Cargando…' : `${data?.total ?? 0} ${data?.total === 1 ? 'oportunidad' : 'oportunidades'} · ${viewingArchived ? 'archivadas, la más reciente primero' : 'ordenadas por urgencia'}`}</span>
+          {/* Un solo botón que alterna (Rodny, 4 de noviembre de 2026: «quiero un botón sencillo que me muestre las archivadas y ya»). */}
+          <button type="button" onClick={() => onFiltersChange({ ...filters, archived: viewingArchived ? '' : 'SOLO' })} aria-pressed={viewingArchived} data-crm-toggle-archived className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 font-semibold transition-colors', viewingArchived ? 'border-primary/40 bg-primary/10 text-primary' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900')}>
+            <Archive className="h-3.5 w-3.5" /> {viewingArchived ? 'Volver a las vigentes' : 'Ver archivadas'}
+          </button>
+        </span>
         {selected.length > 0 && (
           <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-950" data-crm-selection>
             <span className="font-semibold text-zinc-700 dark:text-zinc-200">{selected.length} {selected.length === 1 ? 'seleccionada' : 'seleccionadas'}</span>
