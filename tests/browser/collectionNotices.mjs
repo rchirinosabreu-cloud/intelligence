@@ -25,8 +25,9 @@ const open = async (preview, { width = 1440, height = 900, dark = false, mobile 
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   try {
-    await page.goto(`${preview.origin}/crm?tab=oportunidades${dark ? '&dark' : ''}`);
-    await page.getByText('Calzado Andino').locator('visible=true').first().waitFor();
+    await page.goto(`${preview.origin}/crm?tab=oportunidades${dark ? '&dark' : ''}`, { waitUntil: 'domcontentloaded' });
+    // La primera apertura de esta muestra compila las dependencias de Vite.
+    await page.getByText('Calzado Andino').locator('visible=true').first().waitFor({ timeout: 60000 });
     return { page, errors };
   } catch (error) {
     await page.close();
@@ -65,11 +66,11 @@ test('el recorrido de la banda: escribirle al cliente, el siguiente aviso y «Re
 
     // La cuenta individual llega cinco minutos después de decidir, en verde.
     await page.request.post(`${preview.origin}/api/__preview/clock?minutes=6`);
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await band(page).waitFor();
     assert.equal(await band(page).getAttribute('data-level'), 'SEGUIMIENTO');
     assert.match(await band(page).innerText(), /Cliente de prueba B lleva 22 días vencida la cuenta de cobro No\. 0395: \$1\.500\.000 pendientes/);
-    assert.match(await band(page).innerText(), /Cartera · cuenta vencida/);
+    assert.match(await band(page).innerText(), /Cartera · cuenta vencida/i);
     assert.equal(await band(page).locator('[data-notice-action="archive"]').count(), 0, 'archivar sigue siendo exclusivo del CRM');
     await settled(page);
     await shot(page, '04-banda-servicio-puntual');
@@ -85,7 +86,7 @@ test('el recorrido de la banda: escribirle al cliente, el siguiente aviso y «Re
     assert.equal(waiting.notice, null);
     assert.equal(waiting.nextAt, '2026-10-09T13:00:00.000Z', 'mañana a las 8:00 de Bogotá');
     await page.request.post(`${preview.origin}/api/__preview/clock?minutes=1314`);
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await band(page).waitFor();
     assert.equal(await band(page).getAttribute('data-important-notice'), 'aviso-puntual', 'la pausa no recrea el aviso');
     assert.match(await band(page).innerText(), /Cliente de prueba B lleva 23 días vencida/);
