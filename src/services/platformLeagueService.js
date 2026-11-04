@@ -16,6 +16,7 @@ import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
 import { hasModulePermission } from '../config/security.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
+import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
 
 export const LEAGUE_COMPUTE_MINUTES = 18 * 60 + 5;
 export const LEAGUE_CHECK_MS = 10 * 60 * 1000;
@@ -92,8 +93,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         db.taskWorkSession.findMany({ where: { taskId: { in: closedIds }, isCollaborator: false }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } })
       ]) : [[], []];
       const originalDue = new Map(states.map((row) => [row.taskId, row.originalDueDate]));
-      const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, Number(person.metrics?.overdue ?? 0)]));
-      const byMember = new Map(members.map((member) => [member.id, { memberId: member.id, closedTasks: [], createdTasks: [], sessions: [], overdueAtDawn: snapshot ? (overdueAtDawn.has(member.id) ? overdueAtDawn.get(member.id) : null) : null, returnedToday: 0, firstOpener: opener }]));
+      const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, snapshotOverdueCount(person.metrics, dayKey)]));
+      const byMember = new Map(members.map((member) => [member.id, { memberId: member.id, closedTasks: [], createdTasks: [], sessions: [], overdueAtDawn: overdueAtDawn.get(member.id) ?? null,
+        dawnEvidenceReason: overdueAtDawn.has(member.id) && overdueAtDawn.get(member.id) === null ? 'La foto de la mañana no permite comprobar las fechas de entrega. Este hábito queda sin evaluar.' : null,
+        returnedToday: 0, firstOpener: opener }]));
       for (const task of created) {
         const bucket = byMember.get(memberOfUser.get(task.creatorId)?.id);
         if (bucket) bucket.createdTasks.push({ id: task.id, documented: Boolean(String(task.comments || '').trim()) || task.taskComments.some(comment => String(comment.content || '').trim()) || task.taskAttachments.length > 0 });

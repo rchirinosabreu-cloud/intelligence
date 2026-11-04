@@ -2,6 +2,7 @@
 // fecha de producción en fecha de publicación. Bogotá no aplica horario de verano.
 import { bogotaDate } from './colombiaBusinessDays.js';
 import { publishAtIso } from './socialPublishing.js';
+import { taskDueDay } from './taskDeadlines.js';
 
 const instantOf = value => {
   if (!value) return null;
@@ -27,14 +28,7 @@ export const temporalRelation = ({ fecha = null, instante = null } = {}, { today
   };
 };
 
-export const taskCalendarDay = value => {
-  if (!value) return null;
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return calendarDay(value);
-  }
-  const instant = instantOf(value);
-  return instant ? bogotaDate(instant) : null;
-};
+export const taskCalendarDay = taskDueDay;
 const localClock = value => new Date(new Date(value).getTime() - 5 * 3600000).toISOString().slice(11, 16);
 
 export const publicationTemporalEvidence = (item, { today, now = new Date() } = {}) => {
