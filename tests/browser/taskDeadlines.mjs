@@ -38,6 +38,8 @@ try {
   await page.screenshot({ path: 'output/task-deadlines/dashboard-claro.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
+  // Let the sidebar close and the theme transition finish after resizing.
+  await page.waitForTimeout(800);
   await page.screenshot({ path: 'output/task-deadlines/dashboard-movil-oscuro.png', fullPage: true });
   assert.deepEqual(errors, []);
   console.log('Dashboard: 1 today, 0 overdue, 3 tomorrow; no false overdue reminder. Desktop/light and mobile/dark captured.');
