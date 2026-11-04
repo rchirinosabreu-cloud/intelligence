@@ -1,0 +1,79 @@
+import { compareTaskOrder, mergeFilteredTaskOrder, taskEntersNewQueue } from '../lib/taskOrder.js';
+import { recognitionTransaction } from './recognitionService.js';
+
+const fail = (message, statusCode = 400) => Object.assign(new Error(message), { statusCode });
+const orderSelect = { id: true, status: true, sortOrder: true, dueDate: true, createdAt: true };
+const managerRoles = ['ADMIN', 'PROJECT_MANAGER', 'PM'];
+const validIndex = value => Number.isSafeInteger(value) && value >= 0;
+
+// All callers must use recognitionTransaction: its existing lock and serializable
+// retry protect creation, queue changes and manual ordering in the same transaction.
+export const nextTaskOrder = async (tx, status) => {
+  const result = await tx.task.aggregate({ where: { status }, _max: { sortOrder: true } });
+  return Math.max(0, result._max.sortOrder ?? 0) + 1;
+};
+
+async function saveOrder(tx, tasks) {
+  const order = [];
+  for (const [sortOrder, task] of tasks.entries()) {
+    if (task.sortOrder !== sortOrder) await tx.task.update({ where: { id: task.id }, data: { sortOrder } });
+    order.push({ id: task.id, sortOrder });
+  }
+  return order;
+}
+
+export const reorderTaskSelection = async ({ db, user, reorderList, previousIds }) => {
+  if (!managerRoles.includes(user?.role)) throw fail('Solo PM y administradores pueden reordenar pendientes.', 403);
+  if (!Array.isArray(reorderList) || !reorderList.length
+    || reorderList.some(item => typeof item?.id !== 'string' || !item.id || !validIndex(item.sortOrder))
+    || new Set(reorderList.map(item => item.id)).size !== reorderList.length
+    || new Set(reorderList.map(item => item.sortOrder)).size !== reorderList.length) {
+    throw fail('La selección de pendientes no es válida.');
+  }
+  const orderedIds = [...reorderList].sort((a, b) => a.sortOrder - b.sortOrder).map(item => item.id);
+  if (previousIds !== undefined && (!Array.isArray(previousIds) || previousIds.length !== orderedIds.length
+    || new Set(previousIds).size !== orderedIds.length || previousIds.some(id => !orderedIds.includes(id)))) {
+    throw fail('El orden anterior no corresponde a la selección.');
+  }
+  return recognitionTransaction(db, async tx => {
+    const selected = await tx.task.findMany({ where: { id: { in: orderedIds } }, select: orderSelect });
+    if (selected.length !== orderedIds.length || new Set(selected.map(task => task.status)).size !== 1) {
+      throw fail('Los pendientes cambiaron. Actualiza el tablero.', 409);
+    }
+    if (previousIds && selected.sort(compareTaskOrder).some((task, index) => task.id !== previousIds[index])) {
+      throw fail('La prioridad cambió. Actualiza el tablero antes de ordenar.', 409);
+    }
+    const column = await tx.task.findMany({ where: { status: selected[0].status }, select: orderSelect });
+    return saveOrder(tx, mergeFilteredTaskOrder(column, orderedIds));
+  });
+};
+
+// Also used by content/task reciprocity so changing a piece's date follows the
+// same queue rule. Only a deliberate, authorized placement may override the tail.
+export const updateOrderedTask = async (tx, args, current) => {
+  const data = { ...args.data };
+  const hasAnchor = Object.hasOwn(data, 'orderBeforeId');
+  const hasIndex = Object.hasOwn(data, 'sortOrder');
+  const anchor = data.orderBeforeId;
+  const index = data.sortOrder;
+  delete data.orderBeforeId;
+  delete data.sortOrder;
+  if (hasAnchor && hasIndex) throw fail('Indica una sola posición para el pendiente.');
+  if (hasIndex && !validIndex(index)) throw fail('La posición del pendiente no es válida.');
+  if (hasAnchor && anchor !== null && (typeof anchor !== 'string' || !anchor || anchor === args.where.id)) throw fail('La posición del pendiente no es válida.');
+  const status = data.status ?? current.status;
+  let column;
+  if (hasIndex || (hasAnchor && anchor !== null)) {
+    column = (await tx.task.findMany({ where: { status }, select: orderSelect })).filter(task => task.id !== args.where.id).sort(compareTaskOrder);
+    if (hasAnchor && !column.some(task => task.id === anchor)) throw fail('El destino cambió. Actualiza el tablero.', 409);
+  }
+  if (hasAnchor || hasIndex || taskEntersNewQueue(current, data)) data.sortOrder = await nextTaskOrder(tx, status);
+  const updated = await tx.task.update({ ...args, data });
+  if (column) {
+    const position = hasAnchor ? column.findIndex(task => task.id === anchor) : Math.min(index, column.length);
+    column.splice(position, 0, updated);
+    await saveOrder(tx, column);
+    updated.sortOrder = position;
+  }
+  return updated;
+};

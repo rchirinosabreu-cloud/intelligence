@@ -37,6 +37,7 @@ import {
 import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenFocusNotice, isActiveFocusTask, isFocusOverdue, markFocusNoticeSeen, nextLockReaction } from '@/lib/taskFocus';
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
+import { compareTaskOrder } from '@/lib/taskOrder';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -64,7 +65,6 @@ import TaskTimerBadge from './TaskTimerBadge';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
 import {
     buildTaskReturnPayload,
-    closeTaskWorkSession,
     findConflictingActiveTask,
     hasSeenTaskTimingTutorial,
     markTaskTimingTutorialAfternoonSeen,
@@ -397,7 +397,8 @@ const NativeTasks = () => {
                 aiCategory: task.aiCategory,
                 aiComplexity: task.aiComplexity,
                 plan: task.plan,
-                sortOrder: task.sortOrder || 0,
+                sortOrder: task.sortOrder ?? 0,
+                createdAt: task.createdAt,
                 taskComments: task.taskComments || [],
                 taskAttachments: task.taskAttachments || []
             }));
@@ -663,16 +664,7 @@ const NativeTasks = () => {
             if (dateFilter === 'Esta Semana') return isThisWeek(task.dueDateFormatted);
             return true;
         });
-        filtered.sort((a, b) => {
-            const orderA = a.sortOrder !== undefined && a.sortOrder !== null ? a.sortOrder : 999999;
-            const orderB = b.sortOrder !== undefined && b.sortOrder !== null ? b.sortOrder : 999999;
-            if (orderA !== orderB) {
-                return orderA - orderB;
-            }
-            const dateA = parseDate(a.dueDateFormatted) || new Date(2100, 0, 1);
-            const dateB = parseDate(b.dueDateFormatted) || new Date(2100, 0, 1);
-            return dateA - dateB;
-        });
+        filtered.sort(compareTaskOrder);
         return filtered;
     }, [tasks, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
@@ -773,11 +765,15 @@ const NativeTasks = () => {
         setExtensionRequired(true);
     }, [myOverdueFocusTask, extensionTask]);
 
+    const savingTaskOrder = useRef(false);
+    const dragVisibleTasks = useRef(null);
     const onDragEnd = async (result) => {
+        const visibleAtDrag = dragVisibleTasks.current || filteredTasks;
+        dragVisibleTasks.current = null;
         const { destination, source, draggableId } = result;
+        if (savingTaskOrder.current) return;
         if (!destination) return;
         if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-        const previousTasks = [...tasks];
         const taskId = draggableId;
         const destinationColumnId = destination.droppableId;
         const sourceColumnId = source.droppableId;
@@ -823,21 +819,13 @@ const NativeTasks = () => {
                 return;
             }
 
-            const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === sourceColumnId);
+            const columnTasks = visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId);
             const reordered = [...columnTasks];
-            const [removed] = reordered.splice(source.index, 1);
+            const sourceIndex = reordered.findIndex(t => String(t.id) === taskId);
+            if (sourceIndex < 0) return;
+            const [removed] = reordered.splice(sourceIndex, 1);
             reordered.splice(destination.index, 0, removed);
-
-            // Update sortOrder indexes locally
-            const updatedTasks = tasks.map(task => {
-                const newIndex = reordered.findIndex(t => t.id === task.id);
-                if (newIndex !== -1) {
-                    return { ...task, sortOrder: newIndex };
-                }
-                return task;
-            });
-            queryClient.setQueryData(['nativeTasks'], updatedTasks);
-
+            savingTaskOrder.current = true;
             try {
                 const baseUrl = getApiBaseUrl();
                 const token = localStorage.getItem('authToken');
@@ -849,82 +837,40 @@ const NativeTasks = () => {
                         'Content-Type': 'application/json',
                         'Authorization': token ? `Bearer ${token}` : ''
                     },
-                    body: JSON.stringify({ reorderList })
+                    body: JSON.stringify({ reorderList, previousIds: columnTasks.map(task => task.id) })
                 });
 
-                if (res.ok) {
-                    toast({ title: "Prioridad guardada", description: "El orden de la columna se actualizó correctamente." });
-                } else {
-                    throw new Error("Failed to persist task reordering");
-                }
+                const saved = await res.json().catch(() => null);
+                if (!res.ok) throw new Error(saved?.error || 'No se pudo guardar la prioridad.');
+                const order = new Map((saved?.order || []).map(item => [item.id, item.sortOrder]));
+                queryClient.setQueryData(['nativeTasks'], current => (current || []).map(task => order.has(task.id) ? { ...task, sortOrder: order.get(task.id) } : task));
+                await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+                toast({ title: 'Prioridad guardada' });
             } catch (err) {
                 console.error("Reorder failed:", err);
-                queryClient.setQueryData(['nativeTasks'], previousTasks);
-                toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la prioridad de la columna." });
+                toast({ variant: 'destructive', description: err.message || 'No se pudo guardar la prioridad.' });
+                await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            } finally {
+                savingTaskOrder.current = false;
             }
             return;
         }
 
         // 2. Dragged to a different column (Status transition)
-        const newTasks = [...tasks];
-        const taskIndex = newTasks.findIndex(t => String(t.id) === taskId);
-        if (taskIndex === -1) return;
-        const movedTask = { ...newTasks[taskIndex] };
-        newTasks.splice(taskIndex, 1);
-        const newStatusEnum =
-            destinationColumnId === 'pendiente' ? 'PENDIENTE' :
-            destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
-            destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
-        movedTask.status = newStatusEnum;
-        if (newStatusEnum === 'REALIZADA') movedTask.completedAt = new Date().toISOString();
-        if (newStatusEnum !== 'REALIZADA') movedTask.completedAt = null;
-        if (sourceColumnId === 'en-proceso' && newStatusEnum !== 'EN_CURSO') {
-            movedTask.accumulatedWorkMs = closeTaskWorkSession(movedTask);
-            movedTask.startedAt = null;
-        }
-        if (newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso' && !isTeamTask) {
-            movedTask.startedAt = new Date().toISOString();
-        }
-        if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
-            movedTask.isReturned = false;
-        }
-        const visibleTasksInDestColumn = newTasks.filter(task => {
-            if (getColumnId(task.status) !== destinationColumnId) return false;
-            const normalizedSearch = searchQuery.trim().toLowerCase();
-            if (normalizedSearch !== '') return matchesTaskSearch(task, normalizedSearch);
-            if (!isTaskOfPerson(task, responsibleFilter)) return false;
-            if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
-            if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.dueDateFormatted)) return false;
-            if (dateFilter === 'Solo Vencidos' && !isOverdue(task.dueDateFormatted)) return false;
-            if (dateFilter === 'Esta Semana' && !isThisWeek(task.dueDateFormatted)) return false;
-            if (dateFilter === 'Todos') return true;
-            return true;
-        });
-        let insertionIndexInGlobal = -1;
-        if (visibleTasksInDestColumn.length === 0) {
-            insertionIndexInGlobal = newTasks.length;
-        } else if (destination.index >= visibleTasksInDestColumn.length) {
-            const lastVisibleTask = visibleTasksInDestColumn[visibleTasksInDestColumn.length - 1];
-            const lastVisibleIndex = newTasks.findIndex(t => t.id === lastVisibleTask.id);
-            insertionIndexInGlobal = lastVisibleIndex + 1;
-        } else {
-            const anchorTask = visibleTasksInDestColumn[destination.index];
-            insertionIndexInGlobal = newTasks.findIndex(t => t.id === anchorTask.id);
-        }
-        if (insertionIndexInGlobal !== -1) newTasks.splice(insertionIndexInGlobal, 0, movedTask);
-        else newTasks.push(movedTask);
-        queryClient.setQueryData(['nativeTasks'], newTasks);
+        if (!targetTask) return;
+        const visibleTasksInDestColumn = visibleAtDrag.filter(task => getColumnId(task.status) === destinationColumnId);
         const newStatusForDB =
             destinationColumnId === 'pendiente' ? 'PENDIENTE' :
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
+        savingTaskOrder.current = true;
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const payload = { status: newStatusForDB };
             if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') payload.isReturned = false;
             if (isPMOrAdmin) {
-                payload.sortOrder = destination.index;
+                payload.orderBeforeId = visibleTasksInDestColumn[destination.index]?.id ?? null;
             }
             const response = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
                 method: 'PATCH',
@@ -939,8 +885,9 @@ const NativeTasks = () => {
                 console.error('[NativeTasks] El servidor rechazó el movimiento:', failure);
                 // Un motivo del servidor (por ejemplo, un colaborador que intenta cerrar la tarea) se
                 // dice tal cual; si no lo hay, el aviso de siempre.
-                throw Object.assign(new Error("Failed to update status in backend"), { userMessage: response.status === 403 ? failure?.error : null });
+                throw Object.assign(new Error("Failed to update status in backend"), { userMessage: failure?.error });
             }
+            const savedTask = await response.json();
             // El confeti sale de la columna «Realizado», donde acaba de caer la tarjeta (Rodny, 30 de
             // septiembre de 2026). Se apunta a la columna y no a la tarjeta porque la tarjeta puede
             // no estar todavía repintada en su sitio cuando el servidor contesta rápido, y entonces
@@ -948,7 +895,7 @@ const NativeTasks = () => {
             if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
                 triggerConfetti(document.querySelector('[data-rfd-droppable-id="realizado"]'));
                 // Cerrada sin cronómetro por quien la hizo: el servidor pide preguntarle cuánto le tomó.
-                askDeclaredTimeIfNeeded(await response.json().catch(() => null));
+                askDeclaredTimeIfNeeded(savedTask);
             }
             // Ya confirmado por el servidor: el aviso de que aquí cada quien pone en marcha su reloj,
             // solo para quien está en el equipo de la tarea (es quien puede usar «Empezar mi reloj»).
@@ -958,19 +905,21 @@ const NativeTasks = () => {
             );
             if (isTeamTask && viewerInTeam && destinationColumnId === 'en-proceso' && sourceColumnId !== 'en-proceso') {
                 // La tarea ya movida: si se abre desde el aviso, el panel tiene que verla «En proceso».
-                setTeamStartTask(movedTask);
+                setTeamStartTask({ ...targetTask, status: savedTask.status, sortOrder: savedTask.sortOrder });
             }
             await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
             console.error("Drag and drop failed:", err);
-            queryClient.setQueryData(['nativeTasks'], previousTasks);
             toast({
                 title: "Error de sincronización",
-                description: err?.userMessage || "Se revirtió el movimiento porque no se pudo actualizar el estado.",
+                description: err?.userMessage || 'No se pudo actualizar el estado del pendiente.',
                 variant: "destructive"
             });
+            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+        } finally {
+            savingTaskOrder.current = false;
         }
     };
 
@@ -1446,7 +1395,7 @@ const NativeTasks = () => {
                 </DialogContent>
             </Dialog>
 
-            <DragDropContext onDragEnd={onDragEnd}>
+            <DragDropContext onDragStart={() => { dragVisibleTasks.current = filteredTasks; }} onDragEnd={onDragEnd}>
                 <div className="flex gap-6 flex-1 min-h-[500px] relative">
                     <Dialog open={isReturnedDialogOpen} onOpenChange={setIsReturnedDialogOpen}>
                         <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] flex-col overflow-hidden border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-2xl">
