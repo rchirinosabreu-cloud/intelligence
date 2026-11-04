@@ -9,15 +9,15 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ArrowLeft, Pencil, Archive, Mail, Smartphone, Link2, ExternalLink, AlertCircle, ChevronDown, CalendarClock, Loader2, FileText } from '@/components/ui/icons';
+import { ArrowLeft, Pencil, Archive, RotateCcw, Mail, Smartphone, Link2, ExternalLink, AlertCircle, ChevronDown, CalendarClock, Loader2, FileText } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-import { useCrmLead, useCrmTeam, useChangeStage, useSetTrafficLight, useArchiveLead, useUpdateLead, useCreateQuotationDraft } from './crmApi';
+import { useCrmLead, useCrmTeam, useChangeStage, useSetTrafficLight, useArchiveLead, useUnarchiveLead, useUpdateLead, useCreateQuotationDraft } from './crmApi';
 import CrmLeadForm from './CrmLeadForm';
 import CrmActivityForm from './CrmActivityForm';
 import CrmActivityTimeline from './CrmActivityTimeline';
 import CrmRequestPanel from './CrmRequestPanel';
 import {
-  CRM_STAGES, CRM_TRAFFIC_LIGHTS, TrafficLightBadge, TrafficLightDot, PriorityBadge, OriginBadge, FollowUpLabel,
+  CRM_STAGES, CRM_TRAFFIC_LIGHTS, TrafficLightBadge, TrafficLightDot, PriorityBadge, OriginBadge, ArchivedBadge, FollowUpLabel,
   formatDate, formatDateTime, formatCurrency, originLabel, trafficLightLabel, leadTitle, leadSubtitle, inputClass, labelClass
 } from './crmPresentation';
 
@@ -68,6 +68,7 @@ const CrmLeadDetail = () => {
   const changeStage = useChangeStage();
   const setLight = useSetTrafficLight();
   const archive = useArchiveLead();
+  const unarchive = useUnarchiveLead();
   const update = useUpdateLead();
   const createDraft = useCreateQuotationDraft();
   const [editing, setEditing] = useState(false);
@@ -150,6 +151,16 @@ const CrmLeadDetail = () => {
     }
   };
 
+  // Vuelve tal cual estaba: misma etapa, misma bitácora (reunión del 4 de noviembre de 2026: «ya no se puede desarchivar»).
+  const unarchiveLead = async () => {
+    try {
+      await unarchive.mutateAsync({ id: lead.id });
+      toast.success('Oportunidad desarchivada');
+    } catch (mutationError) {
+      toast.error(mutationError.message);
+    }
+  };
+
   if (isLoading) {
     return <div className="space-y-4 pt-8"><div className="h-10 w-2/3 animate-pulse rounded-xl bg-zinc-200/70 dark:bg-zinc-900" /><div className="h-64 animate-pulse rounded-2xl bg-zinc-200/70 dark:bg-zinc-900" /></div>;
   }
@@ -194,13 +205,24 @@ const CrmLeadDetail = () => {
           </DropdownMenuContent>
         </DropdownMenu>
         <Button variant="outline" onClick={() => setEditing(true)} className="gap-2"><Pencil className="h-4 w-4" /> Editar</Button>
-        <Button variant="ghost" onClick={archiveLead} className="gap-2 text-zinc-500"><Archive className="h-4 w-4" /> Archivar</Button>
+        {lead.archivedAt ? (
+          <Button variant="ghost" onClick={unarchiveLead} disabled={unarchive.isPending} data-crm-unarchive className="gap-2 text-zinc-500"><RotateCcw className="h-4 w-4" /> Desarchivar</Button>
+        ) : (
+          <Button variant="ghost" onClick={archiveLead} className="gap-2 text-zinc-500"><Archive className="h-4 w-4" /> Archivar</Button>
+        )}
         </div>
       </PageHeader>
+
+      {lead.archivedAt && (
+        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200" data-crm-archived-notice>
+          Archivada el {formatDate(lead.archivedAt)}: no aparece en las listas ni en las métricas y no genera avisos. Sus datos y su historial siguen aquí; «Desarchivar» la devuelve tal cual estaba.
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
         <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-200">{lead.code}</span>
         {lead.legacyCode && <span className="font-mono">({lead.legacyCode})</span>}
+        <ArchivedBadge lead={lead} />
         <OriginBadge origin={lead.origin} />
         <PriorityBadge priority={lead.priority} />
         <span>Ingresó {formatDate(lead.enteredAt)}{lead.enteredAtEstimated ? ' (estimado)' : ''}</span>

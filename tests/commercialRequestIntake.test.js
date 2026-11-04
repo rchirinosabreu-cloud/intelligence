@@ -65,7 +65,7 @@ test('receiveCommercialRequest creates lead + request + first log entry, assigne
   assert.equal(result.email, 'catalina@hdi.test');
   const lead = db.state.leads[0];
   assert.equal(lead.stage, 'POR_GESTIONAR');
-  assert.equal(lead.origin, 'FORMULARIO');
+  assert.equal(lead.origin, 'INSTAGRAM', 'quien nos conoció por Instagram es un lead de Instagram (reunión del 4 de noviembre de 2026)');
   assert.equal(lead.priority, 'ALTA');
   assert.equal(lead.companyKey, 'hdi seguros');
   assert.equal(lead.enteredAtEstimated, false);
@@ -109,7 +109,7 @@ test('a fresh request never sinks in the list, can be filtered, and the dashboar
   // A referred prospect who used the form: origin REFERIDO, yet the "Formulario web" origin filter still finds it.
   await receiveCommercialRequest(db, { answers: { ...complete(), company: 'Prueba', source: 'REFERIDO' } }, { now: NOW });
   const byOrigin = (await listLeads(db, { origin: 'FORMULARIO' }, NOW)).items;
-  assert.deepEqual(byOrigin.map(lead => [lead.company, lead.origin]).sort(), [['HDI Seguros', 'FORMULARIO'], ['Prueba', 'REFERIDO']]);
+  assert.deepEqual(byOrigin.map(lead => [lead.company, lead.origin]).sort(), [['HDI Seguros', 'INSTAGRAM'], ['Prueba', 'REFERIDO']]);
   assert.equal((await listLeads(db, { origin: 'LINKEDIN' }, NOW)).items.length, 1, 'other origin filters are untouched');
 });
 

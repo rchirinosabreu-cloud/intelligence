@@ -150,7 +150,7 @@ function NoticeBody({ notice, onDecided }) {
             ))}
             {mode === 'close' && REVIEW_OUTCOMES.map((outcome) => (
               <NoticeButton key={outcome.value} disabled={busy} data-notice-outcome={outcome.value}
-                onClick={() => decide('close', { outcome: outcome.value }, `La oportunidad pasó a ${outcome.stage}`)}>
+                onClick={() => decide('close', { outcome: outcome.value }, outcome.done || `La oportunidad pasó a ${outcome.stage}`)}>
                 {outcome.label}
               </NoticeButton>
             ))}

@@ -74,10 +74,18 @@ test('el aviso dice quién, cuántos días y qué cotización, sin la orden del 
         kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', label: 'Seguimiento comercial', message: 'Café Altura lleva 10 días sin responder la COT-0042'
     });
     assert.deepEqual(followUpNoticeText({ contactName: 'Laura' }, { kind: 'REVIEW', days: 30 }, null), {
-        kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: 'Revisión · 30 días', message: 'Laura lleva 30 días sin responder: ¿sigue o no?'
+        kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: 'Revisión · 30 días', message: 'Laura lleva 30 días sin responder la propuesta: ¿sigue o no?'
     });
+    // Sin cotización en la plataforma, la banda dice de cuándo es la propuesta (reunión del 4 de noviembre de 2026).
+    assert.equal(
+        followUpNoticeText({ company: 'Andino', proposalSentAt: '2026-04-09T17:00:00Z' }, { kind: 'REVIEW', days: 271, step: 30 }, null).message,
+        'Andino lleva 271 días sin responder la propuesta del 9 de abril de 2026 (sin cotización en la plataforma): ¿sigue o no?'
+    );
 });
 
-test('«No sigue» ofrece las dos etapas de cierre del CRM: perdida o descartada', () => {
-    assert.deepEqual(REVIEW_OUTCOMES.map((outcome) => [outcome.value, outcome.label]), [['PERDIDO', 'Perdida'], ['DESCARTADO', 'Descartada']]);
+test('«No sigue» ofrece perder, descartar, marcar ganada porque ya es cliente, o archivar', () => {
+    assert.deepEqual(REVIEW_OUTCOMES.map((outcome) => [outcome.value, outcome.label]), [
+        ['PERDIDO', 'Perdida'], ['DESCARTADO', 'Descartada'], ['GANADO', 'Ya es cliente'], ['ARCHIVAR', 'Archivar']
+    ]);
+    assert.ok(REVIEW_OUTCOMES.every((outcome) => outcome.done), 'cada salida dice en palabras qué pasó, para el aviso de la pantalla');
 });

@@ -51,6 +51,11 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
     res.status(201).json(await service.createLead(db, req.body || {}, req.user));
   }));
 
+  // Varias de una vez desde la lista filtrada (reunión del 4 de noviembre de 2026: 55 oportunidades viejas sin respuesta).
+  router.post('/leads/archive', handle('No pudimos archivar las oportunidades.', async (req, res) => {
+    res.json(await service.archiveLeads(db, req.body?.ids || [], req.user));
+  }));
+
   router.get('/leads/:leadId', handle('No pudimos cargar la oportunidad.', async (req, res) => {
     const lead = await service.getLead(db, req.params.leadId);
     if (!lead) return res.status(404).json({ error: 'Oportunidad no encontrada.' });
@@ -79,6 +84,10 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
 
   router.post('/leads/:leadId/archive', handle('No pudimos archivar la oportunidad.', async (req, res) => {
     res.json(await service.archiveLead(db, req.params.leadId, req.user));
+  }));
+
+  router.post('/leads/:leadId/unarchive', handle('No pudimos desarchivar la oportunidad.', async (req, res) => {
+    res.json(await service.unarchiveLead(db, req.params.leadId, req.user));
   }));
 
   // Manual path: always a new BORRADOR in Cotizaciones, linked to the lead, built from its request (if any).

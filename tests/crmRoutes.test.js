@@ -29,6 +29,8 @@ test('the CRM router exposes the phase-1 endpoints and maps validation errors to
     updateActivity: async () => ({ id: 'a1' }),
     setTrafficLight: async (_db, id, payload) => ({ id, trafficLight: { value: payload.value, mode: 'MANUAL' } }),
     archiveLead: async (_db, id) => ({ id, archivedAt: new Date() }),
+    unarchiveLead: async (_db, id) => ({ id, archivedAt: null }),
+    archiveLeads: async (_db, ids) => { calls.push(['archive', ids]); return { archived: ids.length, skipped: 0, ids }; },
     followUps: async () => ({ buckets: {}, counts: {} }),
     metricsFor: async (_db, query) => { calls.push(['metrics', query]); return { total: 0 }; },
     catalogs: () => ({ stages: [] })
@@ -64,6 +66,9 @@ test('the CRM router exposes the phase-1 endpoints and maps validation errors to
     assert.equal((await json('/leads/L1/activities/a1', { method: 'PATCH', body: JSON.stringify({ note: 'x' }) })).status, 200);
     assert.equal((await json('/leads/L1/traffic-light', { method: 'POST', body: JSON.stringify({ value: 'VERDE', reason: 'ok' }) })).body.trafficLight.mode, 'MANUAL');
     assert.equal((await json('/leads/L1/archive', { method: 'POST' })).status, 200);
+    assert.equal((await json('/leads/L1/unarchive', { method: 'POST' })).body.archivedAt, null);
+    assert.equal((await json('/leads/archive', { method: 'POST', body: JSON.stringify({ ids: ['L1', 'L2'] }) })).body.archived, 2);
+    assert.deepEqual(calls.find(([name]) => name === 'archive')[1], ['L1', 'L2']);
     const draft = await json('/leads/L1/quotations', { method: 'POST' });
     assert.equal(draft.status, 201);
     assert.equal(draft.body.quotation.code, 'COT-0001');
