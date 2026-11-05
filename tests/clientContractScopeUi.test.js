@@ -200,3 +200,26 @@ test('un límite audiovisual conjunto no oculta las piezas cuyo formato falta co
   assert.match(profile.textContent, /2 Sin clasificar/);
   assert.match(profile.textContent, /12 en total/);
 });
+
+test('las ocasiones se muestran como veces por semana sin convertirlas en historias ni días', async () => {
+  const details = scope();
+  details.stories = { quantity: 3, period: 'OCASIONES_SEMANA', perOccasion: null };
+  await mount(Page, { client: client(details), evaluation: { level: 'green', reasons: [] }, today: '2026-11-04', canManage: false });
+  const stories = document.querySelector('[data-contract-stories]');
+  assert.match(stories.textContent, /3 veces por semana/);
+  assert.match(stories.textContent, /historias por ocasión: Por confirmar/);
+  assert.doesNotMatch(stories.textContent, /3 historias|3 días/);
+});
+
+test('seleccionar ocasiones conserva el cupo y pide de nuevo las historias por ocasión al cambiar de unidad', async () => {
+  const details = scope();
+  details.stories = { quantity: 3, period: 'DIAS_SEMANA', perOccasion: 2 };
+  let saved;
+  await mount(Dialog, { client: client(details), team: [], onClose() {}, onSave: async input => { saved = input; } });
+  await change(byAria('Unidad de historias'), 'OCASIONES_SEMANA');
+  assert.equal(byAria('Cantidad de ocasiones').value, '3');
+  assert.equal(byAria('Historias por ocasión').value, '', 'historias por día no acredita historias por ocasión');
+  await submit();
+  assert.deepEqual(saved.contract.scopeDetails.stories, { quantity: 3, period: 'OCASIONES_SEMANA', perOccasion: null });
+  assert.deepEqual(saved.contract.deliverables, client().contract.deliverables);
+});

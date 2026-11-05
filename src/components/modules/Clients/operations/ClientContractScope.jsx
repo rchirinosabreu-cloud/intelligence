@@ -11,7 +11,7 @@ const HELP = 'text-xs text-zinc-500 dark:text-zinc-400';
 const ACTION = 'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 disabled:opacity-40 dark:text-brand-cyan';
 const RULE = { EXACTA: 'Exacta', MINIMO: 'Mínimo', MAXIMO: 'Hasta' };
 const PERIOD = { SEMANA: 'por semana', MES: 'por mes', CONTRATO: 'por contrato', PUNTUAL: 'una vez' };
-const STORY_PERIOD = { SEMANA: 'Historias por semana', MES: 'Historias por mes', DIAS_SEMANA: 'Días con historias por semana' };
+const STORY_PERIOD = { SEMANA: 'Historias por semana', MES: 'Historias por mes', DIAS_SEMANA: 'Días con historias por semana', OCASIONES_SEMANA: 'Veces por semana' };
 const CATEGORY = { BLOG: 'Blog', WEB: 'Web', COMUNIDAD: 'Comunidad', MARCAS: 'Marcas', PERFILES: 'Perfiles', OTRO: 'Otro servicio' };
 const fieldValue = value => value ?? '';
 const prefix = rule => rule === 'MAXIMO' ? 'Hasta ' : rule === 'MINIMO' ? 'Mínimo ' : '';
@@ -81,11 +81,11 @@ export function ContractScopeFields({ scope, contract, onChange, onLegacyChange 
       <legend className={LABEL}>Historias</legend>
       {stories ? <>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className={HELP}>Cantidad<input aria-label="Cantidad de historias" type="number" min={0} max={stories.period === 'DIAS_SEMANA' ? 7 : 999} value={fieldValue(stories.quantity)} onChange={event => patchStories({ quantity: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>
-          <label className={HELP}>Unidad y frecuencia<Select aria-label="Unidad de historias" value={stories.period || ''} onChange={event => patchStories({ period: event.target.value || null, ...(event.target.value !== 'DIAS_SEMANA' ? { perOccasion: null } : {}) })} className={cn(FIELD, 'mt-1')}><option value="">Por confirmar</option>{STORY_PERIODS.map(period => <option key={period} value={period}>{STORY_PERIOD[period]}</option>)}</Select></label>
-          {stories.period === 'DIAS_SEMANA' && <label className={HELP}>Historias por día<input aria-label="Historias por día" type="number" min={0} max={999} value={fieldValue(stories.perOccasion)} onChange={event => patchStories({ perOccasion: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>}
+          <label className={HELP}>{stories.period === 'OCASIONES_SEMANA' ? 'Veces' : 'Cantidad'}<input aria-label={stories.period === 'OCASIONES_SEMANA' ? 'Cantidad de ocasiones' : 'Cantidad de historias'} type="number" min={0} max={stories.period === 'DIAS_SEMANA' ? 7 : 999} value={fieldValue(stories.quantity)} onChange={event => patchStories({ quantity: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>
+          <label className={HELP}>Unidad y frecuencia<Select aria-label="Unidad de historias" value={stories.period || ''} onChange={event => patchStories({ period: event.target.value || null, ...(event.target.value !== stories.period ? { perOccasion: null } : {}) })} className={cn(FIELD, 'mt-1')}><option value="">Por confirmar</option>{STORY_PERIODS.map(period => <option key={period} value={period}>{STORY_PERIOD[period]}</option>)}</Select></label>
+          {['DIAS_SEMANA', 'OCASIONES_SEMANA'].includes(stories.period) && <label className={HELP}>{stories.period === 'DIAS_SEMANA' ? 'Historias por día' : 'Historias por ocasión'}<input aria-label={stories.period === 'DIAS_SEMANA' ? 'Historias por día' : 'Historias por ocasión'} type="number" min={0} max={999} value={fieldValue(stories.perOccasion)} onChange={event => patchStories({ perOccasion: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>}
         </div>
-        <p className={HELP}>Se conserva la unidad elegida; los días no equivalen a cantidad de historias.</p>
+        <p className={HELP}>Los días y las veces por semana no equivalen a cantidad de historias.</p>
       </> : <div className="flex flex-wrap items-center gap-2">
         <Select aria-label="Historias por semana" value={String(contract.storiesPerWeek ?? 0)} onChange={event => onLegacyChange({ storiesPerWeek: Number(event.target.value) })} className={cn(FIELD, 'sm:max-w-xs')}>{STORY_FREQUENCIES.map(option => <option key={option.value} value={String(option.value)}>{option.label}</option>)}</Select>
         <button type="button" className={ACTION} onClick={() => update({ stories: { quantity: contract.storiesPerWeek ?? null, period: 'SEMANA', perOccasion: null } })}>Detallar historias</button>
@@ -132,6 +132,7 @@ export function ContractScopeFields({ scope, contract, onChange, onLegacyChange 
 function storiesText(stories) {
   if (stories.quantity == null) return 'Por confirmar';
   if (stories.period === 'DIAS_SEMANA') return `${stories.quantity} días por semana · ${stories.perOccasion == null ? 'historias por día: Por confirmar' : `${stories.perOccasion} historias por día`}`;
+  if (stories.period === 'OCASIONES_SEMANA') return `${stories.quantity} ${stories.quantity === 1 ? 'vez' : 'veces'} por semana · ${stories.perOccasion == null ? 'historias por ocasión: Por confirmar' : `${stories.perOccasion} historias por ocasión`}`;
   return `${stories.quantity} historias ${PERIOD[stories.period] || '· frecuencia por confirmar'}`;
 }
 

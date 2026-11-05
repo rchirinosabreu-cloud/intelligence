@@ -25,8 +25,9 @@ const NON_MONEY_NUMBER_FIELDS = {
     'src/components/reports/ReportEvidenceWorkspace.jsx': 1,
     // Ficha operativa: día de corte de la parrilla y piezas al mes por formato.
     'src/components/modules/Clients/operations/ClientOperationDialog.jsx': 2,
-    // Cantidades de límites, historias/días, historias por ocasión, jornadas (legado y detalle), horas por jornada y servicios.
-    'src/components/modules/Clients/operations/ClientContractScope.jsx': 7,
+    // Cantidades de límites, conjunto de contenidos, historias/días/ocasiones, historias por ocasión,
+    // jornadas (legado y detalle), horas por jornada y servicios; ninguna representa dinero.
+    'src/components/modules/Clients/operations/ClientContractScope.jsx': 8,
     // Cantidades de entregables, jornadas y horas de producción de cada proyecto; no son dinero.
     'src/components/modules/Clients/operations/ClientProjects.jsx': 3
 };

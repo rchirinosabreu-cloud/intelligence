@@ -8,7 +8,7 @@ En Clientes → Operación → ficha del cliente → Editar se puede describir e
 
 - Límites por formato (video, reel, carrusel, post u otro), distinguiendo cantidad exacta, mínimo y máximo.
 - Cupos compartidos entre formatos: por ejemplo, seis contenidos entre post, carrusel y reel, o hasta seis reels/videos en conjunto. La cantidad pertenece al grupo; no se atribuye a cada formato ni se suma nuevamente al cupo mensual.
-- Historias por semana, por mes o días de publicación por semana, con cantidad por ocasión cuando se conoce.
+- Historias por semana, por mes, días de publicación por semana o veces por semana, con cantidad por ocasión cuando se conoce. Tres veces por semana no se convierte en tres historias ni en tres días obligatorios.
 - Producción incluida, no incluida o por confirmar; jornadas por mes o por contrato y horas por jornada. El límite de horas es independiente del número de jornadas.
 - Servicios adicionales categorizados: blog, web, comunidad, marcas, perfiles y otros, con cantidad, unidad y frecuencia.
 - Datos pendientes de confirmar, visibles en la ficha.

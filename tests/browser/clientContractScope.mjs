@@ -89,6 +89,26 @@ try {
     assert.equal(await page.getByLabel('Cantidad del grupo 1', { exact: true }).inputValue(), '8');
     assert.equal(await page.getByLabel('Carrusel en grupo 1', { exact: true }).isChecked(), true);
     await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    await page.getByRole('button', { name: 'Editar', exact: true }).click();
+    await dialog.getByRole('combobox', { name: 'Unidad de historias', exact: true }).click();
+    await page.getByRole('option', { name: 'Veces por semana', exact: true }).click();
+    await dialog.getByLabel('Cantidad de ocasiones', { exact: true }).fill('3');
+    assert.equal(await dialog.getByLabel('Historias por ocasión', { exact: true }).inputValue(), '');
+    await dialog.getByRole('button', { name: 'Guardar ficha', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
+    const stories = profile.locator('[data-contract-stories]');
+    assert.match(await stories.innerText(), /3 veces por semana/);
+    assert.match(await stories.innerText(), /historias por ocasión: Por confirmar/);
+    assert.doesNotMatch(await stories.innerText(), /3 historias|3 días/);
+    assert.deepEqual(await page.evaluate(() => window.__scopeSaved.contract.scopeDetails.stories), { quantity: 3, period: 'OCASIONES_SEMANA', perOccasion: null });
+    await stories.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(output, `ocasiones-${suffix}.png`) });
+    captures.push(`ocasiones-${suffix}.png`);
+    await page.getByRole('button', { name: 'Editar', exact: true }).click();
+    assert.equal(await dialog.getByLabel('Cantidad de ocasiones', { exact: true }).inputValue(), '3');
+    assert.equal(await dialog.getByLabel('Historias por ocasión', { exact: true }).inputValue(), '');
+    assert.equal(await dialog.getByRole('combobox', { name: 'Unidad de historias', exact: true }).textContent(), 'Veces por semana');
+    await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
     for (const scenario of ['shared', 'flexible', 'partial']) {
       await page.goto(`http://127.0.0.1:3830/tests/fixtures/client-contract-scope.html?theme=${theme}&scenario=${scenario}`, { waitUntil: 'networkidle' });
       const text = await profile.innerText();
@@ -115,7 +135,7 @@ try {
   }
   assert.deepEqual(errors, []);
   assert.deepEqual(apiRequests, []);
-  await writeFile(path.join(output, 'qa.json'), JSON.stringify({ passed: true, viewports: ['1440x1000', '390x1000'], themes: ['light', 'dark'], captures, errors, apiRequests, savesRetainLegacy: true, reopenRetainsValues: true, groupedFormats: true }, null, 2));
+  await writeFile(path.join(output, 'qa.json'), JSON.stringify({ passed: true, viewports: ['1440x1000', '390x1000'], themes: ['light', 'dark'], captures, errors, apiRequests, savesRetainLegacy: true, reopenRetainsValues: true, groupedFormats: true, storyOccasionsRetained: true }, null, 2));
   console.log(JSON.stringify({ passed: true, output, captures, errors: 0, apiRequests: 0 }));
 } finally {
   await browser?.close();

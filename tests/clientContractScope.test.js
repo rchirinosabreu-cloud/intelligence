@@ -26,6 +26,16 @@ test('la ficha conserva alcance estructurado separado del cupo, historias y jorn
   assert.equal(result.value.contract.productionDays, 1);
 });
 
+test('las ocasiones de historias conservan frecuencia y cantidad por ocasión desconocida', () => {
+  const stories = { quantity: 3, period: 'OCASIONES_SEMANA', perOccasion: null };
+  const result = normalize({ ...scope(), stories });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.value.contract.scopeDetails.stories, stories);
+  assert.equal(result.value.contract.storiesPerWeek, 3, 'el campo heredado no se reinterpreta');
+  assert.equal(contractQuota(result.value.contract), 4);
+  assert.equal(normalize({ stories: { quantity: 10, period: 'OCASIONES_SEMANA', perOccasion: 2 } }).valid, true, 'varias ocasiones pueden caer en un mismo día');
+});
+
 test('un cupo compartido conserva sus formatos y no reparte ni incrementa las piezas contratadas', () => {
   const contentGroups = [{ formats: ['Reel', 'Carrusel', 'Post'], quantity: 6, rule: 'EXACTA' }];
   const result = normalize({ ...scope(), contentGroups });

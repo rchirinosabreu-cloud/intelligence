@@ -2,7 +2,7 @@
 // el objetivo medible sigue en ClientContract.deliverables, con las reglas nativas de operación.
 export const SCOPE_FORMATS = ['Video', 'Reel', 'Carrusel', 'Post', 'Otro'];
 export const SCOPE_RULES = ['EXACTA', 'MINIMO', 'MAXIMO'];
-export const STORY_PERIODS = ['SEMANA', 'MES', 'DIAS_SEMANA'];
+export const STORY_PERIODS = ['SEMANA', 'MES', 'DIAS_SEMANA', 'OCASIONES_SEMANA'];
 export const PRODUCTION_PERIODS = ['MES', 'CONTRATO'];
 export const SERVICE_CATEGORIES = ['BLOG', 'WEB', 'COMUNIDAD', 'MARCAS', 'PERFILES', 'OTRO'];
 export const SERVICE_FREQUENCIES = ['SEMANA', 'MES', 'CONTRATO', 'PUNTUAL'];
