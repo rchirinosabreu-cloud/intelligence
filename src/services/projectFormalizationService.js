@@ -9,6 +9,7 @@
 //
 // Ningún paso de aquí deshace una aprobación ni un pago: quien llama anota el fallo y el reloj vuelve a intentarlo.
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
 import { createClientWith } from './clientService.js';
@@ -18,6 +19,7 @@ import { calculateProposalPayments, formatInstallmentDue, paymentPlanForScenario
 import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { pesosFromRate } from '../lib/receivableCurrency.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
+import { ensureProjectOperation } from './projectOperationsService.js';
 import {
     FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, documentUploadProblem, documentVoidProblem, exceptionProblem, requirementsProblem,
     formalizationEnabledText, formalizationRequestText, formalizationState, quotationCode
@@ -38,6 +40,9 @@ const monthStart = (day) => new Date(`${day.slice(0, 7)}-01T00:00:00.000Z`);
 const audit = (db, entityId, action, after, actor) => db.financialAuditEvent.create({
     data: { entityType: 'ProjectFormalization', entityId, action, after: snapshot(after), actorId: actorIdOf(actor) }
 });
+// Documentos, requisitos y habilitación usan la misma cerradura. Se relee el estado bajo ella: una decisión
+// concurrente no puede habilitar usando requisitos o documentos que ya dejaron de estar vigentes.
+const lockFormalization = (tx, id) => tx.$queryRaw(Prisma.sql`SELECT id FROM "ProjectFormalization" WHERE id = ${String(id)} FOR UPDATE`);
 
 /** ¿Puede esta persona ver y gestionar formalizaciones? Solo Dirección y Administrativa y contable. */
 export const canManageFormalizations = async (db, user) => {
@@ -168,7 +173,13 @@ const deliverAll = async (userIds, data, notify, log) => {
  */
 export const startFormalization = async (db = prisma, quotationId, actor = null, { now = new Date(), notify = createNotification, log = console.error } = {}) => {
     const existing = await db.projectFormalization.findUnique({ where: { quotationId } });
-    if (existing) return existing;
+    if (existing) {
+        await db.$transaction(async tx => {
+            await lockFormalization(tx, existing.id);
+            await ensureProjectOperation(tx, await tx.projectFormalization.findUnique({ where: { id: existing.id } }), { now });
+        });
+        return existing;
+    }
     const quotation = await db.quotation.findUnique({ where: { id: quotationId } });
     if (!quotation || quotation.status !== 'APROBADA') return null;
     const acceptedDay = bogotaDay(quotation.accepted_at || now);
@@ -192,6 +203,7 @@ export const startFormalization = async (db = prisma, quotationId, actor = null,
                 data: { quotationId, clientId: client?.id || null, advanceReceivableId: advance?.id || null, requestedAt: now, requestedById: actorIdOf(actor) }
             });
             await audit(tx, formalization.id, 'CREATE', { ...formalization, quotation: quotationCode(quotation), receivables: receivables.map((item) => item.receivable.id) }, actor);
+            await ensureProjectOperation(tx, formalization, { quotation, now });
             return { formalization, client };
         });
     } catch (error) {
@@ -232,14 +244,25 @@ const formalizationInclude = async (db, formalization) => {
  * veces aunque dos caminos lleguen a la vez.
  */
 export const refreshFormalization = async (db = prisma, formalizationId, { now = new Date(), notify = createNotification, log = console.error } = {}) => {
-    const formalization = await db.projectFormalization.findUnique({ where: { id: formalizationId } });
-    if (!formalization || formalization.status === 'HABILITADO') return formalization;
-    const { documents, advance } = await formalizationInclude(db, formalization);
-    const state = formalizationState({ documents, advance, ...stateInput(formalization) });
-    if (!state.ready) return formalization;
-    const update = await db.projectFormalization.updateMany({ where: { id: formalization.id, status: 'PENDIENTE' }, data: { status: 'HABILITADO', enabledAt: now } });
-    if (!update.count) return db.projectFormalization.findUnique({ where: { id: formalization.id } });
-    await audit(db, formalization.id, 'UPDATE', { operation: 'ENABLE', enabledAt: now, advance: state.advance, exception: state.exception }, null);
+    const result = await db.$transaction(async tx => {
+        await lockFormalization(tx, formalizationId);
+        const formalization = await tx.projectFormalization.findUnique({ where: { id: formalizationId } });
+        if (!formalization) return { formalization: null, enabled: false };
+        await ensureProjectOperation(tx, formalization, { now });
+        if (formalization.status === 'HABILITADO') return { formalization, enabled: false };
+        // Una reversión o un pago toma el bloqueo de la obligación; leer el anticipo con el mismo bloqueo
+        // evita habilitar con un pago que está siendo corregido en otra transacción.
+        if (formalization.advanceReceivableId) await tx.$queryRaw(Prisma.sql`SELECT id FROM "AccountsReceivable" WHERE id = ${formalization.advanceReceivableId} FOR UPDATE`);
+        const { documents, advance } = await formalizationInclude(tx, formalization);
+        const state = formalizationState({ documents, advance, ...stateInput(formalization) });
+        if (!state.ready) return { formalization, enabled: false };
+        const update = await tx.projectFormalization.updateMany({ where: { id: formalization.id, status: 'PENDIENTE' }, data: { status: 'HABILITADO', enabledAt: now } });
+        if (!update.count) return { formalization: await tx.projectFormalization.findUnique({ where: { id: formalization.id } }), enabled: false };
+        await audit(tx, formalization.id, 'UPDATE', { operation: 'ENABLE', enabledAt: now, advance: state.advance, exception: state.exception }, null);
+        return { formalization: await tx.projectFormalization.findUnique({ where: { id: formalization.id } }), enabled: true };
+    });
+    const formalization = result.formalization;
+    if (!result.enabled) return formalization;
 
     const client = formalization.clientId
         ? await db.client.findUnique({ where: { id: formalization.clientId }, select: { name: true, slug: true, projectManager: { select: { userId: true, isActive: true } } } })
@@ -346,6 +369,8 @@ export const attachFormalizationDocument = async (db, storage, id, file, details
     const key = `formalizations/${formalization.id}/${randomUUID()}${meta.extension}`;
     await storage.upload({ key, body: meta.buffer, mimeType: meta.mimeType, size: meta.size, name: meta.name });
     const document = await db.$transaction(async (tx) => {
+        await lockFormalization(tx, formalization.id);
+        await loadFormalization(tx, formalization.id);
         const created = await tx.projectFormalizationDocument.create({
             data: {
                 formalizationId: formalization.id, storageKey: key, name: meta.name, mimeType: meta.mimeType, size: meta.size, sha256: meta.sha256,
@@ -366,14 +391,17 @@ export const attachFormalizationDocument = async (db, storage, id, file, details
 export const voidFormalizationDocument = async (db, id, documentId, reason, actor = {}, { now = new Date() } = {}) => {
     const problem = documentVoidProblem(reason);
     if (problem) throw httpError(400, problem);
-    const document = await db.projectFormalizationDocument.findFirst({ where: { id: String(documentId || ''), formalizationId: String(id || '') } });
-    if (!document) throw httpError(404, 'El documento no pertenece a esta formalización o no existe.');
-    if (document.voidedAt) throw httpError(409, 'Ese documento ya estaba anulado.');
-    const data = { voidedAt: now, voidReason: String(reason).trim(), voidedById: actorIdOf(actor) };
-    const update = await db.projectFormalizationDocument.updateMany({ where: { id: document.id, voidedAt: null }, data });
-    if (!update.count) throw httpError(409, 'Ese documento ya estaba anulado.');
-    await audit(db, document.formalizationId, 'UPDATE', { operation: 'DOCUMENT_VOID', documentId: document.id, kind: document.kind, ...data }, actor);
-    return serializeDocument({ ...document, ...data });
+    return db.$transaction(async tx => {
+        await lockFormalization(tx, id);
+        const document = await tx.projectFormalizationDocument.findFirst({ where: { id: String(documentId || ''), formalizationId: String(id || '') } });
+        if (!document) throw httpError(404, 'El documento no pertenece a esta formalización o no existe.');
+        if (document.voidedAt) throw httpError(409, 'Ese documento ya estaba anulado.');
+        const data = { voidedAt: now, voidReason: String(reason).trim(), voidedById: actorIdOf(actor) };
+        const update = await tx.projectFormalizationDocument.updateMany({ where: { id: document.id, voidedAt: null }, data });
+        if (!update.count) throw httpError(409, 'Ese documento ya estaba anulado.');
+        await audit(tx, document.formalizationId, 'UPDATE', { operation: 'DOCUMENT_VOID', documentId: document.id, kind: document.kind, ...data }, actor);
+        return serializeDocument({ ...document, ...data });
+    });
 };
 
 export const openFormalizationDocument = async (db, storage, id, documentId) => {
@@ -389,9 +417,6 @@ export const openFormalizationDocument = async (db, storage, id, documentId) => 
  */
 export const registerFormalizationException = async (db, id, input = {}, actor = {}, options = {}) => {
     const now = options.now || new Date();
-    const formalization = await loadFormalization(db, id);
-    if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
-    if (formalization.exceptionAt) throw httpError(409, 'Esta formalización ya tiene una autorización para empezar sin el anticipo.');
     const problem = exceptionProblem(input, bogotaDay(now));
     if (problem) throw httpError(400, problem);
     const data = {
@@ -402,10 +427,16 @@ export const registerFormalizationException = async (db, id, input = {}, actor =
         exceptionConditions: String(input.conditions ?? '').trim().slice(0, FORMALIZATION_CONDITIONS_MAX) || null,
         exceptionPaymentDate: String(input.paymentDate).trim()
     };
-    const update = await db.projectFormalization.updateMany({ where: { id: formalization.id, exceptionAt: null, status: 'PENDIENTE' }, data });
-    if (!update.count) throw httpError(409, 'La formalización cambió mientras tanto. Recarga y vuelve a intentarlo.');
-    await audit(db, formalization.id, 'UPDATE', { operation: 'EXCEPTION', ...data }, actor);
-    return refreshFormalization(db, formalization.id, options);
+    await db.$transaction(async tx => {
+        await lockFormalization(tx, id);
+        const formalization = await loadFormalization(tx, id);
+        if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
+        if (formalization.exceptionAt) throw httpError(409, 'Esta formalización ya tiene una autorización para empezar sin el anticipo.');
+        const update = await tx.projectFormalization.updateMany({ where: { id: formalization.id, exceptionAt: null, status: 'PENDIENTE' }, data });
+        if (!update.count) throw httpError(409, 'La formalización cambió mientras tanto. Recarga y vuelve a intentarlo.');
+        await audit(tx, formalization.id, 'UPDATE', { operation: 'EXCEPTION', ...data }, actor);
+    });
+    return refreshFormalization(db, id, options);
 };
 
 /**
@@ -417,8 +448,6 @@ export const setFormalizationRequirements = async (db, id, input = {}, actor = {
     const now = options.now || new Date();
     const problem = requirementsProblem(input);
     if (problem) throw httpError(400, problem);
-    const formalization = await loadFormalization(db, id);
-    if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
     const data = {
         requiresContract: input.requiresContract,
         requiresAdvance: input.requiresAdvance,
@@ -427,27 +456,35 @@ export const setFormalizationRequirements = async (db, id, input = {}, actor = {
         requirementsChangedById: actorIdOf(actor),
         requirementsChangedByName: actor?.name || null
     };
-    const update = await db.projectFormalization.updateMany({ where: { id: formalization.id, status: 'PENDIENTE' }, data });
-    if (!update.count) throw httpError(409, 'La formalización cambió mientras tanto. Recarga y vuelve a intentarlo.');
-    await audit(db, formalization.id, 'UPDATE', {
-        operation: 'REQUIREMENTS',
-        from: { requiresContract: formalization.requiresContract !== false, requiresAdvance: formalization.requiresAdvance !== false },
-        ...data
-    }, actor);
-    return refreshFormalization(db, formalization.id, options);
+    await db.$transaction(async tx => {
+        await lockFormalization(tx, id);
+        const formalization = await loadFormalization(tx, id);
+        if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
+        const update = await tx.projectFormalization.updateMany({ where: { id: formalization.id, status: 'PENDIENTE' }, data });
+        if (!update.count) throw httpError(409, 'La formalización cambió mientras tanto. Recarga y vuelve a intentarlo.');
+        await audit(tx, formalization.id, 'UPDATE', {
+            operation: 'REQUIREMENTS',
+            from: { requiresContract: formalization.requiresContract !== false, requiresAdvance: formalization.requiresAdvance !== false },
+            ...data
+        }, actor);
+    });
+    return refreshFormalization(db, id, options);
 };
 
 /** Liga a mano la cuenta del anticipo cuando la cotización no traía plan de pagos. Solo cuentas del mismo cliente. */
 export const linkFormalizationAdvance = async (db, id, receivableId, actor = {}, options = {}) => {
-    const formalization = await loadFormalization(db, id);
-    if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
-    const receivable = await db.accountsReceivable.findUnique({ where: { id: String(receivableId || '') }, select: { id: true, clientId: true, kind: true } });
-    if (!receivable || receivable.kind !== 'CLIENTE' || !formalization.clientId || receivable.clientId !== formalization.clientId) {
-        throw httpError(400, 'Elige una cuenta por cobrar de este mismo cliente.');
-    }
-    await db.projectFormalization.update({ where: { id: formalization.id }, data: { advanceReceivableId: receivable.id } });
-    await audit(db, formalization.id, 'UPDATE', { operation: 'ADVANCE_LINK', from: formalization.advanceReceivableId, to: receivable.id }, actor);
-    return refreshFormalization(db, formalization.id, options);
+    await db.$transaction(async tx => {
+        await lockFormalization(tx, id);
+        const formalization = await loadFormalization(tx, id);
+        if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
+        const receivable = await tx.accountsReceivable.findUnique({ where: { id: String(receivableId || '') }, select: { id: true, clientId: true, kind: true } });
+        if (!receivable || receivable.kind !== 'CLIENTE' || !formalization.clientId || receivable.clientId !== formalization.clientId) {
+            throw httpError(400, 'Elige una cuenta por cobrar de este mismo cliente.');
+        }
+        await tx.projectFormalization.update({ where: { id: formalization.id }, data: { advanceReceivableId: receivable.id } });
+        await audit(tx, formalization.id, 'UPDATE', { operation: 'ADVANCE_LINK', from: formalization.advanceReceivableId, to: receivable.id }, actor);
+    });
+    return refreshFormalization(db, id, options);
 };
 
 /**
@@ -465,8 +502,10 @@ export const sweepFormalizations = async (db = prisma, options = {}) => {
         if (started.has(quotation.id)) continue;
         await startFormalization(db, quotation.id, null, options).catch((error) => log('[Formalización] No se pudo abrir:', error?.message || error));
     }
-    const pending = await db.projectFormalization.findMany({ where: { status: 'PENDIENTE' }, select: { id: true } });
-    for (const item of pending) {
+    // También las habilitadas pueden necesitar su ficha, por ejemplo tras actualizar la aplicación. La recuperación
+    // no cambia el contrato mensual, no habilita trabajo nuevo por sí misma y no repite avisos de habilitación.
+    const formalizations = await db.projectFormalization.findMany({ select: { id: true } });
+    for (const item of formalizations) {
         await refreshFormalization(db, item.id, options).catch((error) => log('[Formalización] No se pudo revisar:', error?.message || error));
     }
 };

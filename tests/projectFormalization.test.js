@@ -6,7 +6,7 @@ import {
 import { receivableDueDate } from '../src/lib/receivableCollections.js';
 import {
     attachFormalizationDocument, canManageFormalizations, voidFormalizationDocument, linkFormalizationAdvance, listFormalizations, quotationInstallments,
-    refreshFormalizationsForReceivable, registerFormalizationException, setFormalizationRequirements, startFormalization, sweepFormalizations
+    refreshFormalization, refreshFormalizationsForReceivable, registerFormalizationException, setFormalizationRequirements, startFormalization, sweepFormalizations
 } from '../src/services/projectFormalizationService.js';
 
 // Punto 3 de la solicitud de Elisa (Rodny, 29 de octubre de 2026): la solicitud de formalización le llega al área
@@ -35,10 +35,11 @@ const quotationFixture = (over = {}) => ({
 
 const fakeDb = ({ quotation = quotationFixture(), lead = { id: 'lead-1', clientId: null }, clients = [], people = team } = {}) => {
     const db = {
-        rows: { formalizations: [], receivables: [], documents: [], clients: [...clients], audits: [], crmActivities: [] },
+        rows: { formalizations: [], receivables: [], documents: [], clients: [...clients], audits: [], crmActivities: [], projects: [] },
         lead: lead ? { ...lead } : null,
         quotations: [quotation],
         $transaction: async (fn) => fn(db),
+        $queryRaw: async () => [],
         quotation: {
             findUnique: async ({ where }) => db.quotations.find((item) => item.id === where.id) || null,
             findMany: async ({ where } = {}) => db.quotations.filter((item) => (!where?.status || item.status === where.status) && (!where?.id?.in || where.id.in.includes(item.id)))
@@ -88,6 +89,14 @@ const fakeDb = ({ quotation = quotationFixture(), lead = { id: 'lead-1', clientI
                 return { count: rows.length };
             }
         },
+        projectOperation: {
+            findUnique: async ({ where }) => db.rows.projects.find(item => where.id ? item.id === where.id : item.formalizationId === where.formalizationId) || null,
+            upsert: async ({ where, create }) => {
+                let row = db.rows.projects.find(item => item.formalizationId === where.formalizationId);
+                if (!row) { row = { ...create }; db.rows.projects.push(row); }
+                return row;
+            }
+        },
         user: { findMany: async () => people },
         teamMember: { findFirst: async ({ where }) => people.find((item) => item.id === where.userId)?.teamMember || null }
     };
@@ -124,6 +133,37 @@ test('las reglas: qué falta, cuándo el anticipo está pagado y qué pide la ex
     // Los avisos que viajan al celular nunca llevan cifras.
     assert.doesNotMatch(formalizationRequestText('Café Altura', 'COT-0042'), /\$|\d{3}\.\d{3}/);
     assert.doesNotMatch(formalizationEnabledText('Café Altura'), /\$|anticipo|contrato/);
+});
+
+test('aprobar prepara una ficha operativa separada y repetir no duplica ni cambia el alcance', async () => {
+    const db = fakeDb();
+    const formalization = await startFormalization(db, 'q-1', null, { now: NOW, ...collect() });
+    assert.equal(db.rows.projects.length, 1);
+    assert.equal(db.rows.projects[0].formalizationId, formalization.id);
+    assert.equal(db.rows.projects[0].reviewStatus, 'PENDIENTE');
+    assert.equal(db.rows.projects[0].sourceSnapshot.services[0].label, 'Branding');
+    await startFormalization(db, 'q-1', null, { now: NOW, ...collect() });
+    assert.equal(db.rows.projects.length, 1);
+});
+
+test('una formalización habilitada recupera su ficha faltante sin repetir el aviso al PM', async () => {
+    const db = fakeDb();
+    const options = { now: NOW, ...collect() };
+    const formalization = await startFormalization(db, 'q-1', null, options);
+    Object.assign(formalization, { status: 'HABILITADO', enabledAt: NOW, projectManagerNotified: true });
+    db.rows.projects = [];
+    await refreshFormalization(db, formalization.id, options);
+    assert.equal(db.rows.projects.length, 1);
+    assert.equal(options.bells.filter(row => row.type === 'PROYECTO_HABILITADO').length, 0);
+});
+
+test('habilitar relee requisitos después de adquirir el bloqueo de la formalización', async () => {
+    const db = fakeDb();
+    const formalization = await startFormalization(db, 'q-1', null, { now: NOW, ...collect() });
+    Object.assign(formalization, { requiresContract: false, requiresAdvance: false });
+    db.$queryRaw = async () => { formalization.requiresContract = true; return []; };
+    const result = await refreshFormalization(db, formalization.id, { now: NOW, ...collect() });
+    assert.equal(result.status, 'PENDIENTE', 'el requisito vigente bajo bloqueo impide habilitar sin contrato');
 });
 
 test('las cuotas salen del plan de pagos del escenario aprobado y suman exactamente el total', () => {

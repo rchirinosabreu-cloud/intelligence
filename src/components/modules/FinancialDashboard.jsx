@@ -40,6 +40,7 @@ import PayablesTab from './financial/PayablesTab';
 import DebtAgingSummary from './financial/DebtAgingSummary';
 import CollectionAlertSettings from './financial/CollectionAlertSettings';
 import { CollectionActivityPanel, useCollectionActivities } from './financial/CollectionActivities';
+import { RECEIVABLE_COLLECTION_MODES, collectionModeLabel } from '@/lib/receivableCollectionMode';
 import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
 import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
@@ -122,6 +123,7 @@ const freshReceivableForm = (period) => ({
     isNewClient: false,
     newClient: emptyClientProfile(),
     currency: 'COP',
+    collectionMode: '',
     amount: '',
     foreignAmount: '',
     exchangeRate: '',
@@ -908,6 +910,7 @@ const FinancialDashboard = () => {
                 dueDate: receivableForm.dueDate || null,
                 comments: receivableForm.comments,
                 currency: receivableForm.currency,
+                collectionMode: receivableForm.collectionMode || null,
                 ...(receivableIsUsd ? {
                     foreignAmount: Number(receivableForm.foreignAmount),
                     exchangeRate: Number(receivableForm.exchangeRate),
@@ -1489,17 +1492,33 @@ await invalidateFinancialQueries(queryClient);
                                                         )}
                                                     </div>
                                                     {client.kind !== 'PRESTAMO' && client.clientId && !String(client.clientId).includes(':') && (
-                                                        <CollectionActivityPanel clientId={client.clientId} items={collectionActivities.get(client.clientId)} canWrite={canWriteFinancials} />
+                                                        <CollectionActivityPanel clientId={client.clientId} items={collectionActivities.byClient.get(client.clientId)} history={collectionActivities} canWrite={canWriteFinancials} />
                                                     )}
                                                     <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
-                                                            <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
+                                                            <div key={debt.id} data-receivable={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                                                                         {isLoanReceivable(debt) ? <span data-receivable-loan>Préstamo a {loanCounterpartyLabel(debt.counterpartyType).toLowerCase()} · {formatFinancialPeriod(debt.period)}</span> : <>Periodo: {formatFinancialPeriod(debt.period)}</>}
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
                                                                 </div>
+                                                                {!isLoanReceivable(debt) && (
+                                                                    <div data-receivable-mode>
+                                                                        {canWriteFinancials && !debt.collectionModeLocked ? (
+                                                                            <label className="block max-w-sm space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+                                                                                <span>Modalidad de cobro</span>
+                                                                                <Select aria-label="Modalidad de cobro" value={debt.collectionMode || ''}
+                                                                                    disabled={debt.balanceReviewRequired || savingReceivableId === debt.id}
+                                                                                    onChange={(event) => handleReceivableUpdate(debt, { collectionMode: event.target.value || null })}
+                                                                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white">
+                                                                                    <option value="">Sin clasificar</option>
+                                                                                    {RECEIVABLE_COLLECTION_MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+                                                                                </Select>
+                                                                            </label>
+                                                                        ) : <p className="text-xs text-zinc-600 dark:text-zinc-300">{collectionModeLabel(debt.collectionMode)}{debt.collectionModeLocked ? ' · del plan de pagos aprobado' : ''}</p>}
+                                                                    </div>
+                                                                )}
                                                                 <div className={cn('grid gap-2 border-y border-zinc-200 py-3 dark:border-white/10', (debt.settledAmount > 0.005 && debt.retainedAmount > 0.005) ? 'grid-cols-2 sm:grid-cols-5' : (debt.settledAmount > 0.005 || debt.retainedAmount > 0.005) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
                                                                     <div data-receivable-amount-editor>
                                                                         <span className="text-xs text-zinc-500 dark:text-zinc-400">Valor original</span>
@@ -1563,6 +1582,10 @@ await invalidateFinancialQueries(queryClient);
                                                                     )}
                                                                 </div>
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
+                                                                {!isLoanReceivable(debt) && debt.clientId && (
+                                                                    <CollectionActivityPanel clientId={debt.clientId} receivableId={debt.id}
+                                                                        items={collectionActivities.byClient.get(debt.clientId)} history={collectionActivities} canWrite={canWriteFinancials} />
+                                                                )}
                                                                 {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. */}
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     {debt.formattedNumber ? (<>
@@ -1959,6 +1982,13 @@ await invalidateFinancialQueries(queryClient);
                                     : <MoneyInput required min="0.01" aria-label="Valor" value={receivableForm.amount} onChange={(amount) => setReceivableForm((current) => ({ ...current, amount }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />}
                             </div>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Periodo</span><BrainMonthPicker ariaLabel="Periodo de la cuenta por cobrar" value={receivableForm.period} onChange={(value) => setReceivableForm((current) => ({ ...current, period: value }))} className="rounded-lg py-2.5" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2"><span className="block">Modalidad de cobro</span>
+                                <Select aria-label="Modalidad de cobro" value={receivableForm.collectionMode || ''} onChange={(event) => setReceivableForm((current) => ({ ...current, collectionMode: event.target.value }))}
+                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white">
+                                    <option value="">Sin clasificar</option>
+                                    {RECEIVABLE_COLLECTION_MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+                                </Select>
+                            </label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2"><span className="block">Fecha de vencimiento</span><BrainDatePicker ariaLabel="Fecha de vencimiento" isClearable placeholder="Opcional" value={receivableForm.dueDate} onChange={(value) => setReceivableForm((current) => ({ ...current, dueDate: value }))} className="rounded-lg py-2.5" /></label>
                         </div>
                         {receivableIsUsd && (

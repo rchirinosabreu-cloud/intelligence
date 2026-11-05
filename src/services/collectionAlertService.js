@@ -81,10 +81,10 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
     for (const client of clients) {
         // La gestión registrada ya atiende los avisos de ese cliente en la banda. El reloj también la respeta: no
         // vuelve a pedirle el mismo seguimiento antes de cumplirse el intervalo elegido por Administración.
-        if (await hasCollectionActivitySince(db, client.id, new Date(now.getTime() - settings.repeatDays * 86400000))) continue;
         const monthly = isMonthlyClient(client.contracts);
         const alerts = clientCollectionAlerts({ clientId: client.id, receivables: client.accountsReceivables, monthly, today, settings });
         for (const alert of alerts) {
+            if (await hasCollectionActivitySince(db, client.id, new Date(now.getTime() - settings.repeatDays * 86400000), alert.receivableIds)) continue;
             // Un pago que baja el número de períodos o corregir una fecha cambia la clave del ciclo, pero no es otra
             // urgencia. Respeta el intervalo desde el último aviso real, incluso con claves anteriores al ajuste.
             // Un período vencido adicional sí conserva el aviso inmediato que ya tenía el protocolo.
@@ -106,7 +106,7 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
             for (const userId of administrative) {
                 queue(userId, COLLECTION_ALERT_TYPE, { subjectId: alert.subjectId, who: client.name, message: collectionBellText(alert, client.name, 'ADMINISTRATIVA'), url: COLLECTION_URL, notice });
             }
-            if (!monthly) continue;
+            if (!monthly && alert.kind !== 'MENSUAL') continue;
             for (const userId of direction) {
                 queue(userId, COLLECTION_ALERT_TYPE, { subjectId: alert.subjectId, who: client.name, message: collectionBellText(alert, client.name, 'DIRECCION'), url: COLLECTION_URL });
             }

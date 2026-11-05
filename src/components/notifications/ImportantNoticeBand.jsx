@@ -30,7 +30,7 @@ const post = async (path, body) => {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error('[Avisos importantes]', data);
-    throw new Error(data?.error || 'No pudimos guardar tu decisión.');
+    throw Object.assign(new Error(data?.error || 'No pudimos guardar tu decisión.'), { status: response.status });
   }
   return data;
 };
@@ -47,7 +47,7 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
   />
 );
 
-function NoticeBody({ notice, onDecided }) {
+function NoticeBody({ notice, onDecided, onRefresh }) {
   const navigate = useNavigate();
   const navigateFrom = useNavigateFrom();
   const [mode, setMode] = useState('base'); // base | channels | close | snooze
@@ -102,6 +102,7 @@ function NoticeBody({ notice, onDecided }) {
     } catch (error) {
       toast.error(error.message);
       setBusy(false);
+      if (error.status === 409) { setMode('base'); onRefresh(); }
     }
   };
 
@@ -168,7 +169,7 @@ function NoticeBody({ notice, onDecided }) {
             )}
             {mode === 'channels' && FOLLOW_UP_CHANNELS.map((channel) => (
               <NoticeButton key={channel.value} disabled={busy} data-notice-channel={channel.value}
-                onClick={() => decide('follow-up', { channel: channel.value }, isCollection ? 'Gestión de cobro registrada' : 'Seguimiento registrado en el CRM')}>
+                onClick={() => decide('follow-up', { channel: channel.value, ...(notice.kind === 'CARTERA_MENSUAL' ? { receivableIds: notice.receivableIds } : {}) }, isCollection ? 'Gestión de cobro registrada' : 'Seguimiento registrado en el CRM')}>
                 {channel.label}
               </NoticeButton>
             ))}
@@ -222,6 +223,7 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange })
     <NoticeBody
       key={notice.id}
       notice={notice}
+      onRefresh={() => queryClient.invalidateQueries({ queryKey: NOTICE_KEY })}
       onDecided={() => {
         queryClient.invalidateQueries({ queryKey: NOTICE_KEY });
         queryClient.invalidateQueries({ queryKey: ['notifications'] });

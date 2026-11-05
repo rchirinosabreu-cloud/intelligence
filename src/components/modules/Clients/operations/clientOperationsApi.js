@@ -15,7 +15,7 @@ async function request(path, options = {}) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error('[ClientOperations] El servidor rechazó la petición:', body);
-    throw Object.assign(new Error(body.error || 'No se pudo completar la operación. Inténtalo de nuevo.'), { status: response.status, errors: body.errors || null });
+    throw Object.assign(new Error(body.error || 'No se pudo completar la operación. Inténtalo de nuevo.'), { status: response.status, code: body.code || null, errors: body.errors || null });
   }
   return body;
 }
@@ -26,6 +26,28 @@ export function useClientOperations({ enabled = true } = {}) {
 
 export function useClientOperation(slug) {
   return useQuery({ queryKey: clientKey(slug), queryFn: () => request(`/${encodeURIComponent(slug)}`), enabled: Boolean(slug), staleTime: 15_000 });
+}
+
+const projectsKey = (clientId, userId) => ['client-project-operations', clientId, userId];
+
+export function useClientProjects(clientId, userId) {
+  return useQuery({
+    queryKey: projectsKey(clientId, userId),
+    queryFn: () => request(`/${encodeURIComponent(clientId)}/projects`),
+    enabled: Boolean(clientId && userId),
+    staleTime: 15_000,
+  });
+}
+
+export function useSaveClientProject(clientId, userId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, input }) => request(`/${encodeURIComponent(clientId)}/projects/${encodeURIComponent(projectId)}`, { method: 'PUT', body: JSON.stringify(input) }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(projectsKey(clientId, userId), (rows) => (rows || []).map((row) => row.id === saved.id ? saved : row));
+      queryClient.invalidateQueries({ queryKey: projectsKey(clientId, userId) });
+    },
+  });
 }
 
 function useRefresh() {

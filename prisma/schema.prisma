@@ -654,6 +654,7 @@ enum ClientStatus {
 }
 
 model Client {
+  projects                  ProjectOperation[]
   aiGovernanceRisks          AiGovernanceRisk[]
   aiGovernanceAuthorizations AiGovernanceAuthorization[]
   aiGovernanceIncidents      AiGovernanceIncident[]
@@ -1292,6 +1293,7 @@ model TeamMember {
   collaboratingTasks TaskCollaborator[]
   responsibleClients Client[]      @relation("ClientResponsible")
   managedClients     Client[]      @relation("ClientProjectManager")
+  managedProjects    ProjectOperation[]
   crmLeads           CrmLead[]     @relation("CrmLeadOwner")
 }
 
@@ -2913,9 +2915,41 @@ model ProjectFormalization {
   requirementsChangedById   String?
   requirementsChangedByName String?
   updatedAt              DateTime  @default(now()) @updatedAt @db.Timestamptz()
+  operation              ProjectOperation?
 
   @@index([status], map: "ProjectFormalization_status_idx")
   @@index([clientId], map: "ProjectFormalization_client_idx")
+}
+
+// Alcance por proyecto, separado del contrato recurrente del cliente. La fuente comercial aprobada es inmutable;
+// revisar la ejecución nunca cambia la propuesta, su habilitación ni las obligaciones financieras.
+model ProjectOperation {
+  id                 String   @id @default(uuid())
+  formalizationId    String   @unique
+  formalization      ProjectFormalization @relation(fields: [formalizationId], references: [id], onDelete: Restrict)
+  clientId           String
+  client             Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  title              String
+  modality           String?
+  startDate          String?
+  endDate            String?
+  projectManagerId   String?
+  projectManager     TeamMember? @relation(fields: [projectManagerId], references: [id], onDelete: SetNull)
+  sourceSnapshot     Json     @db.JsonB
+  deliverables       Json     @default("[]") @db.JsonB
+  notes              String   @default("")
+  productionDays     Int?
+  productionHours    Float?
+  reportRequired     Boolean?
+  reviewStatus       String   @default("PENDIENTE")
+  revision           Int      @default(1)
+  reviewedAt         DateTime? @db.Timestamptz()
+  reviewedById       String?
+  createdAt          DateTime @default(now()) @db.Timestamptz()
+  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz()
+
+  @@index([clientId, createdAt], map: "ProjectOperation_client_created_idx")
+  @@index([projectManagerId], map: "ProjectOperation_manager_idx")
 }
 
 // El contrato firmado o el soporte verificable de una formalización. Mismo bucket y mismas reglas que los comprobantes:

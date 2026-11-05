@@ -68,6 +68,30 @@ const run = (db, options = {}) => {
     }).then((result) => ({ result, bells, bands, infos, logs }));
 };
 
+test('una gestión de una cuota no detiene los avisos de otras obligaciones del cliente', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [{ ...clients()[1], accountsReceivables: [
+        rec({ id: 'q1', period: '2026-08-01', metadata: { collectionMode: 'CUOTA' } }),
+        rec({ id: 'q2', period: '2026-08-01', metadata: { collectionMode: 'CUOTA' } })
+    ] }];
+    db.collectionActivity = { findFirst: async ({ where }) => where.clientId === 'c-grit' && (where.receivableId === undefined || where.receivableId === 'q1') ? { id: 'gestion-q1' } : null };
+    const { bands } = await run(db);
+    assert.deepEqual(bands.map((item) => item.subjectId), ['q2']);
+});
+
+test('mensualidades explícitas avisan a Dirección y PM aunque el contrato general sea de servicios', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [{ ...clients()[0], contracts: [], accountsReceivables: [
+        rec({ id: 'm1', period: '2026-08-01', metadata: { collectionMode: 'MENSUAL' } }),
+        rec({ id: 'm2', period: '2026-09-01', metadata: { collectionMode: 'MENSUAL' } })
+    ] }];
+    const { bells } = await run(db);
+    const pm = bells.find((item) => item.userId === 'u-kamila');
+    assert.equal(pm?.type, 'CARTERA_RIESGO');
+    assert.doesNotMatch(pm.message, /\$|mensualidad|\d/);
+    assert.ok(bells.some((item) => item.userId === 'u-francisco'));
+});
+
 test('Elisa recibe la banda con cifras; Dirección y el project manager, la campana sin cifras', async () => {
     const { result, bells, bands } = await run(fakeDb());
     assert.equal(result.sent, 2, 'Muebles Nuva (dos mensualidades) y la cuenta puntual de Grit');

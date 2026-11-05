@@ -16,7 +16,7 @@ const VISIBLE = 4;
 
 /** Las gestiones de todos los clientes, agrupadas por cliente, de la más reciente a la más vieja. */
 export function useCollectionActivities(enabled) {
-    const { data } = useQuery({
+    const { data, isError, isPending, refetch } = useQuery({
         queryKey: KEY,
         enabled,
         staleTime: 30_000,
@@ -28,15 +28,15 @@ export function useCollectionActivities(enabled) {
             if (!byClient.has(item.clientId)) byClient.set(item.clientId, []);
             byClient.get(item.clientId).push(item);
         }
-        return byClient;
-    }, [data]);
+        return { byClient, hasMore: data?.hasMore === true, limit: data?.limit || 500, isError, isPending, refetch };
+    }, [data, isError, isPending, refetch]);
 }
 
-export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
+export function CollectionActivityPanel({ clientId, receivableId = null, items = [], canWrite, history }) {
     const queryClient = useQueryClient();
     const [showAll, setShowAll] = useState(false);
     const save = useMutation({
-        mutationFn: async (channel) => (await axios.post(`${getApiBaseUrl()}/api/financials/collection-activities`, { clientId, channel }, auth())).data,
+        mutationFn: async (channel) => (await axios.post(`${getApiBaseUrl()}/api/financials/collection-activities`, { clientId, receivableId, channel }, auth())).data,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: KEY });
             queryClient.invalidateQueries({ queryKey: ['important-notice'] });
@@ -47,11 +47,12 @@ export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
             toast.error(error.response?.data?.error || 'No pudimos guardar la gestión de cobro.');
         }
     });
-    const shown = showAll ? items : items.slice(0, VISIBLE);
+    const scoped = items.filter((item) => (item.receivableId || null) === receivableId);
+    const shown = showAll ? scoped : scoped.slice(0, VISIBLE);
     return (
-        <div data-collection-activities className="rounded-xl border border-zinc-100 p-3 dark:border-white/5">
+        <div data-collection-activities={receivableId || 'general'} className="rounded-xl border border-zinc-100 p-3 dark:border-white/5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Gestiones de cobro</p>
+                <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{receivableId ? 'Gestiones de esta obligación' : 'Gestiones de toda la cartera del cliente'}</p>
                 {/* Un menú pequeño, como «Recordarme» en la banda (Rodny, 28 de octubre de 2026): la tarjeta no se ensancha. */}
                 {canWrite && (
                     <DropdownMenu>
@@ -72,7 +73,10 @@ export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
                     </DropdownMenu>
                 )}
             </div>
-            {items.length === 0
+            {history?.isError ? <p role="alert" className="mt-1 text-xs text-destructive">No pudimos leer las gestiones. <button type="button" onClick={() => history.refetch()} className="min-h-11 underline">Volver a intentar</button></p>
+                : history?.isPending ? <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Cargando gestiones…</p>
+                : scoped.length === 0 && history?.hasMore ? <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">No hay gestiones de este alcance en las {history.limit} más recientes.</p>
+                : scoped.length === 0
                 ? <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Todavía no hay gestiones registradas.</p>
                 : (
                     <ul className="mt-1 space-y-1">
@@ -84,9 +88,10 @@ export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
                         ))}
                     </ul>
                 )}
-            {items.length > VISIBLE && (
+            {scoped.length > 0 && history?.hasMore && <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Vista de las {history.limit} gestiones más recientes; hay historial anterior.</p>}
+            {scoped.length > VISIBLE && (
                 <button type="button" onClick={() => setShowAll((open) => !open)} className="mt-1 min-h-11 text-xs font-semibold text-primary">
-                    {showAll ? 'Ver menos' : `Ver las ${items.length} gestiones`}
+                    {showAll ? 'Ver menos' : `Ver las ${scoped.length} gestiones`}
                 </button>
             )}
         </div>

@@ -42,18 +42,37 @@ export const isMonthlyClient = (contracts = []) => {
     return latest?.serviceType === 'PARRILLA';
 };
 
+/** Las obligaciones actuales de un aviso agregado; el seguimiento no alcanza las otras deudas del cliente. */
+export const collectionNoticeReceivableIds = async (db, notice, now = new Date()) => {
+    if (notice.kind === 'CARTERA_UNICO') return [notice.subjectId];
+    if (!['CARTERA_MENSUAL', 'CARTERA_SUSPENSION'].includes(notice.kind)) return [];
+    const client = await db.client.findUnique({ where: { id: notice.subjectId }, select: {
+        contracts: { select: { serviceType: true, startDate: true } },
+        accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS }
+    } });
+    if (!client) return [];
+    const settings = await readCollectionSettings(db);
+    if (notice.kind === 'CARTERA_SUSPENSION') {
+        return suspensionCandidate({ receivables: client.accountsReceivables, today: bogotaToday(now), settings })?.receivableIds || [];
+    }
+    const alerts = clientCollectionAlerts({ clientId: notice.subjectId, monthly: isMonthlyClient(client.contracts),
+        receivables: client.accountsReceivables, today: bogotaToday(now), settings });
+    return alerts.find((alert) => alert.kind === 'MENSUAL')?.receivableIds || [];
+};
+
 /**
- * ¿Sigue haciendo falta el aviso? null si está vigente y actualizado; `refresh` corrige solo su texto y nivel sin
+ * ¿Sigue haciendo falta el aviso? `receivableIds` conserva el alcance de la misma lectura que produjo el texto;
+ * `refresh` corrige solo su texto y nivel sin
  * reemplazarlo ni perder la pausa; `reason` lo retira. La banda usa exactamente el mismo cálculo que el reloj.
  */
 export const collectionStillDue = async (db, notice, now = new Date()) => {
     const settings = await readCollectionSettings(db);
     // Como en el CRM (28 de octubre de 2026): una gestión de cobro registrada después del aviso lo saca de la banda.
-    const handled = async (clientId, subject) => (await hasCollectionActivitySince(db, clientId, notice.createdAt) ? { reason: 'GESTION', subject } : null);
+    const handled = async (clientId, subject, ids = []) => (await hasCollectionActivitySince(db, clientId, notice.createdAt, ids) ? { reason: 'GESTION', subject } : null);
     const currentText = (alert, subject) => {
         const { message, label, level } = collectionNoticeText(alert, subject);
-        return notice.message === message && notice.label === label && notice.level === level
-            ? null : { refresh: { message, label, level } };
+        return { receivableIds: alert.receivableIds,
+            ...(notice.message === message && notice.label === label && notice.level === level ? {} : { refresh: { message, label, level } }) };
     };
     // La propuesta de suspender sale sola de la banda si ya se decidió —el cliente quedó suspendido— o si se puso al
     // día. Es una propuesta: que nadie la atienda no la convierte en suspensión.
@@ -69,7 +88,7 @@ export const collectionStillDue = async (db, notice, now = new Date()) => {
         if (!client) return { reason: 'AL_DIA', subject: null };
         if (client.suspensions?.length) return { reason: 'YA_ATENDIDO', subject: client.name };
         const still = suspensionCandidate({ receivables: client.accountsReceivables, today: bogotaToday(now), settings });
-        return still ? handled(notice.subjectId, client.name) : { reason: 'AL_DIA', subject: client.name };
+        return still ? handled(notice.subjectId, client.name, still.receivableIds) : { reason: 'AL_DIA', subject: client.name };
     }
     if (notice.kind === 'CARTERA_MENSUAL') {
         const client = await db.client.findUnique({
@@ -79,7 +98,7 @@ export const collectionStillDue = async (db, notice, now = new Date()) => {
         const still = client && clientCollectionAlerts({ clientId: notice.subjectId, monthly: isMonthlyClient(client.contracts),
             receivables: client.accountsReceivables, today: bogotaToday(now), settings }).find((alert) => alert.kind === 'MENSUAL');
         if (!still) return { reason: 'RECALCULADO', subject: client?.name || null };
-        return (await handled(notice.subjectId, client.name)) || currentText(still, client.name);
+        return (await handled(notice.subjectId, client.name, still.receivableIds)) || currentText(still, client.name);
     }
     const receivable = await db.accountsReceivable.findUnique({
         where: { id: notice.subjectId }, select: { ...RECEIVABLE_FIELDS, clientId: true, client: { select: { name: true } } }
@@ -87,6 +106,6 @@ export const collectionStillDue = async (db, notice, now = new Date()) => {
     const subject = receivable?.client?.name || null;
     if (!receivable || openBalanceCents(receivable) <= 0) return { reason: 'AL_DIA', subject };
     const still = clientCollectionAlerts({ receivables: [receivable], today: bogotaToday(now), settings })[0];
-    if (!still) return { reason: 'RECALCULADO', subject };
-    return (await handled(receivable.clientId, subject)) || currentText(still, subject);
+    if (!still || still.kind !== 'UNICO') return { reason: 'RECALCULADO', subject };
+    return (await handled(receivable.clientId, subject, still.receivableIds)) || currentText(still, subject);
 };

@@ -76,6 +76,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows of the year
         clientSlug: 'jazmin',
         // CLIENTE o PRESTAMO (20 de octubre de 2026): lo anterior es de clientes.
         kind: 'CLIENTE',
+        collectionMode: null,
+        collectionModeLocked: false,
         counterpartyType: null,
         counterpartyName: null,
         loanRecordId: null,

@@ -172,7 +172,7 @@ router.get('/collection-activities', requireFinancialAccess, async (_req, res) =
 });
 router.post('/collection-activities', requireFinancialWrite, async (req, res) => {
     try {
-        res.status(201).json(await recordCollectionActivity(prisma, { clientId: req.body?.clientId, channel: req.body?.channel }, req.user));
+        res.status(201).json(await recordCollectionActivity(prisma, { clientId: req.body?.clientId, receivableId: req.body?.receivableId ?? null, channel: req.body?.channel }, req.user));
     } catch (error) {
         if (!error.statusCode) console.error('[Cartera] Gestión no guardada:', error?.message || error);
         res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar la gestión de cobro.' });
