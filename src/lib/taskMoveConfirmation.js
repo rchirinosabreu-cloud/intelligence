@@ -1,8 +1,10 @@
+import { applyParticipationReceipt, taskCardKey } from './taskParticipationBoard.js';
+
 // La posición puede anticiparse al guardar; el estado operativo y sus fechas no.
 // Retirar esta proyección vuelve a los datos actuales, sin restaurar una copia vieja.
 export function projectTaskMove(tasks, move, columnOfTask) {
     if (!move) return tasks;
-    const moving = tasks.find(task => String(task.id) === String(move.taskId));
+    const moving = tasks.find(task => taskCardKey(task) === String(move.taskId));
     if (!moving) return tasks;
     const remaining = tasks.filter(task => task !== moving);
     const destination = remaining.filter(task => columnOfTask(task) === move.columnId);
@@ -18,6 +20,7 @@ export function projectTaskMove(tasks, move, columnOfTask) {
 // Solo después de confirmar el PATCH. El tablero conserva sus relaciones normalizadas;
 // el recibo de una tarea no tiene la misma forma que la lista completa.
 export function applyConfirmedTaskMove(tasks, savedTask) {
+    if (savedTask.sharedProgress) return tasks && applyParticipationReceipt(tasks, savedTask);
     return tasks?.map(task => {
         if (String(task.id) !== String(savedTask.id)) return task;
         const confirmed = {};

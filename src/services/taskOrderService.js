@@ -1,5 +1,6 @@
 import { compareTaskOrder, mergeFilteredTaskOrder, taskEntersNewQueue } from '../lib/taskOrder.js';
 import { recognitionTransaction } from './recognitionService.js';
+import { hasTaskParticipations, taskParticipations, aggregateParticipationStatus } from '../lib/taskParticipation.js';
 
 const fail = (message, statusCode = 400) => Object.assign(new Error(message), { statusCode });
 const orderSelect = { id: true, status: true, sortOrder: true, dueDate: true, createdAt: true };
@@ -52,6 +53,14 @@ export const reorderTaskSelection = async ({ db, user, reorderList, previousIds 
 // same queue rule. Only a deliberate, authorized placement may override the tail.
 export const updateOrderedTask = async (tx, args, current) => {
   const data = { ...args.data };
+  // Parrillas, automatizaciones y la API antigua tampoco pueden cerrar partes ajenas.
+  if ('status' in data && data.status !== current.status) {
+    const persisted = await tx.task.findUnique({ where: { id: args.where.id }, include: { assignee: true, collaborators: true, workSessions: { where: { endedAt: null } } } });
+    if (persisted && hasTaskParticipations({ ...persisted, ...data })) {
+      const expected = aggregateParticipationStatus(taskParticipations({ ...persisted, ...data, status: persisted.status }));
+      if (expected !== data.status) throw fail('El estado de esta tarea depende de sus participaciones. Revisa el equipo en Gestión.', 409);
+    }
+  }
   const hasAnchor = Object.hasOwn(data, 'orderBeforeId');
   const hasIndex = Object.hasOwn(data, 'sortOrder');
   const anchor = data.orderBeforeId;

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Clock } from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { DECLARED_TIME_EVENT, DECLARED_TIME_OPTIONS } from '@/lib/declaredTime';
+import { DECLARED_TIME_EVENT, DECLARED_TIME_OPTIONS, declaredTimePayload } from '@/lib/declaredTime';
 
 // «¿Cuánto te tomó?» al cerrar una tarea sin cronómetro (Rodny, 9 de octubre de 2026). Uno solo para toda la
 // aplicación: el tablero o el panel avisan con `askDeclaredTimeIfNeeded` cuando el servidor lo pide. No frena a
@@ -27,7 +27,7 @@ export default function DeclaredTimeDialog() {
       const response = await fetch(`${getApiBaseUrl()}/api/tasks/${encodeURIComponent(task.id)}/declared-time`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ minutes: option.minutes })
+        body: JSON.stringify(declaredTimePayload(task, option.minutes))
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'No se pudo guardar el tiempo.');
@@ -48,7 +48,7 @@ export default function DeclaredTimeDialog() {
           <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan"><Clock className="h-5 w-5" /></div>
           <DialogTitle className="text-zinc-950 dark:text-zinc-50">¿Cuánto te tomó?</DialogTitle>
           <DialogDescription className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-            Cerraste «{task?.title}» sin el cronómetro. Un estimado ayuda a entender tu carga y lo que toma cada tipo de trabajo.
+            {task?.declaredTimeParticipant ? 'Terminaste tu parte de' : 'Cerraste'} «{task?.title}» sin el cronómetro. Un estimado ayuda a entender tu carga y lo que toma cada tipo de trabajo.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-3 gap-2" role="group" aria-label="Tiempo que te tomó">

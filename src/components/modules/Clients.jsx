@@ -13,7 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { toast } from 'react-hot-toast';
@@ -44,10 +45,18 @@ function Person({ member }) {
 }
 
 function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, archivePending }) {
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [responsibleId, setResponsibleId] = useState('all');
-  const [showArchived, setShowArchived] = useState(false);
+  const navigate = useNavigateFrom();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get('directoryQ') || '';
+  const responsibleId = searchParams.get('directoryCM') || 'all';
+  const showArchived = searchParams.get('directoryArchived') === '1';
+  const updateFilter = (key, value) => {
+    const next = new URLSearchParams(location.search);
+    if ((next.get(key) || '') === (value || '')) return;
+    if (value) next.set(key, value); else next.delete(key);
+    setSearchParams(next, { replace: true, state: location.state });
+  };
   const matches = (client) => client.name.toLowerCase().includes(searchQuery.toLowerCase())
     && (responsibleId === 'all' || client.responsible?.id === responsibleId);
   const active = clients.filter((c) => !c.isArchived && matches(c));
@@ -111,12 +120,12 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
         <label className="relative flex-1">
           <span className="sr-only">Buscar cliente</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <input type="text" placeholder="Buscar cliente…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+          <input type="text" placeholder="Buscar cliente…" value={searchQuery} onChange={(e) => updateFilter('directoryQ', e.target.value)}
             className="min-h-11 w-full rounded-xl border border-transparent bg-zinc-100 pl-10 pr-4 text-sm text-zinc-900 focus:border-primary/40 focus:outline-none dark:bg-white/5 dark:text-zinc-100" />
         </label>
         <div className="flex items-center gap-2 rounded-xl bg-zinc-100 pl-3 dark:bg-white/5">
           <UserIcon className="h-4 w-4 shrink-0 text-zinc-400" />
-          <Select value={responsibleId} onChange={(e) => setResponsibleId(e.target.value)} aria-label="Community manager" className="min-h-11 border-none bg-transparent pl-0 pr-9 text-sm">
+          <Select value={responsibleId} onChange={(e) => updateFilter('directoryCM', e.target.value === 'all' ? '' : e.target.value)} aria-label="Community manager" className="min-h-11 border-none bg-transparent pl-0 pr-9 text-sm">
             <option value="all">Todos los CM</option>
             {team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
           </Select>
@@ -139,7 +148,7 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
       </section>
 
       <div className="border-t border-zinc-200 pt-6 dark:border-white/5">
-        <button type="button" onClick={() => setShowArchived(!showArchived)} aria-expanded={showArchived}
+        <button type="button" onClick={() => updateFilter('directoryArchived', showArchived ? '' : '1')} aria-expanded={showArchived}
           className="flex min-h-11 items-center gap-2 text-sm font-semibold text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
           {showArchived ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           Clientes inactivos ({archived.length})
@@ -162,7 +171,7 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
 }
 
 const Clients = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigateFrom();
   const queryClient = useQueryClient();
   const confirm = useConfirmDialog();
   const { currentUser } = useAuth();

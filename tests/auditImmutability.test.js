@@ -22,9 +22,18 @@ test('el catálogo cubre todos los registros de auditoría y de historial', () =
     assert.deepEqual(AUDIT_TABLES.map((spec) => `${spec.schema}.${spec.name}`).sort(), [
         'bria_memory.agency_fact_events', 'bria_memory.decision_events', 'bria_memory.learning_events',
         'public.AiGovernanceEvent', 'public.AiUsageEvent', 'public.DeletedTaskLog',
-        'public.FinancialAuditEvent', 'public.OperationalTraceEvent',
+        'public.FinancialAuditEvent', 'public.OperationalTraceEvent', 'public.TaskParticipationArchive',
         'vault.credential_events', 'vault.reveal_events'
     ]);
+});
+
+test('el archivo de participaciones conserva el identificador histórico y nunca desaparece por cascada', () => {
+    const archive = schema.match(/model TaskParticipationArchive \{([\s\S]*?)\n\}/)?.[1];
+    assert.ok(archive, 'el modelo histórico existe');
+    assert.match(archive, /\btaskId\s+String\b/, 'la identidad histórica es obligatoria');
+    assert.doesNotMatch(archive, /@relation\([^)]*fields: \[taskId\]/, 'borrar la tarea no cambia ni borra su identificador histórico');
+    assert.doesNotMatch(archive, /onDelete: Cascade/);
+    assert.equal(byName('TaskParticipationArchive')?.retention, null, 'no se purga este historial');
 });
 
 test('solo los dos registros con retención admiten la purga, con la misma antigüedad que su servicio', () => {

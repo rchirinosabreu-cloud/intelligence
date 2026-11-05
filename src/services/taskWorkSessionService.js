@@ -1,12 +1,11 @@
 const asDate = (value) => value instanceof Date ? value : new Date(value);
 
-// Colaboradores (Rodny, 5 de octubre de 2026): una tarea tiene dos clases de reloj. El del
-// responsable sigue atado al estado de la tarea (`isCollaborator: false`, como todas las sesiones
-// anteriores a este cambio); cada colaborador abre y pausa el suyo (`isCollaborator: true`). Las
-// búsquedas siempre dicen de cuál hablan: pausar al responsable no puede cerrar la sesión de otro.
+// isCollaborator conserva el rol al abrir el tramo. workerId conserva su dueño aunque cambie
+// después de responsable a colaborador. Los movimientos personales cierran por workerId;
+// los cierres globales antiguos sin trabajador explícito mantienen su alcance anterior.
 const sessionScope = ({ workerId, isCollaborator }) => (isCollaborator
   ? { workerId, isCollaborator: true }
-  : { isCollaborator: false });
+  : { isCollaborator: false, ...(workerId ? { workerId } : {}) });
 
 const durationUntil = (session, endedAt) => Math.max(0, endedAt.getTime() - asDate(session.startedAt).getTime());
 
@@ -48,6 +47,7 @@ export const openTaskWorkSession = async (tx, {
   at = new Date(),
   workerId = task?.assigneeId || null,
   isCollaborator = false,
+  isRework = false,
 } = {}) => {
   const existing = await tx.taskWorkSession.findFirst({
     where: { taskId: task.id, endedAt: null, ...sessionScope({ workerId, isCollaborator }) },
@@ -72,6 +72,7 @@ export const openTaskWorkSession = async (tx, {
       cycleId,
       workerId: workerId || null,
       isCollaborator: Boolean(isCollaborator),
+      isRework: Boolean(isRework),
       startedById: actorId,
       startedAt: asDate(at),
       isOverlapping: Boolean(overlapping),
@@ -140,7 +141,8 @@ export const listTaskWorkHistory = async (prismaClient, taskId) => {
   const [task, cycles] = await Promise.all([
     prismaClient.task.findUnique({
       where: { id: taskId },
-      select: { id: true, status: true, startedAt: true, accumulatedWorkMs: true },
+      select: { id: true, status: true, sharedProgress: true, assigneeId: true, assigneeBaselineWorkMs: true, startedAt: true, accumulatedWorkMs: true,
+        participationArchives: { orderBy: { removedAt: 'asc' } } },
     }),
     prismaClient.taskWorkCycle.findMany({
       where: { taskId },
@@ -155,6 +157,7 @@ export const listTaskWorkHistory = async (prismaClient, taskId) => {
     + cycle.sessions
       .filter((session) => !session.isCollaborator)
       .reduce((sessionTotal, session) => sessionTotal + Number(session.durationMs || 0), 0), 0);
-  const historicalBaselineMs = Math.max(0, Number(task.accumulatedWorkMs || 0) - recordedSessionMs);
-  return { task, cycles, recordedSessionMs, historicalBaselineMs };
+  const historicalBaselineMs = task.sharedProgress ? Number(task.assigneeBaselineWorkMs || 0)
+    : Math.max(0, Number(task.accumulatedWorkMs || 0) - recordedSessionMs);
+  return { task, cycles, recordedSessionMs, historicalBaselineMs, archivedParticipations: task.participationArchives || [] };
 };

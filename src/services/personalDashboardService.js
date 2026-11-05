@@ -8,6 +8,7 @@ import { hasModulePermission } from '../config/security.js';
 import { isActionableStage, stageLabel } from '../lib/crmRules.js';
 import { isTaskOverdue, taskDueDay } from '../lib/taskDeadlines.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
+import { completedTaskParticipationViews, completedTaskParticipationWhere, projectArchivedTaskParticipation, taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const DASHBOARD_MEETING_HORIZON_DAYS = 7;
@@ -133,6 +134,10 @@ const formatTask = (task) => ({
   status: task.status,
   dueDate: task.dueDate,
   completedAt: task.completedAt,
+  ...(task.participantMemberId ? { participantMemberId: task.participantMemberId, participationKey: task.participationKey,
+    globalStatus: task.globalStatus, globalCompletedAt: task.globalCompletedAt, participantRevision: task.participantRevision,
+    ...(task.participantArchiveId ? { participantArchiveId: task.participantArchiveId, isArchivedParticipation: true } : {}),
+    isCollaboration: task.isCollaboration } : {}),
   recognitions: task.recognitions || [],
   creatorId: task.creatorId || null,
   assigneeId: task.assigneeId || null,
@@ -318,10 +323,11 @@ export const buildCrmAttention = ({ leads = [], enabled = true, limit = DASHBOAR
 };
 
 export const buildPersonalDashboard = ({ member, now = new Date(), globalAchievements = null }) => {
-  const tasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
+  const rawTasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
+  const tasks = rawTasks.map(task => taskForMember(task, member?.id)).filter(Boolean);
   const returnedTaskCandidates = Array.isArray(member?.returnedTasks)
     ? member.returnedTasks
-    : tasks.filter((task) => task.status === 'DEVUELTA' && task.creatorId === member?.userId);
+    : rawTasks.filter((task) => task.status === 'DEVUELTA' && task.creatorId === member?.userId);
   const returnedTasks = Array.from(new Map(
     returnedTaskCandidates
       .filter((task) => task.status === 'DEVUELTA' && task.creatorId === member?.userId)
@@ -336,11 +342,11 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       .filter((task) => getBogotaWeekContext(task.createdAt)?.weekKey === currentWeek)
     : [];
   const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
-  // Colaboradores (5 de octubre de 2026): lo que la persona hace como colaboradora también es su
-  // trabajo pendiente y cuenta en su carga. Los logros siguen siendo de quien cierra la tarea.
-  const collaboratingActiveTasks = (Array.isArray(member?.collaboratingTasks) ? member.collaboratingTasks : [])
-    .map((row) => (row?.task ? { ...row.task, isCollaboration: true } : null))
-    .filter((task) => task && ['PENDIENTE', 'EN_CURSO'].includes(task.status));
+  const collaboratingTasks = (Array.isArray(member?.collaboratingTasks) ? member.collaboratingTasks : [])
+    .map(row => row?.task ? taskForMember({ ...row.task,
+      collaborators: row.task.collaborators || [{ ...row, memberId: row.memberId || member?.id, member: row.member || member }]
+    }, member?.id) : null).filter(Boolean);
+  const collaboratingActiveTasks = collaboratingTasks.filter(task => ['PENDIENTE', 'EN_CURSO'].includes(task.status));
   const assignedActiveTasks = Array.from(new Map(
     [...tasks.filter((task) => ['PENDIENTE', 'EN_CURSO'].includes(task.status)), ...collaboratingActiveTasks]
       .map((task) => [task.id, task])
@@ -358,13 +364,15 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
     .slice(0, 8);
-  const memberAchievementsToday = tasks
+  const archivedTasks = (member?.archivedParticipations || []).filter(row => row.task).map(row => projectArchivedTaskParticipation(row.task, row));
+  const memberAchievementsToday = Array.from(new Map([...tasks, ...collaboratingTasks, ...archivedTasks]
+    .map(task => [task.participationKey || task.id, task])).values())
     .filter((task) => task.status === 'REALIZADA' && isSameBogotaDay(toDate(task.completedAt), now))
     .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
   const memberAchievements = memberAchievementsToday.slice(0, 8);
-  const achievements = (Array.isArray(globalAchievements) ? globalAchievements : memberAchievements)
+  const achievements = (Array.isArray(globalAchievements) ? globalAchievements.flatMap(completedTaskParticipationViews) : memberAchievements)
     .filter((task) => task.status === 'REALIZADA')
-    .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+    .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0)).slice(0, 50);
 
   const focusCards = [];
   if (overdueTasks.length > 0) {
@@ -593,6 +601,26 @@ const loadCrmAttention = async ({ member, now }) => {
   return buildCrmAttention({ leads: items, enabled: true });
 };
 
+export const loadRecentTaskAchievements = async (db, take = 50) => {
+  const include = {
+    assignee: { select: { id: true, userId: true, name: true, role: true, avatarUrl: true } },
+    client: { select: { id: true, name: true, slug: true, logoUrl: true } },
+    collaborators: taskParticipationSelect.collaborators,
+    participationArchives: taskParticipationSelect.participationArchives
+  };
+  // Cada fuente limita por su propia fecha; ordenar Tasks por updatedAt perdería cierres
+  // recientes cuando alguien corrige muchos títulos antiguos.
+  const [global, owner, collaborators, archived] = await Promise.all([
+    db.task.findMany({ where: { status: 'REALIZADA', completedAt: { not: null } }, orderBy: { completedAt: 'desc' }, take, include }),
+    db.task.findMany({ where: { assigneeStatus: 'REALIZADA', assigneeCompletedAt: { not: null } }, orderBy: { assigneeCompletedAt: 'desc' }, take, include }),
+    db.taskCollaborator.findMany({ where: { status: 'REALIZADA', completedAt: { not: null } }, orderBy: { completedAt: 'desc' }, take,
+      select: { task: { include } } }),
+    db.taskParticipationArchive.findMany({ where: { currentTaskId: { not: null }, status: 'REALIZADA', completedAt: { not: null } }, orderBy: { completedAt: 'desc' }, take,
+      select: { task: { include } } })
+  ]);
+  return [...new Map([...global, ...owner, ...collaborators.map(row => row.task), ...archived.map(row => row.task)].filter(Boolean).map(task => [task.id, task])).values()];
+};
+
 export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   const userId = targetUserId || requester?.userId;
   assertPersonalDashboardAccess({ requester, targetUserId: userId });
@@ -600,8 +628,10 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   const dashboardDayWindow = getBogotaDayWindow(dashboardNow);
   const dashboardTaskInclude = {
     assignee: {
-      select: { id: true, name: true, role: true, avatarUrl: true }
+      select: { id: true, userId: true, name: true, role: true, avatarUrl: true }
     },
+    collaborators: taskParticipationSelect.collaborators,
+    workSessions: taskParticipationSelect.workSessions,
     client: {
       select: {
         id: true,
@@ -661,14 +691,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
       nativeTasks: {
         where: {
           OR: [
-            { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
-            {
-              status: 'REALIZADA',
-              completedAt: {
-                gte: dashboardDayWindow.start,
-                lt: dashboardDayWindow.end
-              }
-            }
+            { status: { in: ACTIVE_STATUSES } },
+            completedTaskParticipationWhere({ gte: dashboardDayWindow.start, lt: dashboardDayWindow.end })
           ]
         },
         include: dashboardTaskInclude,
@@ -678,8 +702,11 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         ]
       },
       collaboratingTasks: {
-        where: { task: { status: { in: ['PENDIENTE', 'EN_CURSO'] } } },
-        select: { task: { include: dashboardTaskInclude } }
+        where: { task: { OR: [
+          { status: { in: ACTIVE_STATUSES } },
+          completedTaskParticipationWhere({ gte: dashboardDayWindow.start, lt: dashboardDayWindow.end })
+        ] } },
+        select: { memberId: true, task: { include: dashboardTaskInclude } }
       }
     }
   });
@@ -697,35 +724,9 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     console.error(`[PersonalDashboard] ${label} no disponible:`, error?.message || error);
     return fallback;
   });
-  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks, meetings, crmAttention] = await Promise.all([
+  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks, meetings, crmAttention, archivedParticipations] = await Promise.all([
     getDashboardAnnouncements(userId),
-    prisma.task.findMany({
-      where: {
-        status: 'REALIZADA',
-        completedAt: { not: null }
-      },
-      orderBy: { completedAt: 'desc' },
-      take: 50,
-      include: {
-        assignee: {
-          select: {
-            id: true,
-            userId: true,
-            name: true,
-            role: true,
-            avatarUrl: true
-          }
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            logoUrl: true
-          }
-        }
-      }
-    }),
+    loadRecentTaskAchievements(prisma),
     isCommunityManagerRole(member.role)
       ? prisma.task.findMany({
         where: {
@@ -817,7 +818,10 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
       ]
     }),
     safe('reuniones', loadDashboardMeetings({ member, now: dashboardNow }), []),
-    safe('atención comercial', loadCrmAttention({ member, now: dashboardNow }), buildCrmAttention({ enabled: false }))
+    safe('atención comercial', loadCrmAttention({ member, now: dashboardNow }), buildCrmAttention({ enabled: false })),
+    prisma.taskParticipationArchive.findMany({ where: { currentTaskId: { not: null }, memberId: member.id, status: 'REALIZADA',
+      completedAt: { gte: dashboardDayWindow.start, lt: dashboardDayWindow.end } },
+      include: { task: { include: { assignee: { select: { id: true } }, client: { select: { id: true, name: true, slug: true, logoUrl: true } } } } } })
   ]);
 
   return buildPersonalDashboard({
@@ -829,7 +833,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
       authoredOperationalEvents,
       returnedTasks,
       meetings,
-      crmAttention
+      crmAttention,
+      archivedParticipations
     },
     globalAchievements: await attachTaskRecognitions(prisma, globalAchievements),
     now: dashboardNow

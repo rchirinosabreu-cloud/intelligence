@@ -12,7 +12,8 @@ import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useBackToOrigin, useOriginState } from '@/components/layout/BackToOrigin';
 import SuccessModal from './SuccessModal';
 import QuotationTermsEditor from './QuotationTermsEditor';
 import ServiceCatalogModal from './ServiceCatalogModal';
@@ -53,6 +54,10 @@ const emptyQuotationForm = () => ({
 const QuotationForm = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const originState = useOriginState();
+    const { origin, goBack } = useBackToOrigin('/cotizaciones');
+    const backLabel = `Volver a ${origin?.label || 'Cotizaciones'}`;
     const isEditing = !!id;
 
     const [draftForm, setDraftForm, localDraft] = useFormDraft({ scope: `quotation:${id || 'new'}`, initial: emptyQuotationForm(), defer: isEditing });
@@ -483,7 +488,7 @@ const QuotationForm = () => {
                 if (data.delivery.sent) toast.success('Enviada por correo al cliente con el PDF');
                 else if (data.delivery.reason !== 'sin-correo') toast.error(data.delivery.message || 'El correo al cliente no salió');
             }
-            if (!id && data.id) navigate(`/cotizaciones/editar/${data.id}`, { replace: true });
+            if (!id && data.id) navigate(`/cotizaciones/editar/${data.id}`, { replace: true, state: location.state });
         } catch (error) {
             console.error("[QuotationForm] Save failed:", error);
             toast.error(error.message || "Fallo al guardar la cotización");
@@ -548,7 +553,7 @@ const QuotationForm = () => {
             />
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/cotizaciones')} className="rounded-xl">
+                    <Button variant="ghost" size="icon" onClick={goBack} aria-label={backLabel} title={backLabel} className="rounded-xl">
                         <ArrowLeft className="w-5 h-5" />
                     </Button>
                     <div>
@@ -689,7 +694,7 @@ const QuotationForm = () => {
                                         {party.kind === 'CLIENTE' ? 'Ligada a la ficha del cliente ' : 'Cliente potencial: '}
                                         <span className="font-semibold text-zinc-800 dark:text-zinc-100">{party.name}</span>
                                         {' · '}
-                                        <a href={`/crm/oportunidades/${party.leadId}`} className="font-medium text-primary underline-offset-2 hover:underline">{party.leadCode} en el CRM</a>
+                                        <Link to={`/crm/oportunidades/${party.leadId}`} state={originState()} className="font-medium text-primary underline-offset-2 hover:underline">{party.leadCode} en el CRM</Link>
                                     </>
                                 ) : 'Al guardar, la cotización se liga con su cliente si ya existe; si no, queda como cliente potencial en el CRM y en Terceros.'}
                             </p>

@@ -38,7 +38,7 @@ test('la pieza abierta la manda la URL, no un estado paralelo', async () => {
   // Desde el 29 de septiembre de 2026 la navegación va marcada como venida del carril, para que el
   // desplazamiento a la pieza —que es solo para quien llega de fuera— no mueva la página al elegir.
   assert.match(editor, /search: params\.toString\(\) \}/, 'elegir una pieza escribe la URL');
-  assert.match(editor, /\{ replace: true, state: \{ desdeElCarril: true \} \}/);
+  assert.match(editor, /\{ replace: true, state: \{ \.\.\.location\.state, desdeElCarril: true \} \}/, 'elegir una pieza conserva también el origen de navegación');
   assert.match(editor, /if \(location\.state\?\.desdeElCarril\) return undefined;/);
   assert.match(editor, /onSelect=\{selectPiece\}/, 'y el carril usa ese mismo camino');
 });

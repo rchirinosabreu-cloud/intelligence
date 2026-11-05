@@ -25,11 +25,11 @@ const fakeDb = () => ({
         { id: 'created-r', creatorId: 'u-rodny', taskComments: [{ content: 'Contexto' }], taskAttachments: [] },
         { id: 'created-h', creatorId: 'u-helen', taskComments: [], taskAttachments: [] }
       ];
-      if (where.returnedAt) return [{ assigneeId: 'm-jesu' }];
+      if (select.returnedAt) return [{ assigneeId: 'm-jesu', returnedAt: at(`${DAY}T18:00:00Z`) }];
       // Lo cerrado el 3: Rodny con reloj y avance, a tiempo; Helen con tiempo declarado y sin avance, tarde.
       return [
-        { id: 't-r', title: 'Reel', assigneeId: 'm-rodny', completedAt: at(`${DAY}T20:00:00.000Z`), dueDate: at(`${DAY}T12:00:00.000Z`) },
-        { id: 't-h', title: 'Caption', assigneeId: 'm-helen', completedAt: at(`${DAY}T21:00:00.000Z`), dueDate: at(`${DAY}T12:00:00.000Z`) }
+        { id: 't-r', title: 'Reel', status: 'REALIZADA', assigneeId: 'm-rodny', completedAt: at(`${DAY}T20:00:00.000Z`), dueDate: at(`${DAY}T12:00:00.000Z`) },
+        { id: 't-h', title: 'Caption', status: 'REALIZADA', assigneeId: 'm-helen', completedAt: at(`${DAY}T21:00:00.000Z`), dueDate: at(`${DAY}T12:00:00.000Z`) }
       ].filter(() => select);
     }
   },
@@ -147,7 +147,7 @@ test('live habits can change without reducing confirmed points, including gifts 
   assert.deepEqual(before.scoreBreakdown, { confirmed: 25, provisional: 25 });
   assert.equal(before.today.isProvisional, true);
   const find = db.task.findMany;
-  db.task.findMany = async args => args.where.returnedAt ? [{ assigneeId: 'm-rodny' }] : find(args);
+  db.task.findMany = async args => args.select.returnedAt ? [{ assigneeId: 'm-rodny', returnedAt: at(`${DAY}T18:00:00Z`) }] : find(args);
   const after = await service.leagueFor({ userId: 'u-rodny' });
   assert.deepEqual(after.scoreBreakdown, { confirmed: 25, provisional: 20 });
   assert.equal(after.score, 45);
@@ -160,7 +160,7 @@ test('a saved daily close confirms today once and survives later source changes'
   const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T23:15:00Z`) });
   await service.computeAndSave(DAY);
   const find = db.task.findMany;
-  db.task.findMany = async args => args.where.returnedAt ? [{ assigneeId: 'm-rodny' }] : find(args);
+  db.task.findMany = async args => args.select.returnedAt ? [{ assigneeId: 'm-rodny', returnedAt: at(`${DAY}T18:00:00Z`) }] : find(args);
   const result = await service.leagueFor({ userId: 'u-rodny' });
   assert.deepEqual(result.scoreBreakdown, { confirmed: 25, provisional: 0 });
   assert.equal(result.score, 25);
@@ -184,7 +184,8 @@ test('a fresh league starts at zero, excludes old daily evidence and never backf
   assert.equal(league.streak.days, 0);
   assert.equal(league.position, null, 'zero points must not create a winner by alphabetical order');
   assert.equal(league.startsAt, cutoff.toISOString());
-  assert.ok(windows.every(where => (where.createdAt || where.completedAt || where.returnedAt).gte.getTime() === cutoff.getTime()));
+  const dateFilters = value => Object.entries(value).flatMap(([key, entry]) => key === 'gte' ? [entry] : entry && typeof entry === 'object' ? dateFilters(entry) : []);
+  assert.ok(windows.every(where => dateFilters(where).length > 0 && dateFilters(where).every(date => date.getTime() === cutoff.getTime())));
   const savedDays = [];
   service.computeAndSave = async day => savedDays.push(day);
   await service.runAutomatic();

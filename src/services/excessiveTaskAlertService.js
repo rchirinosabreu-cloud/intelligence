@@ -1,6 +1,8 @@
 import prisma from '../lib/prisma.js';
 import { getTaskElapsedMs } from '../lib/taskTiming.js';
 import { EXCESSIVE_TASK_THRESHOLD_HOURS, EXCESSIVE_TASK_THRESHOLD_MS } from '../lib/taskWorkAlerts.js';
+import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
+import { archivedParticipationWorkMs, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 
 // El umbral vive en src/lib/taskWorkAlerts.js (10 h desde el 9 de octubre de 2026; antes 15 h).
 export { EXCESSIVE_TASK_THRESHOLD_HOURS, EXCESSIVE_TASK_THRESHOLD_MS };
@@ -15,15 +17,31 @@ export function buildExcessiveTaskAlerts(tasks, {
   if (!assigneeId || !Array.isArray(tasks)) return [];
 
   return tasks
-    .filter((task) => task?.assigneeId === assigneeId
-      && String(task?.status || '').toUpperCase() === 'EN_CURSO'
-      && !confirmedTaskIds.has(task.id))
+    .filter((task) => task?.assigneeId === assigneeId && !confirmedTaskIds.has(task.id))
+    .map(task => {
+      if (!hasTaskParticipations(task)) return task;
+      const part = taskParticipations(task).find(person => person.memberId === assigneeId);
+      const sessions = (task.workSessions || []).filter(session => session.workerId === assigneeId);
+      if (part?.legacy && task.startedAt && !sessions.some(session => !session.endedAt)) {
+        sessions.push({ workerId: assigneeId, startedAt: task.startedAt, endedAt: null });
+      }
+      if (part?.status !== 'EN_CURSO' || !sessions.some(session => !session.endedAt)) return null;
+      const legacyRecorded = (task.workSessions || []).filter(session => session.endedAt && !session.isCollaborator)
+        .reduce((sum, session) => sum + Number(session.durationMs || 0), 0);
+      const baseline = part.legacy ? Math.max(0, Number(task.accumulatedWorkMs || 0) - legacyRecorded) : Number(part.baselineWorkMs || 0);
+      return { ...task, status: part.status, participantMemberId: assigneeId,
+        startedAt: sessions.find(session => !session.endedAt)?.startedAt,
+        personalElapsedMs: baseline + archivedParticipationWorkMs(task, assigneeId)
+          + sessions.reduce((sum, session) => sum + sessionElapsedMs(session, now), 0) };
+    })
+    .filter(task => task && String(task.status || '').toUpperCase() === 'EN_CURSO')
     .map((task) => ({
       id: task.id,
       title: task.title,
       clientName: task.client?.name || task.clientName || 'Sin cliente',
       startedAt: task.startedAt,
-      elapsedMs: getTaskElapsedMs(task, now),
+      elapsedMs: task.personalElapsedMs ?? getTaskElapsedMs(task, now),
+      ...(task.participantMemberId ? { participantMemberId: task.participantMemberId } : {}),
     }))
     .filter((task) => task.elapsedMs >= thresholdMs)
     .sort((a, b) => b.elapsedMs - a.elapsedMs);
@@ -45,7 +63,12 @@ export function buildCollaboratorTaskAlerts(rows, {
   confirmedTaskIds = new Set(),
 } = {}) {
   return (Array.isArray(rows) ? rows : [])
-    .map((row) => row?.task)
+    .map(row => {
+      if (!row?.task || (row.status && row.status !== 'EN_CURSO') || row.task.status === 'REALIZADA') return null;
+      const sessions = (row.task.workSessions || []).filter(session => !row.memberId || session.workerId === row.memberId);
+      return { ...row.task, workSessions: sessions, participantMemberId: row.memberId,
+        baselineWorkMs: Number(row.baselineWorkMs || 0) + archivedParticipationWorkMs(row.task, row.memberId) };
+    })
     .filter((task) => task && !confirmedTaskIds.has(task.id)
       && (task.workSessions || []).some((session) => !session.endedAt))
     .map((task) => ({
@@ -53,25 +76,26 @@ export function buildCollaboratorTaskAlerts(rows, {
       title: task.title,
       clientName: task.client?.name || 'Sin cliente',
       startedAt: (task.workSessions || []).find((session) => !session.endedAt)?.startedAt || null,
-      elapsedMs: (task.workSessions || []).reduce((total, session) => total + sessionElapsedMs(session, now), 0),
+      elapsedMs: Number(task.baselineWorkMs || 0) + (task.workSessions || []).reduce((total, session) => total + sessionElapsedMs(session, now), 0),
       isCollaboration: true,
+      ...(task.participantMemberId ? { participantMemberId: task.participantMemberId } : {}),
     }))
     .filter((task) => task.elapsedMs >= thresholdMs)
     .sort((a, b) => b.elapsedMs - a.elapsedMs);
 }
 
-export async function getMyExcessiveTaskAlerts(userId, now = new Date()) {
+export async function getMyExcessiveTaskAlerts(userId, now = new Date(), db = prisma) {
   if (!userId) return [];
 
-  const member = await prisma.teamMember.findUnique({
+  const member = await db.teamMember.findUnique({
     where: { userId },
     select: { id: true },
   });
   if (!member) return [];
 
   const [tasks, collaborations] = await Promise.all([
-    prisma.task.findMany({
-      where: { assigneeId: member.id, status: 'EN_CURSO' },
+    db.task.findMany({
+      where: { assigneeId: member.id, OR: [{ assigneeStatus: 'EN_CURSO' }, { assigneeStatus: null, status: 'EN_CURSO' }] },
       select: {
         id: true,
         title: true,
@@ -79,20 +103,27 @@ export async function getMyExcessiveTaskAlerts(userId, now = new Date()) {
         assigneeId: true,
         startedAt: true,
         accumulatedWorkMs: true,
+        ...taskParticipationSelect,
+        workSessions: { select: { workerId: true, isCollaborator: true, durationMs: true, startedAt: true, endedAt: true } },
         client: { select: { name: true } },
       },
     }),
-    prisma.taskCollaborator.findMany({
-      where: { memberId: member.id, task: { status: { in: ['PENDIENTE', 'EN_CURSO'] } } },
+    db.taskCollaborator.findMany({
+      where: { memberId: member.id, OR: [
+        { status: 'EN_CURSO' }, { status: null, task: { status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } } }
+      ] },
       select: {
+        memberId: true, status: true, baselineWorkMs: true,
         task: {
           select: {
             id: true,
             title: true,
+            status: true,
+            participationArchives: taskParticipationSelect.participationArchives,
             client: { select: { name: true } },
             workSessions: {
-              where: { workerId: member.id, isCollaborator: true },
-              select: { durationMs: true, startedAt: true, endedAt: true },
+              where: { workerId: member.id },
+              select: { workerId: true, durationMs: true, startedAt: true, endedAt: true },
             },
           },
         },
@@ -101,7 +132,7 @@ export async function getMyExcessiveTaskAlerts(userId, now = new Date()) {
   ]);
 
   const taskIds = [...tasks.map((task) => task.id), ...collaborations.map((row) => row.task.id)];
-  const recentConfirmations = taskIds.length === 0 ? [] : await prisma.operationalTraceEvent.findMany({
+  const recentConfirmations = taskIds.length === 0 ? [] : await db.operationalTraceEvent.findMany({
     where: {
       eventType: 'TASK_EXCESSIVE_WORK_CONFIRMED',
       subjectUserId: userId,
@@ -121,7 +152,7 @@ export async function getMyExcessiveTaskAlerts(userId, now = new Date()) {
 /** El tiempo propio de un colaborador en una tarea y si su reloj corre ahora. */
 export async function collaboratorWorkOnTask(db, { taskId, memberId, at = new Date() }) {
   const sessions = await db.taskWorkSession.findMany({
-    where: { taskId, workerId: memberId, isCollaborator: true },
+    where: { taskId, workerId: memberId },
     select: { durationMs: true, startedAt: true, endedAt: true },
   });
   return {
@@ -136,14 +167,15 @@ export async function confirmExcessiveTaskWork(userId, taskId, at = new Date(), 
     where: {
       id: taskId,
       OR: [
-        { status: 'EN_CURSO', assignee: { userId } },
-        { status: { in: ['PENDIENTE', 'EN_CURSO'] }, collaborators: { some: { member: { userId } } } },
+        { assignee: { userId } },
+        { collaborators: { some: { member: { userId } } } },
       ],
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, status: true, assigneeId: true, assignee: { select: { id: true, userId: true } }, ...taskParticipationSelect },
   });
 
-  if (!task) {
+  const participant = taskParticipations(task).find(person => person.member?.userId === userId);
+  if (!task || participant?.status !== 'EN_CURSO') {
     const error = new Error('Task is not active or assigned to this user');
     error.code = 'TASK_NOT_ASSIGNED';
     throw error;

@@ -3,7 +3,8 @@ import {
   AlertCircle, CheckCircle, ChevronDown, Clock, FileText, Loader2,
   RefreshCcw, RotateCcw, Trash2
 } from '@/components/ui/icons';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { useOriginState } from '@/components/layout/BackToOrigin';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { askBria } from '@/lib/briaAsk';
 import frontendApiService from '../../../services/frontendApiService';
@@ -23,14 +24,25 @@ const formatDate = (value) => value
 
 const AutomaticMinutesPanel = () => {
   const confirm = useConfirmDialog();
+  const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  const originState = useOriginState('Minutas');
   const [minutes, setMinutes] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [trashView, setTrashView] = useState(false);
+  // Solo la selección viaja en la dirección; el contenido se vuelve a leer con sus permisos.
+  const expandedId = params.get('minute');
+  const trashView = params.get('minutesView') === 'trash';
+  const open = Boolean(expandedId) || trashView || params.get('minutesOpen') === '1';
+  const updateView = values => setParams(current => {
+    const next = new URLSearchParams(current);
+    for (const [key, value] of Object.entries(values)) {
+      if (value) next.set(key, value); else next.delete(key);
+    }
+    return next;
+  }, { replace: true, state: location.state });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
-  const [expandedId, setExpandedId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,7 +142,7 @@ const AutomaticMinutesPanel = () => {
         </div>
         <button
           type="button"
-          onClick={() => setOpen(value => !value)}
+          onClick={() => updateView(open ? { minutesOpen: null, minute: null, minutesView: null } : { minutesOpen: '1' })}
           aria-expanded={open}
           aria-controls="automatic-minutes-content"
           className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -144,8 +156,8 @@ const AutomaticMinutesPanel = () => {
         <div id="automatic-minutes-content" className="border-t border-border p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="inline-flex w-fit rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
-              <button type="button" onClick={() => { setTrashView(false); setExpandedId(null); }} className={`rounded-md px-3 py-1.5 text-xs font-medium ${!trashView ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}>Minutas</button>
-              <button type="button" onClick={() => { setTrashView(true); setExpandedId(null); }} className={`rounded-md px-3 py-1.5 text-xs font-medium ${trashView ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}>Papelera</button>
+              <button type="button" onClick={() => updateView({ minutesOpen: '1', minutesView: null, minute: null })} className={`rounded-md px-3 py-1.5 text-xs font-medium ${!trashView ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}>Minutas</button>
+              <button type="button" onClick={() => updateView({ minutesOpen: '1', minutesView: 'trash', minute: null })} className={`rounded-md px-3 py-1.5 text-xs font-medium ${trashView ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}>Papelera</button>
             </div>
             {!trashView && (
               <Button onClick={syncNow} disabled={syncing} variant="outline" className="shrink-0">
@@ -183,7 +195,7 @@ const AutomaticMinutesPanel = () => {
               return (
                 <article key={minute.id} className="rounded-xl border border-border bg-white p-4 dark:bg-zinc-900">
                   <div className="flex items-start gap-3">
-                    <button type="button" onClick={() => setExpandedId(expanded ? null : minute.id)} className="flex min-w-0 flex-1 items-start justify-between gap-4 text-left">
+                    <button type="button" onClick={() => updateView({ minutesOpen: '1', minute: expanded ? null : minute.id })} className="flex min-w-0 flex-1 items-start justify-between gap-4 text-left">
                       <div className="min-w-0">
                         <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{minute.title}</h3>
                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{formatDate(minute.meetingAt)}</p>
@@ -231,7 +243,7 @@ const AutomaticMinutesPanel = () => {
                             {minute.actionItems.map((item, index) => (
                               <li key={`${minute.id}-action-${index}`} className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70">
                                 {item.task}{item.owner ? ` · ${item.owner}` : ''}
-                                {item.taskId && <> · <Link to={`/gestion?taskId=${encodeURIComponent(item.taskId)}`} className="font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan">ya es pendiente</Link></>}
+                                {item.taskId && <> · <Link to={`/gestion?taskId=${encodeURIComponent(item.taskId)}`} state={originState()} className="font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan">ya es pendiente</Link></>}
                               </li>
                             ))}
                           </ul>

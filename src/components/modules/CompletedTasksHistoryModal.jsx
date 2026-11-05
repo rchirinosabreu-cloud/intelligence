@@ -25,6 +25,9 @@ import {
 } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
 import { cn } from '@/lib/utils';
+import { participationRequest } from '@/lib/taskParticipationBoard';
+
+const achievementKey = task => task.participationKey || task.id;
 
 const formatDateTime = (value) => (value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota' }).format(new Date(value))
@@ -70,12 +73,14 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState('all');
   const [tasks, setTasks] = useState([]);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [reopeningTask, setReopeningTask] = useState(null);
   const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
   const [reopenNote, setReopenNote] = useState('');
   const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
   const canReopenTasks = canReturnCompletedTaskToBoard(currentUser);
+  const canReopenAchievement = task => !task?.isArchivedParticipation && (task?.participantMemberId ? Boolean(currentUser) && !task.isLocked : canReopenTasks);
   // Detalle de una tarea cerrada: horas y datos, abriéndola aquí mismo (Rodny, 23 de septiembre de 2026).
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   // El desglose por sesiones lo sirve el servidor solo a dirección (`isManagerRole`); el resto ve el total.
@@ -129,7 +134,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
 
     fetchCompletedTasks();
     return () => requestController.abort();
-  }, [isOpen, selectedDate, debouncedSearchTerm]);
+  }, [isOpen, selectedDate, debouncedSearchTerm, refreshVersion]);
 
   // Helper to group tasks by User
   // Since we are fetching by a specific day, grouping by date is no longer strictly necessary,
@@ -181,7 +186,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   };
 
   const handleReopenTask = async () => {
-    if (!reopeningTask || isSubmittingReopen || !canReopenTasks) return;
+    if (!reopeningTask || isSubmittingReopen || !canReopenAchievement(reopeningTask)) return;
     const payload = buildCompletedTaskReopenPayload(reopenReason, reopenNote);
     if (!payload) return;
 
@@ -189,18 +194,28 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
       setIsSubmittingReopen(true);
       const baseUrl = getApiBaseUrl();
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${baseUrl}/api/tasks/${reopeningTask.id}`, {
+      const request = participationRequest(reopeningTask.participantMemberId ? {
+        ...reopeningTask,
+        participation: { memberId: reopeningTask.participantMemberId, revision: reopeningTask.participantRevision },
+      } : reopeningTask, payload);
+      const response = await fetch(`${baseUrl}${request.path}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : '',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(request.body),
       });
       const responseBody = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(responseBody?.details || responseBody?.error || `Error ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 409) {
+          setRefreshVersion(value => value + 1);
+          closeReopenDialog(true);
+        }
+        throw new Error(responseBody?.details || responseBody?.error || `Error ${response.status}`);
+      }
 
-      setTasks(current => current.filter(task => task.id !== reopeningTask.id));
+      setTasks(current => current.filter(task => achievementKey(task) !== achievementKey(reopeningTask)));
       await Promise.allSettled([
         queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] }),
@@ -208,8 +223,8 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
         queryClient.invalidateQueries({ queryKey: ['personalDashboard'] }),
       ]);
       toast({
-        title: 'Tarea regresada al tablero',
-        description: 'Ahora aparece en Pendiente y conserva todo su historial.',
+        title: reopeningTask.participantMemberId ? 'Participación regresada al tablero' : 'Tarea regresada al tablero',
+        description: reopeningTask.participantMemberId ? `La parte de ${reopeningTask.assignee?.name || 'esta persona'} está en Pendiente. Las demás partes conservan su avance.` : 'Ahora aparece en Pendiente y conserva todo su historial.',
       });
       closeReopenDialog(true);
     } catch (error) {
@@ -217,7 +232,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
       toast({
         variant: 'destructive',
         title: 'No se pudo regresar la tarea',
-        description: 'La tarea permanece en el historial de logros.',
+        description: error.message || 'La tarea permanece en el historial de logros.',
       });
     } finally {
       setIsSubmittingReopen(false);
@@ -256,7 +271,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                     placeholder="Buscar tarea o cliente..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white"
+                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:text-white"
                 />
             </div>
 
@@ -279,7 +294,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         value={selectedUser}
                         onChange={(e) => setSelectedUser(e.target.value)}
                         disabled={isGlobalSearchActive}
-                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary dark:text-white disabled:cursor-not-allowed disabled:opacity-45"
                     >
                         <option value="all">Todos los miembros</option>
                         {uniqueUsers.map(u => (
@@ -323,24 +338,27 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         {/* Task Cards Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-2 sm:pl-11">
                             {userGroup.items.map(task => {
-                              const isExpanded = expandedTaskId === task.id;
+                              const key = achievementKey(task);
+                              const isExpanded = expandedTaskId === key;
                               return (
                                 <Card
-                                  key={task.id}
+                                  key={key}
                                   data-completed-task-id={task.id}
+                                  data-completed-participant-id={task.participantMemberId}
+                                  data-archived-participation={task.isArchivedParticipation ? 'true' : undefined}
                                   className={cn(
-                                    "relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group",
+                                    "relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-brand-green/25 dark:hover:border-brand-green/25 transition-colors group",
                                     // Abierta ocupa la fila entera: el detalle no cabe en media columna.
-                                    isExpanded && "sm:col-span-2 border-emerald-200 dark:border-emerald-900/50"
+                                    isExpanded && "sm:col-span-2 border-brand-green/25 dark:border-brand-green/25"
                                   )}
                                 >
-                                    {canReopenTasks && (
+                                    {canReopenAchievement(task) && (
                                       <button
                                           type="button"
                                           onClick={() => setReopeningTask(task)}
                                           aria-label="Regresar al tablero"
                                           title="Regresar al tablero"
-                                          className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-[#009EB9]/10 hover:text-[#009EB9] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/30 dark:text-zinc-500"
+                                          className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:text-zinc-500"
                                       >
                                           <TaskReintegrateIcon className="h-3.5 w-3.5" />
                                       </button>
@@ -349,20 +367,22 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                     <button
                                         type="button"
                                         data-completed-task-toggle
-                                        onClick={() => setExpandedTaskId(current => (current === task.id ? null : task.id))}
+                                        onClick={() => setExpandedTaskId(current => (current === key ? null : key))}
                                         aria-expanded={isExpanded}
-                                        aria-controls={`completed-task-details-${task.id}`}
+                                        aria-controls={`completed-task-details-${key}`}
                                         className="flex w-full items-start gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-lg"
                                     >
                                         <div className="mt-0.5">
-                                            <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            <div className="w-4 h-4 rounded-full bg-brand-green/10 dark:bg-brand-green/20 border border-brand-green flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
                                             </div>
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <h4 className={cn("text-sm font-medium text-zinc-900 dark:text-white", !isExpanded && "truncate")} title={task.title}>
                                                 {task.title}
                                             </h4>
+                                            {task.participantMemberId && <p className="mt-1 text-xs text-brand-green-deep dark:text-brand-green">Terminó su parte</p>}
+                                            {task.isArchivedParticipation && <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Participación anterior</p>}
                                             <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                                                 <span>{new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                 {task.client && (
@@ -386,20 +406,23 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                     </button>
 
                                     {isExpanded && (
-                                        <div id={`completed-task-details-${task.id}`} data-completed-task-details className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800/70">
+                                        <div id={`completed-task-details-${key}`} data-completed-task-details className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800/70">
                                             {/* El desglose por sesiones es del mismo componente del panel de la tarea; el servidor
                                                 solo lo entrega a dirección, así que el resto ve el total registrado. */}
-                                            {canSeeWorkSessions ? (
+                                            {canSeeWorkSessions && !task.isLocked ? (
                                                 <TaskWorkHistory
                                                     taskId={task.id}
+                                                    participantMemberId={task.participantMemberId}
+                                                    participantArchiveId={task.participantArchiveId}
+                                                    participantRemovedAt={task.removedAt}
                                                     status={task.status}
                                                     startedAt={task.startedAt}
                                                     accumulatedWorkMs={task.accumulatedWorkMs}
                                                     // Corregir el tiempo también desde aquí (23 de octubre de 2026): una tarea
                                                     // cerrada solo se consulta en este historial, así que es donde se corrige.
                                                     currentUser={currentUser}
-                                                    onCorrected={(result) => {
-                                                        if (result?.task) setTasks(current => current.map(row => (row.id === task.id ? { ...row, ...result.task } : row)));
+                                                    onCorrected={() => {
+                                                        setRefreshVersion(value => value + 1);
                                                         queryClient.invalidateQueries({ queryKey: ['personalDashboard'] });
                                                     }}
                                                 />
@@ -451,11 +474,13 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-              <TaskReintegrateIcon className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" />
-              Regresar tarea al tablero
+              <TaskReintegrateIcon className="h-5 w-5 text-primary" />
+              {reopeningTask?.participantMemberId ? 'Regresar participación al tablero' : 'Regresar tarea al tablero'}
             </DialogTitle>
             <DialogDescription>
-              <strong>{reopeningTask?.title}</strong> volverá a Pendiente y conservará responsable, prioridad y bitácora.
+              {reopeningTask?.participantMemberId
+                ? <>La parte de <strong>{reopeningTask.assignee?.name}</strong> en <strong>{reopeningTask.title}</strong> volverá a Pendiente. Las otras participaciones conservan su avance y sus relojes.</>
+                : <><strong>{reopeningTask?.title}</strong> volverá a Pendiente y conservará responsable, prioridad y bitácora.</>}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1">
@@ -464,7 +489,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
               <Select
                 value={reopenReason}
                 onChange={event => setReopenReason(event.target.value)}
-                className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+                className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
               >
                 {REOPEN_REASONS.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
               </Select>
@@ -475,7 +500,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                 value={reopenNote}
                 onChange={event => setReopenNote(event.target.value)}
                 placeholder="Explica brevemente qué debe corregirse."
-                className="min-h-[112px] w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+                className="min-h-[112px] w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
               />
             </label>
           </div>
@@ -492,7 +517,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
               type="button"
               onClick={handleReopenTask}
               disabled={isSubmittingReopen || !reopenNote.trim()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#009EB9] px-4 text-sm font-medium text-white hover:bg-[#008CA4] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />}
               Regresar a Pendiente

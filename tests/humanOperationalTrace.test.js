@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as labels from '../src/lib/operationalMutationLabels.js';
-import { getOperationalTrace, recordTaskListSync } from '../src/services/operationalTraceService.js';
+import { getOperationalTrace, recordTaskListSync, recordOperationalTrace } from '../src/services/operationalTraceService.js';
 
 const actor = { id: 'helen', name: 'Helen' };
 const row = (eventType, metadata = {}) => ({ id: eventType, eventType, actorId: actor.id,
@@ -90,4 +90,27 @@ test('league gifts and manual traffic awards have explicit human descriptions, g
  assert.equal(labels.presentPlatformMutation({method:'POST',path:'/api/league/meetings'},'Admin').description,'Admin registró quién llegó primero a la reunión de tráfico.');
  assert.equal(labels.presentPlatformMutation({method:'POST',path:'/api/league/kudos'}).visible,true);
  assert.equal(labels.presentPlatformMutation({method:'POST',path:'/api/user/onboarding'}).visible,false);
+});
+
+test('personal task achievements are visible without confusing the actor with the participant', async () => {
+  const subject = { id: 'member', name: 'Ana' };
+  const own = { ...row('TASK_PARTICIPATION_CHANGED', { memberId: 'm-ana', fromStatus: 'EN_CURSO', toStatus: 'REALIZADA' }),
+    id: 'own', actorId: subject.id, actor: subject, subjectUserId: subject.id, subjectUser: subject, taskId: 'task' };
+  const delegated = { ...own, id: 'manager', actorId: 'manager', actor: { id: 'manager', name: 'Dirección' } };
+  let query;
+  const result = await getOperationalTrace({ requester: { role: 'ADMIN' }, db: {
+    user: { findMany: async () => [subject] },
+    task: { findMany: async () => [{ id: 'task', title: 'Una entrega' }] },
+    operationalTraceEvent: { findMany: async args => { query = args; return [own, delegated]; } }
+  } });
+  assert.equal(result.timeline.length, 2);
+  assert.equal(result.timeline[0].description, 'Ana terminó su parte de “Una entrega”.');
+  assert.equal(result.timeline[1].description, 'Dirección marcó como realizada la parte de Ana en “Una entrega”.');
+  assert.equal(result.timeline[0].displayLabel, 'Parte terminada');
+  assert.equal(result.summary.taskMutations, 2);
+  assert.ok(JSON.stringify(query.where).includes('TASK_PARTICIPATION_CHANGED'));
+  const saved = await recordOperationalTrace({ eventType: 'TASK_PARTICIPATION_CHANGED', actorId: subject.id,
+    subjectUserId: subject.id, taskId: 'task', metadata: { memberId: 'm-ana', toStatus: 'REALIZADA' },
+    db: { operationalTraceEvent: { create: async ({ data }) => data } } });
+  assert.equal(saved.subjectUserId, subject.id);
 });

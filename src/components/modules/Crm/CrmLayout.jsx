@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import PageHeader from '@/components/ui/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,8 @@ const TABS = ['dashboard', 'oportunidades', 'seguimientos', 'reportes'];
 
 const CrmLayout = () => {
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
+  const navigateFrom = useNavigateFrom();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'dashboard';
   const [filters, setFilters] = useState(() => {
@@ -49,7 +51,7 @@ const CrmLayout = () => {
   const selectTab = value => {
     const next = new URLSearchParams(searchParams);
     if (value === 'dashboard') next.delete('tab'); else next.set('tab', value);
-    setSearchParams(next, { replace: true });
+    setSearchParams(next, { replace: true, state: location.state });
   };
 
   return (
@@ -80,18 +82,18 @@ const CrmLayout = () => {
         </TabsList>
 
         <TabsContent value="dashboard" className="outline-none animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <CrmDashboard filters={filters} onFiltersChange={setFilters} team={team} onOpenLead={id => navigate(`/crm/oportunidades/${id}`)} onShowTab={selectTab} />
+          <CrmDashboard filters={filters} onFiltersChange={setFilters} team={team} onOpenLead={id => navigateFrom(`/crm/oportunidades/${id}`)} onShowTab={selectTab} />
         </TabsContent>
         <TabsContent value="oportunidades" className="outline-none animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <CrmLeadList filters={filters} onFiltersChange={setFilters} team={team} onOpenLead={id => navigate(`/crm/oportunidades/${id}`)} onCreate={() => setCreating(true)} />
+          <CrmLeadList filters={filters} onFiltersChange={setFilters} team={team} onOpenLead={id => navigateFrom(`/crm/oportunidades/${id}`)} onCreate={() => setCreating(true)} />
         </TabsContent>
         <TabsContent value="seguimientos" className="outline-none animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <CrmFollowUps filters={filters} onFiltersChange={setFilters} team={team} onOpenLead={id => navigate(`/crm/oportunidades/${id}`)} />
+          <CrmFollowUps filters={filters} onFiltersChange={setFilters} team={team} onOpenLead={id => navigateFrom(`/crm/oportunidades/${id}`)} />
         </TabsContent>
       </Tabs>
 
       {alertSettingsOpen && <CrmFollowUpAlertSettings open onOpenChange={setAlertSettingsOpen} current={alertDays} />}
-      <CrmLeadForm open={creating}onOpenChange={setCreating} team={team} onSaved={lead => { setCreating(false); navigate(`/crm/oportunidades/${lead.id}`); }} />
+      <CrmLeadForm open={creating}onOpenChange={setCreating} team={team} onSaved={lead => { setCreating(false); navigateFrom(`/crm/oportunidades/${lead.id}`); }} />
     </div>
   );
 };

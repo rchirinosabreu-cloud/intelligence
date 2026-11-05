@@ -1,5 +1,9 @@
 import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
+import { hasTaskParticipations } from '../lib/taskParticipation.js';
+import { hydrateTaskParticipations, hydrateArchivedTaskParticipations } from './taskParticipationStore.js';
+import { applyTaskAggregateEffects } from './taskCompletionEffectsService.js';
+import { taskParticipationSelect, completedTaskParticipationWhere, completedTaskParticipationViews } from '../lib/taskParticipationMetrics.js';
 import { nextTaskOrder, updateOrderedTask } from './taskOrderService.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { assertTaskClientChange } from './taskClientChange.js';
@@ -132,7 +136,8 @@ export const getTasks = async (clientId, viewerUserId = null) => {
         const clientFilter = clientId ? { clientId } : {};
         // Ambas columnas deben describir el mismo instante: un cierre o una reapertura
         // entre lecturas no puede duplicar una tarea ni hacerla desaparecer del tablero.
-        const [activeTasks, recentCompletedTasks] = await prisma.$transaction(async (tx) => Promise.all([
+        const snapshot = await prisma.$transaction(async (tx) => {
+          const [activeTasks, recentCompletedTasks] = await Promise.all([
             tx.task.findMany({
                 where: { ...clientFilter, status: { not: 'REALIZADA' } },
                 include: taskListInclude,
@@ -144,10 +149,13 @@ export const getTasks = async (clientId, viewerUserId = null) => {
                 orderBy: { completedAt: 'desc' },
                 take: 200
             })
-        ]), { isolationLevel: 'RepeatableRead' });
+          ]);
+          const viewer = viewerUserId ? await tx.user.findUnique({ where: { id: viewerUserId }, select: { id: true, role: true } }) : null;
+          return hydrateTaskParticipations(tx, [...activeTasks, ...recentCompletedTasks], viewer);
+        }, { isolationLevel: 'RepeatableRead' });
         // La reserva se aplica antes de cualquier otra cosa: lo que no se puede ver no
         // debe llegar a la respuesta ni siquiera para ser transformado.
-        const tasks = [...activeTasks, ...recentCompletedTasks].map(taskPrivacyFilter(viewerUserId));
+        const tasks = snapshot.map(taskPrivacyFilter(viewerUserId));
 
         // Map for frontend compatibility: task.plan -> task.contentItem.plan
         return tasks.map(task => {
@@ -192,6 +200,7 @@ export const createTask = async ({
 }, { taskId, requireActiveClient = false } = {}) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
+        if (collaboratorIds?.length && mappedStatus !== 'PENDIENTE') throw Object.assign(new Error('Crea la tarea compartida en Pendiente; después cada persona mueve su parte.'), { statusCode: 400 });
         const taskClassification = classifyTaskDeterministically({
             title,
             description: [
@@ -416,9 +425,10 @@ export const createTask = async ({
             });
         }
 
+        let responseTask = newTask;
         // Map for frontend compatibility
         if (newTask.contentItem && newTask.contentItem.plan) {
-            return {
+            responseTask = {
                 ...newTask,
                 contentPlanId: newTask.contentItem.plan.id, // Ensure ID is at root
                 plan: {
@@ -431,7 +441,11 @@ export const createTask = async ({
             };
         }
 
-        return newTask;
+        if (hasTaskParticipations(newTask)) {
+            const viewer = creatorId ? await prisma.user.findUnique({ where: { id: creatorId }, select: { id: true, role: true } }) : null;
+            return (await hydrateTaskParticipations(prisma, [responseTask], viewer))[0];
+        }
+        return responseTask;
     } catch (error) {
         console.error("Error creating native task:", error);
         throw error;
@@ -477,17 +491,26 @@ export const buildCompletedTaskWhere = (dateString, searchTerm) => {
     };
 };
 
-export const getCompletedTasks = async (dateString, searchTerm) => {
+export const getCompletedTasks = async (dateString, searchTerm, viewerUserId = null) => {
     try {
-        const where = buildCompletedTaskWhere(dateString, searchTerm);
+      return await prisma.$transaction(async tx => {
+        const filter = buildCompletedTaskWhere(dateString, searchTerm);
+        const where = { AND: [completedTaskParticipationWhere(filter.completedAt),
+            ...(filter.OR ? [{ OR: [...filter.OR,
+                { collaborators: { some: { member: { name: { contains: String(searchTerm).trim(), mode: 'insensitive' } } } } },
+                { participationArchives: { some: { memberName: { contains: String(searchTerm).trim(), mode: 'insensitive' } } } },
+            ] }] : [])] };
 
-        const tasks = await prisma.task.findMany({
+        const tasks = await tx.task.findMany({
             where,
             include: {
                 client: {
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
+                collaborators: taskParticipationSelect.collaborators,
+                participationArchives: true,
+                viewers: { select: { userId: true } },
                 creator: {
                     select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                 }
@@ -497,7 +520,13 @@ export const getCompletedTasks = async (dateString, searchTerm) => {
             }
             // Removed take: 100 as we are now strictly filtering by day
         });
-        return await attachTaskRecognitions(prisma, tasks);
+        const recognized = await attachTaskRecognitions(tx, tasks);
+        const current = await hydrateTaskParticipations(tx, recognized, null);
+        const hydrated = await hydrateArchivedTaskParticipations(tx, current);
+        return hydrated.map(taskPrivacyFilter(viewerUserId)).flatMap(completedTaskParticipationViews)
+            .filter(task => !filter.completedAt.gte || (new Date(task.completedAt) >= filter.completedAt.gte && new Date(task.completedAt) <= filter.completedAt.lte))
+            .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+      }, { isolationLevel: 'RepeatableRead' });
     } catch (error) {
         console.error("Error fetching completed tasks:", error);
         throw error;
@@ -512,6 +541,8 @@ export const updateTask = async (id, data, updaterId = null) => {
         const currentTask = await tx.task.findUnique({
             where: { id },
             select: {
+                id: true,
+                ...taskParticipationSelect,
                 title: true,
                 status: true,
                 completedAt: true,
@@ -553,6 +584,11 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         const updateData = pickAllowedTaskUpdates(data);
+        if (hasTaskParticipations(currentTask) && ('status' in updateData || 'isReturned' in updateData)) {
+            throw Object.assign(new Error('Elige la participación que quieres mover; el estado general depende de todo el equipo.'), { statusCode: 409 });
+        }
+        const expectedRosterVersion = updateData.expectedRosterVersion;
+        delete updateData.expectedRosterVersion;
         await assertTaskClientChange(tx, currentTask, updateData);
         await assertActiveTeamMembers(tx, [updateData.assigneeId], [currentTask.assigneeId]);
 
@@ -571,9 +607,13 @@ export const updateTask = async (id, data, updaterId = null) => {
                 taskId: id,
                 assigneeId: nextAssigneeId,
                 collaboratorIds: nextAssigneeId ? keep : [],
+                expectedRosterVersion,
                 actorUserId: updaterId,
                 at: new Date()
             });
+            if (collaboratorChange?.shared && ('status' in updateData || 'isReturned' in updateData)) {
+                throw Object.assign(new Error('Guarda el equipo primero; luego cada persona mueve su participación.'), { statusCode: 409 });
+            }
         }
 
         // Reasignar una tarea en proceso (Rodny, 11 de octubre de 2026): el reloj de quien la trabajaba se cierra
@@ -581,7 +621,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         // pide además «En proceso», el reloj pasa al nuevo en el acto (`handover`). La regla es pura
         // (`reassignmentEffect`) y decide el estado antes del bloque de transición, que es el que cierra el reloj.
         const requestedStatus = 'status' in updateData ? (statusMapper[updateData.status] || updateData.status) : null;
-        const reassignment = reassignmentEffect(currentTask, { assigneeChanged: 'assigneeId' in updateData, assigneeId: nextAssigneeId, status: requestedStatus });
+        const reassignment = (hasTaskParticipations(currentTask) || collaboratorChange?.shared) ? null : reassignmentEffect(currentTask, { assigneeChanged: 'assigneeId' in updateData, assigneeId: nextAssigneeId, status: requestedStatus });
         if (reassignment) updateData.status = reassignment.status;
 
         // Extract and isolate returnReason and reintegrateReason
@@ -1016,6 +1056,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 },
                 assignee: true,
                 collaborators: taskCollaboratorsSelect,
+                workSessions: taskOpenSessionsSelect,
+                viewers: { select: { userId: true } },
                 creator: {
                     select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                 },
@@ -1037,6 +1079,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         if (currentTask.status === 'DEVUELTA' && updatedTask.status !== 'DEVUELTA') {
             await recordQualityStreakTransition(tx, currentTask, updatedTask);
         }
+        if (collaboratorChange?.shared) await applyTaskAggregateEffects(tx, currentTask, updatedTask.status, updaterId);
         const recognitionAt = recognitionBefore?.task.status !== 'REALIZADA' && updatedTask.status === 'REALIZADA' ? updatedTask.completedAt : new Date();
         await finishTaskRecognition(tx, recognitionBefore, updatedTask, recognitionAt);
         if (updatedTask.contentItem) await recordPlanRecognition(tx, updatedTask.contentItem.planId, recognitionAt, { allowAward: false });
@@ -1170,7 +1213,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         // --- Notificación a Seguidores (Tarea Completada) ---
-        if ('status' in data && (statusMapper[data.status] || data.status) === 'REALIZADA' && currentTask.status !== 'REALIZADA') {
+        if (updatedTask.status === 'REALIZADA' && currentTask.status !== 'REALIZADA') {
             try {
                 const followers = await prisma.taskFollower.findMany({
                     where: { taskId: id },
@@ -1251,6 +1294,10 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
         }
 
+        if (hasTaskParticipations(responseTask)) {
+            const viewer = updaterId ? await prisma.user.findUnique({ where: { id: updaterId }, select: { id: true, role: true } }) : null;
+            return (await hydrateTaskParticipations(prisma, [responseTask], viewer))[0];
+        }
         return responseTask;
     } catch (error) {
         console.error("Error updating native task:", error);

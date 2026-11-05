@@ -19,6 +19,7 @@ import { imageDerivativeService } from './socialImageDerivativeService.js';
 import { hasCover, kindAcceptsCover } from '../lib/videoCover.js';
 import { updateTask } from './nativeTaskService.js';
 import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
+import { hasTaskParticipations } from '../lib/taskParticipation.js';
 import { assertNotSuspended } from './clientSuspensionGate.js';
 import {
   MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
@@ -117,10 +118,11 @@ export const createSocialPublishingService = ({
   const whereLabel = (account) => `${SOCIAL_PLATFORM_LABELS[account.platform] || account.platform}${account.displayName ? ` (${account.displayName})` : ''}`;
 
   /**
-   * Meta publicó: el pendiente «Publicar» se cierra solo (Rodny, 15 de octubre de 2026: «si ya la
+   * Meta publicó: el pendiente individual «Publicar» se cierra solo (Rodny, 15 de octubre de 2026: «si ya la
    * plataforma está reconociendo que se publicó en Meta, entonces eso debe publicarse automáticamente»).
    * Así el community manager no tiene que mover nada —que era justo lo que mataba la publicación— y el
-   * logro queda a su nombre, porque el trabajo era programarla y lo hizo.
+   * logro queda a su nombre, porque el trabajo era programarla y lo hizo. En tareas compartidas,
+   * publicar no acredita las partes humanas: cada participante conserva su estado y su reloj.
    *
    * Pasa por el `updateTask` de siempre, no por un atajo: cierra los relojes abiertos, escribe
    * `completedAt` y cuenta para los reconocimientos igual que el botón del tablero. Y **nunca tumba la
@@ -130,9 +132,13 @@ export const createSocialPublishingService = ({
     try {
       const open = await db.task.findMany({
         where: { contentItemId: itemId, status: { not: 'REALIZADA' } },
-        select: { id: true, title: true, assignee: { select: { userId: true } } }
+        select: {
+          id: true, title: true, sharedProgress: true,
+          collaborators: { select: { memberId: true } },
+          assignee: { select: { userId: true } }
+        }
       });
-      for (const task of open.filter((row) => isPublicationTask(row.title || ''))) {
+      for (const task of open.filter((row) => isPublicationTask(row.title || '') && !hasTaskParticipations(row))) {
         await completeTask(task.id, { status: 'REALIZADA' }, task.assignee?.userId || null)
           .catch((error) => logger.error('[SocialPublishing] No se pudo cerrar el pendiente «Publicar»:', error.response?.data || error.message || error));
       }

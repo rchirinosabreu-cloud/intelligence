@@ -22,6 +22,7 @@ const fakeDb = ({ task, sessions = [], cycles = [] }) => {
       findFirst: async () => cycles.at(-1) || null,
       create: async ({ data }) => { writes.cycles.push(data); return { id: 'cy-new', ...data }; }
     },
+    $executeRaw: async () => 1,
     $transaction: async (work) => work(db)
   };
   return { db, writes };

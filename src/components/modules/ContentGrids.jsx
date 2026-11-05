@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useRef } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -27,12 +28,21 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const ContentGrids = () => {
   const confirm = useConfirmDialog();
-  const navigate = useNavigate();
+  const navigate = useNavigateFrom();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeClientId, setActiveClientId] = useState(null);
+  const searchTerm = searchParams.get('q') || '';
+  const activeClientId = searchParams.get('client') || null;
+  const updateView = (key, value) => {
+    const next = new URLSearchParams(location.search);
+    if ((next.get(key) || '') === (value || '')) return;
+    if (value) next.set(key, value); else next.delete(key);
+    setSearchParams(next, { replace: true, state: location.state });
+  };
+  const setActiveClientId = value => updateView('client', value);
   const gridRef = useRef(null);
 
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -59,20 +69,17 @@ const ContentGrids = () => {
     staleTime: 60_000
   });
 
-  // Click Outside Behavior
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      // Close if clicking outside the grid OR exactly on the grid container (between cards)
-      if (gridRef.current && (!gridRef.current.contains(event.target) || event.target === gridRef.current)) {
-        setActiveClientId(null);
-      }
-    };
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, []);
+  // Solo el fondo de esta pantalla cierra la carpeta. Un clic de navegación fuera de ella
+  // (barra lateral, aviso o regreso) no debe escribir después la URL anterior y cancelar la salida.
+  const closeFolderOnBackground = (event) => {
+    if (event.defaultPrevented || event.target.closest('a, button, input, select, textarea, [role="button"], [role="link"]')) return;
+    if (gridRef.current && (!gridRef.current.contains(event.target) || event.target === gridRef.current)) {
+      setActiveClientId(null);
+    }
+  };
 
   const toggleClient = (clientId) => {
-    setActiveClientId(prev => (prev === clientId ? null : clientId));
+    setActiveClientId(activeClientId === clientId ? null : clientId);
   };
 
   const deleteMutation = useMutation({
@@ -166,7 +173,7 @@ const ContentGrids = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500" onClick={closeFolderOnBackground}>
       <PageHeader
         title="Parrillas de Contenido"
         subtitle="Estructura jerárquica organizada por clientes."
@@ -174,7 +181,7 @@ const ContentGrids = () => {
         <Button
           size="lg"
           onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto shadow-lg shadow-indigo-500/20"
+          className="w-full sm:w-auto shadow-lg shadow-brand-cyan/20"
         >
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Plan
@@ -189,12 +196,12 @@ const ContentGrids = () => {
             type="text"
             placeholder="Buscar por cliente, mes o año..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-600/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
+            onChange={(e) => updateView('q', e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-brand-cyan/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
           />
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+          <div className="px-4 py-2 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
             <Folder className="w-3 h-3" />
             {filteredClientGroups.length} Clientes
           </div>
@@ -204,7 +211,7 @@ const ContentGrids = () => {
       {/* Main Folder View */}
       {isLoading ? (
         <div className="p-20 flex flex-col items-center justify-center gap-4">
-          <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+          <Loader2 className="w-10 h-10 text-brand-cyan-deep dark:text-brand-cyan animate-spin" />
           <p className="text-zinc-500 animate-pulse">Cargando carpetas de clientes...</p>
         </div>
       ) : filteredClientGroups.length > 0 ? (
@@ -225,8 +232,8 @@ const ContentGrids = () => {
                   className={`
                     p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden
                     ${activeClientId === group.id
-                      ? 'bg-white dark:bg-zinc-900 border-indigo-600/30 ring-1 ring-indigo-600/20 shadow-xl'
-                      : 'bg-white/50 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-white/5 hover:border-indigo-600/30 shadow-sm'}
+                      ? 'bg-white dark:bg-zinc-900 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-xl'
+                      : 'bg-white/50 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-white/5 hover:border-brand-cyan/30 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between relative z-10">
@@ -249,9 +256,9 @@ const ContentGrids = () => {
                       </div>
                     </div>
                     {activeClientId === group.id ? (
-                      <ChevronDown className="w-5 h-5 text-indigo-600" />
+                      <ChevronDown className="w-5 h-5 text-brand-cyan-deep dark:text-brand-cyan" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-indigo-600 transition-colors" />
+                      <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-brand-cyan-deep dark:group-hover:text-brand-cyan transition-colors" />
                     )}
                   </div>
                 </div>
@@ -265,7 +272,7 @@ const ContentGrids = () => {
                       exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="mt-2 space-y-2 px-3 pb-2 border-l-2 border-indigo-600/10 ml-6 pt-2">
+                      <div className="mt-2 space-y-2 px-3 pb-2 border-l-2 border-brand-cyan/10 ml-6 pt-2">
                         {group.external?.months.map((month) => (
                           <div
                             key={`hoja-${month.slug}`}
@@ -300,18 +307,18 @@ const ContentGrids = () => {
                           <div
                             key={plan.id}
                             onClick={() => navigateToPlan(plan)}
-                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border border-transparent hover:border-indigo-600/20 transition-all cursor-pointer group/item"
+                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/5 hover:bg-brand-cyan-soft dark:hover:bg-brand-cyan/10 border border-transparent hover:border-brand-cyan/20 transition-all cursor-pointer group/item"
                           >
                             <div className="flex items-center gap-3">
                               <div className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 shadow-sm">
-                                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                                <Calendar className="w-3.5 h-3.5 text-brand-cyan-deep dark:text-brand-cyan" />
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
                                   {getContentPlanMonthName(plan.month)} {plan.year}
                                 </span>
                                 <span className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${
-                                  plan.status === 'FINALIZADO' ? 'text-emerald-500' : 'text-zinc-400'
+                                  plan.status === 'FINALIZADO' ? 'text-brand-green-deep dark:text-brand-green' : 'text-zinc-400'
                                 }`}>
                                   {plan.status.replace('_', ' ')}
                                 </span>

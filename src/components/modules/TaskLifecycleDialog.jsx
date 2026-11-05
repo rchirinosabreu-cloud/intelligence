@@ -47,6 +47,7 @@ export default function TaskLifecycleDialog({
   submitLabel,
   onSubmit,
   isSubmitting = false,
+  error = '',
 }) {
   const styles = toneStyles[tone] || toneStyles.cyan;
   const hasReasons = reasons.length > 0;
@@ -102,6 +103,8 @@ export default function TaskLifecycleDialog({
             />
           </label>
         </div>
+
+        {error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
 
         <DialogFooter className="gap-3 sm:justify-between">
           <button

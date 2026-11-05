@@ -14,6 +14,17 @@ export const DECLARED_TIME_OPTIONS = [
 export const DECLARED_TIME_EVENT = 'brain:declared-time';
 export const askDeclaredTimeIfNeeded = (task) => {
   if (!task?.needsDeclaredTime || !task.id || typeof window === 'undefined') return false;
-  window.dispatchEvent(new CustomEvent(DECLARED_TIME_EVENT, { detail: { id: task.id, title: task.title || 'esta tarea' } }));
+  window.dispatchEvent(new CustomEvent(DECLARED_TIME_EVENT, { detail: {
+    id: task.id, title: task.title || 'esta tarea',
+    ...(task.declaredTimeParticipant ? { declaredTimeParticipant: task.declaredTimeParticipant } : {})
+  } }));
   return true;
 };
+
+export const declaredTimePayload = (task, minutes) => ({
+  minutes,
+  ...(task?.declaredTimeParticipant ? {
+    participantMemberId: task.declaredTimeParticipant.memberId,
+    expectedRevision: task.declaredTimeParticipant.revision,
+  } : {}),
+});

@@ -57,3 +57,19 @@ test('a confirmed pause clears running sessions, without rewriting other cards',
   assert.deepEqual(saved.openSessions, []);
   assert.equal(saved.status, 'PENDIENTE');
 });
+
+test('moving one participation never projects another card with the same Task ID', () => {
+  const rows = [{ id: 'same', boardKey: 'same:ana', status: 'EN_CURSO' }, { id: 'same', boardKey: 'same:luis', status: 'EN_CURSO' }];
+  const projected = projectTaskMove(rows, { taskId: 'same:ana', columnId: 'REALIZADA', index: 0 }, task => task.status);
+  assert.equal(projected.find(row => row.boardKey === 'same:ana').pendingColumnId, 'REALIZADA');
+  assert.equal(projected.find(row => row.boardKey === 'same:luis').pendingColumnId, undefined);
+});
+
+test('shared receipts never infer that every running session has ended', () => {
+  const session = { id: 'luis', workerId: 'luis', endedAt: null };
+  const [saved] = applyConfirmedTaskMove([{ id: 'a', sharedProgress: true, openSessions: [session] }], {
+    id: 'a', sharedProgress: true, status: 'DEVUELTA', workSessions: [session], participants: [{ memberId: 'ana', status: 'DEVUELTA' }]
+  });
+  assert.deepEqual(saved.openSessions, [session]);
+  assert.equal(saved.participants[0].status, 'DEVUELTA');
+});

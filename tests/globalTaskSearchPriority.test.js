@@ -11,7 +11,7 @@ test('completed history search is global and its card action stays icon-only', a
 
   assert.match(modal, /params\.set\('search',\s*normalizedSearch\)/);
   assert.match(modal, /filterCompletedHistoryTasks\(tasks,\s*searchTerm,\s*selectedUser\)/);
-  assert.match(controller, /getCompletedTasks\(req\.query\.date,\s*req\.query\.search\)/);
+  assert.match(controller, /getCompletedTasks\(req\.query\.date,\s*req\.query\.search,\s*req\.user\?\.userId \|\| req\.user\?\.id\)/, 'el historial aplica acceso privado antes de proyectar logros');
   assert.match(service, /buildCompletedTaskWhere\(dateString,\s*searchTerm\)/);
 
   assert.match(modal, /aria-label="Regresar al tablero"/);

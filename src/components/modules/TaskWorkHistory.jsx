@@ -95,7 +95,7 @@ function TimeCorrectionDialog({ taskId, session, user, onClose, onCorrected }) {
   );
 }
 
-export default function TaskWorkHistory({ taskId, status, startedAt, accumulatedWorkMs = 0, currentUser = null, onCorrected = null }) {
+export default function TaskWorkHistory({ taskId, participantMemberId = null, participantArchiveId = null, participantRemovedAt = null, status, startedAt, accumulatedWorkMs = 0, currentUser = null, onCorrected = null }) {
   const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -136,9 +136,15 @@ export default function TaskWorkHistory({ taskId, status, startedAt, accumulated
     onCorrected?.(result);
   }, [onCorrected]);
 
-  const timingTask = history?.task || { status, startedAt, accumulatedWorkMs };
+  const timingTask = (!participantMemberId && history?.task) || { status, startedAt, accumulatedWorkMs };
   const totalMs = getTaskElapsedMs(timingTask, now);
-  const cycles = history?.cycles || [];
+  const cycles = useMemo(() => participantMemberId
+    ? (history?.cycles || []).map(cycle => ({ ...cycle, sessions: cycle.sessions.filter(session => session.workerId === participantMemberId
+      && (!participantArchiveId || (session.endedAt && participantRemovedAt && new Date(session.endedAt) <= new Date(participantRemovedAt)))) })).filter(cycle => cycle.sessions.length)
+    : (history?.cycles || []), [history, participantMemberId, participantArchiveId, participantRemovedAt]);
+  const historicalBaselineMs = participantMemberId
+    ? Math.max(0, Number(accumulatedWorkMs) - cycles.reduce((total, cycle) => total + cycle.sessions.reduce((sum, session) => sum + Number(session.durationMs || 0), 0), 0))
+    : Number(history?.historicalBaselineMs || 0);
   const sessionCount = useMemo(() => cycles.reduce((total, cycle) => total + cycle.sessions.length, 0), [cycles]);
 
   return (
@@ -154,7 +160,7 @@ export default function TaskWorkHistory({ taskId, status, startedAt, accumulated
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="px-1 py-1 text-[11px] font-medium text-zinc-500 transition-colors hover:text-[#009EB9] dark:text-zinc-400"
+          className="px-1 py-1 text-[11px] font-medium text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400"
           aria-expanded={expanded}
         >
           {expanded ? 'Ocultar detalle' : 'Ver sesiones'}
@@ -163,10 +169,10 @@ export default function TaskWorkHistory({ taskId, status, startedAt, accumulated
 
       {expanded && (
         <div className="mt-3 space-y-2.5 border-t border-zinc-200/70 pt-3 dark:border-zinc-800/70">
-          {Number(history?.historicalBaselineMs || 0) > 0 && (
+          {!loading && historicalBaselineMs > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-zinc-200/60 px-3 py-2 text-xs dark:bg-zinc-800/70">
               <span className="text-zinc-600 dark:text-zinc-300">Tiempo histórico sin desglose</span>
-              <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-100">{formatElapsedTime(history.historicalBaselineMs)}</span>
+              <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-100">{formatElapsedTime(historicalBaselineMs)}</span>
             </div>
           )}
           {cycles.length === 0 && !loading && (
@@ -184,7 +190,7 @@ export default function TaskWorkHistory({ taskId, status, startedAt, accumulated
                   <div key={session.id} className="grid grid-cols-[1fr_auto] gap-3 text-[11px]" data-work-session={session.id}>
                     <div className="min-w-0 text-zinc-500 dark:text-zinc-400">
                       <p className="truncate">Sesión {index + 1} · {formatMoment(session.startedAt)} → {formatMoment(session.endedAt)}</p>
-                      <p>{session.endedAt ? closeLabels[session.closeReason] || 'Cerrada' : 'Activa'}{session.isOverlapping ? ' · Simultánea' : ''}{session.isCollaborator ? ' · Colaborador' : ''}</p>
+                      <p>{session.endedAt ? closeLabels[session.closeReason] || 'Cerrada' : 'Activa'}{session.isRework ? ' · Retrabajo' : ''}{session.isOverlapping ? ' · Simultánea' : ''}{session.isCollaborator ? ' · Colaborador' : ''}</p>
                       {session.correctedAt && (
                         <p className="text-zinc-600 dark:text-zinc-300" data-work-session-corrected>
                           Corregida: marcaba {formatCorrectionSpan(Number(session.originalDurationMs || 0))}{session.correctionReason ? ` · ${session.correctionReason}` : ''}

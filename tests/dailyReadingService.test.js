@@ -90,7 +90,7 @@ const fakeDb = () => {
     ]; } },
     task: { findMany: async (args) => {
       calls.push(['tasks', args]);
-      if (args.where.status === 'REALIZADA') return [{ assigneeId: 'm1', clientId: 'c2' }, { assigneeId: 'm1', clientId: 'c2' }];
+      if (args.select.completedAt) return ['closed-1', 'closed-2'].map(id => ({ id, status: 'REALIZADA', completedAt: at('17:00', '2026-10-19'), assigneeId: 'm1', clientId: 'c2' }));
       return [
         { id: 't1', status: 'PENDIENTE', dueDate: new Date('2026-10-15T17:00:00Z'), assigneeId: 'm1', clientId: 'c1' },
         { id: 't2', status: 'DEVUELTA', dueDate: new Date('2026-10-14T17:00:00Z'), assigneeId: 'm1', creatorId: 'u2', clientId: 'c1' },

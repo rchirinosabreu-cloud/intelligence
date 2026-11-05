@@ -1,12 +1,16 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { QueryClientContext } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { clearManagementFilters } from '@/lib/managementFilterSession';
 import { clearChatDrafts } from '@/lib/teamChatDrafts';
 
 const AuthContext = createContext(null);
 
-const clearAuthSession = () => {
+const clearAuthSession = (queryClient) => {
+    // Las respuestas incluyen permisos y contenido propios de la sesión que las pidió.
+    // clear también cancela lecturas pendientes para que no repueblen la caché después de salir.
+    queryClient?.clear();
     clearChatDrafts();
     clearManagementFilters(sessionStorage);
     localStorage.removeItem('authToken');
@@ -39,11 +43,15 @@ const isJwtExpired = (token) => {
 };
 
 export const AuthProvider = ({ children }) => {
+    const queryClient = useContext(QueryClientContext);
+    const authRefreshAbort = useRef(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        const controller = new AbortController();
+        authRefreshAbort.current = controller;
         const token = localStorage.getItem('authToken');
         const userStr = localStorage.getItem('currentUser');
 
@@ -54,34 +62,38 @@ export const AuthProvider = ({ children }) => {
                 setCurrentUser(cachedUser);
 
                 fetch(`${getApiBaseUrl()}/api/auth/me`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
+                    signal: controller.signal
                 })
                     .then((response) => {
                         if (!response.ok) throw new Error(`Auth refresh failed: ${response.status}`);
                         return response.json();
                     })
                     .then((freshUser) => {
+                        if (controller.signal.aborted || localStorage.getItem('authToken') !== token) return;
                         const mergedUser = { ...cachedUser, ...freshUser };
                         localStorage.setItem('currentUser', JSON.stringify(mergedUser));
                         sessionStorage.setItem('currentUser', JSON.stringify(mergedUser));
                         setCurrentUser(mergedUser);
                     })
                     .catch((error) => {
+                        if (controller.signal.aborted || localStorage.getItem('authToken') !== token) return;
                         console.error('Failed to refresh user session:', error);
                     });
             } catch (e) {
                 console.error('Failed to parse user data');
-                clearAuthSession();
+                clearAuthSession(queryClient);
             }
         } else {
-            clearAuthSession();
+            clearAuthSession(queryClient);
         }
         setIsLoading(false);
 
         const handleAuthError = () => {
+            authRefreshAbort.current?.abort();
             setIsAuthenticated(false);
             setCurrentUser(null);
-            clearAuthSession();
+            clearAuthSession(queryClient);
         };
 
         const handlePasswordChangeRequired = () => {
@@ -117,11 +129,13 @@ export const AuthProvider = ({ children }) => {
         window.addEventListener('password-change-required', handlePasswordChangeRequired);
         window.addEventListener('mfa-enrollment-required', handleMfaEnrollmentRequired);
         return () => {
+            controller.abort();
+            if (authRefreshAbort.current === controller) authRefreshAbort.current = null;
             window.removeEventListener('auth-error', handleAuthError);
             window.removeEventListener('password-change-required', handlePasswordChangeRequired);
             window.removeEventListener('mfa-enrollment-required', handleMfaEnrollmentRequired);
         };
-    }, []);
+    }, [queryClient]);
 
     // Cambios del propio usuario que confirmó el servidor (p. ej. MFA activado).
     const updateCurrentUser = (patch) => {
@@ -135,6 +149,8 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = (token, user) => {
+        authRefreshAbort.current?.abort();
+        queryClient?.clear();
         clearChatDrafts();
         clearManagementFilters(sessionStorage);
         localStorage.setItem('authToken', token);
@@ -148,7 +164,8 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        clearAuthSession();
+        authRefreshAbort.current?.abort();
+        clearAuthSession(queryClient);
         setCurrentUser(null);
         setIsAuthenticated(false);
     };

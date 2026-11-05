@@ -25,5 +25,5 @@ test('actual content approval and both history reads are connected to the shared
   assert.match(content, /recordPlanRecognition\(tx, item.planId/);
   assert.match(content, /allowAward: safeData.status === 'APROBADO'/);
   assert.match(readFileSync('src/services/personalDashboardService.js', 'utf8'), /attachTaskRecognitions\(prisma/);
-  assert.match(readFileSync('src/services/nativeTaskService.js', 'utf8'), /attachTaskRecognitions\(prisma, tasks\)/);
+  assert.match(readFileSync('src/services/nativeTaskService.js', 'utf8'), /attachTaskRecognitions\(tx, tasks\)/, 'reconocimientos y participaciones se leen en el mismo snapshot');
 });

@@ -24,13 +24,13 @@ import {
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import TaskSidePanel from './TaskSidePanel';
 
 const ClientTasksWidget = ({ clientId }) => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
-    const navigate = useNavigate();
+    const navigate = useNavigateFrom();
 
     // Un solo creador de tareas en toda la plataforma (Rodny, 2 de octubre de 2026): el panel de Gestión.
     // Abrir una tarea la lleva a Gestión, donde vive con sus comentarios, adjuntos, tiempos y bloqueos.
@@ -74,6 +74,10 @@ const ClientTasksWidget = ({ clientId }) => {
 
     const handleToggleTask = async (e, task) => {
         e.stopPropagation();
+        if (task.sharedProgress || task.collaborators?.length) {
+            navigate(`/gestion?taskId=${encodeURIComponent(task.id)}`);
+            return;
+        }
 
         const isDone = task.status === 'REALIZADA';
         const newStatus = isDone ? 'PENDIENTE' : 'REALIZADA';
@@ -223,7 +227,9 @@ const ClientTasksWidget = ({ clientId }) => {
                                         : "bg-white dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 hover:shadow-sm"
                                 )}
                             >
-                                <div
+                                <button
+                                    type="button"
+                                    aria-label={task.sharedProgress || task.collaborators?.length ? `Revisar participaciones de ${task.title}` : `${isDone ? 'Reabrir' : 'Completar'} ${task.title}`}
                                     className={cn(
                                         "transition-colors mt-0.5 cursor-pointer",
                                         isDone ? "text-blue-500" : "text-zinc-300 hover:text-blue-400"
@@ -231,7 +237,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                     onClick={(e) => handleToggleTask(e, task)}
                                 >
                                     {isDone ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                                </div>
+                                </button>
 
                                 <div className="flex-1 min-w-0">
                                     <span className={cn(

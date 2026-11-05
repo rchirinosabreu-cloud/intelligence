@@ -39,6 +39,7 @@ import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
 import { compareTaskOrder } from '@/lib/taskOrder';
 import { applyConfirmedTaskMove, projectTaskMove } from '@/lib/taskMoveConfirmation';
+import { projectTaskParticipations, taskCardKey, participationRequest, didCompleteParticipation, individualPriorityCards, individualPriorityAnchor, taskCardForDeepLink } from '@/lib/taskParticipationBoard';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -153,23 +154,15 @@ const matchesTaskSearch = (task, normalizedSearch) => {
 
 // --- STYLES ---
 
-const CLIENT_COLORS = {
-    "SunPartners": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800",
-    "TechFlow": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800",
-    "Urban Coffee": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
-    "Dr. Smile": "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800",
-    "Velvet Hotel": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800",
-};
-
 const CATEGORY_COLORS = {
-    'Estratégico': '#009EB9',
-    'Creativo & Diseño': '#00AC8A',
-    'Marketing & Social Media': '#06b6d4',
-    'Producción Audiovisual': '#ec4899',
-    'Creación de Contenido': '#f97316',
-    'Operaciones & Reuniones': '#10b981',
-    'Administrativo & Finanzas': '#71717a',
-    'Educación': '#f59e0b'
+    'Estratégico': 'rgb(var(--brand-cyan))',
+    'Creativo & Diseño': 'rgb(var(--brand-green))',
+    'Marketing & Social Media': 'rgb(var(--brand-cyan))',
+    'Producción Audiovisual': 'rgb(var(--brand-magenta))',
+    'Creación de Contenido': 'rgb(var(--brand-coral))',
+    'Operaciones & Reuniones': 'rgb(var(--brand-green))',
+    'Administrativo & Finanzas': 'hsl(var(--muted-foreground))',
+    'Educación': 'rgb(var(--brand-yellow))'
 };
 
 // Priority tabs on the Kanban cards (brand palette, 21 September 2026): a folder-like tab at the top-left corner
@@ -354,6 +347,9 @@ const NativeTasks = () => {
 
             return safeData.map(task => ({
                 id: task.id,
+                sharedProgress: task.sharedProgress,
+                rosterVersion: task.rosterVersion,
+                participants: task.participants,
                 title: task.title,
                 // Lo marca el servidor: la tarea es privada y este usuario no puede
                 // abrirla, así que llega sin descripción, adjuntos ni comentarios.
@@ -416,6 +412,8 @@ const NativeTasks = () => {
         refetchOnWindowFocus: true,
     });
 
+    const taskCards = useMemo(() => projectTaskParticipations(tasks), [tasks]);
+
     const { data: clientsList = [] } = useQuery({
         queryKey: ['clientsDropdown'],
         queryFn: async () => {
@@ -443,7 +441,7 @@ const NativeTasks = () => {
         setResponsibleFilter(responsable);
         params.delete('responsable');
         const rest = params.toString();
-        navigate(`${location.pathname}${rest ? `?${rest}` : ''}`, { replace: true });
+        navigate(`${location.pathname}${rest ? `?${rest}` : ''}`, { replace: true, state: location.state });
     }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
@@ -457,10 +455,11 @@ const NativeTasks = () => {
 
         if (taskId && tasks.length > 0) {
             const taskToOpen = tasks.find(t => String(t.id) === taskId);
+            const deepLinkCard = taskCardForDeepLink(taskCards, taskId, params.get('participantId'), currentUser?.id);
             // A locked task never opens, not even from a notification or a deep link (Rodny, 21 September 2026),
             // and it is not highlighted either: a locked card is only dimmed, no border, no badge.
             const deepLinkLock = taskToOpen ? getTaskLock({
-                tasks, task: taskToOpen, viewerUserId: currentUser?.id,
+                tasks: taskCards, task: deepLinkCard || taskToOpen, viewerUserId: currentUser?.id,
                 viewerIsManager: ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role)
             }) : null;
             if (!deepLinkLock) setHighlightedTaskId(taskId);
@@ -468,7 +467,7 @@ const NativeTasks = () => {
                 if (deepLinkLock) {
                     setFocusLockNotice(deepLinkLock);
                 } else {
-                    setEditingTask(taskToOpen);
+                    setEditingTask({ ...taskToOpen, viewedParticipantMemberId: params.get('participantId') || undefined });
                     if (getColumnId(taskToOpen.status) === 'devuelto') {
                         setIsReturnedDialogOpen(true);
                     }
@@ -477,12 +476,13 @@ const NativeTasks = () => {
             const paramsToClean = new URLSearchParams(location.search);
             if (paramsToClean.has('taskId') || paramsToClean.has('showReturned')) {
                 paramsToClean.delete('taskId');
+                paramsToClean.delete('participantId');
                 paramsToClean.delete('showReturned');
                 const newSearch = paramsToClean.toString();
-                navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
+                navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true, state: location.state });
             }
             setTimeout(() => {
-                const element = document.getElementById(`task-${taskId}`);
+                const element = document.getElementById(`task-${taskId}${deepLinkCard?.participation ? `-${deepLinkCard.participation.memberId}` : ''}`);
                 if (element) {
                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
@@ -492,7 +492,7 @@ const NativeTasks = () => {
             }, 3000);
             return () => clearTimeout(timer);
         }
-    }, [location.search, tasks, navigate, location.pathname]);
+    }, [location.search, tasks, taskCards, navigate, location.pathname, location.state, currentUser?.id, currentUser?.role]);
 
     const handleReturnTask = async () => {
         const payload = buildTaskReturnPayload(returnReason, returnNote);
@@ -502,13 +502,14 @@ const NativeTasks = () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
 
-            const response = await fetch(`${baseUrl}/api/tasks/${returningTask.id}`, {
+            const request = participationRequest(returningTask, payload);
+            const response = await fetch(`${baseUrl}${request.path}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(request.body)
             });
 
             if (response.ok) {
@@ -524,13 +525,14 @@ const NativeTasks = () => {
                 queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
             } else {
                 const errorBody = await response.json().catch(() => ({}));
+                if (response.status === 409) { setReturningTask(null); queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }); }
                 throw new Error(errorBody?.error || `Return failed with status ${response.status}`);
             }
         } catch (err) {
             console.error("Error returning task:", err);
             toast({
                 title: "Error",
-                description: "No se pudo devolver la tarea.",
+                description: err.message || "No se pudo devolver la tarea.",
                 variant: "destructive"
             });
         } finally {
@@ -544,19 +546,18 @@ const NativeTasks = () => {
             setIsSubmittingReintegration(true);
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${baseUrl}/api/tasks/${reintegratingTask.id}`, {
+            const request = participationRequest(reintegratingTask, { status: 'PENDIENTE', reintegrateReason: reintegrateNote.trim() });
+            const response = await fetch(`${baseUrl}${request.path}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({
-                    status: 'PENDIENTE',
-                    reintegrateReason: reintegrateNote.trim()
-                })
+                body: JSON.stringify(request.body)
             });
             if (!response.ok) {
                 const errorBody = await response.json().catch(() => ({}));
+                if (response.status === 409) { setReintegratingTask(null); queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }); }
                 throw new Error(errorBody?.error || `Reintegration failed with status ${response.status}`);
             }
             toast({ title: 'Tarea reintegrada', description: 'La tarea volvió a Pendiente para continuar la corrección.' });
@@ -567,7 +568,7 @@ const NativeTasks = () => {
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
             console.error('Error reintegrating task:', err);
-            toast({ title: 'Error', description: 'No se pudo reintegrar la tarea.', variant: 'destructive' });
+            toast({ title: 'Error', description: err.message || 'No se pudo reintegrar la tarea.', variant: 'destructive' });
         } finally {
             setIsSubmittingReintegration(false);
         }
@@ -641,7 +642,7 @@ const NativeTasks = () => {
     }, [tasks, clientFilter]);
 
     const filteredServerTasks = useMemo(() => {
-        let filtered = tasks.filter(task => {
+        let filtered = taskCards.filter(task => {
             const normalizedSearch = searchQuery.trim().toLowerCase();
             if (normalizedSearch !== '') {
                 return matchesTaskSearch(task, normalizedSearch);
@@ -668,7 +669,7 @@ const NativeTasks = () => {
         });
         filtered.sort(compareTaskOrder);
         return filtered;
-    }, [tasks, responsibleFilter, clientFilter, dateFilter, searchQuery]);
+    }, [taskCards, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
     // Se filtra con las fechas y el estado reales antes de proyectar la posición:
     // una tarjeta camino a Realizado no necesita inventar completedAt para verse.
@@ -685,14 +686,14 @@ const NativeTasks = () => {
     ];
 
     const returnedTasks = useMemo(() => {
-        return projectTaskMove(tasks, pendingTaskMove, task => getColumnId(task.status))
+        return projectTaskMove(taskCards, pendingTaskMove, task => getColumnId(task.status))
             .filter(task => (task.pendingColumnId ?? getColumnId(task.status)) === 'devuelto');
-    }, [tasks, pendingTaskMove]);
+    }, [taskCards, pendingTaskMove]);
 
     // Compromiso con hora: managers are never locked; a person with an active commitment cannot open or move
     // their other tasks until it is done.
     const viewerIsManager = ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role);
-    const focusLockFor = (task) => getTaskLock({ tasks, task, viewerUserId: currentUser?.id, viewerIsManager });
+    const focusLockFor = (task) => getTaskLock({ tasks: taskCards, task, viewerUserId: currentUser?.id, viewerIsManager });
     // First touch on a locked card: shake. A retry within LOCK_RETRY_WINDOW_MS: the "Primero tu compromiso" popup.
     const onLockedAttempt = (task, lock) => {
         const key = String(task.id);
@@ -741,13 +742,13 @@ const NativeTasks = () => {
             onPrivateAttempt(task);
             return;
         }
-        setEditingTask(task);
+        setEditingTask(task.canonicalTask ? { ...task.canonicalTask, viewedParticipantMemberId: task.participation.memberId } : task);
     };
 
     const myFocusTask = useMemo(() => {
         if (viewerIsManager || !currentUser?.id) return null;
-        return findFocusTaskFor(tasks, { assigneeUserId: currentUser.id });
-    }, [tasks, currentUser?.id, viewerIsManager]);
+        return findFocusTaskFor(taskCards, { assigneeUserId: currentUser.id });
+    }, [taskCards, currentUser?.id, viewerIsManager]);
     const myOverdueFocusTask = useMemo(
         () => (myFocusTask && isFocusOverdue(myFocusTask) ? myFocusTask : null),
         [myFocusTask, overdueTick]
@@ -791,9 +792,9 @@ const NativeTasks = () => {
         const taskId = draggableId;
         const destinationColumnId = destination.droppableId;
         const sourceColumnId = source.droppableId;
-        const targetTask = tasks.find(task => String(task.id) === String(taskId));
+        const targetTask = taskCards.find(task => taskCardKey(task) === String(taskId));
 
-        const lock = getTaskLock({ tasks, task: targetTask, viewerUserId: currentUser?.id, viewerIsManager });
+        const lock = getTaskLock({ tasks: taskCards, task: targetTask, viewerUserId: currentUser?.id, viewerIsManager });
         if (lock) {
             setFocusLockNotice(lock);
             return;
@@ -801,9 +802,9 @@ const NativeTasks = () => {
 
         // Tareas con colaboradores (5 de octubre de 2026): ningún reloj arranca solo al moverla, así
         // que no hay «otra tarea en curso» que advertir.
-        const isTeamTask = (targetTask?.collaborators || []).length > 0;
+        const isTeamTask = !targetTask?.participation && (targetTask?.collaborators || []).length > 0;
         if (!result.timingConflictConfirmed && destinationColumnId === 'en-proceso' && !isTeamTask) {
-            const conflict = findConflictingActiveTask(tasks, targetTask);
+            const conflict = findConflictingActiveTask(taskCards, targetTask);
             if (conflict) {
                 setConflictingMove({ result, conflict, targetTask });
                 return;
@@ -824,6 +825,10 @@ const NativeTasks = () => {
 
         // 1. Dragged within the same column (Reordering Priority)
         if (sourceColumnId === destinationColumnId) {
+            if (targetTask?.participation) {
+                toast({ description: 'Esta tarea comparte una prioridad para todo el equipo. Puedes mover tu parte entre estados.' });
+                return;
+            }
             if (!isPMOrAdmin) {
                 toast({
                     variant: "destructive",
@@ -833,19 +838,20 @@ const NativeTasks = () => {
                 return;
             }
 
-            const columnTasks = visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId);
+            const columnTasks = individualPriorityCards(visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId));
             const reordered = [...columnTasks];
-            const sourceIndex = reordered.findIndex(t => String(t.id) === taskId);
+            const sourceIndex = reordered.findIndex(t => taskCardKey(t) === taskId);
             if (sourceIndex < 0) return;
             const [removed] = reordered.splice(sourceIndex, 1);
-            reordered.splice(destination.index, 0, removed);
+            const individualIndex = individualPriorityCards(visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId).slice(0, destination.index)).length;
+            reordered.splice(individualIndex, 0, removed);
             savingTaskOrder.current = true;
             setSavingTaskId(taskId);
             setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
             try {
                 const baseUrl = getApiBaseUrl();
                 const token = localStorage.getItem('authToken');
-                const reorderList = reordered.map((task, idx) => ({ id: task.id, sortOrder: idx }));
+                const reorderList = [...new Map(reordered.map(task => [task.id, task])).values()].map((task, idx) => ({ id: task.id, sortOrder: idx }));
 
                 const res = await fetch(`${baseUrl}/api/tasks/reorder`, {
                     method: 'POST',
@@ -853,7 +859,7 @@ const NativeTasks = () => {
                         'Content-Type': 'application/json',
                         'Authorization': token ? `Bearer ${token}` : ''
                     },
-                    body: JSON.stringify({ reorderList, previousIds: columnTasks.map(task => task.id) })
+                    body: JSON.stringify({ reorderList, previousIds: [...new Set(columnTasks.map(task => task.id))] })
                 });
 
                 const saved = await res.json().catch(() => null);
@@ -890,16 +896,17 @@ const NativeTasks = () => {
             const token = localStorage.getItem('authToken');
             const payload = { status: newStatusForDB };
             if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') payload.isReturned = false;
-            if (isPMOrAdmin) {
-                payload.orderBeforeId = visibleTasksInDestColumn[destination.index]?.id ?? null;
+            if (isPMOrAdmin && !targetTask.participation) {
+                payload.orderBeforeId = individualPriorityAnchor(visibleTasksInDestColumn, destination.index);
             }
-            const response = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
+            const request = participationRequest(targetTask, payload);
+            const response = await fetch(`${baseUrl}${request.path}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(request.body)
             });
             if (!response.ok) {
                 const failure = await response.json().catch(() => null);
@@ -917,7 +924,7 @@ const NativeTasks = () => {
             // septiembre de 2026). Se apunta a la columna y no a la tarjeta porque la tarjeta puede
             // no estar todavía repintada en su sitio cuando el servidor contesta rápido, y entonces
             // el disparo salía de la columna de la que venía.
-            if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
+            if (targetTask.participation ? didCompleteParticipation(savedTask, targetTask.participation.memberId) : sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
                 triggerConfetti(document.querySelector('[data-rfd-droppable-id="realizado"]'));
                 // Cerrada sin cronómetro por quien la hizo: el servidor pide preguntarle cuánto le tomó.
                 askDeclaredTimeIfNeeded(savedTask);
@@ -956,19 +963,20 @@ const NativeTasks = () => {
             setIsSubmittingReopen(true);
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${baseUrl}/api/tasks/${reopeningTask.id}`, {
+            const request = participationRequest(reopeningTask, { status: 'PENDIENTE', reopenReason, reopenNote: reopenNote.trim() });
+            const response = await fetch(`${baseUrl}${request.path}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({
-                    status: 'PENDIENTE',
-                    reopenReason,
-                    reopenNote: reopenNote.trim()
-                })
+                body: JSON.stringify(request.body)
             });
-            if (!response.ok) throw new Error(`Reopen failed with status ${response.status}`);
+            if (!response.ok) {
+                const failure = await response.json().catch(() => ({}));
+                if (response.status === 409) { setReopeningTask(null); queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }); }
+                throw new Error(failure.error || `Reopen failed with status ${response.status}`);
+            }
             await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             toast({ title: 'Tarea reabierta', description: 'Conserva su código, responsable, prioridad e historial.' });
             setReopeningTask(null);
@@ -976,7 +984,7 @@ const NativeTasks = () => {
             setReopenReason('CLIENT_CORRECTION');
         } catch (error) {
             console.error('Error reopening task:', error);
-            toast({ variant: 'destructive', title: 'No se pudo reabrir', description: 'La tarea permanece en Realizado.' });
+            toast({ variant: 'destructive', title: 'No se pudo reabrir', description: error.message || 'La tarea permanece en Realizado.' });
         } finally {
             setIsSubmittingReopen(false);
         }
@@ -985,7 +993,7 @@ const NativeTasks = () => {
     if (loadingTasks && tasks.length === 0) {
         return (
             <div className="h-full flex flex-col items-center justify-center space-y-4">
-                <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                <Loader2 className="w-10 h-10 text-brand-cyan-deep dark:text-brand-cyan animate-spin" />
                 <p className="text-zinc-500 dark:text-zinc-400 text-sm animate-pulse">Cargando base de datos...</p>
             </div>
         );
@@ -1050,8 +1058,8 @@ const NativeTasks = () => {
                                 className={cn(
                                     "flex h-9 w-9 items-center justify-center rounded-lg border bg-white shadow-sm transition-all dark:bg-zinc-900",
                                     showTutorialButtonHint
-                                        ? "scale-105 border-[#009EB9] text-[#009EB9] ring-4 ring-[#009EB9]/15"
-                                        : "border-zinc-200 text-zinc-400 hover:border-[#009EB9]/40 hover:text-[#009EB9] dark:border-zinc-800 dark:text-zinc-500"
+                                        ? "scale-105 border-brand-cyan text-brand-cyan-deep dark:text-brand-cyan ring-4 ring-brand-cyan/15"
+                                        : "border-zinc-200 text-zinc-400 hover:border-brand-cyan/40 hover:text-brand-cyan-deep dark:hover:text-brand-cyan dark:border-zinc-800 dark:text-zinc-500"
                                 )}
                             >
                                 <HelpCircle className="h-4 w-4" />
@@ -1062,7 +1070,7 @@ const NativeTasks = () => {
                                         initial={{ opacity: 0, y: 6, scale: 0.96 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-[#009EB9] px-3 py-2 text-[11px] font-semibold text-white shadow-xl shadow-[#009EB9]/20"
+                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-brand-cyan-deep px-3 py-2 text-[11px] font-semibold text-white shadow-xl shadow-brand-cyan/20"
                                     >
                                         Puedes volver a verlo aquí
                                     </motion.div>
@@ -1143,7 +1151,7 @@ const NativeTasks = () => {
                     if (params.has('taskId')) {
                         params.delete('taskId');
                         const newSearch = params.toString();
-                        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
+                        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true, state: location.state });
                     }
                 }}
                 onSuccess={() => {
@@ -1160,12 +1168,12 @@ const NativeTasks = () => {
                     overlayClassName="z-[190]"
                     className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
                 >
-                    <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
+                    <div className="relative overflow-hidden brain-ai-header px-6 py-7 pr-28 text-white">
                         <BriaPortrait  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
                         <DialogHeader className="relative z-10">
                             <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Novedad</span>
                             <DialogTitle className="text-lg text-white sm:whitespace-nowrap">El tiempo de trabajo será visible para ti</DialogTitle>
-                            <DialogDescription className="text-sm leading-relaxed text-indigo-100">
+                            <DialogDescription className="text-sm leading-relaxed text-white">
                                 Ahora tenemos una forma más clara de comprender el trabajo de la agencia, aprender de nuestros tiempos para poder planificar mejor.
                             </DialogDescription>
                         </DialogHeader>
@@ -1180,7 +1188,7 @@ const NativeTasks = () => {
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Tú decides si mantienes activa más de una tarea</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si ya estás registrando tiempo en una tarea, te avisaremos, pero tú decides continuar. Si quieres pausar el cronómetro, puedes regresar la tarea a “Pendiente” y continuar cuando quieras.</p></div>
                         </div>
                         <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400"><TaskReintegrateIcon className="h-4 w-4" /></div>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-magenta-soft text-brand-magenta-deep dark:bg-brand-magenta/10 dark:text-brand-magenta"><TaskReintegrateIcon className="h-4 w-4" /></div>
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Las tareas pueden reabrirse</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si una tarea realizada necesita una corrección, no necesitas crear un pendiente nuevo. Puedes buscar la tarea realizada y regresarla a “Pendiente” para conservar el ID de la tarea y su historial. Esto nos garantiza una mejor trazabilidad.</p></div>
                         </div>
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -1213,7 +1221,7 @@ const NativeTasks = () => {
                                 setConflictingMove(null);
                                 onDragEnd({ ...pending.result, timingConflictConfirmed: true });
                             }}
-                            className="rounded-xl bg-[#009EB9] px-4 py-2 text-sm font-medium text-white hover:bg-[#008CA4]"
+                            className="rounded-xl bg-brand-cyan-deep px-4 py-2 text-sm font-medium text-white hover:bg-brand-cyan-deep/90"
                         >
                             Sí, continuar
                         </button>
@@ -1320,7 +1328,7 @@ const NativeTasks = () => {
                 }}
                 icon={TaskReintegrateIcon}
                 title="Reabrir tarea"
-                description={<><strong>{reopeningTask?.title}</strong> conservará su código, responsable, prioridad e historial.</>}
+                description={<><strong>{reopeningTask?.title}</strong>{reopeningTask?.participation ? ` · Parte de ${reopeningTask.assigneeName}. Las demás participaciones no cambian.` : ' conservará su código, responsable, prioridad e historial.'}</>}
                 tone="cyan"
                 reasons={REOPEN_REASONS}
                 reasonLabel="Motivo de reapertura"
@@ -1346,7 +1354,7 @@ const NativeTasks = () => {
                 }}
                 icon={TaskReturnIcon}
                 title="Devolver tarea"
-                description={<>Selecciona el motivo y explica qué debe corregirse en <strong>{returningTask?.title}</strong>.</>}
+                description={<>Selecciona el motivo y explica qué debe corregirse en <strong>{returningTask?.title}</strong>{returningTask?.participation ? ` · Parte de ${returningTask.assigneeName}. Las demás participaciones no cambian.` : '.'}</>}
                 tone="red"
                 reasons={RETURN_REASONS}
                 reasonLabel="Motivo de devolución"
@@ -1371,7 +1379,7 @@ const NativeTasks = () => {
                 }}
                 icon={TaskReintegrateIcon}
                 title="Reintegrar tarea"
-                description={<><strong>{reintegratingTask?.title}</strong> volverá a Pendiente conservando todo su historial.</>}
+                description={<><strong>{reintegratingTask?.title}</strong>{reintegratingTask?.participation ? ` · Parte de ${reintegratingTask.assigneeName}. Las demás participaciones no cambian.` : ' volverá a Pendiente conservando todo su historial.'}</>}
                 tone="emerald"
                 noteLabel="Nota de reintegración"
                 noteValue={reintegrateNote}
@@ -1390,6 +1398,7 @@ const NativeTasks = () => {
                         </DialogTitle>
                         <DialogDescription>
                             La tarea <strong>{deletingTask?.title}</strong> dejará de ser visible en el Kanban y en las métricas.
+                            {deletingTask?.sharedProgress && ' Se eliminará la tarea completa y todas sus participaciones, también las de las demás personas.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
@@ -1453,10 +1462,10 @@ const NativeTasks = () => {
                                         ) : (
                                             returnedTasks.map((task, index) => (
                                                 <TaskCard
-                                                    key={String(task.id)}
+                                                    key={taskCardKey(task)}
                                                     task={task}
                                                     index={index}
-                                                    saving={savingTaskId === String(task.id)}
+                                                    saving={savingTaskId === taskCardKey(task)}
                                                     movePending={Boolean(savingTaskId)}
                                                     highlightedTaskId={highlightedTaskId}
                                                     onClick={(t) => openTaskFromBoard(t)}
@@ -1465,7 +1474,7 @@ const NativeTasks = () => {
                                                     shaking={shakingTaskId === String(task.id)}
                                                     onShakeEnd={onShakeEnd}
                                                     onReturn={(t) => setReturningTask(t)}
-                                                    onReopen={(t) => setReopeningTask(t)}
+                                                    onReopen={(t) => t.status === 'DEVUELTA' ? setReintegratingTask(t) : setReopeningTask(t)}
                                                     onDelete={(t) => setDeletingTask(t)}
                                                 />
                                             ))
@@ -1547,10 +1556,10 @@ const NativeTasks = () => {
                                             >
                                                 {columnTasks.map((task, index) => (
                                                     <TaskCard
-                                                        key={String(task.id)}
+                                                        key={taskCardKey(task)}
                                                         task={task}
                                                         index={index}
-                                                        saving={savingTaskId === String(task.id)}
+                                                        saving={savingTaskId === taskCardKey(task)}
                                                         movePending={Boolean(savingTaskId)}
                                                         highlightedTaskId={highlightedTaskId}
                                                         onClick={(t) => openTaskFromBoard(t)}
@@ -1583,7 +1592,7 @@ const NativeTasks = () => {
 };
 
 const TaskCard = ({ task, index, lock = null, movePending = false, ...surfaceProps }) => (
-    <Draggable draggableId={String(task.id)} index={index} isDragDisabled={Boolean(lock) || movePending}>
+    <Draggable draggableId={taskCardKey(task)} index={index} isDragDisabled={Boolean(lock) || movePending || Boolean(task.participation && !(task.status === 'REALIZADA' ? task.participation.permissions?.canReopen : task.status === 'DEVUELTA' ? task.participation.permissions?.canReintegrate : task.participation.permissions?.canChangeStatus))}>
         {(provided, snapshot) => (
             <TaskCardSurface task={task} provided={provided} snapshot={snapshot} lock={lock} {...surfaceProps} />
         )}
@@ -1633,7 +1642,11 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
 
     return (
                 <div
-                    id={snapshot.isClone ? undefined : `task-${task.id}`}
+                    id={snapshot.isClone ? undefined : `task-${task.id}${task.participation ? `-${task.participation.memberId}` : ''}`}
+                    data-task-id={task.id}
+                    data-task-member={task.participation?.memberId}
+                    data-participation-status={task.participation?.status}
+                    data-participation-running={task.participation ? String(Boolean(task.participation.startedAt)) : undefined}
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...dragHandleProps}
@@ -1660,7 +1673,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                             <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
                                 <defs>
                                     {/* Top-to-bottom tint that fades out completely before the card edge (Rodny, 21 September 2026). */}
-                                    <linearGradient id={`task-tab-${task.id}`} x1="0" y1="0" x2="0" y2="1">
+                                    <linearGradient id={`task-tab-${task.id}${task.participation ? `-${task.participation.memberId}` : ''}`} x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0" stopColor="currentColor" stopOpacity="0.18" />
                                         <stop offset="0.55" stopColor="currentColor" stopOpacity="0.06" />
                                         <stop offset="0.85" stopColor="currentColor" stopOpacity="0" />
@@ -1668,7 +1681,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                 </defs>
                                 {/* Same surface as the card body (bg-white / dark:bg-zinc-900): the card token is near black in dark mode. */}
                                 <path d={TASK_TAB_FILL_PATH} className="fill-white dark:fill-zinc-900" />
-                                <path d={TASK_TAB_FILL_PATH} fill={`url(#task-tab-${task.id})`} />
+                                <path d={TASK_TAB_FILL_PATH} fill={`url(#task-tab-${task.id}${task.participation ? `-${task.participation.memberId}` : ''})`} />
                                 <path
                                     d={TASK_TAB_STROKE_PATH}
                                     fill="none"
@@ -1743,7 +1756,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
 
                             {/* Acciones rápidas, ancladas a la esquina superior derecha de la tarjeta. */}
                             {!saving && <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
-                                {lifecycleAction === 'reintegrate' ? (
+                                {lifecycleAction === 'reintegrate' && (!task.participation || (isReturned ? task.participation.permissions?.canReintegrate : task.participation.permissions?.canReopen)) ? (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onReopen(task); }}
                                         className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-zinc-400 transition-colors hover:bg-brand-cyan/10 hover:text-brand-cyan-deep dark:hover:text-brand-cyan sm:min-h-8 sm:min-w-8"
@@ -1752,7 +1765,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                     >
                                         <TaskReintegrateIcon className="w-3.5 h-3.5" />
                                     </button>
-                                ) : lifecycleAction === 'return' ? (
+                                ) : lifecycleAction === 'return' && (!task.participation || task.participation.permissions?.canReturn) ? (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onReturn(task); }}
                                         className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
@@ -1791,6 +1804,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                     {task.isLocked && <Lock data-task-private="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-label="Pendiente privado" />}
                                     <span className="min-w-0">{task.title}</span>
                                 </h4>
+                                {task.participation && <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{isDone ? 'Terminó su parte' : `Parte de ${task.assigneeName}`} · {task.participants.filter(row => row.status === 'REALIZADA').length}/{task.participants.length} completadas</p>}
                             </div>
 
                             {/* Responsable + fecha */}
@@ -1859,7 +1873,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                             <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-4 dark:border-white/10">
                                 <div className="flex min-w-0 items-center gap-2.5">
                                     <span className="hidden items-center gap-1.5 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
-                                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
+                                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || 'hsl(var(--muted-foreground))' }} />
                                         <span className="truncate max-w-[160px]">{task.aiCategory || 'Sin clasificar'}</span>
                                     </span>
                                     {task.aiComplexity && (
