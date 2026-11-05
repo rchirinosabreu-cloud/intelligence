@@ -748,6 +748,7 @@ model ClientContract {
   standBySince   String?
   cutDay         Int      @default(1)
   deliverables   Json     @default("[]")
+  scopeDetails   Json?    @db.JsonB
   storiesPerWeek Int      @default(0)
   productionDays Int      @default(0)
   monthlyReport  Boolean  @default(false)

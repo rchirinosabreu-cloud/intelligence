@@ -1,12 +1,12 @@
 import React, { useLayoutEffect, useState } from 'react';
-import { CalendarDays, CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, RotateCcw, Video } from '@/components/ui/icons';
+import { CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, RotateCcw } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import {
-  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES, STORY_FREQUENCIES,
+  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, OPERATION_STAGES, SERVICE_TYPES,
   canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
@@ -14,6 +14,7 @@ import CycleBar from './CycleBar';
 import ClientObservations from './ClientObservations';
 import { CloseDialog, ReportDialog, SuspensionDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
 import PiecePeekDialog from './PiecePeekDialog';
+import { ContractScopeSummary } from './ClientContractScope';
 import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 
@@ -344,7 +345,7 @@ function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspensi
         <Field label="Agencia">{labelOf(CLIENT_AGENCIES, client.agency)}</Field>
         <Field label="Complejidad">{labelOf(CLIENT_COMPLEXITY, client.complexity)}</Field>
         <Field label="Tipo">{labelOf(SERVICE_TYPES, contract?.serviceType)}</Field>
-        <Field label="Estado">{labelOf(CONTRACT_STATUSES, contract?.status)}</Field>
+        <Field label="Estado del contrato">{labelOf(CONTRACT_STATUSES, contract?.status)}</Field>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-zinc-100 pt-4 dark:border-white/5">
         <Person role="Project manager" member={client.projectManager} />
@@ -367,11 +368,7 @@ function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspensi
               </div>
             </div>
           )}
-          <ul className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-300">
-            {contract.storiesPerWeek > 0 && <li className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-zinc-400" />Historias: {labelOf(STORY_FREQUENCIES, contract.storiesPerWeek).toLowerCase()}</li>}
-            {contract.productionDays > 0 && <li className="flex items-center gap-2"><Video className="h-4 w-4 text-zinc-400" />{contract.productionDays === 1 ? '1 jornada de producción al mes' : `${contract.productionDays} jornadas de producción al mes`}</li>}
-            {contract.monthlyReport && <li className="flex items-center gap-2"><FileBarChart className="h-4 w-4 text-zinc-400" />Informe mensual</li>}
-          </ul>
+          <ContractScopeSummary contract={contract} />
           {contract.notes && <p className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-white/5 dark:text-zinc-300">{contract.notes}</p>}
         </div>
       ) : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">Sin contrato no hay contra qué medir. {canManage && 'Cárgalo con «Editar».'}</p>}

@@ -6,6 +6,7 @@
 
 import { unbackedWork } from './unbackedWork.js';
 import { sheetIdFromUrl } from './externalPlan.js';
+import { normalizeContractScope } from './clientContractScope.js';
 
 // Etapas de una pieza, en orden. Cada una cuenta las piezas que llegaron *al menos* hasta ahí.
 export const OPERATION_STAGES = [
@@ -366,6 +367,13 @@ export function normalizeOperationProfile(input = {}) {
       }
     }
     if (contract.status !== 'STAND_BY') contract.standBySince = null;
+    // Los formularios anteriores no conocen este campo: omitirlo conserva lo guardado.
+    // Renovar no hereda este alcance ni lo deduce de las notas del contrato anterior.
+    if (Object.hasOwn(raw, 'scopeDetails')) {
+      const scope = normalizeContractScope(raw.scopeDetails);
+      Object.assign(errors, scope.errors);
+      contract.scopeDetails = scope.value;
+    }
     value.contract = contract;
   }
   return { valid: Object.keys(errors).length === 0, value, errors };

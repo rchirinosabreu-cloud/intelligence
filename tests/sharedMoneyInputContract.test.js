@@ -23,8 +23,10 @@ const NON_MONEY_NUMBER_FIELDS = {
     'src/components/modules/Quotations/ProposalDetailsEditor.jsx': 4,
     // Variación porcentual de una métrica.
     'src/components/reports/ReportEvidenceWorkspace.jsx': 1,
-    // Ficha operativa del cliente: día de corte de la parrilla, piezas al mes por formato y jornadas al mes.
-    'src/components/modules/Clients/operations/ClientOperationDialog.jsx': 3,
+    // Ficha operativa: día de corte de la parrilla y piezas al mes por formato.
+    'src/components/modules/Clients/operations/ClientOperationDialog.jsx': 2,
+    // Cantidades de límites, historias/días, historias por ocasión, jornadas (legado y detalle), horas por jornada y servicios.
+    'src/components/modules/Clients/operations/ClientContractScope.jsx': 7,
     // Cantidades de entregables, jornadas y horas de producción de cada proyecto; no son dinero.
     'src/components/modules/Clients/operations/ClientProjects.jsx': 3
 };
