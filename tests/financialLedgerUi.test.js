@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { readFinancialNavigation } from '../src/lib/financialNavigation.js';
+import { FINANCIAL_TAB_GROUPS } from '../src/lib/financialTabs.js';
 
 const dashboardSource = fs.readFileSync(
     new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url),
@@ -8,10 +10,16 @@ const dashboardSource = fs.readFileSync(
 );
 
 test('financial dashboard exposes the operational ledger as a primary tab', () => {
-    // Financiero abre en Movimientos, la primera de sus cuatro pestañas.
+    // Financiero abre en Movimientos, su primera pestaña; la selección vive en la URL.
     // Un enlace puede abrir otra vista (la revisión del cierre del mes lleva a Rentabilidad); sin él, Movimientos.
-    assert.match(dashboardSource, /useState\((?:\(\) => \([\s\S]*?)?'records'\)?\)/);
-    assert.match(fs.readFileSync(new URL('../src/lib/financialTabs.js', import.meta.url), 'utf8'), /key: 'movimientos', label: 'Movimientos'/);
+    assert.equal(readFinancialNavigation('').activeTab, 'records');
+    assert.equal(readFinancialNavigation('?tab=desconocida').activeTab, 'records');
+    assert.equal(readFinancialNavigation('?tab=rentabilidad').activeTab, 'profitability');
+    assert.equal(FINANCIAL_TAB_GROUPS[0].key, 'movimientos');
+    assert.equal(FINANCIAL_TAB_GROUPS[0].label, 'Movimientos');
+    assert.equal(FINANCIAL_TAB_GROUPS[0].views[0].key, 'records');
+    assert.match(dashboardSource, /const \{[^}]*\bactiveTab\b[^}]*\} = useFinancialNavigation\(\)/);
+    assert.match(dashboardSource, /activeTab === 'records' && \(\s*<FinancialLedger\b/);
     assert.match(dashboardSource, /<FinancialLedger/);
     assert.match(dashboardSource, /<FinancialFilters/);
     assert.match(dashboardSource, /filters=\{filters\}/);
