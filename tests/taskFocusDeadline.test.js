@@ -157,7 +157,7 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(board, /focusDeadlineAt: task\.focusDeadlineAt/, 'the board reads the hour from the API');
   assert.match(board, /assigneeUserId: task\.assignee\?\.userId/, 'the board knows whose task it is');
   assert.match(board, /getTaskLock\(\{ tasks, task, viewerUserId: currentUser\?\.id, viewerIsManager \}\)/);
-  assert.match(card, /isDragDisabled=\{Boolean\(lock\)\}/, 'locked cards cannot be moved');
+  assert.match(card, /isDragDisabled=\{Boolean\(lock\) \|\| movePending\}/, 'locked cards cannot be moved, even when no save is pending');
   assert.match(card, /onPointerDown=\{lock \? \(\) => onLocked\(task, lock\) : undefined\}/, 'the very first touch on a locked card (click or drag start) is the attempt');
   assert.match(card, /onClick=\{\(\) => \{ if \(!lock\) onClick\(task\); \}\}/, 'a locked card never opens');
   assert.match(card, /shaking && "brain-shake"/, 'the first attempt shakes the card (Rodny, 21 September 2026)');

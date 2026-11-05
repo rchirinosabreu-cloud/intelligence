@@ -7,12 +7,16 @@ const readNativeTasks = () => readFile(
   'utf8'
 );
 
-test('task moves preserve the visible state until the server confirms and reloads it', async () => {
+test('task moves apply the confirmed response before refreshing the board', async () => {
   const source = await readNativeTasks();
   const transition = source.slice(source.indexOf('// 2. Dragged to a different column'), source.indexOf('const handle', source.indexOf('// 2. Dragged to a different column')));
-  assert.doesNotMatch(transition, /setQueryData|completedAt\s*=/);
+  assert.doesNotMatch(transition, /completedAt\s*=/);
   assert.match(transition, /const savedTask = await response\.json\(\)/);
-  assert.match(transition, /await queryClient\.invalidateQueries\(\{ queryKey: \['nativeTasks'\] \}\)/);
+  const confirmation = transition.indexOf('const savedTask = await response.json()');
+  const cancel = transition.indexOf('await queryClient.cancelQueries(', confirmation);
+  const apply = transition.indexOf('applyConfirmedTaskMove(', cancel);
+  assert.ok(cancel > confirmation && apply > cancel, 'an older read cannot overwrite the confirmed move');
+  assert.match(transition, /queryClient\.invalidateQueries\(\{ queryKey: \['nativeTasks'\] \}\)/);
 });
 
 test('completion confetti runs only after a successful backend response', async () => {
