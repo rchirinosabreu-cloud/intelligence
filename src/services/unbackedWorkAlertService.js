@@ -7,14 +7,14 @@ import { createNotification } from './notificationService.js';
 import { activeAreaUserIds } from './teamAreaService.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import { MONTH_NAMES } from '../lib/clientOperations.js';
+import { CONTRACT_ORDER, selectedContract } from '../lib/clientContractSelection.js';
+import { bogotaDate as bogotaToday } from '../lib/colombiaBusinessDays.js';
 import { unbackedWork, unbackedWorkNoticeText } from '../lib/unbackedWork.js';
 
 export const UNBACKED_WORK_TYPE = 'TRABAJO_SIN_PROPUESTA';
 const OPEN_TASK_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const CHECK_MS = 30 * 60 * 1000;
 const DIGEST_THRESHOLD = 3;
-
-const bogotaToday = (now) => new Date(now.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10);
 
 /** Lo que se está trabajando con cada cliente, en la misma forma que lo lee el semáforo de Operación. */
 export const clientWork = (client, today) => {
@@ -36,7 +36,7 @@ export const runUnbackedWorkAlerts = async (db = prisma, { now = new Date(), not
         where: { isArchived: false },
         select: {
             id: true, name: true, slug: true,
-            contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { status: true, startDate: true, endDate: true } },
+            contracts: { orderBy: CONTRACT_ORDER, select: { id: true, status: true, startDate: true, endDate: true, createdAt: true } },
             workAuthorizations: { orderBy: { createdAt: 'desc' }, take: 1, select: { until: true, reason: true, authorizedByName: true } },
             contentPlans: {
                 where: { deletedAt: null, OR: [{ year, month }, { year: next.year, month: next.month }] },
@@ -53,7 +53,7 @@ export const runUnbackedWorkAlerts = async (db = prisma, { now = new Date(), not
     for (const client of clients) {
         const authorization = client.workAuthorizations?.[0];
         const finding = unbackedWork({
-            contract: client.contracts?.[0] || null,
+            contract: selectedContract(client.contracts, today),
             work: clientWork(client, today),
             authorization: authorization ? { until: authorization.until, reason: authorization.reason, byName: authorization.authorizedByName } : null
         }, today);

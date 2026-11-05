@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import { cycleForDate } from '../lib/clientOperations.js';
+import { CONTRACT_ORDER, selectedContract } from '../lib/clientContractSelection.js';
 import {
     firstSuspendedCycle, isDecisionDay, liftProblem, suspensionCandidate,
     suspensionCandidateBellText, suspensionCandidateNoticeText, suspensionLiftedText, suspensionProblem, suspensionStartedText
@@ -24,6 +25,7 @@ export const SUSPENSION_PROPOSED_TYPE = 'CARTERA_SUSPENSION_PROPUESTA';
 export const SUSPENSION_STARTED_TYPE = 'CLIENTE_SUSPENDIDO';
 export const SUSPENSION_LIFTED_TYPE = 'CLIENTE_REACTIVADO';
 const CHECK_MS = 30 * 60 * 1000;
+const CONTRACT_SELECTION = { orderBy: CONTRACT_ORDER, select: { id: true, startDate: true, createdAt: true, cutDay: true } };
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 const isUniqueViolation = (error) => error?.code === 'P2002';
@@ -34,7 +36,7 @@ const clientForSuspension = async (db, clientId) => {
         where: { id: String(clientId || '') },
         select: {
             id: true, name: true, slug: true,
-            contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { cutDay: true } },
+            contracts: CONTRACT_SELECTION,
             projectManager: { select: { userId: true } },
             responsible: { select: { userId: true } },
             accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS }
@@ -87,7 +89,7 @@ export const createClientSuspensionService = ({
         const today = bogotaToday(now);
         const settings = await readCollectionSettings(db);
         const candidate = suspensionCandidate({ receivables: client.accountsReceivables, today, settings });
-        const fromCycle = firstSuspendedCycle(cycleForDate(today, client.contracts[0]?.cutDay || 1));
+        const fromCycle = firstSuspendedCycle(cycleForDate(today, selectedContract(client.contracts, today)?.cutDay || 1));
         const data = {
             id: randomUUID(), clientId: client.id, fromCycle, suspendedOn: today,
             authorizedBy: String(authorizedBy).trim(), reason: String(reason).trim(),
@@ -179,7 +181,7 @@ export const createClientSuspensionService = ({
             },
             select: {
                 id: true, name: true, slug: true,
-                contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { cutDay: true } },
+                contracts: CONTRACT_SELECTION,
                 projectManager: { select: { userId: true } },
                 accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS }
             }
@@ -187,7 +189,7 @@ export const createClientSuspensionService = ({
         for (const client of clients) {
             const candidate = suspensionCandidate({ receivables: client.accountsReceivables, today, settings });
             if (!candidate) continue;
-            const fromCycle = firstSuspendedCycle(cycleForDate(today, client.contracts[0]?.cutDay || 1));
+            const fromCycle = firstSuspendedCycle(cycleForDate(today, selectedContract(client.contracts, today)?.cutDay || 1));
             try {
                 // Una propuesta por cliente y mes congelado: si nadie decide, no se repite todos los días.
                 await db.collectionAlert.create({ data: { subjectId: client.id, kind: 'SUSPENSION', cycle: `S:${fromCycle}`, step: 0, sentAt: now } });

@@ -101,6 +101,22 @@ test('el responsable actual sigue visible y se conserva aunque ya no esté en la
   assert.equal(Object.hasOwn(saved.contract, 'scopeDetails'), false, 'guardar un legado sin detallar no crea metadatos ni borra otros');
 });
 
+test('el editor distingue Video, Reel, Sin clasificar y Otro y conserva cantidades y responsables al guardar', async () => {
+  let saved;
+  const account = client(null);
+  account.contract.deliverables = [{ format: 'Post', quantity: 4 }, { format: 'Video', quantity: 6 }, { format: 'Sin clasificar', quantity: 2 }];
+  await mount(Dialog, { client: account, team: [], onClose() {}, onSave: async input => { saved = input; } });
+  const formats = [...document.querySelectorAll('select')].filter(select => [...select.options].some(option => option.value === 'Carrusel'));
+  assert.equal(formats.length, 3);
+  assert.deepEqual(formats.map(select => select.value), ['Post', 'Video', 'Sin clasificar']);
+  for (const format of ['Video', 'Reel', 'Sin clasificar', 'Otro']) assert.ok([...formats[0].options].some(option => option.value === format), `falta opción ${format}`);
+  await submit();
+  assert.ok(saved);
+  assert.deepEqual(saved.contract.deliverables, account.contract.deliverables);
+  assert.equal(saved.projectManagerId, 'pm-retained');
+  assert.equal(saved.communityManagerId, 'cm-retained');
+});
+
 test('un fallo de guardado conserva cantidades nuevas, campos desconocidos y el formulario abierto', async () => {
   let closed = 0, attempted;
   await mount(Dialog, { client: client(), team: [], onClose: () => { closed += 1; }, onSave: async input => { attempted = input; throw new Error('No fue posible guardar la revisión.'); } });

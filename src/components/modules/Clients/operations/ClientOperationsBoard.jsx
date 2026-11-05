@@ -5,6 +5,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf } from '@/lib/clientOperations';
+import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
 import { LEVEL_META, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
 
@@ -12,7 +13,7 @@ import CycleBar from './CycleBar';
 // Excel, pero calculada. Cada fila abre la página completa del cliente.
 
 const SUMMARY_HINT = {
-  red: 'Piezas atrasadas o un mes sin cerrar',
+  red: 'Publicaciones atrasadas o pendientes del mes anterior',
   yellow: 'Algo que mirar antes de que se caiga',
   green: 'Van al ritmo de lo contratado',
   gray: 'En stand by o sin contrato cargado',
@@ -23,11 +24,11 @@ const FILTER_SELECT = 'min-h-11 border-none bg-transparent pl-0 pr-9 text-sm';
 
 function MonthCell({ cycle }) {
   if (!cycle) return <span className="text-xs text-zinc-400">—</span>;
-  const closed = cycle.reached.publicada >= cycle.quota;
+  const fulfilled = cycle.reached.publicada >= cycle.quota;
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', closed ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
-      title={closed ? `${cycle.label}: cerrado` : `${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas`}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', closed ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />
+    <span className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', fulfilled ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
+      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas`}>
+      <span className={cn('h-1.5 w-1.5 rounded-full', fulfilled ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />
       {cycle.label.slice(0, 3)} {cycle.reached.publicada}/{cycle.quota}
     </span>
   );
@@ -38,7 +39,8 @@ function ClientRow({ client, evaluation, onOpen }) {
   const { current, previous } = client.cycles || {};
   const tasks = client.openTasks || [];
   const overdue = tasks.filter((t) => t.overdue).length;
-  const [first, ...rest] = evaluation.reasons;
+  const { primary, contract } = deriveClientAlerts(evaluation);
+  const [first, ...rest] = primary.length ? primary : contract;
   const measured = isMeasured(client) && current;
   const tags = [labelOf(CLIENT_AGENCIES, client.agency), client.complexity && `Complejidad ${labelOf(CLIENT_COMPLEXITY, client.complexity).toLowerCase()}`].filter(Boolean).join(' · ');
   return (
@@ -83,11 +85,6 @@ function ClientRow({ client, evaluation, onOpen }) {
 
         <span className="col-span-2 min-w-0 text-sm text-zinc-700 dark:text-zinc-300 lg:col-span-1">
           {first ? <span className="line-clamp-2">{first.text}{rest.length > 0 && <span className="text-zinc-400"> · y {rest.length} más</span>}</span> : <span className="text-zinc-400">Todo al día.</span>}
-          {client.latestObservation && (
-            <span className="mt-1 block truncate text-xs text-zinc-500 dark:text-zinc-400" title={client.latestObservation.text}>
-              <span className="font-medium">Observación:</span> {client.latestObservation.text}
-            </span>
-          )}
         </span>
       </button>
     </li>

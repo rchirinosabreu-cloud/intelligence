@@ -71,7 +71,16 @@ const clientRow = (id, over = {}) => ({
 const fakeDb = (clients) => {
     const taken = new Set();
     return {
-        client: { findMany: async () => clients },
+        client: { findMany: async ({ select } = {}) => clients.map(client => {
+            const result = structuredClone(client);
+            const selection = select?.contracts;
+            if (selection) {
+                result.contracts.sort((a, b) => b.startDate.localeCompare(a.startDate));
+                if (selection.take) result.contracts = result.contracts.slice(0, selection.take);
+                if (selection.select) result.contracts = result.contracts.map(row => Object.fromEntries(Object.keys(selection.select).map(key => [key, row[key]])));
+            }
+            return result;
+        }) },
         user: { findMany: async () => people },
         unbackedWorkAlert: {
             create: async ({ data }) => {
@@ -83,9 +92,9 @@ const fakeDb = (clients) => {
         }
     };
 };
-const run = async (db) => {
+const run = async (db, now = NOW) => {
     const bells = [];
-    const result = await runUnbackedWorkAlerts(db, { now: NOW, notify: async (data) => { bells.push(data); return { id: bells.length }; }, log: () => {}, info: () => {} });
+    const result = await runUnbackedWorkAlerts(db, { now, notify: async (data) => { bells.push(data); return { id: bells.length }; }, log: () => {}, info: () => {} });
     return { result, bells };
 };
 
@@ -106,6 +115,19 @@ test('Dirección recibe el aviso una vez por cliente y mes; lo autorizado o con 
 
     const again = await run(db);
     assert.equal(again.bells.length, 0, 'no se repite en el mismo mes');
+});
+
+test('una renovación futura no oculta trabajo sin respaldo antes de empezar en Bogotá', async () => {
+    const client = clientRow('renovacion', { contracts: [
+        { id: 'old', status: 'ACTIVO', startDate: '2026-01-01', endDate: '2026-10-28' },
+        { id: 'new', status: 'ACTIVO', startDate: '2026-10-30', endDate: null },
+    ] });
+    const before = await run(fakeDb([client]), new Date('2026-10-30T03:00:00Z'));
+    assert.equal(before.result.found, 1);
+    assert.equal(before.bells.length, 1);
+    const started = await run(fakeDb([client]), new Date('2026-10-30T05:00:00Z'));
+    assert.equal(started.result.found, 0);
+    assert.equal(started.bells.length, 0);
 });
 
 test('autorizar seguir es de Dirección o Administración, con motivo y fecha', async () => {

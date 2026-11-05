@@ -17,6 +17,7 @@ import PiecePeekDialog from './PiecePeekDialog';
 import { ContractScopeSummary } from './ClientContractScope';
 import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
+import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
 
 // Página completa de un cliente en «Operación» (borrador del 2 de octubre de 2026). Todo lo que la fila
 // del Excel tenía de ese cliente, más lo que se trabaja desde aquí: marcar lo publicado por fuera,
@@ -40,22 +41,40 @@ function Person({ role, member }) {
   );
 }
 
-function Attention({ evaluation }) {
+function Attention({ evaluation, client, onOpenPlan, onReport, onSection }) {
+  const [expanded, setExpanded] = useState(false);
   const meta = LEVEL_META[evaluation.level];
+  const { primary, contract } = deriveClientAlerts(evaluation);
+  const visible = expanded ? primary : primary.slice(0, 4);
+  const actionFor = reason => {
+    const action = reason.action;
+    if (!action) return null;
+    if (action.type === 'profile' || action.type === 'tasks') return { label: action.type === 'tasks' ? 'Ver tareas' : 'Ver ficha', run: () => onSection(action.type) };
+    const cycles = [client.cycles?.current, client.cycles?.previous, ...(client.history || [])].filter(Boolean);
+    const cycle = cycles.find(item => item.year === action.year && item.month === action.month);
+    if (!cycle) return null;
+    if (action.type === 'report' && onReport) return { label: 'Revisar informe', run: () => onReport(cycle) };
+    if (['current_plan', 'previous_plan'].includes(action.type) && onOpenPlan) return { label: `Revisar ${cycle.label.toLowerCase()}`, run: () => onOpenPlan(cycle) };
+    return null;
+  };
   return (
-    <section className={cn('rounded-2xl border p-5', meta.soft)} aria-label="Qué pide atención">
+    <section className={CARD} aria-label="Qué pide atención">
       <p className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
         <span className={cn('h-2.5 w-2.5 rounded-full', meta.dot)} />{meta.label}
       </p>
-      {evaluation.reasons.length > 0 && evaluation.level !== 'green' ? (
+      {primary.length > 0 ? (
         <ul className="mt-3 grid gap-2 md:grid-cols-2">
-          {evaluation.reasons.map((reason) => (
-            <li key={reason.text} className="flex items-start gap-2.5 rounded-xl bg-white/80 px-3 py-2 text-sm text-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-100">
-              <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', LEVEL_META[reason.level].dot)} />{reason.text}
-            </li>
-          ))}
+          {visible.map((reason, index) => {
+            const action = actionFor(reason);
+            return <li key={`${reason.code || reason.text}-${index}`} className="flex items-start gap-2.5 rounded-xl bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:bg-white/5 dark:text-zinc-100">
+              <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', LEVEL_META[reason.level].dot)} />
+              <div className="min-w-0 flex-1"><p>{reason.text}</p>{action && <button type="button" onClick={action.run} className={cn(TEXT_ACTION, '-ml-3 text-xs')}>{action.label}</button>}</div>
+            </li>;
+          })}
         </ul>
-      ) : <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">Va al ritmo de lo contratado. No hay nada pendiente.</p>}
+      ) : <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">No hay alertas operativas con los datos registrados.</p>}
+      {primary.length > 4 && <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className={cn(TEXT_ACTION, '-ml-3 mt-1')}>{expanded ? 'Ver menos' : `Ver ${primary.length - 4} más`}</button>}
+      {contract.length > 0 && <button type="button" onClick={() => onSection('profile')} className={cn(TEXT_ACTION, '-ml-3 mt-2 block text-xs')}>Contrato: {contract.length} {contract.length === 1 ? 'aviso' : 'avisos'} en la ficha operativa</button>}
     </section>
   );
 }
@@ -113,7 +132,7 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
         </div>
         {fromSheet && externalPlanUrl
           ? <a href={externalPlanUrl} target="_blank" rel="noreferrer" className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir la hoja <ExternalLink className="h-4 w-4" /></a>
-          : cycle.created > 0 && <button type="button" onClick={onOpenPlan} className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir parrilla <ExternalLink className="h-4 w-4" /></button>}
+          : cycle.created > 0 && <button type="button" onClick={() => onOpenPlan(cycle)} className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir parrilla <ExternalLink className="h-4 w-4" /></button>}
       </div>
       <CycleBar cycle={cycle} className="mt-4 h-2.5" />
       <ul className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -191,11 +210,12 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
 }
 
 function History({ months, monthlyReport, today, onReport, onClose, onReopen }) {
+  const showReports = months.some(month => month.monthlyReport ?? monthlyReport);
   return (
     <section className={CARD} aria-label="Meses anteriores">
       <h2 className={cn(CARD_TITLE, 'mb-3')}>Meses anteriores</h2>
       <table className="w-full text-left text-sm">
-        <thead className="text-xs text-zinc-500"><tr><th className="py-2 font-medium">Mes</th><th className="py-2 font-medium">Publicadas</th>{monthlyReport && <th className="py-2 font-medium">Informe</th>}<th className="py-2 font-medium">Cierre</th></tr></thead>
+        <thead className="text-xs text-zinc-500"><tr><th className="py-2 font-medium">Mes</th><th className="py-2 font-medium">Publicadas</th>{showReports && <th className="py-2 font-medium">Informe</th>}<th className="py-2 font-medium">Cierre</th></tr></thead>
         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
           {months.map((month) => {
             const closed = month.reached.publicada >= month.quota;
@@ -207,13 +227,13 @@ function History({ months, monthlyReport, today, onReport, onClose, onReopen }) 
                     <span className={cn('h-1.5 w-1.5 rounded-full', closed ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />{month.reached.publicada} de {month.quota}
                   </span>
                 </td>
-                {monthlyReport && (
+                {showReports && (
                   <td className="py-1" data-history-report={month.label}>
-                    <div className="flex flex-wrap items-center gap-1">
+                    {(month.monthlyReport ?? monthlyReport) ? <div className="flex flex-wrap items-center gap-1">
                       <ReportStatus report={month.report} />
                       <button type="button" onClick={() => onReport(month)} aria-label={`Actualizar el informe de ${month.label.toLowerCase()}`}
                         className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}><FileBarChart className="h-4 w-4" />Actualizar</button>
-                    </div>
+                    </div> : <span className={LABEL}>No contratado</span>}
                   </td>
                 )}
                 <td className="py-1" data-history-close={month.label}><CloseStatus cycle={month} today={today} onClose={onClose} onReopen={onReopen} compact /></td>
@@ -274,7 +294,7 @@ function UnbackedWork({ client, today, onAuthorize }) {
       className={cn('mb-4 rounded-xl border p-3 text-sm', finding.authorized
         ? 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300'
         : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
-      <p className="font-semibold">{finding.authorized ? 'Trabajo autorizado sin propuesta' : 'Trabajo sin propuesta aprobada'}</p>
+      <p className="font-semibold">{finding.authorized ? 'Continuidad autorizada' : 'Contrato registrado por revisar'}</p>
       <p className="mt-1">{finding.text}</p>
       {!finding.authorized && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Renueva el contrato con «Editar» o aprueba una cotización nueva.</p>}
       {client.canAuthorizeWork && onAuthorize && (
@@ -323,17 +343,18 @@ function ExternalPlan({ client, onRefresh }) {
   );
 }
 
-function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan }) {
+function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan }) {
   const { contract } = client;
   const quota = contractQuota(contract);
   return (
-    <section className={CARD} aria-label="Ficha operativa">
+    <section className={cn(CARD, 'scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary')} id="client-operation-profile" tabIndex={-1} aria-label="Ficha operativa">
       <div className="mb-4 flex items-start justify-between gap-3">
         <h2 className={CARD_TITLE}>Ficha operativa</h2>
         {canManage && <button type="button" onClick={onEdit} className={cn(TEXT_ACTION, '-mr-2 -mt-2')}><Edit className="h-4 w-4" />Editar</button>}
       </div>
       <Suspension client={client} onOpen={onSuspension} />
       <UnbackedWork client={client} today={today} onAuthorize={onAuthorizeWork} />
+      {deriveClientAlerts(evaluation).contract.filter(reason => reason.code !== 'UNBACKED_WORK').map(reason => <p key={reason.code || reason.text} className="mb-4 text-sm text-zinc-700 dark:text-zinc-300">{reason.text}</p>)}
       <ExternalPlan client={client} onRefresh={onRefreshExternalPlan} />
       {client.description && <p className="mb-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{client.description}</p>}
       {client.instagramUrl && (
@@ -369,7 +390,7 @@ function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspensi
             </div>
           )}
           <ContractScopeSummary contract={contract} />
-          {contract.notes && <p className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-white/5 dark:text-zinc-300">{contract.notes}</p>}
+          {contract.notes && <details className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><summary className="cursor-pointer py-1 font-medium">Notas del contrato</summary><p className="mt-2 whitespace-pre-line">{contract.notes}</p></details>}
         </div>
       ) : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">Sin contrato no hay contra qué medir. {canManage && 'Cárgalo con «Editar».'}</p>}
     </section>
@@ -378,7 +399,7 @@ function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspensi
 
 function Tasks({ tasks, onNewTask, onOpenTask }) {
   return (
-    <section className={CARD} aria-label="Tareas abiertas">
+    <section className={cn(CARD, 'scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary')} id="client-operation-tasks" tabIndex={-1} aria-label="Tareas abiertas">
       <div className="flex items-center justify-between gap-3">
         <h2 className={CARD_TITLE}>Tareas abiertas <span className="font-normal text-zinc-400">({tasks.length})</span></h2>
         <button type="button" onClick={onNewTask} className={cn(TEXT_ACTION, '-mr-2')}><Plus className="h-4 w-4" />Nueva tarea</button>
@@ -429,27 +450,28 @@ export default function ClientOperationPage({
         <Button className="min-h-11 rounded-xl" onClick={onNewTask}><Plus className="mr-2 h-4 w-4" />Nueva tarea</Button>
       </PageHeader>
 
-      <Attention evaluation={evaluation} />
+      <Attention key={`attention-${client.id}`} evaluation={evaluation} client={client} onOpenPlan={onOpenPlan} onReport={onSaveReport ? setReportFor : null}
+        onSection={section => { const node = document.getElementById(`client-operation-${section}`); node?.scrollIntoView({ block: 'start', behavior: 'smooth' }); node?.focus({ preventScroll: true }); }} />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
-            onAdd={onAddObservation} onDelete={onDeleteObservation} />
           {projectsSection}
-          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
+          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={current.monthlyReport ?? monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
             onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} onPeek={setPeeking} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
           {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null}
+          <Profile client={client} evaluation={evaluation} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null}
             onSuspension={onSuspend || onLiftSuspension ? () => setSuspending(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
+      <ClientObservations key={`observations-${client.id}`} observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
+        onAdd={onAddObservation} onDelete={onDeleteObservation} />
       {reportFor && <ReportDialog month={reportFor} onClose={() => setReportFor(null)}
         onSave={async (data) => { await onSaveReport(reportFor, data); setReportFor(null); }} />}
-      {closeFor && <CloseDialog month={closeFor} monthlyReport={monthlyReport} onClose={() => setCloseFor(null)}
+      {closeFor && <CloseDialog month={closeFor} monthlyReport={closeFor.monthlyReport ?? monthlyReport} onClose={() => setCloseFor(null)}
         onConfirm={async (note) => { await onConfirmClose(closeFor, note); setCloseFor(null); }} />}
       {peeking && current && <PiecePeekDialog piece={peeking} cycle={current} clientSlug={client.slug} onClose={() => setPeeking(null)}
         onOpenFull={(path) => { setPeeking(null); onOpenPiece?.(path); }} />}
