@@ -7,6 +7,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
+import { CONTRACT_ORDER, orderedContracts, contractAt, selectedContract } from '../lib/clientContractSelection.js';
 import {
   cycleForDate, cycleOf, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
   normalizeOperationProfile, contractQuota, MONTH_NAMES,
@@ -30,6 +31,12 @@ const PERSON = { select: { id: true, name: true, avatarUrl: true } };
 const TEAM_PERSON = { select: { id: true, name: true, avatarUrl: true, role: true, highlightedAction: true, userId: true, isActive: true } };
 const OBSERVATION_MAX = 2000;
 const OBSERVATIONS_SHOWN = 100;
+const contractForMonth = (contracts, year, month) => contracts.find((row) => {
+  const cycle = cycleOf(year, month, row.cutDay);
+  if (row.startDate > cycle.end || (row.endDate && row.endDate < cycle.start)) return false;
+  const atStart = contractAt(contracts, cycle.start);
+  return !atStart || (atStart.endDate && atStart.endDate < cycle.start) || atStart.id === row.id;
+}) || null;
 
 // Ventana de meses que se leen: la parrilla en curso, la anterior y el historial. Con día de corte la
 // parrilla en curso puede ser la del mes pasado, así que se lee un mes más.
@@ -48,7 +55,7 @@ const clientSelect = (window) => ({
   responsible: TEAM_PERSON, projectManager: TEAM_PERSON,
   // Las observaciones del cliente (lo que el Excel guardaba en «Comentario» y «OBSERVACIONES»).
   observations: { orderBy: { createdAt: 'desc' }, take: OBSERVATIONS_SHOWN, select: { id: true, text: true, source: true, sourceLabel: true, authorId: true, createdAt: true } },
-  contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1 },
+  contracts: { orderBy: CONTRACT_ORDER },
   monthlyReports: { where: { OR: window } },
   monthlyCloses: { where: { OR: window } },
   workAuthorizations: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -105,7 +112,7 @@ function pieceFacts(planId, item) {
   };
 }
 
-function cycleSummary(client, cycle, quota, today, reporters) {
+function cycleSummary(client, cycle, contract, today, reporters) {
   let items = client.contentPlans
     .filter((plan) => plan.year === cycle.year && plan.month === cycle.month)
     .flatMap((plan) => plan.contentItems.map((item) => pieceFacts(plan.id, item)));
@@ -117,7 +124,9 @@ function cycleSummary(client, cycle, quota, today, reporters) {
   if (client.externalPlanUrl) items = [];
   const external = sheet && (client.externalPlanUrl || !items.length) ? sheet : null;
   if (external) items = (Array.isArray(external.pieces) ? external.pieces : []).map(asOperationPiece);
-  const summary = summarizeCycle(cycle, items, { quota, today });
+  const summary = summarizeCycle(cycle, items, { quota: contractQuota(contract), today });
+  summary.contractId = contract.id;
+  summary.monthlyReport = Boolean(contract.monthlyReport);
   if (external) summary.source = { kind: 'HOJA_MIO', tab: external.tabName || null, readAt: external.okAt ? bogotaDate(external.okAt) : null, problem: external.problem || null };
   const report = client.monthlyReports.find((r) => r.year === cycle.year && r.month === cycle.month);
   // Solo «enviado» es entregado: `deliveredAt` sigue diciendo cuándo se envió, como antes de los estados.
@@ -170,7 +179,8 @@ const publicAuthorization = (row) => (row ? {
 
 function buildOperation(client, { today, reporters, detail }) {
   const observations = (client.observations || []).map((row) => publicObservation(row, reporters));
-  const contract = publicContract(client.contracts?.[0]);
+  const contracts = orderedContracts(client.contracts);
+  const contract = publicContract(selectedContract(contracts, today));
   const base = {
     id: client.id, name: client.name, slug: client.slug, logoUrl: client.logoUrl ?? null,
     description: client.description ?? null, instagramUrl: client.instagramUrl ?? null,
@@ -192,18 +202,22 @@ function buildOperation(client, { today, reporters, detail }) {
     observations,
     latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null,
   };
-  if (isMeasured(base)) {
-    const quota = contract.deliverables.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  if (isMeasured(base) && contract.startDate <= today) {
+    const startedContracts = contracts.filter((row) => row.startDate <= today);
     const currentCycle = cycleForDate(today, contract.cutDay);
     let cursor = currentCycle;
     const past = [];
     for (let i = 0; i < HISTORY_MONTHS; i += 1) {
       cursor = previousCycle(cursor, contract.cutDay);
-      // Antes de que empezara el contrato no hay nada que medir.
-      if (cursor.end < contract.startDate) break;
-      past.push(cycleSummary(client, cursor, quota, today, reporters));
+      const historical = publicContract(contractForMonth(startedContracts, cursor.year, cursor.month));
+      if (!historical) continue;
+      if (!isMeasured({ contract: historical })) continue;
+      // Cada mes conserva cupo, informe y corte de su contrato. La parrilla mantiene su identidad año/mes.
+      // Si un cambio de corte produce dos ciclos en el mismo mes, se conserva el criterio previo del más reciente:
+      // no hay vínculo contrato-parrilla para repartir ese mes y no se inventa un prorrateo.
+      past.push(cycleSummary(client, cycleOf(cursor.year, cursor.month, historical.cutDay), historical, today, reporters));
     }
-    const current = cycleSummary(client, currentCycle, quota, today, reporters);
+    const current = cycleSummary(client, currentCycle, contract, today, reporters);
     base.cycles = { current, previous: past[0] || null };
     base.history = past.map(({ pieces: _pieces, ...month }) => month);
     if (!detail) {
@@ -263,11 +277,12 @@ export const createClientOperationsService = ({
     const clients = await db.client.findMany({ where, orderBy: { name: 'asc' }, select: clientSelect(monthWindow(today)) });
     const rows = [];
     for (const client of clients) {
-      const contract = publicContract(client.contracts?.[0]);
+      const contract = publicContract(selectedContract(orderedContracts(client.contracts), today));
       if (!contract || contract.status !== 'ACTIVO') continue;
+      if (contract.startDate > today) continue;
       if (!isMeasured({ contract })) continue;
       const cycle = cycleForDate(today, contract.cutDay);
-      const summary = cycleSummary(client, cycle, contractQuota(contract), today, new Map());
+      const summary = cycleSummary(client, cycle, contract, today, new Map());
       if (!summary.overdueItems) continue;
       const member = (person) => (person?.userId && person.isActive !== false ? { userId: person.userId, name: person.name } : null);
       rows.push({
@@ -347,7 +362,9 @@ export const createClientOperationsService = ({
     if (!check.valid) throw httpError(422, 'Revisa los campos marcados.', { code: 'CLIENT_OPERATION_INVALID', errors: check.errors });
     const profile = check.value;
 
-    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, projectManagerId: true, responsibleId: true, contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { id: true } } } });
+    const today = todayKey();
+    const contractSelection = { orderBy: CONTRACT_ORDER, select: { id: true, startDate: true, createdAt: true } };
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, projectManagerId: true, responsibleId: true, contracts: contractSelection } });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
 
     // Corregir el alcance no reasigna a los responsables existentes. Una asignación nueva sí exige
@@ -365,6 +382,13 @@ export const createClientOperationsService = ({
     }
 
     await db.$transaction(async (tx) => {
+      let current = selectedContract(orderedContracts(client.contracts), today);
+      if (profile.contract && input.renew !== true) {
+        const fresh = await tx.client.findFirst({ where: { id: client.id }, select: { contracts: contractSelection } });
+        const selected = selectedContract(orderedContracts(fresh?.contracts), today);
+        if (current?.id !== selected?.id) throw httpError(409, 'El contrato del cliente cambió. Vuelve a abrir la ficha antes de guardar.', { code: 'CLIENT_CONTRACT_CHANGED' });
+        current = selected;
+      }
       await tx.client.update({
         where: { id: client.id },
         data: {
@@ -378,7 +402,6 @@ export const createClientOperationsService = ({
       if (profile.contract) {
         const data = { ...profile.contract, updatedById: actorUserId || null };
         if (Object.hasOwn(data, 'scopeDetails') && data.scopeDetails === null) data.scopeDetails = Prisma.DbNull;
-        const current = client.contracts?.[0];
         if (current && input.renew !== true) await tx.clientContract.update({ where: { id: current.id }, data });
         else await tx.clientContract.create({ data: { ...data, clientId: client.id, createdById: actorUserId || null } });
       }
@@ -467,7 +490,7 @@ export const createClientOperationsService = ({
     if (!cycle) throw httpError(404, 'Ese mes no está entre los que se pueden cerrar.');
     if (cycle.close) throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} ya se confirmó.`);
     if (!canConfirmClose(cycle, todayKey())) throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} se confirma desde tres días antes de que termine.`);
-    const snapshot = closeSnapshot(cycle, { monthlyReport: Boolean(operation.contract?.monthlyReport) });
+    const snapshot = closeSnapshot(cycle, { monthlyReport: Boolean(cycle.monthlyReport) });
     try {
       await db.clientMonthlyClose.create({
         data: { clientId, year: y, month: m, closedById: actorUserId || null, note: String(note ?? '').trim() || null, snapshot },

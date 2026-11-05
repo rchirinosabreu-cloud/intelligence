@@ -152,7 +152,9 @@ test('renovar sin alcance explícito deja la nueva ficha vacía y conserva la an
   const previous = structuredClone(row.contracts[0]);
   const result = await service.saveProfile({ clientId: row.id, input: { renew: true, contract: { ...contract(), startDate: '2027-01-01' } } });
   assert.equal(Object.hasOwn(writes.find(([kind]) => kind === 'create')[1], 'scopeDetails'), false);
-  assert.equal(result.contract.scopeDetails, null);
+  assert.equal(row.contracts[0].scopeDetails ?? null, null, 'la renovación futura no hereda el alcance');
+  assert.equal(result.contract.id, previous.id, 'la ficha conserva el contrato que ya está en curso');
+  assert.deepEqual(result.contract.scopeDetails, previous.scopeDetails);
   assert.deepEqual(row.contracts[1], previous);
 });
 

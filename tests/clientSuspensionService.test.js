@@ -4,26 +4,37 @@ import { createClientSuspensionService } from '../src/services/clientSuspensionS
 import { suspensionBlock } from '../src/services/clientSuspensionGate.js';
 
 // Una base de mentira con lo justo: clientes, su cartera, las suspensiones y los avisos ya mandados.
-const buildDb = ({ receivables = [], suspensions = [], areas = {}, enabled = true, archived = false, contractStatus = 'ACTIVO' } = {}) => {
+const buildDb = ({ receivables = [], suspensions = [], areas = {}, enabled = true, archived = false, contractStatus = 'ACTIVO', contracts = [{ id: 'contract-current', startDate: '2026-01-01', cutDay: 1 }] } = {}) => {
     const rows = { suspensions: [...suspensions], alerts: [] };
     const client = {
         id: 'cliente-1', name: 'Café Altura', slug: 'cafe-altura',
-        contracts: [{ cutDay: 1 }],
+        contracts,
         projectManager: { userId: 'u-pm' },
         responsible: { userId: 'u-cm' },
         accountsReceivables: receivables
     };
     const open = (clientId) => rows.suspensions.find((row) => row.clientId === clientId && !row.liftedAt) || null;
+    const selectedClient = (args = {}) => {
+        const result = structuredClone(client);
+        const selection = args.select?.contracts;
+        if (selection) {
+            result.contracts.sort((a, b) => b.startDate.localeCompare(a.startDate));
+            if (selection.take) result.contracts = result.contracts.slice(0, selection.take);
+            if (selection.select) result.contracts = result.contracts.map(row => Object.fromEntries(Object.keys(selection.select).map(key => [key, row[key]])));
+        }
+        return result;
+    };
     return {
         rows,
         client: {
-            findFirst: async ({ where }) => (where.id === client.id || where.slug === client.slug ? client : null),
+            findFirst: async args => (args.where.id === client.id || args.where.slug === client.slug ? selectedClient(args) : null),
             // Solo los que se están trabajando: ni archivados ni sin contrato vigente, como pide la consulta real.
-            findMany: async ({ where } = {}) => {
+            findMany: async (args = {}) => {
+                const { where } = args;
                 if (open(client.id)) return [];
                 if (where?.isArchived === false && archived) return [];
                 if (where?.contracts?.some?.status === 'ACTIVO' && contractStatus !== 'ACTIVO') return [];
-                return [client];
+                return [selectedClient(args)];
             }
         },
         clientSuspension: {
@@ -117,6 +128,36 @@ test('un cliente no puede quedar suspendido dos veces', async () => {
     const datos = { clientId: 'cliente-1', authorizedBy: 'Francisco Villa', reason: 'No ha pagado.', actorUserId: 'u-elisa', now: NOW };
     await service.suspendClient(datos);
     await assert.rejects(() => service.suspendClient(datos), (error) => error.status === 409);
+});
+
+test('la suspensión usa el corte del contrato actual aunque ya exista una renovación futura', async () => {
+    const { service } = build({ receivables: vencida, areas: AREAS, contracts: [
+        { id: 'current', startDate: '2026-01-01', cutDay: 1 },
+        { id: 'future', startDate: '2026-11-15', cutDay: 15 },
+    ] });
+    const result = await service.suspendClient({ clientId: 'cliente-1', authorizedBy: 'F', reason: 'Acuerdo.', actorUserId: 'u-elisa', now: new Date('2026-11-05T17:00:00Z') });
+    assert.equal(result.fromCycle, '2026-12', 'noviembre continúa según el contrato que muestra la ficha');
+});
+
+test('la renovación cambia el corte al comenzar su fecha en Bogotá, no en UTC', async () => {
+    const contracts = [{ id: 'current', startDate: '2026-01-01', cutDay: 1 }, { id: 'new', startDate: '2026-11-15', cutDay: 20 }];
+    for (const [now, day, cycle] of [['2026-11-15T03:00:00Z', '2026-11-14', '2026-12'], ['2026-11-15T05:00:00Z', '2026-11-15', '2026-11']]) {
+        const { service } = build({ receivables: vencida, areas: AREAS, contracts });
+        const result = await service.suspendClient({ clientId: 'cliente-1', authorizedBy: 'F', reason: 'Acuerdo.', actorUserId: 'u-elisa', now: new Date(now) });
+        assert.equal(result.suspendedOn, day);
+        assert.equal(result.fromCycle, cycle);
+    }
+});
+
+test('la propuesta automática de suspensión conserva el corte actual ante una renovación futura', async () => {
+    const { service, db, banded } = build({ receivables: vencida, areas: AREAS, contracts: [
+        { id: 'current', startDate: '2026-01-01', cutDay: 1 },
+        { id: 'future', startDate: '2026-12-01', cutDay: 25 },
+    ] });
+    const result = await service.runClientSuspensions({ now: new Date('2026-11-20T17:00:00Z') });
+    assert.equal(result.proposed, 1);
+    assert.equal(db.rows.alerts[0].cycle, 'S:2026-12');
+    assert.match(banded[0].message, /diciembre/);
 });
 
 test('se puede suspender por un acuerdo aunque hoy no llegue al umbral: lo explica el motivo', async () => {

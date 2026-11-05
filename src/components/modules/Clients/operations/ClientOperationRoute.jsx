@@ -14,6 +14,7 @@ import {
   useUndoPiecePublished, useClientProjects, useSaveClientProject,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
+import { clientOperationPlanPath } from '@/lib/clientOperationAlerts';
 import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 
 // `/clientes/operacion/:slug`: la página completa de un cliente (Rodny, 2 de octubre de 2026: «necesito
@@ -70,8 +71,6 @@ export default function ClientOperationRoute() {
       </div>
     );
   }
-
-  const planId = client.cycles?.current?.pieces?.[0]?.planId;
 
   return (
     <>
@@ -158,7 +157,7 @@ export default function ClientOperationRoute() {
           await refetch();
           toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`);
         }}
-        onOpenPlan={() => navigateFrom(planId ? `/parrillas/${planId}` : '/parrillas')}
+        onOpenPlan={(cycle) => navigateFrom(clientOperationPlanPath(client, cycle))}
         onOpenPiece={(path) => navigateFrom(path)}
         onNewTask={() => setCreatingTask(true)}
         onOpenWorkspace={() => navigateFrom(`/cliente/${client.slug}`)}

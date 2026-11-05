@@ -89,10 +89,18 @@ export function expectedPublished(cycle) {
 
 function pieces(n) { return n === 1 ? '1 pieza' : `${n} piezas`; }
 
+// La causa y su destino son datos: la pantalla no necesita interpretar la frase para abrir el recurso correcto.
+function reason(code, category, level, text, type, cycle) {
+  const action = { type };
+  if (Number.isInteger(cycle?.year) && cycle.year > 0) action.year = cycle.year;
+  if (Number.isInteger(cycle?.month) && cycle.month >= 1 && cycle.month <= 12) action.month = cycle.month;
+  return { level, text, code, category, action };
+}
+
 function taskReasons(client) {
   const overdue = (client.openTasks || []).filter((task) => task.overdue).length;
   if (!overdue) return [];
-  return [{ level: 'yellow', text: overdue === 1 ? '1 tarea vencida en Gestión.' : `${overdue} tareas vencidas en Gestión.` }];
+  return [reason('TASKS_OVERDUE', 'operation', 'yellow', overdue === 1 ? '1 tarea vencida en Gestión.' : `${overdue} tareas vencidas en Gestión.`, 'tasks')];
 }
 
 function finish(reasons) {
@@ -109,17 +117,17 @@ export function evaluateClientOperation(client, { today }) {
   const { contract } = client;
   // Trabajo en curso sin propuesta aprobada (29 de octubre de 2026): un motivo propio, nunca un gris callado.
   const unbacked = unbackedWork({ contract, work: client.work, authorization: client.workAuthorization }, today);
-  const unbackedReason = unbacked && { level: unbacked.authorized ? 'gray' : 'yellow', text: unbacked.text };
+  const unbackedReason = unbacked && reason('UNBACKED_WORK', 'contract', unbacked.authorized ? 'gray' : 'yellow', unbacked.text, 'profile');
   if (!contract) {
     if (unbackedReason) return { level: unbackedReason.level, reasons: [unbackedReason] };
-    return { level: 'gray', reasons: [{ level: 'gray', text: 'Sin contrato cargado: no hay contra qué medir el avance.' }] };
+    return { level: 'gray', reasons: [reason('NO_CONTRACT', 'contract', 'gray', 'Sin contrato cargado: no hay contra qué medir el avance.', 'profile')] };
   }
   if (contract.status === 'STAND_BY') {
-    return { level: 'gray', reasons: [{ level: 'gray', text: contract.standBySince ? `En stand by desde el ${shortDate(contract.standBySince)}.` : 'En stand by.' }] };
+    return { level: 'gray', reasons: [reason('PAUSED', 'status', 'gray', contract.standBySince ? `En stand by desde el ${shortDate(contract.standBySince)}.` : 'En stand by.', 'profile')] };
   }
   if (contract.status === 'TERMINADO') {
     if (unbackedReason) return { level: unbackedReason.level, reasons: [unbackedReason] };
-    return { level: 'gray', reasons: [{ level: 'gray', text: 'Contrato terminado.' }] };
+    return { level: 'gray', reasons: [reason('TERMINATED', 'status', 'gray', 'Contrato terminado.', 'profile')] };
   }
 
   const reasons = [];
@@ -127,47 +135,47 @@ export function evaluateClientOperation(client, { today }) {
   if (contract.endDate) {
     const left = daysBetween(today, contract.endDate);
     // Vencido y con trabajo lo dice el motivo de arriba; con autorización vigente, no se insiste.
-    if (left < 0 && !unbacked) reasons.push({ level: 'yellow', text: `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.` });
-    else if (left >= 0 && left <= CONTRACT_WARNING_DAYS) reasons.push({ level: 'yellow', text: `El contrato vence el ${shortDate(contract.endDate)}.` });
+    if (left < 0 && !unbacked) reasons.push(reason('CONTRACT_EXPIRED', 'contract', 'yellow', `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.`, 'profile'));
+    else if (left >= 0 && left <= CONTRACT_WARNING_DAYS) reasons.push(reason('CONTRACT_EXPIRING', 'contract', 'yellow', `El contrato vence el ${shortDate(contract.endDate)}.`, 'profile'));
   }
 
   // Servicios: sin cupo de piezas, lo que dice si va bien son sus tareas.
   if (!isMeasured(client)) {
     reasons.push(...taskReasons(client));
-    if (!(client.openTasks || []).length && !reasons.length) return { level: 'gray', reasons: [{ level: 'gray', text: 'Servicios sin trabajo abierto en Gestión.' }] };
+    if (!(client.openTasks || []).length && !reasons.length) return { level: 'gray', reasons: [reason('NO_SERVICE_TASKS', 'status', 'gray', 'Servicios sin trabajo abierto en Gestión.', 'tasks')] };
     return finish(reasons);
   }
 
   const { previous, current } = client.cycles || {};
   if (previous && previous.reached.publicada < previous.quota) {
     const missing = previous.quota - previous.reached.publicada;
-    reasons.push({ level: 'red', text: `${previous.label} cerró con ${previous.reached.publicada} de ${previous.quota} publicadas: faltaron ${pieces(missing)}.` });
+    reasons.push(reason('PREVIOUS_SHORTFALL', 'operation', 'red', `${previous.label}: ${previous.reached.publicada} de ${previous.quota} publicadas; faltan ${pieces(missing)}.`, 'previous_plan', previous));
   }
-  if (contract.monthlyReport && previous && !previous.report?.deliveredAt) {
+  if (previous && (previous.monthlyReport ?? contract.monthlyReport) && !previous.report?.deliveredAt) {
     // Con los estados del informe (29 de octubre de 2026) se dice en qué va, si ya empezó.
     const stage = { EN_ELABORACION: 'va en elaboración', EN_REVISION: 'va en revisión' }[previous.report?.status];
-    reasons.push({ level: 'yellow', text: `Falta enviar el informe de ${previous.label.toLowerCase()}${stage ? `: ${stage}` : ''}.` });
+    reasons.push(reason('REPORT_PENDING', 'operation', 'yellow', `Falta enviar el informe de ${previous.label.toLowerCase()}${stage ? `: ${stage}` : ''}.`, 'report', previous));
   }
 
   if (current) {
     if (!current.created) {
-      reasons.push({ level: current.day >= NO_PLAN_RED_FROM_DAY ? 'red' : 'yellow', text: `${current.label} todavía no tiene parrilla.` });
+      reasons.push(reason('NO_PLAN', 'operation', current.day >= NO_PLAN_RED_FROM_DAY ? 'red' : 'yellow', `${current.label} todavía no tiene parrilla.`, 'current_plan', current));
     } else if (current.created < current.quota) {
-      reasons.push({ level: 'yellow', text: `${current.label}: ${current.created} de ${current.quota} piezas creadas, faltan ${current.quota - current.created}.` });
+      reasons.push(reason('MISSING_PIECES', 'planning', 'yellow', `${current.label}: ${current.created} de ${current.quota} piezas creadas, faltan ${current.quota - current.created}.`, 'current_plan', current));
     }
     if (current.overdueItems > 0) {
-      reasons.push({ level: 'red', text: `${pieces(current.overdueItems)} con fecha pasada y sin publicar.` });
+      reasons.push(reason('CURRENT_OVERDUE', 'operation', 'red', `${pieces(current.overdueItems)} con fecha pasada y sin publicar.`, 'current_plan', current));
     }
     const expected = expectedPublished(current);
     if (current.created && expected - current.reached.publicada >= 2 && !current.overdueItems) {
-      reasons.push({ level: 'red', text: `Van ${current.reached.publicada} publicadas; a esta fecha deberían ir ${expected}.` });
+      reasons.push(reason('PUBLISHING_BEHIND', 'operation', 'red', `Van ${current.reached.publicada} publicadas; a esta fecha deberían ir ${expected}.`, 'current_plan', current));
     }
-    // El hueco ya viene medido contra el contrato: si está, es que de verdad se pasó.
+    // Se revisa la distribución de fechas de la parrilla, no el historial real de publicación.
     if (current.longestGap) {
-      reasons.push({ level: 'yellow', text: `${current.longestGap.days} días entre publicaciones (del ${shortDate(current.longestGap.from)} al ${shortDate(current.longestGap.to)}).` });
+      reasons.push(reason('PLANNED_GAP', 'planning', 'yellow', `${current.longestGap.days} días entre fechas de la parrilla (del ${shortDate(current.longestGap.from)} al ${shortDate(current.longestGap.to)}).`, 'current_plan', current));
     }
     for (const day of current.sameDay || []) {
-      reasons.push({ level: 'yellow', text: `${day.count} piezas el mismo día: ${shortDate(day.date)}.` });
+      reasons.push(reason('PLANNED_SAME_DAY', 'planning', 'yellow', `${day.count} piezas con la misma fecha en la parrilla: ${shortDate(day.date)}.`, 'current_plan', current));
     }
   }
 
@@ -210,8 +218,9 @@ export function teamLoad(evaluatedClients, roleKey = 'communityManager') {
   return [...byMember.values()].sort((a, b) => b.red - a.red || b.clients.length - a.clients.length);
 }
 
-// Los mismos formatos que ofrece la pieza en la parrilla: lo contratado y lo hecho se cuentan igual.
-export const CONTRACT_FORMATS = ['Reel', 'Carrusel', 'Post', 'Otro'];
+// Video y Reel conservan su identidad. «Sin clasificar» reserva el cupo cuyo formato falta definir;
+// «Otro» sigue siendo una categoría elegida, nunca el sustituto automático de un dato desconocido.
+export const CONTRACT_FORMATS = ['Reel', 'Video', 'Carrusel', 'Post', 'Otro', 'Sin clasificar'];
 export const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 const pad = (n) => String(n).padStart(2, '0');

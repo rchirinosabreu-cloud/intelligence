@@ -106,18 +106,19 @@ test('un cliente al día sale en verde y sin motivos', () => {
 test('sin contrato, en stand by o terminado no se mide', () => {
   assert.equal(evaluateClientOperation(base({ contract: null }), { today }).level, 'gray');
   const standBy = evaluateClientOperation(base({ contract: { ...base().contract, status: 'STAND_BY', standBySince: '2026-09-15' } }), { today });
-  assert.deepEqual(standBy, { level: 'gray', reasons: [{ level: 'gray', text: 'En stand by desde el 15 sep.' }] });
+  assert.equal(standBy.level, 'gray');
+  assert.deepEqual(standBy.reasons.map(({ level, text }) => ({ level, text })), [{ level: 'gray', text: 'En stand by desde el 15 sep.' }]);
   assert.equal(evaluateClientOperation(base({ contract: { ...base().contract, status: 'TERMINADO' } }), { today }).level, 'gray');
 });
 
-test('el mes anterior sin cerrar es rojo y el informe sin entregar es amarillo', () => {
+test('el mes anterior con piezas pendientes es rojo y el informe sin entregar es amarillo', () => {
   const client = base();
   client.cycles.previous.reached.publicada = 10;
   client.contract.monthlyReport = true;
   const result = evaluateClientOperation(client, { today });
   assert.equal(result.level, 'red');
   assert.deepEqual(result.reasons.map((r) => r.text), [
-    'Septiembre cerró con 10 de 12 publicadas: faltaron 2 piezas.',
+    'Septiembre: 10 de 12 publicadas; faltan 2 piezas.',
     'Falta enviar el informe de septiembre.',
   ]);
 });
@@ -126,7 +127,8 @@ test('sin parrilla es amarillo los primeros días y rojo desde el día 5', () =>
   const early = base(); early.cycles.current.created = 0;
   assert.equal(evaluateClientOperation(early, { today }).reasons[0].level, 'yellow');
   const late = base(); late.cycles.current.created = 0; late.cycles.current.day = 5;
-  assert.deepEqual(evaluateClientOperation(late, { today }).reasons[0], { level: 'red', text: 'Octubre todavía no tiene parrilla.' });
+  const { level, text } = evaluateClientOperation(late, { today }).reasons[0];
+  assert.deepEqual({ level, text }, { level: 'red', text: 'Octubre todavía no tiene parrilla.' });
 });
 
 test('piezas atrasadas, ritmo, huecos y días repetidos se explican en una frase', () => {
@@ -135,7 +137,7 @@ test('piezas atrasadas, ritmo, huecos y días repetidos se explican en una frase
   const slow = base(); Object.assign(slow.cycles.current, { day: 20, length: 30 });
   assert.equal(evaluateClientOperation(slow, { today }).reasons[0].text, 'Van 0 publicadas; a esta fecha deberían ir 8.');
   const gaps = base(); Object.assign(gaps.cycles.current, { longestGap: { days: 6, from: '2026-10-08', to: '2026-10-14' }, sameDay: [{ date: '2026-10-07', count: 2 }] });
-  assert.deepEqual(evaluateClientOperation(gaps, { today }).reasons.map((r) => r.text), ['6 días entre publicaciones (del 8 oct al 14 oct).', '2 piezas el mismo día: 7 oct.']);
+  assert.deepEqual(evaluateClientOperation(gaps, { today }).reasons.map((r) => r.text), ['6 días entre fechas de la parrilla (del 8 oct al 14 oct).', '2 piezas con la misma fecha en la parrilla: 7 oct.']);
 });
 
 test('el contrato que vence pronto o ya venció se avisa', () => {
@@ -147,7 +149,9 @@ test('un cliente de servicios se sigue por sus tareas', () => {
   const services = { contract: { serviceType: 'SERVICIOS', status: 'ACTIVO', startDate: '2026-01-01', endDate: null, deliverables: [] }, cycles: {} };
   assert.equal(evaluateClientOperation({ ...services, openTasks: [] }, { today }).level, 'gray');
   assert.equal(evaluateClientOperation({ ...services, openTasks: [{ overdue: false }] }, { today }).level, 'green');
-  assert.deepEqual(evaluateClientOperation({ ...services, openTasks: [{ overdue: true }, { overdue: true }] }, { today }), { level: 'yellow', reasons: [{ level: 'yellow', text: '2 tareas vencidas en Gestión.' }] });
+  const overdue = evaluateClientOperation({ ...services, openTasks: [{ overdue: true }, { overdue: true }] }, { today });
+  assert.equal(overdue.level, 'yellow');
+  assert.deepEqual(overdue.reasons.map(({ level, text }) => ({ level, text })), [{ level: 'yellow', text: '2 tareas vencidas en Gestión.' }]);
 });
 
 test('la barra pinta cada pieza en la etapa más avanzada que alcanzó', () => {
@@ -188,6 +192,18 @@ test('la ficha operativa se valida igual en la pantalla y en el servidor', () =>
   assert.equal(inverted.errors['contract.endDate'], 'El fin no puede ser antes del inicio.');
 
   assert.equal(normalizeOperationProfile({ contract: null }).valid, true, 'se puede guardar la ficha sin contrato');
+});
+
+test('Video y Reel conservan su identidad; Sin clasificar no se transforma en Otro ni altera el cupo', () => {
+  const deliverables = [
+    { format: 'Video', quantity: 6 }, { format: 'Reel', quantity: 1 },
+    { format: 'Post', quantity: 4 }, { format: 'Sin clasificar', quantity: 2 }, { format: 'Otro', quantity: 1 },
+  ];
+  const result = normalizeOperationProfile({ contract: { ...base().contract, deliverables } });
+  assert.equal(result.valid, true, JSON.stringify(result.errors));
+  assert.deepEqual(result.value.contract.deliverables, deliverables);
+  assert.equal(contractQuota(result.value.contract), 14);
+  assert.equal(normalizeOperationProfile({ contract: { ...base().contract, deliverables: [...deliverables, { format: 'Video', quantity: 1 }] } }).valid, false, 'cada formato sigue siendo único');
 });
 
 test('«Ya se publicó» se ofrece desde el mismo día de la publicación, pero no sobre lo que Meta va a publicar hoy', async () => {
