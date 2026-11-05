@@ -89,6 +89,7 @@ function publicContract(row) {
     id: row.id, serviceType: row.serviceType, status: row.status, startDate: row.startDate, endDate: row.endDate ?? null,
     standBySince: row.standBySince ?? null, cutDay: row.cutDay ?? 1, deliverables: Array.isArray(row.deliverables) ? row.deliverables : [],
     storiesPerWeek: row.storiesPerWeek ?? 0, productionDays: row.productionDays ?? 0, monthlyReport: Boolean(row.monthlyReport), notes: row.notes ?? null,
+    scopeDetails: row.scopeDetails ?? null,
   };
 }
 
@@ -346,16 +347,20 @@ export const createClientOperationsService = ({
     if (!check.valid) throw httpError(422, 'Revisa los campos marcados.', { code: 'CLIENT_OPERATION_INVALID', errors: check.errors });
     const profile = check.value;
 
-    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { id: true } } } });
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, projectManagerId: true, responsibleId: true, contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { id: true } } } });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
 
-    // Solo personas activas del equipo: una ficha nunca apunta a alguien que ya no está.
-    const people = [profile.projectManagerId, profile.communityManagerId].filter(Boolean);
+    // Corregir el alcance no reasigna a los responsables existentes. Una asignación nueva sí exige
+    // una persona activa; omitir el campo conserva la asignación y null explícito la retira.
+    const assignments = [
+      { field: 'projectManagerId', id: profile.projectManagerId, current: client.projectManagerId },
+      { field: 'communityManagerId', id: profile.communityManagerId, current: client.responsibleId },
+    ].filter(({ field, id, current }) => Object.hasOwn(input, field) && id && id !== current);
+    const people = assignments.map(({ id }) => id);
     if (people.length) {
       const active = new Set((await db.teamMember.findMany({ where: { id: { in: people }, isActive: true }, select: { id: true } })).map((m) => m.id));
       const errors = {};
-      if (profile.projectManagerId && !active.has(profile.projectManagerId)) errors.projectManagerId = 'Esa persona ya no está activa en el equipo.';
-      if (profile.communityManagerId && !active.has(profile.communityManagerId)) errors.communityManagerId = 'Esa persona ya no está activa en el equipo.';
+      for (const { field, id } of assignments) if (!active.has(id)) errors[field] = 'Esa persona ya no está activa en el equipo.';
       if (Object.keys(errors).length) throw httpError(422, 'Revisa los campos marcados.', { code: 'CLIENT_OPERATION_INVALID', errors });
     }
 
@@ -364,13 +369,15 @@ export const createClientOperationsService = ({
         where: { id: client.id },
         data: {
           description: profile.description, instagramUrl: profile.instagramUrl, agency: profile.agency, complexity: profile.complexity,
-          projectManagerId: profile.projectManagerId, responsibleId: profile.communityManagerId,
+          ...(Object.hasOwn(input, 'projectManagerId') ? { projectManagerId: profile.projectManagerId } : {}),
+          ...(Object.hasOwn(input, 'communityManagerId') ? { responsibleId: profile.communityManagerId } : {}),
           // La hoja de MIO solo cambia si el formulario la manda: quien edita la ficha por otro camino no la borra.
           ...(Object.hasOwn(input, 'externalPlanUrl') ? { externalPlanUrl: profile.externalPlanUrl } : {}),
         },
       });
       if (profile.contract) {
         const data = { ...profile.contract, updatedById: actorUserId || null };
+        if (Object.hasOwn(data, 'scopeDetails') && data.scopeDetails === null) data.scopeDetails = Prisma.DbNull;
         const current = client.contracts?.[0];
         if (current && input.renew !== true) await tx.clientContract.update({ where: { id: current.id }, data });
         else await tx.clientContract.create({ data: { ...data, clientId: client.id, createdById: actorUserId || null } });

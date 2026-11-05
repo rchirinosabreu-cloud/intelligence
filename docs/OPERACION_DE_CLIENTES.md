@@ -2,6 +2,24 @@
 
 Decisión de Rodny, 1 y 2 de octubre de 2026: dejar el Excel «PENDIENTES BRAIN STUDIO 2026» y trabajar en la plataforma. **Lo que dice la plataforma es lo que se refleja en la operación.**
 
+## Alcance categorizado (5 de noviembre de 2026)
+
+En Clientes → Operación → ficha del cliente → Editar se puede describir el contrato con campos opcionales:
+
+- Límites por formato (video, reel, carrusel, post u otro), distinguiendo cantidad exacta, mínimo y máximo.
+- Historias por semana, por mes o días de publicación por semana, con cantidad por ocasión cuando se conoce.
+- Producción incluida, no incluida o por confirmar; jornadas por mes o por contrato y horas por jornada. El límite de horas es independiente del número de jornadas.
+- Servicios adicionales categorizados: blog, web, comunidad, marcas, perfiles y otros, con cantidad, unidad y frecuencia.
+- Datos pendientes de confirmar, visibles en la ficha.
+
+El cupo mensual que ya usa el semáforo sigue en las piezas contratadas. Estos detalles no convierten máximos en objetivos, no cuentan días como historias y no suman servicios adicionales a las piezas. Un valor pendiente es distinto de cero. El estado activo/inactivo del cliente tampoco se deduce de un color o una nota: se cambia expresamente en Directorio → opciones → Desactivar/Reactivar, con confirmación y conservando el historial.
+
+Los contratos existentes mantienen sus valores, notas, responsables y avance. Esta entrega no importa la revisión de MIO ni aplica las diferencias comerciales pendientes. No añade un selector de fuente ni una sincronización con el Excel. Los datos de revisión y las capturas con información real permanecen locales.
+
+Persistencia: `ClientContract.scopeDetails`, JSONB opcional añadido de forma idempotente. `normalizeContractScope` valida los campos antes de guardar. Omitir el campo en una edición conserva lo guardado; `null` lo retira expresamente. Una renovación sin alcance explícito no lo hereda del contrato anterior. No se reescriben contratos previos ni cuotas al leer la ficha.
+
+Contratos de prueba: `tests/clientContractScope.test.js`, `tests/clientContractScopeUi.test.js` y `tests/browser/clientActivation.mjs`, junto con las pruebas existentes de operación y permisos. Las pruebas de persistencia usan únicamente PostgreSQL local aislado.
+
 ## Qué reemplaza
 
 | Excel | Plataforma |

@@ -6,12 +6,12 @@ import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Plus, Trash2 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
-  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_FORMATS as FORMATS, CONTRACT_STATUSES, SERVICE_TYPES, STORY_FREQUENCIES,
+  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_FORMATS as FORMATS, CONTRACT_STATUSES, SERVICE_TYPES,
   contractQuota, normalizeOperationProfile,
 } from '@/lib/clientOperations';
+import { ContractScopeFields } from './ClientContractScope';
 
-// Ficha operativa (2 de octubre de 2026): las columnas del Excel que nadie más sabe —qué se vendió, para
-// quién, a quién le toca— en un solo formulario. Lo editan admins y project managers. Se valida con la
+// Ficha operativa: qué se vendió, a quién y quién lo lleva. Lo editan admins y project managers. Se valida con la
 // misma regla que el servidor y no se cierra hasta que el servidor confirma; un clic afuera no la cierra.
 const FIELD = 'min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60';
 const LABEL = 'block text-sm font-medium text-zinc-800 dark:text-zinc-100';
@@ -19,10 +19,18 @@ const SECTION = 'space-y-4 border-t border-zinc-100 pt-5 dark:border-white/5';
 
 const emptyContract = () => ({ serviceType: 'PARRILLA', status: 'ACTIVO', startDate: '', endDate: '', cutDay: 1, deliverables: [{ format: 'Reel', quantity: 2 }, { format: 'Carrusel', quantity: 2 }, { format: 'Post', quantity: 8 }], storiesPerWeek: 0, productionDays: 0, monthlyReport: true, notes: '' });
 
-export default function ClientOperationDialog({ client, team, onClose, onSave }) {
+export default function ClientOperationDialog({ client, team = [], onClose, onSave }) {
   const base = client.contract || emptyContract();
-  const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, deliverables: base.deliverables.map((row) => ({ ...row })) }));
-  const [profile, setProfile] = useState({ description: client.description || '', instagramUrl: client.instagramUrl || '', agency: client.agency || 'BRAIN', complexity: client.complexity || '', pmId: client.projectManager?.id || '', cmId: client.communityManager?.id || '', externalPlanUrl: client.externalPlanUrl || '' });
+  const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, deliverables: (base.deliverables || []).map((row) => ({ ...row })) }));
+  const [scope, setScope] = useState(() => base.scopeDetails ? structuredClone(base.scopeDetails) : null);
+  const [scopeChanged, setScopeChanged] = useState(false);
+  const [profile, setProfile] = useState({ description: client.description || '', instagramUrl: client.instagramUrl || '', agency: client.agency || 'BRAIN', complexity: client.complexity || '', pmId: client.projectManager?.id || client.projectManagerId || '', cmId: client.communityManager?.id || client.responsibleId || '', externalPlanUrl: client.externalPlanUrl || '' });
+  // Quien ya lleva la cuenta sigue siendo una opción aunque la lista de equipo solo traiga activos.
+  const members = [...new Map([
+    ...team.map(member => [member.id, member]),
+    ...[client.projectManager, client.communityManager].filter(member => member?.id).map(member => [member.id, member]),
+  ]).values()];
+  const retainedOptions = (selected, label) => members.some(member => member.id === selected) || !selected ? members : [...members, { id: selected, name: label }];
   const [customCycle, setCustomCycle] = useState((base.cutDay || 1) !== 1);
   const [renew, setRenew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,12 +59,16 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
         deliverables: parrilla ? contract.deliverables.map((row) => ({ format: row.format, quantity: Number(row.quantity) })) : [],
       },
     };
+    // Una ficha antigua guardada sin detallar no se reclasifica ni envía una retirada implícita.
+    delete input.contract.scopeDetails;
+    if (scopeChanged || base.scopeDetails != null) input.contract.scopeDetails = scope;
     const check = normalizeOperationProfile(input);
     if (!check.valid) { setErrors(check.errors); setError('Revisa los campos marcados.'); return; }
     setSaving(true);
     setErrors({});
     setError('');
     try {
+      if (Object.prototype.hasOwnProperty.call(input.contract, 'scopeDetails')) input.contract.scopeDetails = check.value.contract.scopeDetails;
       await onSave(input);
     } catch (failure) {
       console.error('[ClientOperationDialog] No se pudo guardar la ficha:', failure?.errors || failure?.message || failure);
@@ -102,14 +114,14 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
               <label htmlFor={`${id}-pm`} className={LABEL}>Project manager</label>
               <Select id={`${id}-pm`} value={profile.pmId} onChange={(e) => setP({ pmId: e.target.value })} className={FIELD}>
                 <option value="">Sin asignar</option>
-                {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {retainedOptions(profile.pmId, 'Responsable actual').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </Select>
             </div>
             <div className="space-y-1.5">
               <label htmlFor={`${id}-cm`} className={LABEL}>Community manager</label>
               <Select id={`${id}-cm`} value={profile.cmId} onChange={(e) => setP({ cmId: e.target.value })} className={FIELD}>
                 <option value="">Sin asignar</option>
-                {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {retainedOptions(profile.cmId, 'Responsable actual').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </Select>
             </div>
           </div>
@@ -132,7 +144,7 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor={`${id}-status`} className={LABEL}>Estado</label>
+                <label htmlFor={`${id}-status`} className={LABEL}>Estado del contrato</label>
                 <Select id={`${id}-status`} value={contract.status} onChange={(e) => setC({ status: e.target.value })} className={FIELD}>
                   {CONTRACT_STATUSES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
@@ -177,7 +189,7 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
                 </fieldset>
 
                 <fieldset className="space-y-2">
-                  <legend className={LABEL}>Piezas al mes</legend>
+                  <legend className={LABEL}>Cupo mensual de piezas</legend>
                   <ul className="space-y-2">
                     {contract.deliverables.map((row, index) => (
                       <li key={index} className="grid grid-cols-[1fr_6rem_2.75rem] gap-2">
@@ -202,22 +214,11 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
               </>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <label htmlFor={`${id}-stories`} className={LABEL}>Historias</label>
-                <Select id={`${id}-stories`} value={String(contract.storiesPerWeek)} onChange={(e) => setC({ storiesPerWeek: Number(e.target.value) })} className={FIELD}>
-                  {STORY_FREQUENCIES.map((o) => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor={`${id}-days`} className={LABEL} title="Jornadas de producción al mes">Jornadas al mes</label>
-                <input id={`${id}-days`} type="number" min={0} max={10} value={contract.productionDays} onChange={(e) => setC({ productionDays: Number(e.target.value) })} className={FIELD} />
-              </div>
-              <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-zinc-200 px-3 text-sm font-medium dark:border-white/10">
+            <ContractScopeFields scope={scope} contract={contract} onLegacyChange={setC} onChange={(next) => { setScope(next); setScopeChanged(true); }} />
+              <label className="flex min-h-11 items-center gap-3 rounded-xl border border-zinc-200 px-3 text-sm font-medium dark:border-white/10">
                 <input type="checkbox" checked={contract.monthlyReport} onChange={(e) => setC({ monthlyReport: e.target.checked })} className="h-4 w-4 accent-[rgb(var(--brand-cyan))]" />
                 Informe mensual
               </label>
-            </div>
 
             <div className="space-y-1.5">
               <label htmlFor={`${id}-notes`} className={LABEL}>Lo que no entra en las cifras</label>
@@ -228,7 +229,7 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
           {client.contract && (
             <label className="flex items-start gap-3 rounded-xl border border-zinc-200 p-3 text-sm dark:border-white/10">
               <input type="checkbox" checked={renew} onChange={(e) => setRenew(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[rgb(var(--brand-cyan))]" />
-              <span><span className="font-medium">Es una renovación</span><span className="block text-xs text-zinc-500">Guarda esto como un contrato nuevo y deja el anterior en el historial, en vez de corregirlo.</span></span>
+              <span><span className="font-medium">Es una renovación</span><span className="block text-xs text-zinc-500 dark:text-zinc-400">Guarda esto como un contrato nuevo y deja el anterior en el historial, en vez de corregirlo. Revisa las cantidades y la vigencia del nuevo acuerdo.</span></span>
             </label>
           )}
 

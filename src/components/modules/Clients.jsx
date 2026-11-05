@@ -25,6 +25,7 @@ import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile'
 import { OPERATION_LEVELS } from '@/lib/clientOperations';
 import { useAuth } from '@/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // Clientes (2 de octubre de 2026). Administradores y project managers ven «Operación» y «Equipo», que
 // sustituyen al Excel «PENDIENTES»; el directorio de siempre queda en su propia pestaña y es lo único
@@ -42,7 +43,7 @@ function Person({ member }) {
   );
 }
 
-function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle }) {
+function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, archivePending }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [responsibleId, setResponsibleId] = useState('all');
@@ -72,7 +73,7 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle }) {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" aria-label={`Opciones de ${client.name}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-200">
+              <button type="button" aria-label={`Opciones de ${client.name}`} disabled={archivePending} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200">
                 <MoreVertical className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
@@ -84,7 +85,7 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle }) {
               )}
               <DropdownMenuItem className="gap-2 py-2.5" onSelect={() => onArchiveToggle(client)}>
                 {client.isArchived ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                <span>{client.isArchived ? 'Reactivar cliente' : 'Archivar cliente'}</span>
+                <span>{client.isArchived ? 'Reactivar cliente' : 'Desactivar cliente'}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -141,15 +142,15 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle }) {
         <button type="button" onClick={() => setShowArchived(!showArchived)} aria-expanded={showArchived}
           className="flex min-h-11 items-center gap-2 text-sm font-semibold text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
           {showArchived ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          Clientes archivados ({archived.length})
+          Clientes inactivos ({archived.length})
         </button>
         {showArchived && (
-          <section className="mt-4 overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-white/5" aria-label="Clientes archivados">
+          <section className="mt-4 overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-white/5" aria-label="Clientes inactivos">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left">
                 {head}
                 <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                  {archived.length ? archived.map(row) : <tr><td colSpan={4} className="p-10 text-center text-sm text-zinc-400">No hay clientes archivados.</td></tr>}
+                  {archived.length ? archived.map(row) : <tr><td colSpan={4} className="p-10 text-center text-sm text-zinc-400">No hay clientes inactivos.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -163,11 +164,13 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle }) {
 const Clients = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const confirm = useConfirmDialog();
   const { currentUser } = useAuth();
   const canManage = MANAGER_ROLES.includes(String(currentUser?.role || '').toUpperCase());
   const [clients, setClients] = useState([]);
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [archivePending, setArchivePending] = useState(false);
   const operations = useClientOperations({ enabled: canManage });
   const setTeamHighlight = useSetTeamHighlight();
 
@@ -226,7 +229,19 @@ const Clients = () => {
   };
 
   const handleArchiveToggle = async (client) => {
+    if (archivePending) return;
+    setArchivePending(true);
     try {
+      const action = client.isArchived ? 'Reactivar' : 'Desactivar';
+      const accepted = await confirm({
+        title: `${action} a ${client.name}`,
+        description: client.isArchived
+          ? 'Volverá a aparecer entre los clientes activos con sus responsables e historial conservados.'
+          : 'Pasará a Clientes inactivos. Se conservarán su historial, contratos y responsables. Podrás reactivarlo después.',
+        confirmLabel: action,
+        tone: 'neutral',
+      });
+      if (!accepted) return;
       const res = await fetch(`${getApiBaseUrl()}/api/clients/${client.id}/archive`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -240,10 +255,12 @@ const Clients = () => {
       const updated = await res.json();
       setClients((prev) => prev.map((c) => (c.id === updated.id ? { ...c, isArchived: updated.isArchived } : c)));
       refreshEverywhere();
-      toast.success(updated.isArchived ? 'Cliente archivado' : 'Cliente reactivado');
+      toast.success(updated.isArchived ? 'Cliente desactivado' : 'Cliente reactivado');
     } catch (err) {
       console.error('Error processing archive request:', err);
       toast.error(err.message || 'Error al procesar solicitud');
+    } finally {
+      setArchivePending(false);
     }
   };
 
@@ -298,7 +315,7 @@ const Clients = () => {
 
   const directory = (
     <ClientsDirectory clients={clients} loading={loading} team={team}
-      onEdit={setEditingClient} onArchiveToggle={handleArchiveToggle} />
+      onEdit={setEditingClient} onArchiveToggle={handleArchiveToggle} archivePending={archivePending} />
   );
 
   return (
