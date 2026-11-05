@@ -8,9 +8,10 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
+import ClientProjects from './ClientProjects';
 import {
   useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useLiftSuspension, useRefreshExternalPlan, useReopenMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport, useSuspendClient,
-  useUndoPiecePublished,
+  useUndoPiecePublished, useClientProjects, useSaveClientProject,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
 import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
@@ -28,6 +29,9 @@ export default function ClientOperationRoute() {
   const { currentUser } = useAuth();
   const canManage = MANAGER_ROLES.includes(String(currentUser?.role || '').toUpperCase());
   const { data: client, isLoading, error, refetch } = useClientOperation(canManage ? slug : null);
+  const viewerId = currentUser?.id || currentUser?.userId;
+  const projectQuery = useClientProjects(canManage ? client?.id : null, viewerId);
+  const saveProject = useSaveClientProject(client?.id, viewerId);
   const { data: team = [] } = useQuery({
     queryKey: ['team-active'],
     enabled: canManage,
@@ -73,6 +77,18 @@ export default function ClientOperationRoute() {
     <>
       <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage
         currentUserId={currentUser?.id} isAdmin={String(currentUser?.role || '').toUpperCase() === 'ADMIN'}
+        projectsSection={<ClientProjects key={`${client.id}:${viewerId}`} projects={projectQuery.data || []} team={team}
+          loading={projectQuery.isLoading} error={projectQuery.error}
+          onRetry={async () => {
+            const result = await projectQuery.refetch();
+            if (result.error) throw result.error;
+            return result.data;
+          }}
+          onSave={async (project, input) => {
+            const saved = await saveProject.mutateAsync({ projectId: project.id, input });
+            toast.success(input.review ? 'Ficha del proyecto revisada.' : 'Borrador del proyecto guardado.');
+            return saved;
+          }} />}
         onAddObservation={async (text) => {
           // Si falla, el error vuelve a la tarjeta y lo escrito no se pierde.
           await addObservation.mutateAsync({ clientId: client.id, text });

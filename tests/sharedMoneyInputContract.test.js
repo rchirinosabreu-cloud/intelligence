@@ -24,7 +24,9 @@ const NON_MONEY_NUMBER_FIELDS = {
     // Variación porcentual de una métrica.
     'src/components/reports/ReportEvidenceWorkspace.jsx': 1,
     // Ficha operativa del cliente: día de corte de la parrilla, piezas al mes por formato y jornadas al mes.
-    'src/components/modules/Clients/operations/ClientOperationDialog.jsx': 3
+    'src/components/modules/Clients/operations/ClientOperationDialog.jsx': 3,
+    // Cantidades de entregables, jornadas y horas de producción de cada proyecto; no son dinero.
+    'src/components/modules/Clients/operations/ClientProjects.jsx': 3
 };
 
 const ROOT = new URL('..', import.meta.url);

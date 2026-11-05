@@ -1,11 +1,13 @@
 import express from 'express';
 import { isManagerRole } from '../../config/security.js';
 import { clientOperationsService } from '../../services/clientOperationsService.js';
+import { projectOperationsService } from '../../services/projectOperationsService.js';
 
 // Operación de clientes (2 de octubre de 2026): el tablero global, la página de cada cliente, su ficha
 // operativa y el informe del mes. Solo administradores y project managers (Rodny, 1 de octubre de 2026).
 
 const PROFILE_FIELDS = ['description', 'instagramUrl', 'agency', 'complexity', 'projectManagerId', 'communityManagerId', 'externalPlanUrl', 'contract', 'renew'];
+const PROJECT_FIELDS = ['expectedRevision', 'title', 'modality', 'startDate', 'endDate', 'projectManagerId', 'deliverables', 'productionDays', 'productionHours', 'reportRequired', 'notes', 'review'];
 
 const requireManager = (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -23,12 +25,26 @@ const reply = (res, error, logger) => {
   return res.status(status).json({ error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.errors ? { errors: error.errors } : {}) });
 };
 
-export const createClientOperationsRouter = ({ service = clientOperationsService, logger = console } = {}) => {
+export const createClientOperationsRouter = ({ service = clientOperationsService, projectService = projectOperationsService, logger = console } = {}) => {
   const router = express.Router();
   router.use(requireManager);
 
   router.get('/', async (_req, res) => {
     try { return res.json(await service.listOperations()); } catch (error) { return reply(res, error, logger); }
+  });
+
+  router.get('/:clientId/projects', async (req, res) => {
+    try {
+      return res.json(await projectService.listClientProjects(req.params.clientId, { userId: req.user.userId, role: req.user.role }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  router.put('/:clientId/projects/:projectId', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const input = Object.fromEntries(PROJECT_FIELDS.filter((key) => Object.hasOwn(body, key)).map((key) => [key, body[key]]));
+      return res.json(await projectService.updateProjectOperation(req.params.clientId, req.params.projectId, input, { userId: req.user.userId, role: req.user.role }));
+    } catch (error) { return reply(res, error, logger); }
   });
 
   router.get('/:slug', async (req, res) => {

@@ -32,10 +32,20 @@ const createImportantNoticeMemory = (crmDb, userId, { cartera = false, now = nul
     teamMember: { findFirst: async () => ({ role: 'Coordinadora Administrativa y Contable', areas: ['ADMINISTRATIVA', 'COMERCIAL'] }) },
     collectionSetting: { findUnique: async () => null },
     client: { findUnique: async ({ where }) => collectionClients.find(client => client.id === where.id) || null },
-    accountsReceivable: { findUnique: async ({ where }) => where.id === 'cuenta-grit'
-      ? { ...owed('cuenta-grit', '2026-09-01'), amount: 1500000, number: 395, clientId: 'cliente-grit', client: collectionClients[1] } : null },
+    accountsReceivable: { findUnique: async ({ where }) => {
+      if (where.id === 'cuenta-grit') return { ...owed('cuenta-grit', '2026-09-01'), amount: 1500000, number: 395, clientId: 'cliente-grit', client: collectionClients[1] };
+      const client = collectionClients.find(item => item.accountsReceivables.some(receivable => receivable.id === where.id));
+      return client ? { ...client.accountsReceivables.find(item => item.id === where.id), clientId: client.id, client } : null;
+    } },
     collectionActivity: {
-      findFirst: async ({ where }) => collectionActivities.find(activity => activity.clientId === where.clientId && activity.occurredAt > where.occurredAt.gt) || null,
+      findFirst: async ({ where }) => collectionActivities.find(activity => activity.clientId === where.clientId && (activity.receivableId || null) === where.receivableId && activity.occurredAt > where.occurredAt.gt) || null,
+      upsert: async ({ where, create }) => {
+        const previous = collectionActivities.find(activity => activity.noticeId === where.noticeId);
+        if (previous) return previous;
+        const activity = { id: `gestion-${collectionActivities.length + 1}`, ...create };
+        collectionActivities.push(activity);
+        return activity;
+      },
       create: async ({ data }) => {
         if (data.noticeId && collectionActivities.some(activity => activity.noticeId === data.noticeId)) throw Object.assign(new Error('Gestión ya registrada'), { code: 'P2002' });
         const activity = { id: `gestion-${collectionActivities.length + 1}`, ...data };
@@ -48,6 +58,7 @@ const createImportantNoticeMemory = (crmDb, userId, { cartera = false, now = nul
   const contact = new Set(['LLAMADA', 'CORREO', 'WHATSAPP', 'MENSAJE_LINKEDIN', 'REUNION', 'PROPUESTA_ENVIADA', 'RESPUESTA_CLIENTE']);
   const db = Object.create(crmDb);
   Object.assign(db, {
+    $transaction: async (work) => work(db),
     importantNotice: {
       findMany: async ({ where }) => rows.filter((row) => matches(row, where)),
       findFirst: async ({ where, orderBy }) => rows.filter((row) => matches(row, where)).sort((a, b) => (orderBy?.decidedAt ? b.decidedAt - a.decidedAt : 0))[0] || null,

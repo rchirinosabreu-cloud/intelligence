@@ -197,7 +197,7 @@ axios.defaults.adapter = async config => {
     window.__collectionActivities ||= [{ id: 'ga-1', clientId: client.id, receivableId: null, channel: 'WHATSAPP', channelLabel: 'WhatsApp', source: 'AVISO', authorName: 'Elisa Mestra', occurredAt: '2026-10-27T15:00:00.000Z' }];
     data = { items: window.__collectionActivities };
   } else if (path === '/api/financials/collection-activities' && config.method === 'post') {
-    const item = { id: `ga-${Date.now()}`, clientId: body.clientId, receivableId: null, channel: body.channel, source: 'MANUAL', authorName: 'Demo', occurredAt: '2026-10-28T15:00:00.000Z' };
+    const item = { id: `ga-${Date.now()}`, clientId: body.clientId, receivableId: body.receivableId || null, channel: body.channel, source: 'MANUAL', authorName: 'Demo', occurredAt: '2026-10-28T15:00:00.000Z' };
     window.__collectionActivities = [item, ...(window.__collectionActivities || [])];
     data = item;
   }
@@ -332,8 +332,9 @@ axios.defaults.adapter = async config => {
   else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];
   else if (path.endsWith('/receivables-ledger')) {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
-    const outstandingTotal = (debt.deleted ? 0 : debt.outstanding) + loans.reduce((sum, loan) => sum + loan.outstanding, 0);
-    data = { year: 2026, items: [...(debt.deleted ? [] : [{ ...debt }]), ...loans.map(loan => ({ ...loan }))], totals: { outstandingTotal, total: outstandingTotal, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
+    const second = new URLSearchParams(location.search).has('collectionScope') ? [{ ...debt, id: 'demo-debt-second', amount: 500000, outstanding: 500000, paidAmount: 0, collectionMode: 'CUOTA', collectionModeLocked: true, payments: [] }] : [];
+    const outstandingTotal = (debt.deleted ? 0 : debt.outstanding) + loans.reduce((sum, loan) => sum + loan.outstanding, 0) + second.reduce((sum, item) => sum + item.outstanding, 0);
+    data = { year: 2026, items: [...(debt.deleted ? [] : [{ ...debt }]), ...second, ...loans.map(loan => ({ ...loan }))], totals: { outstandingTotal, total: outstandingTotal, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
   } else if (path.endsWith('/client-reconciliation')) {
     data = {
       year: 2026,

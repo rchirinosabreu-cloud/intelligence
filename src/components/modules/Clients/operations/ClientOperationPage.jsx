@@ -406,7 +406,7 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 }
 
 export default function ClientOperationPage({
-  client, evaluation, today, canManage, currentUserId, isAdmin,
+  client, evaluation, today, canManage, currentUserId, isAdmin, projectsSection,
   onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onSuspend, onLiftSuspension, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
@@ -438,6 +438,7 @@ export default function ClientOperationPage({
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
             onAdd={onAddObservation} onDelete={onDeleteObservation} />
+          {projectsSection}
           {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
             onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} onPeek={setPeeking} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}

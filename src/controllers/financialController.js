@@ -6,6 +6,7 @@ import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { formatReceivableNumber } from '../services/receivableDocumentService.js';
 import { isCashPayment, isReceivableClosed, isRetentionPayment } from '../lib/receivableSettlement.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
+import { receivableCollectionMode, isFormalizationInstallment } from '../lib/receivableCollectionMode.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -70,6 +71,8 @@ const serializeReceivable = (receivable) => {
         // CLIENTE o PRESTAMO (20 de octubre de 2026): un préstamo dice a quién se le prestó y de
         // qué egreso salió; la pantalla no le ofrece cuenta de cobro y su pago es reintegro.
         kind: receivable.kind || 'CLIENTE',
+        collectionMode: receivableCollectionMode(receivable),
+        collectionModeLocked: isFormalizationInstallment(receivable),
         counterpartyType: receivable.counterpartyType || null,
         counterpartyName: receivable.counterpartyName || null,
         loanRecordId: receivable.loanRecordId || null,

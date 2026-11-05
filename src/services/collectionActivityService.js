@@ -12,24 +12,27 @@ export const recordCollectionActivity = async (db = prisma, { clientId, receivab
     if (!isCollectionChannel(channel)) throw httpError(400, 'Elige cómo fue la gestión de cobro.');
     const client = clientId ? await db.client.findUnique({ where: { id: clientId }, select: { id: true } }) : null;
     if (!client) throw httpError(404, 'Ese cliente ya no está.');
-    try {
-        return await db.collectionActivity.create({
-            data: {
-                clientId, receivableId, channel, source, noticeId,
-                authorId: actor.userId || actor.id || null, authorName: actor.name || null, occurredAt: now
-            }
-        });
-    } catch (error) {
-        if (noticeId && error?.code === 'P2002') return null;
-        throw error;
+    if (receivableId !== null) {
+        if (typeof receivableId !== 'string' || !receivableId.trim()) throw httpError(400, 'Elige una obligación válida para esta gestión.');
+        const receivable = await db.accountsReceivable.findUnique({ where: { id: receivableId }, select: { clientId: true, kind: true } });
+        if (!receivable) throw httpError(404, 'Esa obligación ya no está.');
+        if (receivable.clientId !== clientId || receivable.kind === 'PRESTAMO') throw httpError(409, 'La obligación no corresponde a la cartera de este cliente.');
     }
+    const data = { clientId, receivableId, channel, source, noticeId,
+        authorId: actor.userId || actor.id || null, authorName: actor.name || null, occurredAt: now };
+    // El reintento conserva el evento original. Una violación de unicidad atrapada dentro de la transacción de
+    // varias obligaciones dejaría PostgreSQL abortado; el upsert no produce esa excepción ni reescribe el evento.
+    if (noticeId) return db.collectionActivity.upsert({ where: { noticeId }, create: data, update: {} });
+    return db.collectionActivity.create({ data });
 };
 
 /** Las gestiones más recientes, para Cuentas por cobrar. */
 export const listCollectionActivities = async (db = prisma) => {
-    const rows = await db.collectionActivity.findMany({ orderBy: { occurredAt: 'desc' }, take: LIST_LIMIT });
+    const rows = await db.collectionActivity.findMany({ orderBy: { occurredAt: 'desc' }, take: LIST_LIMIT + 1 });
     return {
-        items: rows.map((row) => ({
+        hasMore: rows.length > LIST_LIMIT,
+        limit: LIST_LIMIT,
+        items: rows.slice(0, LIST_LIMIT).map((row) => ({
             id: row.id, clientId: row.clientId, receivableId: row.receivableId || null, channel: row.channel,
             channelLabel: collectionChannelLabel(row.channel), source: row.source, authorName: row.authorName || null,
             occurredAt: row.occurredAt instanceof Date ? row.occurredAt.toISOString() : row.occurredAt
@@ -37,8 +40,15 @@ export const listCollectionActivities = async (db = prisma) => {
     };
 };
 
-/** ¿Hubo una gestión de cobro con este cliente después de ese momento? */
-export const hasCollectionActivitySince = async (db, clientId, since) => {
+/** Una gestión general cubre el cliente; una específica solo las obligaciones que identifica. */
+export const hasCollectionActivitySince = async (db, clientId, since, receivableIds = []) => {
     if (!clientId || typeof db.collectionActivity?.findFirst !== 'function') return false;
-    return Boolean(await db.collectionActivity.findFirst({ where: { clientId, occurredAt: { gt: new Date(since) } }, select: { id: true } }));
+    const where = { clientId, occurredAt: { gt: new Date(since) } };
+    if (await db.collectionActivity.findFirst({ where: { ...where, receivableId: null }, select: { id: true } })) return true;
+    const ids = [...new Set(receivableIds.filter(Boolean))];
+    if (!ids.length) return false;
+    for (const id of ids) {
+        if (!await db.collectionActivity.findFirst({ where: { ...where, receivableId: id }, select: { id: true } })) return false;
+    }
+    return true;
 };

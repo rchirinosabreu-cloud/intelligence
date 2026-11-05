@@ -14,7 +14,7 @@ import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
 import { userHasArea } from './teamAreaService.js';
-import { collectionStillDue } from './collectionState.js';
+import { collectionStillDue, collectionNoticeReceivableIds } from './collectionState.js';
 import { hasCollectionActivitySince, recordCollectionActivity } from './collectionActivityService.js';
 import { NOTICE_ARCHIVE_OUTCOME, isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { isPlanNotice, parsePlanSubject } from '../lib/planCloseNotices.js';
@@ -28,8 +28,9 @@ const MAX_STALE_PER_READ = 25;
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
-const serialize = (notice) => ({
-    id: notice.id, kind: notice.kind, level: notice.level, label: notice.label, message: notice.message, url: notice.url || null
+const serialize = (notice, receivableIds) => ({
+    id: notice.id, kind: notice.kind, level: notice.level, label: notice.label, message: notice.message, url: notice.url || null,
+    ...(receivableIds ? { receivableIds } : {})
 });
 
 const leadName = (lead) => lead?.company || lead?.contactName || null;
@@ -80,7 +81,10 @@ export const queueImportantNotice = async (db, data, now = new Date()) => db.$tr
         });
         const clientId = existing && (isClientCollectionNotice(existing) ? existing.subjectId
             : (await tx.accountsReceivable.findUnique({ where: { id: existing.subjectId }, select: { clientId: true } }))?.clientId);
-        const handled = existing && await hasCollectionActivitySince(tx, clientId, existing.createdAt);
+        const handled = existing && typeof tx.collectionActivity?.findFirst === 'function' && (
+            await hasCollectionActivitySince(tx, clientId, existing.createdAt)
+            || await hasCollectionActivitySince(tx, clientId, existing.createdAt, await collectionNoticeReceivableIds(tx, existing, now))
+        );
         if (existing && !handled) return tx.importantNotice.update({
             where: { id: existing.id },
             data: { level: data.level, label: data.label, message: data.message, url: data.url || null,
@@ -167,8 +171,9 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
         if (!cleared) return { notice: serialize(notice), nextAt };
         if (cleared.refresh) {
             const refreshed = await db.importantNotice.update({ where: { id: notice.id }, data: cleared.refresh });
-            return { notice: serialize(refreshed), nextAt };
+            return { notice: serialize(refreshed, cleared.receivableIds), nextAt };
         }
+        if (cleared.receivableIds) return { notice: serialize(notice, cleared.receivableIds), nextAt };
         await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
         await traceNotice(db, NOTICE_TRACE_EVENTS.CLEARED, { notice, subject: cleared.subject, subjectName: who, extra: { reason: cleared.reason }, now, log });
         candidates = candidates.filter((row) => row.id !== notice.id);
@@ -261,7 +266,23 @@ export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = 
             const clientId = oneOff
                 ? (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { clientId: true } }))?.clientId
                 : notice.subjectId;
-            await recordCollectionActivity(db, { clientId, receivableId: oneOff ? notice.subjectId : null, channel: body.channel, noticeId: notice.id, source: 'AVISO' }, actor, { now });
+            if (notice.kind === 'CARTERA_MENSUAL') {
+                // El aviso agrupado cobra estas obligaciones, no todas las deudas presentes o futuras del cliente.
+                const ids = body.receivableIds;
+                if (!Array.isArray(ids) || !ids.length || ids.some((value) => typeof value !== 'string' || !value.trim()) || new Set(ids).size !== ids.length) {
+                    throw httpError(409, 'Actualiza el aviso para revisar las obligaciones de esta gestión.');
+                }
+                await db.$transaction(async (tx) => {
+                    const currentIds = new Set(await collectionNoticeReceivableIds(tx, notice, now));
+                    if (ids.some((receivableId) => !currentIds.has(receivableId))) throw httpError(409, 'La cartera de este aviso cambió. Actualiza para revisar las obligaciones vigentes.');
+                    for (const receivableId of ids) {
+                        await recordCollectionActivity(tx, { clientId, receivableId, channel: body.channel,
+                            noticeId: `${notice.id}:${receivableId}`, source: 'AVISO' }, actor, { now });
+                    }
+                }, { isolationLevel: 'Serializable' });
+            } else {
+                await recordCollectionActivity(db, { clientId, receivableId: oneOff ? notice.subjectId : null, channel: body.channel, noticeId: notice.id, source: 'AVISO' }, actor, { now });
+            }
         }
     } else {
         requireCrm(actor);

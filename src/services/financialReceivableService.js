@@ -5,6 +5,7 @@ import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { resolveDocumentMoney } from './receivableDocumentService.js';
+import { isFormalizationInstallment, isReceivableCollectionMode } from '../lib/receivableCollectionMode.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -12,6 +13,20 @@ import {
 } from './financialRecordService.js';
 
 const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
+
+const collectionModeInput = (value, existing = null) => {
+    if (value === undefined) return undefined;
+    if (value !== null && value !== '' && !isReceivableCollectionMode(value)) {
+        throw new FinancialDomainError('RECEIVABLE_COLLECTION_MODE_INVALID', 'Elige mensualidad, servicio puntual o cuota.');
+    }
+    if (isFormalizationInstallment(existing) && value !== 'CUOTA') {
+        throw new FinancialDomainError('RECEIVABLE_COLLECTION_MODE_LOCKED', 'Esta cuota proviene del plan de pagos aprobado y conserva esa modalidad.', 409);
+    }
+    if (existing?.kind === 'PRESTAMO' && value) {
+        throw new FinancialDomainError('RECEIVABLE_COLLECTION_MODE_INVALID', 'Un préstamo conserva su propia clase; no es una mensualidad, un servicio ni una cuota comercial.');
+    }
+    return value || null;
+};
 
 const parseReceivableDueDate = (value) => {
     if (value === undefined || value === null || value === '') return null;
@@ -25,6 +40,7 @@ const parseReceivableDueDate = (value) => {
 export const CLIENT_NAME_MAX = 120;
 
 export const createReceivable = async (prismaClient, input = {}, actor) => {
+    const collectionMode = collectionModeInput(input.collectionMode);
     const clientId = String(input.clientId || '').trim();
     // Se puede crear la ficha del cliente aquí mismo (Rodny, 23 de septiembre de 2026):
     // registrar un cobro de alguien nuevo no debería obligar a salir a crearlo primero.
@@ -104,7 +120,7 @@ export const createReceivable = async (prismaClient, input = {}, actor) => {
                 notes: String(input.notes || '').trim() || null,
                 comments: String(input.comments || '').trim() || null,
                 sourceLabel: client.name,
-                metadata: { createdBy: actorId, origin: 'PLATFORM' }
+                metadata: { createdBy: actorId, origin: 'PLATFORM', ...(collectionMode !== undefined ? { collectionMode } : {}) }
             }
         });
         await tx.financialAuditEvent.create({
@@ -221,6 +237,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
             if (!existing) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }
+            const collectionMode = collectionModeInput(input.collectionMode, existing);
             const periodDate = new Date(existing.period);
             await assertOpenFinancialPeriod(tx, existing.year || periodDate.getUTCFullYear(), existing.month || periodDate.getUTCMonth() + 1);
 
@@ -291,6 +308,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 dueDate,
                 metadata: {
                     ...(existing.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
+                    ...(collectionMode !== undefined ? { collectionMode } : {}),
                     editedBy: actorId,
                     editedAt: new Date().toISOString()
                 }

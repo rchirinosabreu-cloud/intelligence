@@ -10,6 +10,7 @@
 // Todos los plazos se cambian desde la plataforma (Rodny: «dejar las fechas flexibles» para ajustarlas con Francisco).
 //
 // Lógica pura: la usan el reloj que avisa, la banda y las pruebas. Los días son días civiles de Bogotá («AAAA-MM-DD»).
+import { receivableCollectionMode } from './receivableCollectionMode.js';
 
 // Nacen apagados (28 de octubre de 2026): la primera lectura de producción habría soltado 19 avisos de una vez, varios de
 // saldos del Excel que probablemente ya no son deuda. Administración limpia y un administrador los enciende.
@@ -118,20 +119,23 @@ export const oneOffCollectionAlerts = ({ receivables = [], today, settings = DEF
 
 /**
  * Una cuota del plan aprobado es una obligación individual, no prueba una mensualidad de la parrilla del cliente.
- * La modalidad del resto de cuentas todavía no está estructurada: el contrato solo conserva la cadencia heredada,
- * nunca acredita qué servicio cobra una cuenta. Los avisos reales dicen «cuentas», sin interpretar conceptos.
+ * La modalidad elegida en la obligación prevalece; para el legado sin clasificar se conserva la cadencia heredada
+ * y el texto neutral, sin interpretar conceptos ni convertir el contrato del cliente en evidencia de su modalidad.
  * Filtrar un saldo por verificar aquí no modifica su obligación ni la regla separada de suspensiones.
  */
 export const clientCollectionAlerts = ({ clientId, receivables = [], monthly = false, today, settings = DEFAULT_COLLECTION_SETTINGS }) => {
     const eligible = receivables.filter((item) => item.balanceReviewRequired !== true && item.metadata?.balanceReviewRequired !== true);
-    const installment = (item) => item.metadata?.origin === 'FORMALIZACION' && Boolean(item.metadata.quotationId && item.metadata.installmentId);
-    const grouped = monthly ? eligible.filter((item) => !installment(item)) : [];
-    const individual = monthly ? eligible.filter(installment) : eligible;
-    const aggregate = monthly ? monthlyCollectionAlert({ clientId, receivables: grouped, today, settings }) : null;
+    const grouped = eligible.filter((item) => receivableCollectionMode(item) === 'MENSUAL' || (!receivableCollectionMode(item) && monthly));
+    const individual = eligible.filter((item) => !grouped.includes(item));
+    const aggregate = monthlyCollectionAlert({ clientId, receivables: grouped, today, settings });
+    const byId = new Map(eligible.map((item) => [item.id, item]));
     return [
         ...(aggregate ? [aggregate] : []),
         ...oneOffCollectionAlerts({ receivables: individual, today, settings })
-    ].map((alert) => ({ ...alert, unclassified: true }));
+    ].map((alert) => ({ ...alert,
+        collectionMode: alert.kind === 'MENSUAL' ? 'MENSUAL' : receivableCollectionMode(byId.get(alert.subjectId)),
+        unclassified: alert.receivableIds.some((id) => !receivableCollectionMode(byId.get(id)))
+    }));
 };
 
 const money = (cents) => `$${String(Math.round(cents / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
@@ -154,7 +158,7 @@ export const collectionNoticeText = (alert, clientName) => {
         };
     }
     return {
-        kind: 'CARTERA_UNICO', level: 'SEGUIMIENTO', label: alert.unclassified ? 'Cartera · cuenta vencida' : 'Cartera · servicio puntual',
+        kind: 'CARTERA_UNICO', level: 'SEGUIMIENTO', label: alert.unclassified ? 'Cartera · cuenta vencida' : alert.collectionMode === 'CUOTA' ? 'Cartera · cuota' : 'Cartera · servicio puntual',
         message: `${who} lleva ${plural(alert.daysOverdue, 'día', 'días')} vencida ${whichAccount(alert)}: ${money(alert.balanceCents)} pendientes`
     };
 };
