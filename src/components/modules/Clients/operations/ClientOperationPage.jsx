@@ -346,6 +346,9 @@ function ExternalPlan({ client, onRefresh }) {
 function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan }) {
   const { contract } = client;
   const quota = contractQuota(contract);
+  const sharedQuota = quota > 0 && contract?.deliverables?.length === 1
+    && contract.deliverables[0].format === 'Sin clasificar'
+    && contract.scopeDetails?.contentGroups?.some(group => group.rule === 'EXACTA' && group.quantity === quota && group.formats?.length >= 2);
   return (
     <section className={cn(CARD, 'scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary')} id="client-operation-profile" tabIndex={-1} aria-label="Ficha operativa">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -384,7 +387,7 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
             <div>
               <p className={LABEL}>Piezas al mes</p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {contract.deliverables.map((row) => <span key={row.format} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium dark:border-white/10">{row.quantity} {row.format}</span>)}
+                {!sharedQuota && contract.deliverables.map((row) => <span key={row.format} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium dark:border-white/10">{row.quantity} {row.format}</span>)}
                 <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs font-semibold dark:bg-white/10">{quota} en total</span>
               </div>
             </div>

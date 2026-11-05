@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useId, useRef } from 'react';
 import Select from '@/components/ui/Select';
 import { CalendarDays, FileBarChart, Plus, Trash2, Video } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,7 @@ const HELP = 'text-xs text-zinc-500 dark:text-zinc-400';
 const ACTION = 'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 disabled:opacity-40 dark:text-brand-cyan';
 const RULE = { EXACTA: 'Exacta', MINIMO: 'Mínimo', MAXIMO: 'Hasta' };
 const PERIOD = { SEMANA: 'por semana', MES: 'por mes', CONTRATO: 'por contrato', PUNTUAL: 'una vez' };
-const STORY_PERIOD = { SEMANA: 'Historias por semana', MES: 'Historias por mes', DIAS_SEMANA: 'Días con historias por semana' };
+const STORY_PERIOD = { SEMANA: 'Historias por semana', MES: 'Historias por mes', DIAS_SEMANA: 'Días con historias por semana', OCASIONES_SEMANA: 'Veces por semana' };
 const CATEGORY = { BLOG: 'Blog', WEB: 'Web', COMUNIDAD: 'Comunidad', MARCAS: 'Marcas', PERFILES: 'Perfiles', OTRO: 'Otro servicio' };
 const fieldValue = value => value ?? '';
 const prefix = rule => rule === 'MAXIMO' ? 'Hasta ' : rule === 'MINIMO' ? 'Mínimo ' : '';
@@ -24,14 +24,26 @@ function Remove({ label, onClick }) {
 /** Los límites describen condiciones; el cupo de piezas se edita por separado. */
 export function ContractScopeFields({ scope, contract, onChange, onLegacyChange }) {
   const id = useId();
+  const groupKeys = useRef(new WeakMap());
   const value = scope || emptyDetails();
   const update = patch => onChange({ ...value, ...patch });
   const patchStories = patch => update({ stories: { ...value.stories, ...patch } });
   const patchProduction = patch => update({ production: { ...value.production, ...patch } });
   const limits = value.contentLimits || [];
+  const groups = value.contentGroups || [];
   const services = value.additionalServices || [];
   const used = new Set(limits.map(row => row.format));
   const limitChange = (index, patch) => update({ contentLimits: limits.map((row, i) => i === index ? { ...row, ...patch } : row) });
+  const groupKey = group => {
+    if (!groupKeys.current.has(group)) groupKeys.current.set(group, crypto.randomUUID());
+    return groupKeys.current.get(group);
+  };
+  const groupChange = (index, patch) => update({ contentGroups: groups.map((row, i) => {
+    if (i !== index) return row;
+    const next = { ...row, ...patch };
+    groupKeys.current.set(next, groupKey(row));
+    return next;
+  }) });
   const serviceChange = (serviceId, patch) => update({ additionalServices: services.map(row => row.id === serviceId ? { ...row, ...patch } : row) });
   const stories = value.stories;
   const production = value.production;
@@ -48,15 +60,32 @@ export function ContractScopeFields({ scope, contract, onChange, onLegacyChange 
       <p className={HELP}>Estos límites no cambian el cupo mensual ni el semáforo.</p>
     </fieldset>}
 
+    {contract.serviceType === 'PARRILLA' && <fieldset className="space-y-3" data-scope-groups>
+      <legend className={LABEL}>Cupos compartidos entre formatos <span className="font-normal text-zinc-500 dark:text-zinc-400">(opcional)</span></legend>
+      {groups.map((group, index) => <fieldset key={groupKey(group)} className="min-w-0 space-y-2 rounded-xl border border-zinc-200 p-3 dark:border-white/10">
+        <legend className={HELP}>Grupo {index + 1}</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">{SCOPE_FORMATS.map(format => <label key={format} className="inline-flex min-h-11 items-center gap-2 text-sm text-zinc-800 dark:text-zinc-100">
+          <input type="checkbox" aria-label={`${format} en grupo ${index + 1}`} checked={group.formats.includes(format)} onChange={event => groupChange(index, { formats: event.target.checked ? [...group.formats, format] : group.formats.filter(item => item !== format) })} className="h-4 w-4 accent-primary" />{format}
+        </label>)}</div>
+        <div className="grid grid-cols-[1fr_5rem_2.75rem] items-end gap-2">
+          <label className={HELP}>Cantidad del conjunto<Select aria-label={`Tipo de cantidad del grupo ${index + 1}`} value={group.rule} onChange={event => groupChange(index, { rule: event.target.value })} className={cn(FIELD, 'mt-1')}>{SCOPE_RULES.map(rule => <option key={rule} value={rule}>{RULE[rule]}</option>)}</Select></label>
+          <label className={HELP}>Contenidos<input aria-label={`Cantidad del grupo ${index + 1}`} type="number" min={0} max={999} value={fieldValue(group.quantity)} onChange={event => groupChange(index, { quantity: event.target.value })} placeholder="—" className={cn(FIELD, 'mt-1')} /></label>
+          <Remove label={`Quitar grupo ${index + 1}`} onClick={() => update({ contentGroups: groups.filter((_, i) => i !== index) })} />
+        </div>
+      </fieldset>)}
+      <button type="button" className={ACTION} disabled={groups.length >= 10} onClick={() => update({ contentGroups: [...groups, { formats: [], quantity: null, rule: 'EXACTA' }] })}><Plus className="h-4 w-4" />Añadir grupo de formatos</button>
+      <p className={HELP}>Elige al menos dos formatos. La cantidad corresponde al conjunto, sin exigir un reparto fijo entre ellos.</p>
+    </fieldset>}
+
     <fieldset className="space-y-2" data-scope-stories>
       <legend className={LABEL}>Historias</legend>
       {stories ? <>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className={HELP}>Cantidad<input aria-label="Cantidad de historias" type="number" min={0} max={stories.period === 'DIAS_SEMANA' ? 7 : 999} value={fieldValue(stories.quantity)} onChange={event => patchStories({ quantity: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>
-          <label className={HELP}>Unidad y frecuencia<Select aria-label="Unidad de historias" value={stories.period || ''} onChange={event => patchStories({ period: event.target.value || null, ...(event.target.value !== 'DIAS_SEMANA' ? { perOccasion: null } : {}) })} className={cn(FIELD, 'mt-1')}><option value="">Por confirmar</option>{STORY_PERIODS.map(period => <option key={period} value={period}>{STORY_PERIOD[period]}</option>)}</Select></label>
-          {stories.period === 'DIAS_SEMANA' && <label className={HELP}>Historias por día<input aria-label="Historias por día" type="number" min={0} max={999} value={fieldValue(stories.perOccasion)} onChange={event => patchStories({ perOccasion: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>}
+          <label className={HELP}>{stories.period === 'OCASIONES_SEMANA' ? 'Veces' : 'Cantidad'}<input aria-label={stories.period === 'OCASIONES_SEMANA' ? 'Cantidad de ocasiones' : 'Cantidad de historias'} type="number" min={0} max={stories.period === 'DIAS_SEMANA' ? 7 : 999} value={fieldValue(stories.quantity)} onChange={event => patchStories({ quantity: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>
+          <label className={HELP}>Unidad y frecuencia<Select aria-label="Unidad de historias" value={stories.period || ''} onChange={event => patchStories({ period: event.target.value || null, ...(event.target.value !== stories.period ? { perOccasion: null } : {}) })} className={cn(FIELD, 'mt-1')}><option value="">Por confirmar</option>{STORY_PERIODS.map(period => <option key={period} value={period}>{STORY_PERIOD[period]}</option>)}</Select></label>
+          {['DIAS_SEMANA', 'OCASIONES_SEMANA'].includes(stories.period) && <label className={HELP}>{stories.period === 'DIAS_SEMANA' ? 'Historias por día' : 'Historias por ocasión'}<input aria-label={stories.period === 'DIAS_SEMANA' ? 'Historias por día' : 'Historias por ocasión'} type="number" min={0} max={999} value={fieldValue(stories.perOccasion)} onChange={event => patchStories({ perOccasion: event.target.value })} placeholder="Por confirmar" className={cn(FIELD, 'mt-1')} /></label>}
         </div>
-        <p className={HELP}>Se conserva la unidad elegida; los días no equivalen a cantidad de historias.</p>
+        <p className={HELP}>Los días y las veces por semana no equivalen a cantidad de historias.</p>
       </> : <div className="flex flex-wrap items-center gap-2">
         <Select aria-label="Historias por semana" value={String(contract.storiesPerWeek ?? 0)} onChange={event => onLegacyChange({ storiesPerWeek: Number(event.target.value) })} className={cn(FIELD, 'sm:max-w-xs')}>{STORY_FREQUENCIES.map(option => <option key={option.value} value={String(option.value)}>{option.label}</option>)}</Select>
         <button type="button" className={ACTION} onClick={() => update({ stories: { quantity: contract.storiesPerWeek ?? null, period: 'SEMANA', perOccasion: null } })}>Detallar historias</button>
@@ -103,6 +132,7 @@ export function ContractScopeFields({ scope, contract, onChange, onLegacyChange 
 function storiesText(stories) {
   if (stories.quantity == null) return 'Por confirmar';
   if (stories.period === 'DIAS_SEMANA') return `${stories.quantity} días por semana · ${stories.perOccasion == null ? 'historias por día: Por confirmar' : `${stories.perOccasion} historias por día`}`;
+  if (stories.period === 'OCASIONES_SEMANA') return `${stories.quantity} ${stories.quantity === 1 ? 'vez' : 'veces'} por semana · ${stories.perOccasion == null ? 'historias por ocasión: Por confirmar' : `${stories.perOccasion} historias por ocasión`}`;
   return `${stories.quantity} historias ${PERIOD[stories.period] || '· frecuencia por confirmar'}`;
 }
 
@@ -111,6 +141,9 @@ export function ContractScopeSummary({ contract }) {
   const stories = scope?.stories;
   const production = scope?.production;
   return <div className="space-y-4" data-contract-scope-summary>
+    {scope?.contentGroups?.length > 0 && <div data-contract-content-groups><p className={HELP}>Cupos compartidos entre formatos</p><ul className="mt-1.5 space-y-2 text-sm text-zinc-800 dark:text-zinc-100">{scope.contentGroups.map(group => <li key={`${[...group.formats].sort().join('-')}-${group.rule}`}>
+      <span className="font-medium">{group.quantity == null ? 'Cantidad por confirmar' : `${prefix(group.rule)}${group.quantity} ${group.quantity === 1 ? 'contenido' : 'contenidos'}`}</span> entre {new Intl.ListFormat('es', { type: 'conjunction' }).format(group.formats)}
+    </li>)}</ul><p className={cn(HELP, 'mt-1.5')}>Se distribuyen dentro del cupo mensual; no se suman a él.</p></div>}
     {scope?.contentLimits?.length > 0 && <div><p className={HELP}>Límites por formato</p><div className="mt-1.5 flex flex-wrap gap-1.5">{scope.contentLimits.map(row => <span key={row.format} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium dark:border-white/10">{row.quantity == null ? 'Por confirmar' : `${prefix(row.rule)}${row.quantity}`} {row.format}</span>)}</div><p className={cn(HELP, 'mt-1.5')}>No se suman al cupo mensual.</p></div>}
     <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
       {(stories || contract.storiesPerWeek > 0) && <li className="flex items-start gap-2" data-contract-stories><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" /><span>Historias: {stories ? storiesText(stories) : labelOf(STORY_FREQUENCIES, contract.storiesPerWeek).toLowerCase()}</span></li>}

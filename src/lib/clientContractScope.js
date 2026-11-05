@@ -2,7 +2,7 @@
 // el objetivo medible sigue en ClientContract.deliverables, con las reglas nativas de operación.
 export const SCOPE_FORMATS = ['Video', 'Reel', 'Carrusel', 'Post', 'Otro'];
 export const SCOPE_RULES = ['EXACTA', 'MINIMO', 'MAXIMO'];
-export const STORY_PERIODS = ['SEMANA', 'MES', 'DIAS_SEMANA'];
+export const STORY_PERIODS = ['SEMANA', 'MES', 'DIAS_SEMANA', 'OCASIONES_SEMANA'];
 export const PRODUCTION_PERIODS = ['MES', 'CONTRATO'];
 export const SERVICE_CATEGORIES = ['BLOG', 'WEB', 'COMUNIDAD', 'MARCAS', 'PERFILES', 'OTRO'];
 export const SERVICE_FREQUENCIES = ['SEMANA', 'MES', 'CONTRATO', 'PUNTUAL'];
@@ -62,6 +62,32 @@ export function normalizeContractScope(input) {
     return { format, quantity: number(row.quantity, `${field}.quantity`, 999), rule: choice(row.rule, SCOPE_RULES, `${field}.rule`, 'EXACTA') };
   });
 
+  // Un grupo conserva la cantidad conjunta, sin asignarla de nuevo a cada formato.
+  // La omisión mantiene la representación de los alcances v1 ya guardados.
+  let contentGroups;
+  if (Object.hasOwn(input, 'contentGroups')) {
+    const groups = new Set();
+    contentGroups = rows(input.contentGroups, 'contentGroups', 10).map((raw, index) => {
+      const field = `contentGroups.${index}`, row = section(raw, field) || {};
+      const selected = rows(row.formats, `${field}.formats`, SCOPE_FORMATS.length);
+      if (selected.length < 2) error(`${field}.formats`, 'Elige al menos dos formatos para compartir una cantidad.');
+      if (raw === null) error(field, 'Completa un grupo válido.');
+      const seen = new Set();
+      const groupFormats = selected.map((value, formatIndex) => {
+        const formatField = `${field}.formats.${formatIndex}`;
+        const format = choice(value, SCOPE_FORMATS, formatField);
+        if (!format || seen.has(format)) error(formatField, 'Elige formatos conocidos sin repetirlos dentro del grupo.');
+        seen.add(format);
+        return format;
+      });
+      const rule = choice(row.rule, SCOPE_RULES, `${field}.rule`, 'EXACTA');
+      const key = `${[...groupFormats].sort().join('|')}:${rule}`;
+      if (groups.has(key)) error(`${field}.formats`, 'Este grupo de formatos ya tiene esa regla.');
+      groups.add(key);
+      return { formats: groupFormats, quantity: number(row.quantity, `${field}.quantity`, 999), rule };
+    });
+  }
+
   const rawStories = section(input.stories, 'stories');
   let stories = null;
   if (rawStories) {
@@ -99,5 +125,5 @@ export function normalizeContractScope(input) {
       unit: text(row.unit, `${field}.unit`, 80), frequency: choice(row.frequency, SERVICE_FREQUENCIES, `${field}.frequency`),
       notes: text(row.notes, `${field}.notes`, 1000) };
   });
-  return result({ version: 1, contentLimits, stories, production, additionalServices, reviewPending: text(input.reviewPending, 'reviewPending', 2000) });
+  return result({ version: 1, contentLimits, ...(contentGroups === undefined ? {} : { contentGroups }), stories, production, additionalServices, reviewPending: text(input.reviewPending, 'reviewPending', 2000) });
 }

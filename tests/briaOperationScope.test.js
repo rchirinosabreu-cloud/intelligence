@@ -99,6 +99,29 @@ test('detailed scope preserves limits, units, categories and unknowns without co
   assert.deepEqual(account, before, 'a Bria read never changes contract or execution');
 });
 
+test('shared format groups reach detail and portfolio without becoming individual quotas', async () => {
+  const account = row();
+  const contentGroups = [
+    { formats: ['Reel', 'Video', 'Carrusel', 'Post'], quantity: 20, rule: 'EXACTA' },
+    { formats: ['Reel', 'Video'], quantity: 6, rule: 'MAXIMO' },
+    { formats: ['Post', 'Carrusel'], quantity: null, rule: 'MINIMO' },
+  ];
+  account.contract.scopeDetails = { ...scope(), contentGroups };
+  const before = structuredClone(account);
+  account.contract.scopeDetails.contentGroups[0].price = { invoice: 'PRIVATE_FINANCE_VALUE' };
+  const result = await detail(account);
+  assert.deepEqual(result.contrato.alcanceDetallado, before.contract.scopeDetails);
+  assert.equal(result.contrato.piezasPorMes, 6);
+  const portfolio = await toolByName('cartera_de_operacion').run({}, context(account));
+  assert.deepEqual(portfolio.data.cuentas[0].contrato.alcanceDetallado.contentGroups, contentGroups.map(({ formats, quantity, rule }) => ({ formats, quantity, rule })));
+  assert.equal(portfolio.data.cuentas[0].mesActual.contratadas, 6);
+  assert.doesNotMatch(JSON.stringify({ result, portfolio }), /PRIVATE_FINANCE_VALUE/);
+  for (const name of ['operacion_de_cliente', 'cartera_de_operacion']) {
+    assert.match(toolByName(name).description, /contentGroups/);
+    assert.match(toolByName(name).description, /conjunto/);
+  }
+});
+
 test('unknown detailed quantities override old counts and preserve days-per-week without inventing pieces', async () => {
   const account = row(); account.contract.scopeDetails = {
     version: 1, contentLimits: [],
@@ -140,6 +163,11 @@ test('an incompatible scope remains explicitly unreadable and never falls back t
 
 test('malformed scope sections stay unreadable without hiding the rest of the portfolio or exposing nested data', async t => {
   const cases = [
+    ['group list object', { contentGroups: { invoice: 'PRIVATE_FINANCE_VALUE' } }],
+    ['null group row', { contentGroups: [null] }],
+    ['nested group formats', { contentGroups: [{ formats: [{ invoice: 'PRIVATE_FINANCE_VALUE' }], quantity: 6, rule: 'MAXIMO' }] }],
+    ['formats are not a list', { contentGroups: [{ formats: 'PRIVATE_FINANCE_VALUE', quantity: 6, rule: 'MAXIMO' }] }],
+    ['nested group quantity', { contentGroups: [{ formats: ['Reel', 'Video'], quantity: { invoice: 'PRIVATE_FINANCE_VALUE' }, rule: 'MAXIMO' }] }],
     ['null content row', { contentLimits: [null] }],
     ['null service row', { additionalServices: [null] }],
     ['primitive content row', { contentLimits: [42] }],
