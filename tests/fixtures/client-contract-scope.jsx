@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import ClientOperationDialog from '@/components/modules/Clients/operations/ClientOperationDialog';
 import ClientOperationPage from '@/components/modules/Clients/operations/ClientOperationPage';
-import { cycleOf, summarizeCycle, evaluateClientOperation, normalizeOperationProfile } from '@/lib/clientOperations';
+import { cycleOf, summarizeCycle, evaluateClientOperation, normalizeOperationProfile, contractQuota } from '@/lib/clientOperations';
 import '@/index.css';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -20,6 +20,7 @@ const initial = {
   projectManager: { id: 'fiction-pm', name: 'Ángela Muestra' }, communityManager: { id: 'fiction-cm', name: 'Tomás Muestra' },
   contract: { serviceType: 'PARRILLA', status: 'ACTIVO', startDate: '2026-10-01', endDate: '2027-03-31', cutDay: 1, deliverables: [{ format: 'Reel', quantity: 4 }], storiesPerWeek: 3, productionDays: 1, monthlyReport: true, notes: '',
     scopeDetails: { version: 1, contentLimits: [{ format: 'Reel', quantity: 6, rule: 'MAXIMO' }],
+      contentGroups: [{ formats: ['Reel', 'Video'], quantity: 6, rule: 'MAXIMO' }],
       stories: { quantity: 8, period: 'MES', perOccasion: null },
       production: { included: true, quantity: 2, period: 'CONTRATO', hours: 4, rule: 'EXACTA', hoursRule: 'MAXIMO' },
       additionalServices: [{ id: 'fiction-blog', category: 'BLOG', label: 'Artículos del taller', quantity: 2, unit: 'artículos', frequency: 'MES', notes: 'Contenido editorial separado de las piezas para redes.' }],
@@ -28,6 +29,24 @@ const initial = {
   cycles: { current }, history: [], observations: [], openTasks: [], work: { openTasks: 0, plans: ['noviembre'] },
 };
 const dark = new URLSearchParams(window.location.search).get('theme') === 'dark';
+const scenario = new URLSearchParams(window.location.search).get('scenario');
+if (scenario === 'shared') {
+  initial.contract.deliverables = [{ format: 'Sin clasificar', quantity: 6 }];
+  initial.contract.scopeDetails.contentLimits = [];
+  initial.contract.scopeDetails.contentGroups = [{ formats: ['Post', 'Carrusel', 'Reel'], quantity: 6, rule: 'EXACTA' }];
+  initial.contract.scopeDetails.reviewPending = null;
+} else if (scenario === 'flexible') {
+  initial.contract.deliverables = [{ format: 'Sin clasificar', quantity: 20 }];
+  initial.contract.scopeDetails.contentLimits = [{ format: 'Carrusel', quantity: 4, rule: 'MAXIMO' }, { format: 'Post', quantity: 10, rule: 'MAXIMO' }];
+  initial.contract.scopeDetails.contentGroups = [{ formats: ['Reel', 'Video', 'Carrusel', 'Post'], quantity: 20, rule: 'EXACTA' }, { formats: ['Reel', 'Video'], quantity: 6, rule: 'MAXIMO' }];
+  initial.contract.scopeDetails.reviewPending = null;
+} else if (scenario === 'partial') {
+  initial.contract.deliverables = [{ format: 'Post', quantity: 4 }, { format: 'Video', quantity: 6 }, { format: 'Sin clasificar', quantity: 2 }];
+  initial.contract.scopeDetails.contentLimits = [];
+  initial.contract.scopeDetails.contentGroups = [];
+  initial.contract.scopeDetails.reviewPending = 'Confirmar el formato de 2 contenidos.';
+}
+initial.cycles.current = { ...summarizeCycle(cycleOf(2026, 11), current.pieces, { quota: contractQuota(initial.contract), today }), report: current.report, close: null };
 document.documentElement.classList.toggle('dark', dark);
 
 function Preview() {

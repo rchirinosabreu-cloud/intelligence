@@ -26,6 +26,65 @@ test('la ficha conserva alcance estructurado separado del cupo, historias y jorn
   assert.equal(result.value.contract.productionDays, 1);
 });
 
+test('un cupo compartido conserva sus formatos y no reparte ni incrementa las piezas contratadas', () => {
+  const contentGroups = [{ formats: ['Reel', 'Carrusel', 'Post'], quantity: 6, rule: 'EXACTA' }];
+  const result = normalize({ ...scope(), contentGroups });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.value.contract.scopeDetails.contentGroups, contentGroups);
+  assert.equal(contractQuota(result.value.contract), 4);
+  assert.deepEqual(result.value.contract.deliverables, contract().deliverables);
+});
+
+test('el límite audiovisual conjunto puede convivir con un cupo general y límites individuales', () => {
+  const contentGroups = [
+    { formats: ['Video', 'Reel', 'Carrusel', 'Post'], quantity: 20, rule: 'EXACTA' },
+    { formats: ['Video', 'Reel'], quantity: 6, rule: 'MAXIMO' },
+    { formats: ['Reel', 'Video'], quantity: 2, rule: 'MINIMO' },
+  ];
+  const result = normalize({ contentGroups, contentLimits: [{ format: 'Carrusel', quantity: 4, rule: 'MAXIMO' }] });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.value.contract.scopeDetails.contentGroups, contentGroups);
+  assert.equal(contractQuota(result.value.contract), 4);
+});
+
+test('el grupo distingue cantidad pendiente de cero y elimina campos ajenos al alcance', () => {
+  const unknown = normalize({ contentGroups: [{ formats: ['Video', 'Reel'], quantity: '', rule: 'MAXIMO', price: 500 }] });
+  assert.equal(unknown.valid, true);
+  assert.deepEqual(unknown.value.contract.scopeDetails.contentGroups, [{ formats: ['Video', 'Reel'], quantity: null, rule: 'MAXIMO' }]);
+  const zero = normalize({ contentGroups: [{ formats: ['Post', 'Carrusel'], quantity: '0' }] });
+  assert.equal(zero.valid, true);
+  assert.equal(zero.value.contract.scopeDetails.contentGroups[0].quantity, 0);
+  assert.equal(zero.value.contract.scopeDetails.contentGroups[0].rule, 'EXACTA');
+});
+
+test('los alcances existentes sin grupos mantienen su representación; una lista vacía retira los grupos', () => {
+  assert.equal(Object.hasOwn(normalize(scope()).value.contract.scopeDetails, 'contentGroups'), false);
+  assert.deepEqual(normalize({ ...scope(), contentGroups: [] }).value.contract.scopeDetails.contentGroups, []);
+});
+
+for (const [label, contentGroups, field] of [
+  ['lista nula', null, 'contentGroups'],
+  ['fila nula', [null], 'contentGroups.0'],
+  ['grupo sin formatos', [{ quantity: 6 }], 'contentGroups.0.formats'],
+  ['formato único', [{ formats: ['Reel'] }], 'contentGroups.0.formats'],
+  ['formato desconocido', [{ formats: ['Reel', 'Historia'] }], 'contentGroups.0.formats.1'],
+  ['formato repetido', [{ formats: ['Reel', 'Reel'] }], 'contentGroups.0.formats.1'],
+  ['formato no textual', [{ formats: ['Reel', { private: 'value' }] }], 'contentGroups.0.formats.1'],
+  ['cantidad negativa', [{ formats: ['Reel', 'Video'], quantity: -1 }], 'contentGroups.0.quantity'],
+  ['cantidad fraccionaria', [{ formats: ['Reel', 'Video'], quantity: 2.5 }], 'contentGroups.0.quantity'],
+  ['cantidad booleana', [{ formats: ['Reel', 'Video'], quantity: true }], 'contentGroups.0.quantity'],
+  ['cantidad excesiva', [{ formats: ['Reel', 'Video'], quantity: 1000 }], 'contentGroups.0.quantity'],
+  ['regla desconocida', [{ formats: ['Reel', 'Video'], quantity: 6, rule: 'APROXIMADO' }], 'contentGroups.0.rule'],
+  ['grupo duplicado en otro orden', [{ formats: ['Reel', 'Video'], quantity: 6, rule: 'MAXIMO' }, { formats: ['Video', 'Reel'], quantity: 7, rule: 'MAXIMO' }], 'contentGroups.1.formats'],
+  ['demasiados grupos', Array.from({ length: 11 }, () => ({ formats: ['Reel', 'Video'], quantity: 6 })), 'contentGroups'],
+]) {
+  test(`el alcance compartido rechaza ${label}`, () => {
+    const result = normalize({ contentGroups });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors[`contract.scopeDetails.${field}`]);
+  });
+}
+
 test('omitir alcance no inventa datos y null lo retira expresamente', () => {
   const omitted = normalizeOperationProfile({ contract: contract() });
   assert.equal(Object.hasOwn(omitted.value.contract, 'scopeDetails'), false);
@@ -145,6 +204,23 @@ test('guardar y borrar alcance usan JSON y DbNull explícitos, sin alterar notas
   const result = await service.saveProfile({ clientId: row.id, input: { contract: { ...contract(), scopeDetails: null } } });
   assert.equal(writes.filter(([kind]) => kind === 'update').at(-1)[1].scopeDetails, Prisma.DbNull);
   assert.equal(result.contract.scopeDetails, null);
+});
+
+test('guardar y releer grupos compartidos conserva responsables, notas, cuotas e historial nativo', async () => {
+  const { row, service } = fixture(null);
+  row.projectManagerId = 'pm-existing'; row.responsibleId = 'cm-existing';
+  const before = await service.getOperation(row.slug);
+  const details = { ...scope(), contentGroups: [{ formats: ['Video', 'Reel'], quantity: 6, rule: 'MAXIMO' }] };
+  await service.saveProfile({ clientId: row.id, input: { contract: { ...contract(), scopeDetails: details } } });
+  const after = await service.getOperation(row.slug);
+  assert.deepEqual(after.contract.scopeDetails, details);
+  assert.deepEqual(after.contract.deliverables, before.contract.deliverables);
+  assert.deepEqual(after.cycles, before.cycles);
+  assert.deepEqual(after.history, before.history);
+  assert.deepEqual(after.evaluation, before.evaluation);
+  assert.equal(after.contract.notes, before.contract.notes);
+  assert.equal(row.projectManagerId, 'pm-existing');
+  assert.equal(row.responsibleId, 'cm-existing');
 });
 
 test('renovar sin alcance explícito deja la nueva ficha vacía y conserva la anterior', async () => {

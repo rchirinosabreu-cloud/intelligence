@@ -160,3 +160,43 @@ test('un dato detallado nulo se presenta por confirmar, sin rescatar el cero o f
   assert.doesNotMatch(stories.textContent, /3 por semana|0 historias/);
   assert.equal(button('Editar'), undefined);
 });
+
+test('editar un cupo compartido conserva los formatos juntos y no reparte ni suma piezas', async () => {
+  const details = scope();
+  details.contentGroups = [{ formats: ['Reel', 'Video'], quantity: 6, rule: 'MAXIMO' }];
+  let saved;
+  await mount(Dialog, { client: client(details), team: [], onClose() {}, onSave: async input => { saved = input; } });
+  await change(byAria('Cantidad del grupo 1'), '7');
+  await act(async () => byAria('Carrusel en grupo 1').click());
+  await submit();
+  assert.ok(saved);
+  assert.deepEqual(saved.contract.scopeDetails.contentGroups, [{ formats: ['Reel', 'Video', 'Carrusel'], quantity: 7, rule: 'MAXIMO' }]);
+  assert.deepEqual(saved.contract.deliverables, [{ format: 'Reel', quantity: 4 }]);
+  assert.equal(saved.projectManagerId, 'pm-retained');
+  assert.equal(saved.communityManagerId, 'cm-retained');
+});
+
+test('la ficha presenta un cupo compartido conocido sin llamarlo sin clasificar', async () => {
+  const details = scope();
+  details.contentLimits = [];
+  details.contentGroups = [{ formats: ['Post', 'Carrusel', 'Reel'], quantity: 6, rule: 'EXACTA' }];
+  const account = client(details);
+  account.contract.deliverables = [{ format: 'Sin clasificar', quantity: 6 }];
+  await mount(Page, { client: account, evaluation: { level: 'green', reasons: [] }, today: '2026-11-04', canManage: false });
+  const profile = document.querySelector('[aria-label="Ficha operativa"]');
+  assert.match(profile.textContent, /6 contenidos entre Post, Carrusel y Reel/);
+  assert.match(profile.textContent, /6 en total/);
+  assert.doesNotMatch(profile.textContent, /6 Sin clasificar/);
+});
+
+test('un límite audiovisual conjunto no oculta las piezas cuyo formato falta confirmar', async () => {
+  const details = scope();
+  details.contentGroups = [{ formats: ['Reel', 'Video'], quantity: 6, rule: 'MAXIMO' }];
+  const account = client(details);
+  account.contract.deliverables = [{ format: 'Post', quantity: 4 }, { format: 'Video', quantity: 6 }, { format: 'Sin clasificar', quantity: 2 }];
+  await mount(Page, { client: account, evaluation: { level: 'green', reasons: [] }, today: '2026-11-04', canManage: false });
+  const profile = document.querySelector('[aria-label="Ficha operativa"]');
+  assert.match(profile.textContent, /Hasta 6 contenidos entre Reel y Video/);
+  assert.match(profile.textContent, /2 Sin clasificar/);
+  assert.match(profile.textContent, /12 en total/);
+});
