@@ -130,19 +130,21 @@ export { getOrCreateSystemStreak, resetSystemStreak, processSystemStreakDailyInc
 export const getTasks = async (clientId, viewerUserId = null) => {
     try {
         const clientFilter = clientId ? { clientId } : {};
-        const [activeTasks, recentCompletedTasks] = await Promise.all([
-            prisma.task.findMany({
+        // Ambas columnas deben describir el mismo instante: un cierre o una reapertura
+        // entre lecturas no puede duplicar una tarea ni hacerla desaparecer del tablero.
+        const [activeTasks, recentCompletedTasks] = await prisma.$transaction(async (tx) => Promise.all([
+            tx.task.findMany({
                 where: { ...clientFilter, status: { not: 'REALIZADA' } },
                 include: taskListInclude,
                 orderBy: { createdAt: 'asc' }
             }),
-            prisma.task.findMany({
+            tx.task.findMany({
                 where: { ...clientFilter, status: 'REALIZADA' },
                 include: taskListInclude,
                 orderBy: { completedAt: 'desc' },
                 take: 200
             })
-        ]);
+        ]), { isolationLevel: 'RepeatableRead' });
         // La reserva se aplica antes de cualquier otra cosa: lo que no se puede ver no
         // debe llegar a la respuesta ni siquiera para ser transformado.
         const tasks = [...activeTasks, ...recentCompletedTasks].map(taskPrivacyFilter(viewerUserId));

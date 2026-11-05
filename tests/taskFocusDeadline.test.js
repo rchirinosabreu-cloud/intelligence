@@ -157,9 +157,9 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(board, /focusDeadlineAt: task\.focusDeadlineAt/, 'the board reads the hour from the API');
   assert.match(board, /assigneeUserId: task\.assignee\?\.userId/, 'the board knows whose task it is');
   assert.match(board, /getTaskLock\(\{ tasks, task, viewerUserId: currentUser\?\.id, viewerIsManager \}\)/);
-  assert.match(card, /isDragDisabled=\{Boolean\(lock\)\}/, 'locked cards cannot be moved');
+  assert.match(card, /isDragDisabled=\{Boolean\(lock\) \|\| movePending\}/, 'locked cards cannot be moved, even when no save is pending');
   assert.match(card, /onPointerDown=\{lock \? \(\) => onLocked\(task, lock\) : undefined\}/, 'the very first touch on a locked card (click or drag start) is the attempt');
-  assert.match(card, /onClick=\{\(\) => \{ if \(!lock\) onClick\(task\); \}\}/, 'a locked card never opens');
+  assert.match(card, /onClick=\{\(\) => \{ if \(!lock && !saving\) onClick\(task\); \}\}/, 'a locked or saving card never opens');
   assert.match(card, /shaking && "brain-shake"/, 'the first attempt shakes the card (Rodny, 21 September 2026)');
   assert.match(card, /onAnimationEnd=\{shaking \? \(\) => onShakeEnd\(task\) : undefined\}/, 'the shake class is removed when the animation ends, so it can shake again later');
   assert.match(board, /const \{ reaction, record \} = nextLockReaction\(lockAttemptsRef\.current\[key\]\)/, 'the board decides shake vs popup with the shared pure rule');

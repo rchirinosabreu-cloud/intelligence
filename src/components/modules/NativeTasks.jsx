@@ -38,6 +38,7 @@ import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenF
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
 import { compareTaskOrder } from '@/lib/taskOrder';
+import { applyConfirmedTaskMove, projectTaskMove } from '@/lib/taskMoveConfirmation';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -214,6 +215,7 @@ const NativeTasks = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const [pendingTaskMove, setPendingTaskMove] = useState(null);
 
     const [filters, setFilters] = useState(() => readManagementFilters(window.sessionStorage, currentUser));
     const { responsibleFilter, dateFilter, clientFilter } = filters;
@@ -638,7 +640,7 @@ const NativeTasks = () => {
         return ['Todos', ...unique];
     }, [tasks, clientFilter]);
 
-    const filteredTasks = useMemo(() => {
+    const filteredServerTasks = useMemo(() => {
         let filtered = tasks.filter(task => {
             const normalizedSearch = searchQuery.trim().toLowerCase();
             if (normalizedSearch !== '') {
@@ -668,6 +670,13 @@ const NativeTasks = () => {
         return filtered;
     }, [tasks, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
+    // Se filtra con las fechas y el estado reales antes de proyectar la posición:
+    // una tarjeta camino a Realizado no necesita inventar completedAt para verse.
+    const filteredTasks = useMemo(
+        () => projectTaskMove(filteredServerTasks, pendingTaskMove, task => getColumnId(task.status)),
+        [filteredServerTasks, pendingTaskMove]
+    );
+
     // Brand board columns (21 September 2026): glass panels; the accent only marks the column, cards stay neutral.
     const columns = [
         { id: 'pendiente', title: 'Pendiente', accent: 'bg-brand-cyan', canCreate: true },
@@ -676,8 +685,9 @@ const NativeTasks = () => {
     ];
 
     const returnedTasks = useMemo(() => {
-        return tasks.filter(t => getColumnId(t.status) === 'devuelto');
-    }, [tasks]);
+        return projectTaskMove(tasks, pendingTaskMove, task => getColumnId(task.status))
+            .filter(task => (task.pendingColumnId ?? getColumnId(task.status)) === 'devuelto');
+    }, [tasks, pendingTaskMove]);
 
     // Compromiso con hora: managers are never locked; a person with an active commitment cannot open or move
     // their other tasks until it is done.
@@ -766,12 +776,16 @@ const NativeTasks = () => {
     }, [myOverdueFocusTask, extensionTask]);
 
     const savingTaskOrder = useRef(false);
+    const [savingTaskId, setSavingTaskId] = useState(null);
     const dragVisibleTasks = useRef(null);
     const onDragEnd = async (result) => {
         const visibleAtDrag = dragVisibleTasks.current || filteredTasks;
         dragVisibleTasks.current = null;
         const { destination, source, draggableId } = result;
-        if (savingTaskOrder.current) return;
+        if (savingTaskOrder.current) {
+            toast({ description: 'Se está guardando el movimiento anterior. Espera un momento.' });
+            return;
+        }
         if (!destination) return;
         if (destination.droppableId === source.droppableId && destination.index === source.index) return;
         const taskId = draggableId;
@@ -826,6 +840,8 @@ const NativeTasks = () => {
             const [removed] = reordered.splice(sourceIndex, 1);
             reordered.splice(destination.index, 0, removed);
             savingTaskOrder.current = true;
+            setSavingTaskId(taskId);
+            setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
             try {
                 const baseUrl = getApiBaseUrl();
                 const token = localStorage.getItem('authToken');
@@ -843,15 +859,18 @@ const NativeTasks = () => {
                 const saved = await res.json().catch(() => null);
                 if (!res.ok) throw new Error(saved?.error || 'No se pudo guardar la prioridad.');
                 const order = new Map((saved?.order || []).map(item => [item.id, item.sortOrder]));
+                await queryClient.cancelQueries({ queryKey: ['nativeTasks'], exact: true });
                 queryClient.setQueryData(['nativeTasks'], current => (current || []).map(task => order.has(task.id) ? { ...task, sortOrder: order.get(task.id) } : task));
-                await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+                queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                 toast({ title: 'Prioridad guardada' });
             } catch (err) {
                 console.error("Reorder failed:", err);
                 toast({ variant: 'destructive', description: err.message || 'No se pudo guardar la prioridad.' });
-                await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+                queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             } finally {
                 savingTaskOrder.current = false;
+                setSavingTaskId(null);
+                setPendingTaskMove(null);
             }
             return;
         }
@@ -864,6 +883,8 @@ const NativeTasks = () => {
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
         savingTaskOrder.current = true;
+        setSavingTaskId(taskId);
+        setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -888,6 +909,10 @@ const NativeTasks = () => {
                 throw Object.assign(new Error("Failed to update status in backend"), { userMessage: failure?.error });
             }
             const savedTask = await response.json();
+            // El PATCH ya confirmó el movimiento. Una lectura iniciada antes de guardarlo
+            // no puede devolver la tarjeta a su columna anterior al terminar más tarde.
+            await queryClient.cancelQueries({ queryKey: ['nativeTasks'], exact: true });
+            queryClient.setQueryData(['nativeTasks'], current => applyConfirmedTaskMove(current, savedTask));
             // El confeti sale de la columna «Realizado», donde acaba de caer la tarjeta (Rodny, 30 de
             // septiembre de 2026). Se apunta a la columna y no a la tarjeta porque la tarjeta puede
             // no estar todavía repintada en su sitio cuando el servidor contesta rápido, y entonces
@@ -907,7 +932,7 @@ const NativeTasks = () => {
                 // La tarea ya movida: si se abre desde el aviso, el panel tiene que verla «En proceso».
                 setTeamStartTask({ ...targetTask, status: savedTask.status, sortOrder: savedTask.sortOrder });
             }
-            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
@@ -917,9 +942,11 @@ const NativeTasks = () => {
                 description: err?.userMessage || 'No se pudo actualizar el estado del pendiente.',
                 variant: "destructive"
             });
-            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
         } finally {
             savingTaskOrder.current = false;
+            setSavingTaskId(null);
+            setPendingTaskMove(null);
         }
     };
 
@@ -1429,6 +1456,8 @@ const NativeTasks = () => {
                                                     key={String(task.id)}
                                                     task={task}
                                                     index={index}
+                                                    saving={savingTaskId === String(task.id)}
+                                                    movePending={Boolean(savingTaskId)}
                                                     highlightedTaskId={highlightedTaskId}
                                                     onClick={(t) => openTaskFromBoard(t)}
                                                     lock={focusLockFor(task)}
@@ -1449,7 +1478,7 @@ const NativeTasks = () => {
                     </Dialog>
                     <div className="task-board-grid flex-1">
                         {columns.map((col) => {
-                            const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === col.id);
+                            const columnTasks = filteredTasks.filter(t => (t.pendingColumnId ?? getColumnId(t.status)) === col.id);
                             return (
                                 <div key={col.id} className="brain-glass flex min-w-0 flex-col p-3">
                                     <div className="flex items-center justify-between gap-2 px-1 pb-3">
@@ -1521,6 +1550,8 @@ const NativeTasks = () => {
                                                         key={String(task.id)}
                                                         task={task}
                                                         index={index}
+                                                        saving={savingTaskId === String(task.id)}
+                                                        movePending={Boolean(savingTaskId)}
                                                         highlightedTaskId={highlightedTaskId}
                                                         onClick={(t) => openTaskFromBoard(t)}
                                                         lock={focusLockFor(task)}
@@ -1551,8 +1582,8 @@ const NativeTasks = () => {
     );
 };
 
-const TaskCard = ({ task, index, lock = null, ...surfaceProps }) => (
-    <Draggable draggableId={String(task.id)} index={index} isDragDisabled={Boolean(lock)}>
+const TaskCard = ({ task, index, lock = null, movePending = false, ...surfaceProps }) => (
+    <Draggable draggableId={String(task.id)} index={index} isDragDisabled={Boolean(lock) || movePending}>
         {(provided, snapshot) => (
             <TaskCardSurface task={task} provided={provided} snapshot={snapshot} lock={lock} {...surfaceProps} />
         )}
@@ -1563,7 +1594,7 @@ const TaskCard = ({ task, index, lock = null, ...surfaceProps }) => (
 // `renderClone` draws through a portal on <body>. The glass columns (backdrop-blur) each create a
 // stacking context, so a card dragged from inside its column would paint behind the neighbouring
 // column no matter its z-index; the portal takes the moving card out of the columns altogether.
-const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd }) => {
+const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd, saving = false }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
     const isFocusTask = isActiveFocusTask(task);
     const focusTime = isFocusTask ? bogotaTimeOf(task.focusDeadlineAt) : '';
@@ -1608,10 +1639,11 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                     {...dragHandleProps}
                     data-task-locked={lock ? 'true' : undefined}
                     data-task-shaking={shaking ? 'true' : undefined}
+                    aria-busy={saving || undefined}
                     className={cn("relative mb-3 group/card", priorityBadgeClass && "pt-6", lock ? "cursor-not-allowed opacity-60" : "cursor-pointer", shaking && "brain-shake")}
                     // A locked card reacts to the very first touch (click or drag start): first a shake, on a retry the popup.
                     onPointerDown={lock ? () => onLocked(task, lock) : undefined}
-                    onClick={() => { if (!lock) onClick(task); }}
+                    onClick={() => { if (!lock && !saving) onClick(task); }}
                     onAnimationEnd={shaking ? () => onShakeEnd(task) : undefined}
                     style={provided.draggableProps.style}
                 >
@@ -1666,8 +1698,13 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                         isReturned && !isHighlighted && "border-destructive/50"
                     )}>
                         <div className="flex flex-col gap-4 p-5">
+                            {saving && (
+                                <span role="status" className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Guardando…
+                                </span>
+                            )}
                             {/* Distintivos de estado (devuelta, cronómetro). Solo se dibuja la fila si hay alguno. */}
-                            {hasStatusChips && (
+                            {hasStatusChips && !saving && (
                                 <div className="flex min-w-0 flex-wrap items-center gap-1.5 pr-16">
                                     {isFocusTask && (
                                         <span
@@ -1705,7 +1742,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                             )}
 
                             {/* Acciones rápidas, ancladas a la esquina superior derecha de la tarjeta. */}
-                            <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                            {!saving && <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
                                 {lifecycleAction === 'reintegrate' ? (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onReopen(task); }}
@@ -1733,7 +1770,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-                            </div>
+                            </div>}
 
                             {/* Cliente y título, juntos y en ese orden (Rodny, 30 de septiembre de 2026): de quién es
                                 el trabajo antes que el trabajo. El cliente estaba abajo, apretado entre la categoría

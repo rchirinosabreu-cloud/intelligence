@@ -90,5 +90,5 @@ test('el cliente va encima del título y la tarjeta respira', () => {
   // encima del cliente y la tarjeta arrancaba descolgada.
   // Con colaboradores, «N trabajando» también es un distintivo (5 de octubre de 2026).
   assert.match(card, /const hasStatusChips = isFocusTask \|\| isReturned \|\| isRunning \|\| workingIds\.length > 0;/);
-  assert.match(card, /\{hasStatusChips && \(/, 'sin distintivos no se dibuja la fila');
+  assert.match(card, /\{hasStatusChips && !saving && \(/, 'sin distintivos o durante el movimiento provisional no se dibuja la fila');
 });

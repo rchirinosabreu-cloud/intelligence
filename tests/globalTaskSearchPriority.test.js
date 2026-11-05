@@ -22,7 +22,7 @@ test('completed history search is global and its card action stays icon-only', a
 test('management global search is evaluated before every board filter', async () => {
   const board = await read('src/components/modules/NativeTasks.jsx');
   const filterBlock = board.slice(
-    board.indexOf('const filteredTasks = useMemo'),
+    board.indexOf('const filteredServerTasks = useMemo'),
     board.indexOf('const columns =')
   );
 
