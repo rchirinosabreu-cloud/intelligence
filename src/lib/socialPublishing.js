@@ -166,7 +166,9 @@ export const facebookImagePlan = ({ mimeType, size = 0 }) => {
 export const META_REEL_MAX_BYTES = 300 * MB;
 export const META_STORY_VIDEO_MAX_BYTES = 100 * MB;
 export const CAROUSEL_MIN_ITEMS = 2;
-export const CAROUSEL_MAX_ITEMS = 10;
+// Lo que admite Instagram por secuencia, según su referencia (leída el 5 de noviembre de 2026; antes eran 10).
+export const CAROUSEL_MAX_ITEMS = 20;
+const CAROUSEL_TOO_LONG = `Un carrusel lleva como máximo ${CAROUSEL_MAX_ITEMS} archivos.`;
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
 const VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime']);
@@ -246,12 +248,12 @@ export const describeMetaMedia = ({ format, assets = [] }) => {
     kind = 'REELS';
   } else if (normalized === 'carrusel') {
     if (assets.length < CAROUSEL_MIN_ITEMS) return result('CAROUSEL', 'Un carrusel necesita al menos dos archivos.');
-    if (assets.length > CAROUSEL_MAX_ITEMS) return result('CAROUSEL', 'Un carrusel lleva como máximo 10 archivos.');
+    if (assets.length > CAROUSEL_MAX_ITEMS) return result('CAROUSEL', CAROUSEL_TOO_LONG);
     kind = 'CAROUSEL';
   } else if (assets.length === 1) {
     kind = isVideo(assets[0]) ? 'REELS' : 'IMAGE';
   } else {
-    if (assets.length > CAROUSEL_MAX_ITEMS) return result('CAROUSEL', 'Un carrusel lleva como máximo 10 archivos.');
+    if (assets.length > CAROUSEL_MAX_ITEMS) return result('CAROUSEL', CAROUSEL_TOO_LONG);
     kind = 'CAROUSEL';
   }
 

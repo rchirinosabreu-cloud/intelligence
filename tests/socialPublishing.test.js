@@ -57,7 +57,11 @@ test('each format maps to the Meta content type that Meta can actually publish',
   assert.equal(describeMetaMedia({ format: 'Carrusel', assets: [image, { ...image, id: 'a2' }] }).kind, 'CAROUSEL');
   assert.equal(describeMetaMedia({ format: 'Post', assets: [image, { ...image, id: 'a2' }] }).kind, 'CAROUSEL', 'several images in a post are a carousel');
   assert.match(describeMetaMedia({ format: 'Carrusel', assets: [image] }).problem, /al menos dos/i);
-  assert.match(describeMetaMedia({ format: 'Carrusel', assets: Array.from({ length: 11 }, (_, i) => ({ ...image, id: `a${i}` })) }).problem, /10/);
+  // Meta admite 20 elementos por secuencia (referencia leída el 5 de noviembre de 2026); el tope era 10.
+  const carousel = (length) => describeMetaMedia({ format: 'Carrusel', assets: Array.from({ length }, (_, i) => ({ ...image, id: `a${i}` })) });
+  assert.equal(carousel(19).problem, null, 'el carrusel de 19 fotos de Pablo Hoff se puede programar');
+  assert.equal(carousel(20).problem, null);
+  assert.match(carousel(21).problem, /20/);
   assert.match(describeMetaMedia({ format: 'Reel', assets: [image] }).problem, /video/i, 'a reel needs a video');
   assert.match(describeMetaMedia({ format: 'Historia', assets: [image, video] }).problem, /una sola/i, 'a story is one file');
   assert.match(describeMetaMedia({ format: 'Post', assets: [] }).problem, /pieza final/i);
