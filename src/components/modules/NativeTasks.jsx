@@ -38,7 +38,7 @@ import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenF
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
 import { compareTaskOrder } from '@/lib/taskOrder';
-import { applyConfirmedTaskMove } from '@/lib/taskMoveConfirmation';
+import { applyConfirmedTaskMove, projectTaskMove } from '@/lib/taskMoveConfirmation';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -215,6 +215,7 @@ const NativeTasks = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const [pendingTaskMove, setPendingTaskMove] = useState(null);
 
     const [filters, setFilters] = useState(() => readManagementFilters(window.sessionStorage, currentUser));
     const { responsibleFilter, dateFilter, clientFilter } = filters;
@@ -639,7 +640,7 @@ const NativeTasks = () => {
         return ['Todos', ...unique];
     }, [tasks, clientFilter]);
 
-    const filteredTasks = useMemo(() => {
+    const filteredServerTasks = useMemo(() => {
         let filtered = tasks.filter(task => {
             const normalizedSearch = searchQuery.trim().toLowerCase();
             if (normalizedSearch !== '') {
@@ -669,6 +670,13 @@ const NativeTasks = () => {
         return filtered;
     }, [tasks, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
+    // Se filtra con las fechas y el estado reales antes de proyectar la posición:
+    // una tarjeta camino a Realizado no necesita inventar completedAt para verse.
+    const filteredTasks = useMemo(
+        () => projectTaskMove(filteredServerTasks, pendingTaskMove, task => getColumnId(task.status)),
+        [filteredServerTasks, pendingTaskMove]
+    );
+
     // Brand board columns (21 September 2026): glass panels; the accent only marks the column, cards stay neutral.
     const columns = [
         { id: 'pendiente', title: 'Pendiente', accent: 'bg-brand-cyan', canCreate: true },
@@ -677,8 +685,9 @@ const NativeTasks = () => {
     ];
 
     const returnedTasks = useMemo(() => {
-        return tasks.filter(t => getColumnId(t.status) === 'devuelto');
-    }, [tasks]);
+        return projectTaskMove(tasks, pendingTaskMove, task => getColumnId(task.status))
+            .filter(task => (task.pendingColumnId ?? getColumnId(task.status)) === 'devuelto');
+    }, [tasks, pendingTaskMove]);
 
     // Compromiso con hora: managers are never locked; a person with an active commitment cannot open or move
     // their other tasks until it is done.
@@ -832,6 +841,7 @@ const NativeTasks = () => {
             reordered.splice(destination.index, 0, removed);
             savingTaskOrder.current = true;
             setSavingTaskId(taskId);
+            setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
             try {
                 const baseUrl = getApiBaseUrl();
                 const token = localStorage.getItem('authToken');
@@ -860,6 +870,7 @@ const NativeTasks = () => {
             } finally {
                 savingTaskOrder.current = false;
                 setSavingTaskId(null);
+                setPendingTaskMove(null);
             }
             return;
         }
@@ -873,6 +884,7 @@ const NativeTasks = () => {
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
         savingTaskOrder.current = true;
         setSavingTaskId(taskId);
+        setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -934,6 +946,7 @@ const NativeTasks = () => {
         } finally {
             savingTaskOrder.current = false;
             setSavingTaskId(null);
+            setPendingTaskMove(null);
         }
     };
 
@@ -1465,7 +1478,7 @@ const NativeTasks = () => {
                     </Dialog>
                     <div className="task-board-grid flex-1">
                         {columns.map((col) => {
-                            const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === col.id);
+                            const columnTasks = filteredTasks.filter(t => (t.pendingColumnId ?? getColumnId(t.status)) === col.id);
                             return (
                                 <div key={col.id} className="brain-glass flex min-w-0 flex-col p-3">
                                     <div className="flex items-center justify-between gap-2 px-1 pb-3">
@@ -1630,7 +1643,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                     className={cn("relative mb-3 group/card", priorityBadgeClass && "pt-6", lock ? "cursor-not-allowed opacity-60" : "cursor-pointer", shaking && "brain-shake")}
                     // A locked card reacts to the very first touch (click or drag start): first a shake, on a retry the popup.
                     onPointerDown={lock ? () => onLocked(task, lock) : undefined}
-                    onClick={() => { if (!lock) onClick(task); }}
+                    onClick={() => { if (!lock && !saving) onClick(task); }}
                     onAnimationEnd={shaking ? () => onShakeEnd(task) : undefined}
                     style={provided.draggableProps.style}
                 >
@@ -1691,7 +1704,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                 </span>
                             )}
                             {/* Distintivos de estado (devuelta, cronómetro). Solo se dibuja la fila si hay alguno. */}
-                            {hasStatusChips && (
+                            {hasStatusChips && !saving && (
                                 <div className="flex min-w-0 flex-wrap items-center gap-1.5 pr-16">
                                     {isFocusTask && (
                                         <span
@@ -1729,7 +1742,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                             )}
 
                             {/* Acciones rápidas, ancladas a la esquina superior derecha de la tarjeta. */}
-                            <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                            {!saving && <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
                                 {lifecycleAction === 'reintegrate' ? (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onReopen(task); }}
@@ -1757,7 +1770,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-                            </div>
+                            </div>}
 
                             {/* Cliente y título, juntos y en ese orden (Rodny, 30 de septiembre de 2026): de quién es
                                 el trabajo antes que el trabajo. El cliente estaba abajo, apretado entre la categoría

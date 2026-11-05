@@ -68,7 +68,7 @@ for (const [from, to, key, dark] of [
   ['PENDIENTE', 'EN_CURSO', 'ArrowRight', false],
   ['EN_CURSO', 'PENDIENTE', 'ArrowLeft', true],
   ['EN_CURSO', 'REALIZADA', 'ArrowRight', false],
-]) test(`${from} → ${to}: confirmation moves the card without waiting for the list`, { timeout: 60000 }, async () => {
+]) test(`${from} → ${to}: drop moves immediately while confirmation saves in the background`, { timeout: 60000 }, async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(8000);
   const pageErrors = [];
@@ -106,6 +106,16 @@ for (const [from, to, key, dark] of [
     await page.goto(`${preview.origin}/gestion?admin`, { waitUntil: 'commit' });
     await cardIn(from).waitFor({ timeout: 25000 });
     if (dark) await page.evaluate(() => document.documentElement.classList.add('dark'));
+    const cachedBefore = await page.evaluate(() => window.__moveQueryClient.getQueryData(['nativeTasks']));
+    await page.evaluate(() => {
+      window.__moveColumns = [];
+      const recordColumn = () => {
+        const column = document.querySelector('[data-rfd-draggable-id="move-test"]')?.closest('[data-rfd-droppable-id]')?.getAttribute('data-rfd-droppable-id');
+        if (column && window.__moveColumns.at(-1) !== column) window.__moveColumns.push(column);
+      };
+      recordColumn();
+      new MutationObserver(recordColumn).observe(document.getElementById('root'), { childList: true, subtree: true });
+    });
     await cardIn(from).focus();
     await page.keyboard.press('Space');
     await page.waitForTimeout(250);
@@ -113,10 +123,13 @@ for (const [from, to, key, dark] of [
     await page.waitForTimeout(250);
     await page.keyboard.press('Space');
     await within(patchSeen.promise, 'The drag did not send a PATCH');
-    assert.equal(await cardIn(from).count(), 1, 'no move is shown before the server confirms');
-    await cardIn(from).getByRole('status').filter({ hasText: 'Guardando' }).waitFor();
-    assert.equal(await cardIn(from).getAttribute('aria-busy'), 'true');
-    assert.equal(await cardIn(from).getAttribute('data-rfd-drag-handle-draggable-id'), null, 'a pending save disables another gesture');
+    await cardIn(to).waitFor({ timeout: 1000 });
+    assert.equal(await cardIn(from).count(), 0, 'the dropped card is already in its destination before the PATCH confirms');
+    await cardIn(to).getByRole('status').filter({ hasText: 'Guardando' }).waitFor();
+    assert.equal(await cardIn(to).getAttribute('aria-busy'), 'true');
+    assert.equal(await cardIn(to).getAttribute('data-rfd-drag-handle-draggable-id'), null, 'a pending save disables another gesture');
+    assert.deepEqual(await page.evaluate(() => window.__moveQueryClient.getQueryData(['nativeTasks'])), cachedBefore, 'pending presentation does not invent saved status, timestamps or clock values');
+    assert.equal(await page.locator('body > canvas').count(), 0, 'a pending move must not celebrate completion');
     await page.keyboard.press('Space'); await page.keyboard.press(key); await page.keyboard.press('Space');
     assert.equal(writes, 1, 'a repeated keyboard gesture while saving cannot duplicate the PATCH');
     await page.screenshot({ path: `output/task-move-synchronization/saving-${from}-${to}.png`, animations: 'disabled' });
@@ -128,6 +141,8 @@ for (const [from, to, key, dark] of [
     assert.notEqual(await cardIn(to).getAttribute('aria-busy'), 'true');
     assert.equal(writes, 1, 'one gesture is one write');
     assert.deepEqual(pageErrors, []);
+    assert.deepEqual(await page.evaluate(() => window.__moveColumns), [columnOf(from), columnOf(to)], 'the card never bounces back through its original column during confirmation');
+    if (to === 'REALIZADA') await page.locator('body > canvas').waitFor({ timeout: 2000 });
     await page.screenshot({ path: `output/task-move-synchronization/${from}-${to}.png`, animations: 'disabled' });
   } catch (error) {
     await page.screenshot({ path: `output/task-move-synchronization/failure-${from}-${to}.png` });
@@ -147,19 +162,21 @@ const makeTask = (status = 'PENDIENTE') => {
     creator: recognitionDemoUser, creatorId: recognitionDemoUser.id, assignee: recognitionDemoMember, assigneeId: recognitionDemoMember.id,
     collaborators: [], taskComments: [], taskAttachments: [] };
 };
-async function openBoard({ initial = makeTask(), read, patch, dark = false }) {
+async function openBoard({ initial = makeTask(), additionalTasks = [], read, patch, reorder, dark = false }) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(8000);
   const events = { reads: 0, writes: 0, errors: [] };
+  const initialRows = [initial, ...additionalTasks];
   page.on('pageerror', error => events.errors.push(error.message));
   await page.route('**/api/tasks**', async route => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === '/api/tasks') {
       const number = ++events.reads;
-      if (number === 1) return route.fulfill({ json: [initial] });
-      return read ? read(route, number, page) : route.fulfill({ json: [initial] });
+      if (number === 1) return route.fulfill({ json: initialRows });
+      return read ? read(route, number, page) : route.fulfill({ json: initialRows });
     }
     if (pathname === '/api/tasks/move-test' && route.request().method() === 'PATCH') return patch(route, ++events.writes, page);
+    if (pathname === '/api/tasks/reorder' && route.request().method() === 'POST' && reorder) return reorder(route, ++events.writes, page);
     return route.continue();
   });
   await page.goto(`${preview.origin}/gestion?admin`, { waitUntil: 'commit' });
@@ -198,20 +215,32 @@ test('a successful PATCH remains visible when the following GET fails', { timeou
   } finally { await board.page.close(); }
 });
 
-test('a rejected PATCH keeps the saved column and displays the server error', { timeout: 30000 }, async () => {
-  const board = await openBoard({ dark: true, patch: route => route.fulfill({ status: 403, json: { error: 'Movimiento rechazado en esta prueba.' } }) });
+for (const [from, to] of [['PENDIENTE', 'EN_CURSO'], ['EN_CURSO', 'REALIZADA']]) test(`${from} → ${to}: a rejected PATCH restores the original column and displays the server error`, { timeout: 30000 }, async () => {
+  const allowReject = deferred(), patchSeen = deferred();
+  const board = await openBoard({ initial: makeTask(from), dark: true, patch: async route => {
+    patchSeen.resolve();
+    await allowReject.promise;
+    return route.fulfill({ status: 403, json: { error: 'Movimiento rechazado en esta prueba.' } });
+  } });
   try {
-    await drag(board, 'PENDIENTE', 'EN_CURSO');
+    await drag(board, from, to);
+    await within(patchSeen.promise, 'The drag did not send a PATCH');
+    await board.card(to).waitFor({ timeout: 1000 });
+    await board.card(to).getByRole('status').filter({ hasText: 'Guardando' }).waitFor();
+    assert.equal(await board.card(from).count(), 0, 'the move is visible while the rejected response is still pending');
+    assert.equal(await board.page.locator('body > canvas').count(), 0, 'no success is celebrated before the server responds');
+    allowReject.resolve();
     const errorNotice = board.page.locator('[data-toast-type="error"]').filter({ hasText: 'Movimiento rechazado en esta prueba.' });
     await errorNotice.waitFor();
     assert.match(await errorNotice.innerText(), /Movimiento rechazado en esta prueba\./);
-    assert.equal(await board.card('PENDIENTE').count(), 1);
-    assert.equal(await board.card('EN_CURSO').count(), 0);
+    assert.equal(await board.card(from).count(), 1);
+    assert.equal(await board.card(to).count(), 0);
     assert.equal(board.events.writes, 1);
-    assert.notEqual(await board.card('PENDIENTE').getAttribute('aria-busy'), 'true');
+    assert.notEqual(await board.card(from).getAttribute('aria-busy'), 'true');
+    assert.equal(await board.page.locator('body > canvas').count(), 0, 'a rejected completion is never celebrated');
     assert.deepEqual(board.events.errors, []);
-    await board.page.screenshot({ path: 'output/task-move-synchronization/rejected-dark.png', animations: 'disabled' });
-  } finally { await board.page.close(); }
+    await board.page.screenshot({ path: `output/task-move-synchronization/rejected-${from}-${to}-dark.png`, animations: 'disabled' });
+  } finally { allowReject.resolve(); await board.page.close(); }
 });
 
 test('an old polling response is cancelled before the saved move updates the board', { timeout: 30000 }, async () => {
@@ -241,6 +270,46 @@ test('an old polling response is cancelled before the saved move updates the boa
   } finally { releaseStale.resolve(); await board.page.close(); }
 });
 
+test('a polling result arriving during the PATCH does not undo the pending visual move', { timeout: 30000 }, async () => {
+  const initial = makeTask(), staleStarted = deferred(), releaseStale = deferred(), staleFinished = deferred();
+  const allowSave = deferred(), patchSeen = deferred();
+  const saved = { ...initial, status: 'EN_CURSO', startedAt: new Date().toISOString(), sortOrder: 5 };
+  const board = await openBoard({ initial, patch: async route => {
+    patchSeen.resolve();
+    await allowSave.promise;
+    return route.fulfill({ json: saved });
+  }, read: async (route, number) => {
+    if (number === 2) {
+      staleStarted.resolve();
+      await releaseStale.promise;
+      await route.fulfill({ json: [initial] }).catch(() => {});
+      staleFinished.resolve();
+      return;
+    }
+    return route.fulfill({ json: [saved] });
+  } });
+  try {
+    await board.page.evaluate(() => { void window.__moveQueryClient.refetchQueries({ queryKey: ['nativeTasks'], exact: true }); });
+    await within(staleStarted.promise, 'The polling request did not start');
+    await drag(board, 'PENDIENTE', 'EN_CURSO');
+    await within(patchSeen.promise, 'The drag did not send a PATCH');
+    await board.card('EN_CURSO').waitFor({ timeout: 1000 });
+    releaseStale.resolve();
+    await within(staleFinished.promise, 'The polling request did not finish');
+    await board.page.waitForTimeout(150);
+    assert.equal(await board.card('PENDIENTE').count(), 0);
+    assert.equal(await board.card('EN_CURSO').count(), 1);
+    assert.equal(await board.card('EN_CURSO').getAttribute('aria-busy'), 'true');
+    const response = board.page.waitForResponse(request => request.url().endsWith('/api/tasks/move-test') && request.request().method() === 'PATCH');
+    allowSave.resolve();
+    await response;
+    await board.card('EN_CURSO').getByRole('status').filter({ hasText: 'Guardando' }).waitFor({ state: 'hidden' });
+    assert.equal(await board.card('PENDIENTE').count(), 0);
+    assert.equal(await board.card('EN_CURSO').count(), 1);
+    assert.deepEqual(board.events.errors, []);
+  } finally { releaseStale.resolve(); allowSave.resolve(); await board.page.close(); }
+});
+
 test('a second confirmed move is accepted while the first reconciliation GET is still pending', { timeout: 30000 }, async () => {
   const releaseReads = deferred(), firstRead = deferred(), secondPatch = deferred();
   let current = makeTask();
@@ -261,4 +330,70 @@ test('a second confirmed move is accepted while the first reconciliation GET is 
     assert.equal(await board.card('EN_CURSO').count(), 0);
     assert.deepEqual(board.events.errors, []);
   } finally { releaseReads.resolve(); await board.page.close(); }
+});
+
+test('rejecting the visual move preserves an unrelated task updated during the save', { timeout: 30000 }, async () => {
+  const initial = makeTask(), other = { ...makeTask(), id: 'other-task', title: 'Preparar materiales', sortOrder: 1 };
+  const updatedOther = { ...other, title: 'Materiales actualizados por otra persona' };
+  const allowReject = deferred(), patchSeen = deferred();
+  const board = await openBoard({ initial, additionalTasks: [other],
+    patch: async route => { patchSeen.resolve(); await allowReject.promise; return route.fulfill({ status: 403, json: { error: 'Movimiento rechazado en esta prueba.' } }); },
+    read: route => route.fulfill({ json: [initial, updatedOther] }),
+  });
+  try {
+    await drag(board, 'PENDIENTE', 'EN_CURSO');
+    await within(patchSeen.promise, 'The drag did not send a PATCH');
+    await board.card('EN_CURSO').waitFor({ timeout: 1000 });
+    await board.page.evaluate(() => window.__moveQueryClient.refetchQueries({ queryKey: ['nativeTasks'], exact: true }));
+    await board.page.getByText(updatedOther.title, { exact: true }).waitFor();
+    assert.equal(await board.card('EN_CURSO').getAttribute('aria-busy'), 'true');
+    allowReject.resolve();
+    await board.page.locator('[data-toast-type="error"]').filter({ hasText: 'Movimiento rechazado en esta prueba.' }).waitFor();
+    await board.card('PENDIENTE').waitFor();
+    assert.equal(await board.card('EN_CURSO').count(), 0);
+    assert.equal(await board.page.getByText(updatedOther.title, { exact: true }).count(), 1, 'rollback must not restore an old snapshot over another person\'s update');
+    assert.equal(await board.page.getByText(other.title, { exact: true }).count(), 0);
+    assert.deepEqual(board.events.errors, []);
+  } finally { allowReject.resolve(); await board.page.close(); }
+});
+
+for (const rejected of [false, true]) test(`same-column reorder is immediate and ${rejected ? 'rolls back when rejected' : 'remains after confirmation'}`, { timeout: 30000 }, async () => {
+  const initial = makeTask(), other = { ...makeTask(), id: 'other-task', title: 'Revisar materiales', sortOrder: 1 };
+  const allowResponse = deferred(), reorderSeen = deferred();
+  const savedOrder = [{ id: other.id, sortOrder: 0 }, { id: initial.id, sortOrder: 1 }];
+  let confirmed = false;
+  const board = await openBoard({ initial, additionalTasks: [other], dark: rejected,
+    reorder: async route => {
+      const payload = route.request().postDataJSON();
+      assert.deepEqual(payload.previousIds, [initial.id, other.id]);
+      assert.deepEqual(payload.reorderList, savedOrder);
+      reorderSeen.resolve();
+      await allowResponse.promise;
+      confirmed = !rejected;
+      return route.fulfill(rejected ? { status: 403, json: { error: 'No se pudo guardar esta prioridad.' } } : { json: { order: savedOrder } });
+    },
+    read: route => route.fulfill({ json: confirmed ? [{ ...initial, sortOrder: 1 }, { ...other, sortOrder: 0 }] : [initial, other] }),
+  });
+  const cards = board.page.locator('[data-rfd-droppable-id="pendiente"] [data-rfd-draggable-id]');
+  const order = () => cards.evaluateAll(elements => elements.map(element => element.getAttribute('data-rfd-draggable-id')));
+  try {
+    const cachedBefore = await board.page.evaluate(() => window.__moveQueryClient.getQueryData(['nativeTasks']));
+    await board.card('PENDIENTE').focus();
+    await board.page.keyboard.press('Space');
+    await board.page.waitForTimeout(150);
+    await board.page.keyboard.press('ArrowDown');
+    await board.page.waitForTimeout(150);
+    await board.page.keyboard.press('Space');
+    await within(reorderSeen.promise, 'The drag did not send a reorder');
+    await board.card('PENDIENTE').getByRole('status').filter({ hasText: 'Guardando' }).waitFor();
+    assert.deepEqual(await order(), [other.id, initial.id], 'the destination priority is visible while saving');
+    assert.deepEqual(await board.page.evaluate(() => window.__moveQueryClient.getQueryData(['nativeTasks'])), cachedBefore, 'unconfirmed priority does not mutate saved order');
+    allowResponse.resolve();
+    await board.card('PENDIENTE').getByRole('status').filter({ hasText: 'Guardando' }).waitFor({ state: 'hidden' });
+    assert.deepEqual(await order(), rejected ? [initial.id, other.id] : [other.id, initial.id]);
+    if (rejected) await board.page.locator('[data-toast-type="error"]').filter({ hasText: 'No se pudo guardar esta prioridad.' }).waitFor();
+    assert.equal(board.events.writes, 1);
+    assert.deepEqual(board.events.errors, []);
+    await board.page.screenshot({ path: `output/task-move-synchronization/reorder-${rejected ? 'rejected-dark' : 'confirmed-light'}.png`, animations: 'disabled' });
+  } finally { allowResponse.resolve(); await board.page.close(); }
 });
