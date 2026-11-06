@@ -1203,7 +1203,10 @@ const ContentPlanDetail = () => {
           queryClient.invalidateQueries({ queryKey: [key] });
         }
         const target = item.periodTransfer.toPlan;
-        toast.success(`Pieza trasladada a ${getContentPlanMonthName(target.month)} de ${target.year}${item.periodTransfer.destinationCreated ? '. Parrilla creada.' : '.'}`);
+        toast.success(
+          `Pieza trasladada a ${getContentPlanMonthName(target.month)} de ${target.year}. ${item.periodTransfer.destinationCreated ? 'Se creó una nueva parrilla para este período.' : 'Se utilizó la parrilla existente de este período.'}`,
+          { duration: 8000, style: { whiteSpace: 'normal' } }
+        );
         const search = new URLSearchParams(location.search);
         search.set('item', item.id); search.delete('itemId');
         navigate(`/parrillas/${target.id}?${search}`, { replace: true, state: location.state });

@@ -25,7 +25,7 @@ const KINDS = {
 };
 
 const BrainToast = ({ toast }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(toast.style?.whiteSpace === 'normal');
   const kind = KINDS[toast.type] || KINDS.blank;
   const message = resolveValue(toast.message, toast);
   const text = typeof message === 'string' || typeof message === 'number' ? cleanToastText(message) : null;
