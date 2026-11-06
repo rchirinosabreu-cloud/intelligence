@@ -225,6 +225,18 @@ test('la banda lleva a la pauta y un error del servidor se dice sin cerrar el fo
   await page.close();
 });
 
+test('la pauta se ve en la página del cliente', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  await page.goto(`${BASE}/cliente`, { timeout: 90000, waitUntil: 'domcontentloaded' });
+  const block = page.locator('[data-client-ad-budgets]');
+  await block.waitFor({ timeout: 60000 });
+  assert.match(await block.innerText(), /Wine & Wonder/);
+  assert.match(await block.innerText(), /cierra el 30 nov/);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/10-cliente.png` });
+  await page.close();
+});
+
 test('se ve bien en oscuro y en celular', async () => {
   const dark = await open('?dark');
   await dark.page.waitForTimeout(300);

@@ -10,8 +10,8 @@ import { useAdBudgets } from './adBudgetsApi';
 // La pauta en la página del cliente (reunión del 6 de noviembre de 2026: «en los entregables del cliente tiene que estar la
 // parte de pauta»). Solo la ve quien entra a Pautas, y solo si el cliente tiene alguna: un cliente sin pauta no dibuja nada.
 export default function ClientAdBudgets({ clientId }) {
-  const { user } = useAuth();
-  const allowed = hasModuleAccess(user, 'pautas');
+  const { currentUser } = useAuth();
+  const allowed = hasModuleAccess(currentUser, 'pautas');
   const { data } = useAdBudgets({ clientId, enabled: allowed && Boolean(clientId) });
   const budgets = data?.budgets || [];
   if (!allowed || !budgets.length) return null;
