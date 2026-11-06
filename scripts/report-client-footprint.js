@@ -44,6 +44,8 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'Integration', label: 'integraciones', recent: null },
   { table: 'ClientSocialAccount', label: 'redes conectadas', recent: 'connectedAt' },
   { table: 'ClientAdAccount', label: 'cuentas publicitarias vinculadas', recent: 'createdAt' },
+  { table: 'AdBudget', label: 'pautas', recent: 'updatedAt' },
+  { table: 'AdBudgetEvent', label: 'correcciones de pautas', recent: 'createdAt' },
   { table: 'AgencyIntegration', label: 'integraciones v2', recent: null },
   { table: 'AiGovernanceRisk', label: 'riesgos de IA', recent: 'updatedAt' },
   { table: 'AiGovernanceAuthorization', label: 'autorizaciones de IA', recent: 'updatedAt' },

@@ -92,6 +92,9 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   const isPlan = String(notice.kind || '').startsWith('PARRILLA_');
   const isOperational = String(notice.kind || '').startsWith('OPERACION_');
   const openLabel = notice.kind === 'PARRILLA_RESUMEN' ? 'Abrir Operación' : 'Abrir la parrilla';
+  // Pauta (6 de noviembre de 2026): igual que la parrilla, el aviso no se decide aquí. Se abre la pauta, se actualiza el
+  // gasto o se apaga la campaña, y el aviso se cae solo.
+  const isAd = String(notice.kind || '').startsWith('PAUTA_');
 
   // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
   // pestaña visible: una pestaña de fondo no le muestra nada a nadie. El servidor lo anota una vez por aparición.
@@ -170,6 +173,10 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
                   <NoticeButton primary disabled={busy} data-notice-action="open-plan" onClick={() => navigate(notice.url || '/clientes')}>
                     {openLabel}
                   </NoticeButton>
+                ) : isAd ? (
+                  <NoticeButton primary disabled={busy} data-notice-action="open-ad-budget" onClick={() => navigateFrom(notice.url || '/pautas')}>
+                    {notice.kind === 'PAUTA_RESUMEN' ? 'Abrir Pautas' : 'Abrir la pauta'}
+                  </NoticeButton>
                 ) : (
                   <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => openOptions('channels', 'follow-up')}>
                     {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
@@ -187,7 +194,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
                     No sigue
                   </NoticeButton>
                 )}
-                {!isReview && !isCollection && !isPlan && !isOperational && notice.url && (
+                {!isReview && !isCollection && !isPlan && !isOperational && !isAd && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
                 )}
                 {isCrm && (

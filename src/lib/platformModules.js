@@ -22,6 +22,8 @@ export const PLATFORM_MODULES = Object.freeze([
     { key: 'reportes', label: 'Reportes', path: '/reportes', roles: EVERYONE },
     { key: 'inspiracion', label: 'Inspiración', path: '/moodboard', roles: EVERYONE },
     { key: 'parrillas', label: 'Parrillas', path: '/parrillas', roles: EVERYONE },
+    // Quien tenía Manager (dirección y project managers) entra sin tocar la base; a quien lleva la pauta se le marca en Equipo.
+    { key: 'pautas', label: 'Pautas', path: '/pautas', roles: MANAGERS, inheritsFrom: 'manager' },
     { key: 'minutas', label: 'Minutas', path: '/minutas', roles: EVERYONE },
     { key: 'drive', label: 'Drive', path: '/drive', roles: EVERYONE, inheritsFrom: 'minutas' },
     { key: 'crm', label: 'CRM', path: '/crm', roles: MANAGERS },

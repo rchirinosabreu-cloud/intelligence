@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Wallet, Target, ShieldCheck, Sun, Moon } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Wallet, Target, ShieldCheck, Sun, Moon, Megaphone } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { hasModuleAccess } from '@/lib/platformModules';
 import { motion } from 'framer-motion';
@@ -30,6 +30,7 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes', moduleKey: 'reportes' },
     { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard', moduleKey: 'inspiracion' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas', moduleKey: 'parrillas' },
+    { id: 'ad-budgets', label: 'Pautas', icon: Megaphone, path: '/pautas', moduleKey: 'pautas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas', moduleKey: 'minutas' },
     { id: 'drive', label: 'Drive', icon: FolderOpen, path: '/drive', moduleKey: 'drive' },
     { id: 'crm', label: 'CRM', icon: Target, path: '/crm', moduleKey: 'crm' },
