@@ -27,7 +27,7 @@ test('PostgreSQL: gestiones de cobro idempotentes y alcance transaccional', { sk
     const ddl = execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'], {
         encoding: 'utf8', env: { ...process.env, DATABASE_URL: scopedUrl.href }, stdio: ['ignore', 'pipe', 'pipe']
     });
-    const tables = new Set(['User', 'Client', 'ClientContract', 'AccountsReceivable', 'ReceivablePayment', 'ImportantNotice', 'CollectionActivity', 'CollectionSetting', 'OperationalTraceEvent']);
+    const tables = new Set(['User', 'TeamMember', 'Client', 'ClientContract', 'AccountsReceivable', 'ReceivablePayment', 'ImportantNotice', 'CollectionActivity', 'CollectionSetting', 'OperationalTraceEvent']);
     for (const [statement] of ddl.matchAll(/CREATE TYPE "[^"]+" AS ENUM \([\s\S]*?\);/g)) await connection.query(statement);
     for (const [statement, name] of ddl.matchAll(/CREATE TABLE "([^"]+)" \([\s\S]*?\n\);/g)) if (tables.has(name)) await connection.query(statement);
     for (const [statement, table] of ddl.matchAll(/CREATE (?:UNIQUE )?INDEX "[^"]+" ON "([^"]+)"[^;]+;/g)) if (tables.has(table)) await connection.query(statement);
@@ -35,6 +35,7 @@ test('PostgreSQL: gestiones de cobro idempotentes y alcance transaccional', { sk
 
     const now = new Date('2026-11-04T15:00:00Z');
     const user = await db.user.create({ data: { name: 'Administración prueba', email: `${randomUUID()}@example.invalid`, password: 'local-only-fixture', role: 'ADMIN' } });
+    await db.teamMember.create({ data: { name: user.name, role: 'Coordinadora Administrativa y Contable', areas: ['ADMINISTRATIVA'], userId: user.id, isActive: true } });
     const actor = { userId: user.id, name: user.name, role: 'ADMIN' };
     const client = await db.client.create({ data: { name: 'Cliente de prueba', slug: randomUUID() } });
     const other = await db.client.create({ data: { name: 'Otro cliente', slug: randomUUID() } });

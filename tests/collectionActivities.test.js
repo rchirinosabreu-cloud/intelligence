@@ -89,6 +89,7 @@ const bandDb = (notice) => {
             update: async ({ data }) => Object.assign(notice, data)
         },
         notification: { updateMany: async () => ({ count: 0 }) },
+        user: { findUnique: async ({ where }) => where.id === 'u-elisa' ? { role: 'ADMIN', modulePermissions: [], isActive: true, teamMember: { isActive: true } } : null },
         teamMember: { findFirst: async () => ({ role: 'Coordinadora Administrativa y Contable', areas: [] }) },
         collectionSetting: { findUnique: async () => null }
     });
