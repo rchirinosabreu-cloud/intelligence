@@ -19,7 +19,7 @@ test('el formulario recuerda la cotización que creó y no guarda dos veces a la
     const form = fs.readFileSync(new URL('../src/components/modules/Quotations/QuotationForm.jsx', import.meta.url), 'utf8');
     assert.match(form, /quotationSaveTarget\(id, savedQuotationId\)/);
     assert.match(form, /localDraft\.commit\([\s\S]*?savedQuotationId: savedQuotationId \|\| data\.id/, 'tras crear, conserva el identificador confirmado');
-    assert.match(form, /navigate\(`\/cotizaciones\/editar\/\$\{data\.id\}`, \{ replace: true \}\)/, 'una recarga vuelve a la cotización guardada');
+    assert.match(form, /navigate\(`\/cotizaciones\/editar\/\$\{data\.id\}`, \{ replace: true, state: location\.state \}\)/, 'una recarga vuelve a la cotización guardada y conserva el origen');
     assert.match(form, /savingRef\.current/, 'dos toques rápidos no mandan dos guardados');
     assert.doesNotMatch(form, /const method = isEditing \? 'PUT' : 'POST'/);
 });

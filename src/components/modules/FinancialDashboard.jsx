@@ -25,7 +25,9 @@ import {
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
+import { useFinancialNavigation } from '@/hooks/useFinancialNavigation';
+import { usePageLabel } from '@/components/layout/BackToOrigin';
 import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
@@ -141,13 +143,15 @@ const FinancialDashboard = () => {
     const queryClient = useQueryClient();
 
     // 1. React Hook Declarations (Inconditional - at the absolute top)
-    const [selectedYear, setSelectedYear] = useState(2026);
-    const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '', category: '', q: '' });
-    const [search, setSearch] = useState('');
+    const { selectedYear, setSelectedYear, filters, setFilters, activeTab, setActiveTab, linkedMonth } = useFinancialNavigation();
+    const [search, setSearch] = useState(filters.q);
+    usePageLabel(`Financiero · ${visibleFinancialTabs({ isAdmin: true, canFormalize: true }).flatMap(group => group.views).find(view => view.key === activeTab)?.label || 'Movimientos'}`);
+    useEffect(() => { setSearch(filters.q); }, [filters.q]);
     useEffect(() => {
+        if (search.trim() === filters.q) return undefined;
         const timer = setTimeout(() => setFilters(current => ({ ...current, q: search.trim() })), 250);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, filters.q, setFilters]);
     const searchPending = search.trim() !== filters.q;
     // Cartera y nómina no se clasifican por categoría: pasarles el filtro no los
     // cambiaría y haría creer que sí. Solo lo reciben los indicadores, las gráficas
@@ -160,16 +164,7 @@ const FinancialDashboard = () => {
     const dashboardQuery = useMemo(() => (
         filters.category ? `${filterQuery}&category=${encodeURIComponent(filters.category)}` : filterQuery
     ), [filterQuery, filters.category]);
-    // Financiero abre en Movimientos (Rodny, 23 de septiembre de 2026): el trabajo
-    // diario es el libro, no las gráficas.
-    // `?tab=rentabilidad&year=&month=` (23 de octubre de 2026): la revisión de cierre de mes de Bria abre aquí, en ese mes.
-    const location = useLocation();
-    const linkParams = new URLSearchParams(location.search);
-    const linkedMonth = linkParams.get('tab') === 'rentabilidad' && /^\d{4}$/.test(linkParams.get('year') || '') && /^\d{1,2}$/.test(linkParams.get('month') || '')
-        ? `${linkParams.get('year')}-${String(linkParams.get('month')).padStart(2, '0')}-01` : '';
-    // `?tab=cartera` (28 de octubre de 2026): los avisos de cartera vencida abren Cuentas por cobrar.
-    // `?tab=formalizacion` (29 de octubre de 2026): la solicitud de formalización abre su vista.
-    const [activeTab, setActiveTab] = useState(() => ({ rentabilidad: 'profitability', cartera: 'receivables', formalizacion: 'formalizations' }[linkParams.get('tab')] || 'records'));
+    // Pestaña y período viven en la URL, también al abrir otro enlace con Financiero ya montado.
     const [expandedClients, setExpandedClients] = useState({});
     // Filtros de Cuentas por cobrar (23 de octubre de 2026): a quién se le cobra y cuánto lleva esperando.
     const [receivableKind, setReceivableKind] = useState(null);
@@ -1729,7 +1724,7 @@ await invalidateFinancialQueries(queryClient);
                 )}
 
                 {activeTab === 'profitability' && isAdminUser && (
-                    <ProfitabilityTab enabled={!!currentUser} initialMonth={linkedMonth} />
+                    <ProfitabilityTab key={linkedMonth} enabled={!!currentUser} initialMonth={linkedMonth} />
                 )}
 
                 {activeTab === 'payables' && (

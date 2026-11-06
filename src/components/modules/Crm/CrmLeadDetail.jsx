@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigateFrom, useOriginState, usePageLabel } from '@/components/layout/BackToOrigin';
 import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import Select from '@/components/ui/Select';
@@ -62,8 +63,11 @@ const StageControl = ({ lead, onChange, pending }) => (
 const CrmLeadDetail = () => {
   const { leadId } = useParams();
   const navigate = useNavigate();
+  const navigateFrom = useNavigateFrom();
+  const originState = useOriginState();
   const confirm = useConfirmDialog();
   const { data: lead, isLoading, error } = useCrmLead(leadId);
+  usePageLabel(lead ? `CRM · ${lead.code}` : null);
   const { data: team = [] } = useCrmTeam();
   const changeStage = useChangeStage();
   const setLight = useSetTrafficLight();
@@ -128,7 +132,7 @@ const CrmLeadDetail = () => {
         adjustments ? `${adjustments} ajuste(s) por el presupuesto del cliente` : null,
         result.ai?.failure ? 'armado sin IA, revisar con cuidado' : null
       ].filter(Boolean).join(' · '));
-      navigate(`/cotizaciones/editar/${result.quotation.id}`);
+      navigateFrom(`/cotizaciones/editar/${result.quotation.id}`);
     } catch (mutationError) {
       toast.error(mutationError.message);
     }
@@ -309,7 +313,7 @@ const CrmLeadDetail = () => {
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                 {lead.quotations.map(quotation => (
                   <li key={quotation.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <Link to={`/cotizaciones/editar/${quotation.id}`} className="font-semibold text-primary hover:underline">{quotation.code}</Link>
+                    <Link to={`/cotizaciones/editar/${quotation.id}`} state={originState()} className="font-semibold text-primary hover:underline">{quotation.code}</Link>
                     <span className={cn('text-xs', quotation.status === 'APROBADA' ? 'font-medium text-status-positive' : 'text-zinc-500')}>{quotationStatusLabel(quotation.status)}</span>
                     <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatCurrency(quotation.total, quotation.currency)}</span>
                   </li>

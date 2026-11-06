@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import { projectTaskParticipations, taskCardKey } from '../src/lib/taskParticipationBoard.js';
 
 // Rodny, 21 September 2026: the Gestión Kanban follows the brand board layout — ambient background,
 // glass columns with a count and a "+" button, cards with a priority tag, assignee row, date, snippet and footer.
@@ -8,6 +10,13 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync('src/components/modules/NativeTasks.jsx', 'utf8');
 const card = source.slice(source.indexOf('const TaskCard ='), source.indexOf('export default NativeTasks'));
 const board = source.slice(source.indexOf('<div className="task-board-grid'), source.indexOf('const TaskCard ='));
+const cardIdExpression = card.match(/id=\{(snapshot\.isClone[^\r\n]+)\}\s+data-task-id=/)?.[1];
+const gradientIdExpression = card.match(/<linearGradient id=\{([^\r\n]+)\} x1="0" y1="0" x2="0" y2="1">/)?.[1];
+const gradientFillExpression = card.match(/<path d=\{TASK_TAB_FILL_PATH\} fill=\{([^\r\n]+)\} \/>/)?.[1];
+const renderedIdentity = (expression, task, isClone = false) => {
+  assert.ok(expression, 'la expresión se lee de la superficie real de la tarjeta');
+  return runInNewContext(expression, { task, snapshot: { isClone } });
+};
 
 test('the board sits on the brand ambient and its columns are glass panels with a count and a create button', () => {
   assert.match(source, /<div className="brain-ambient space-y-6 h-full flex flex-col">/, 'the page carries the dashboard ambient');
@@ -27,7 +36,8 @@ test('the dragged card is drawn through a portal, so it never paints behind the 
   assert.match(board, /columnTasks\[rubric\.source\.index\]/, 'the clone shows the task being dragged from that column');
   assert.match(board, /<TaskCardSurface[\s\S]*?provided=\{provided\}[\s\S]*?snapshot=\{snapshot\}/, 'the clone is the same card surface as the in-column card');
   assert.match(card, /const TaskCardSurface = \(\{ task, provided, snapshot,/, 'the card surface takes the dnd props from outside so both the list and the clone can render it');
-  assert.match(card, /id=\{snapshot\.isClone \? undefined : `task-\$\{task\.id\}`\}/, 'the clone never duplicates the card DOM id (deep links scroll to the real card)');
+  assert.equal(renderedIdentity(cardIdExpression, { id: 'individual' }), 'task-individual', 'individual deep links keep the real card DOM id');
+  assert.equal(renderedIdentity(cardIdExpression, { id: 'individual' }, true), undefined, 'the clone never duplicates the card DOM id');
   assert.doesNotMatch(source, /getContainerForClone/, 'the default container (document.body) is enough: nothing there clips or restacks the card');
 });
 
@@ -38,7 +48,9 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.match(source, /const TASK_TAB_STROKE_PATH = 'M0\.5,28[^']*100,24'/, 'the outline is open at the bottom and ends tangent to the card top edge');
   assert.match(card, /<path d=\{TASK_TAB_FILL_PATH\} className="fill-white dark:fill-zinc-900" \/>/, 'the tab is filled with the very same surface as the card body (white, zinc-900 in dark mode): part of the card, never a black badge (Rodny, 21 September 2026)');
   assert.doesNotMatch(card, /hsl\(var\(--card\)\)/, 'the card token is near black in dark mode, so the tab never uses it');
-  assert.match(card, /<linearGradient id=\{`task-tab-\$\{task\.id\}`\} x1="0" y1="0" x2="0" y2="1">/, 'the tint runs top to bottom (Rodny, 21 September 2026)');
+  assert.ok(gradientIdExpression, 'the tint runs top to bottom: x1=0, y1=0, x2=0, y2=1');
+  assert.equal(renderedIdentity(gradientIdExpression, { id: 'individual' }), 'task-tab-individual');
+  assert.equal(renderedIdentity(gradientFillExpression, { id: 'individual' }), 'url(#task-tab-individual)', 'the tint uses its own gradient');
   assert.match(card, /stopOpacity="0\.18"[\s\S]*?offset="0\.85" stopColor="currentColor" stopOpacity="0"/, 'the priority tints the tab faintly and fades out completely before the card edge');
   assert.match(card, /stroke-zinc-200 dark:stroke-white\/10/, 'the tab outline is the same thin grey as the card border, so the outline reads as one shape');
   assert.match(card, /stroke-destructive\/50/, 'overdue and returned cards keep their red outline on the tab too');
@@ -65,6 +77,27 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.doesNotMatch(card, /indigo|violet|purple-|emerald|#009EB9/, 'no legacy hues or local hex on the card (priority colours are the historical red/orange/blue by decision of Rodny)');
   assert.match(card, /rounded-2xl border/, 'full soft border, rounded like the dashboard cards');
   assert.match(card, /sm:opacity-0 sm:group-hover\/card:opacity-100/, 'card actions appear on hover on desktop and stay visible on touch');
+});
+
+test('three participants share one Task ID and have distinct card, drag and priority-gradient identities', () => {
+  const cards = projectTaskParticipations([{ id: 'shared-task', sharedProgress: true,
+    participants: ['ana', 'bea', 'carlos'].map(memberId => ({ memberId, status: 'PENDIENTE' })) }]);
+  assert.deepEqual(cards.map(task => task.id), ['shared-task', 'shared-task', 'shared-task']);
+  assert.match(card, /draggableId=\{taskCardKey\(task\)\}/, 'drag identity follows the personal card');
+  assert.equal(new Set(cards.map(taskCardKey)).size, 3);
+  assert.match(card, /data-task-id=\{task\.id\}/, 'the canonical business ID is preserved');
+  assert.match(card, /data-task-member=\{task\.participation\?\.memberId\}/, 'the person is explicit on the card');
+  const cardIds = cards.map(task => renderedIdentity(cardIdExpression, task));
+  const gradientIds = cards.map(task => renderedIdentity(gradientIdExpression, task));
+  assert.deepEqual(cardIds, ['task-shared-task-ana', 'task-shared-task-bea', 'task-shared-task-carlos']);
+  assert.equal(new Set(gradientIds).size, 3, 'one participant cannot borrow another priority tint');
+  for (const [index, task] of cards.entries()) {
+    assert.equal(renderedIdentity(cardIdExpression, task, true), undefined, 'no clone duplicates its card ID');
+    assert.equal(renderedIdentity(gradientFillExpression, task), `url(#${gradientIds[index]})`);
+    assert.equal(renderedIdentity(gradientFillExpression, task, true), `url(#${renderedIdentity(gradientIdExpression, task, true)})`);
+    const duringDrag = gradientIds.map((id, other) => other === index ? renderedIdentity(gradientIdExpression, task, true) : id);
+    assert.equal(new Set(duringDrag).size, 3, 'the portal clone and the other participants retain distinct tint definitions');
+  }
 });
 
 test('el cliente va encima del título y la tarjeta respira', () => {

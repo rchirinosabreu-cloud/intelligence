@@ -1,8 +1,18 @@
 import prisma from '../lib/prisma.js';
+import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
+import { taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 
 export const RETURNED_TASK_THRESHOLD_MS = 60 * 60 * 1000;
 export const RETURNED_TASK_SNOOZE_MS = 60 * 60 * 1000;
 export const RETURNED_TASK_SNOOZE_EVENT = 'TASK_RETURNED_REMINDER_SNOOZED';
+
+const pendingReturn = task => {
+  if (!hasTaskParticipations(task)) return task;
+  const part = taskParticipations(task).filter(person => person.status === 'DEVUELTA' && person.returnedAt
+    && Number.isFinite(new Date(person.returnedAt).getTime()))
+    .sort((a, b) => new Date(a.returnedAt) - new Date(b.returnedAt))[0];
+  return part ? { ...task, returnedAt: part.returnedAt, participantMemberId: part.memberId } : null;
+};
 
 export function buildReturnedTaskAlerts(tasks, {
   creatorId,
@@ -15,6 +25,7 @@ export function buildReturnedTaskAlerts(tasks, {
   const nowMs = now.getTime();
 
   return tasks
+    .map(pendingReturn)
     .filter((task) => task?.creatorId === creatorId
       && String(task?.status || '').toUpperCase() === 'DEVUELTA'
       && task.returnedAt
@@ -26,6 +37,7 @@ export function buildReturnedTaskAlerts(tasks, {
         title: task.title,
         clientName: task.client?.name || task.clientName || 'Sin cliente',
         returnedAt: task.returnedAt,
+        ...(task.participantMemberId ? { participantMemberId: task.participantMemberId } : {}),
         elapsedMs: Number.isFinite(returnedAtMs) ? Math.max(0, nowMs - returnedAtMs) : 0,
       };
     })
@@ -41,7 +53,11 @@ export async function getMyReturnedTaskAlerts(userId, now = new Date(), db = pri
     where: {
       creatorId: userId,
       status: 'DEVUELTA',
-      returnedAt: { lte: thresholdDate },
+      OR: [
+        { returnedAt: { lte: thresholdDate } },
+        { assigneeStatus: 'DEVUELTA', assigneeReturnedAt: { lte: thresholdDate } },
+        { collaborators: { some: { status: 'DEVUELTA', returnedAt: { lte: thresholdDate } } } }
+      ],
     },
     select: {
       id: true,
@@ -49,6 +65,8 @@ export async function getMyReturnedTaskAlerts(userId, now = new Date(), db = pri
       status: true,
       creatorId: true,
       returnedAt: true,
+      assigneeId: true,
+      ...taskParticipationSelect,
       client: { select: { name: true } },
     },
     orderBy: { returnedAt: 'asc' },

@@ -17,11 +17,13 @@ import { hasModulePermission } from '../config/security.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
+import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
+import { completedTaskParticipationViews, completedTaskParticipationWhere, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 
 export const LEAGUE_COMPUTE_MINUTES = 18 * 60 + 5;
 export const LEAGUE_CHECK_MS = 10 * 60 * 1000;
 /** Una huella humana en la traza operativa: lo que deja una persona al usar la plataforma (nunca un reloj ni una réplica). */
-export const PRESENCE_EVENTS = ['SESSION_STARTED', 'TASK_OPENED', 'TASK_LIST_SYNCED', 'TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'NOTIFICATION_READ', 'PLATFORM_MUTATION'];
+export const PRESENCE_EVENTS = ['SESSION_STARTED', 'TASK_OPENED', 'TASK_LIST_SYNCED', 'TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_PARTICIPATION_CHANGED', 'NOTIFICATION_READ', 'PLATFORM_MUTATION'];
 
 const KUDOS_NOTE_MAX = 120;
 const DAY_MS = 86_400_000;
@@ -72,9 +74,15 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const memberOfUser = new Map(members.map((member) => [member.user.id, member]));
       const open = openWindowOf(dayKey);
       const [closed, daySessions, returned, snapshot, firstTrace, created] = await Promise.all([
-        db.task.findMany({ where: { status: 'REALIZADA', completedAt: { gte: start, lt: end } }, select: { id: true, title: true, assigneeId: true, completedAt: true, dueDate: true } }),
+        db.task.findMany({ where: completedTaskParticipationWhere({ gte: start, lt: end }), select: {
+          id: true, title: true, status: true, assigneeId: true, completedAt: true, dueDate: true, ...taskParticipationSelect
+        } }),
         db.taskWorkSession.findMany({ where: { OR: [{ endedAt: { gte: start, lt: end } }, { endedAt: null, startedAt: { gte: startedAt, lt: end } }] }, select: { workerId: true, durationMs: true, isOverlapping: true, correctedAt: true, closeReason: true, startedAt: true, endedAt: true } }),
-        db.task.findMany({ where: { returnedAt: { gte: start, lt: end } }, select: { assigneeId: true } }),
+        db.task.findMany({ where: { OR: [
+          { returnedAt: { gte: start, lt: end } },
+          { assigneeReturnedAt: { gte: start, lt: end } },
+          { collaborators: { some: { returnedAt: { gte: start, lt: end } } } }
+        ] }, select: { id: true, status: true, assigneeId: true, returnedAt: true, ...taskParticipationSelect } }),
         startedAt > new Date(`${dayKey}T11:00:00Z`) ? null : snaps.snapshot(dayKey).catch((error) => { logger.error('[Liga] Sin la foto de las 6:00:', error?.message || error); return null; }),
         // Primero en abrir: la primera huella humana en la traza operativa desde las 8:00 de Bogotá. Sin lectura, nada se asume.
         db.operationalTraceEvent.findFirst({ where: { occurredAt: { gte: open.start, lt: open.end }, actorId: { in: [...memberOfUser.keys()] }, eventType: { in: PRESENCE_EVENTS } }, orderBy: { occurredAt: 'asc' }, select: { actorId: true, occurredAt: true } })
@@ -90,7 +98,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const closedIds = closed.map((task) => task.id);
       const [states, taskSessions] = closedIds.length ? await Promise.all([
         db.recognitionTaskState.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, originalDueDate: true } }),
-        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds }, isCollaborator: false }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } })
+        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } })
       ]) : [[], []];
       const originalDue = new Map(states.map((row) => [row.taskId, row.originalDueDate]));
       const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, snapshotOverdueCount(person.metrics, dayKey)]));
@@ -101,7 +109,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const bucket = byMember.get(memberOfUser.get(task.creatorId)?.id);
         if (bucket) bucket.createdTasks.push({ id: task.id, documented: Boolean(String(task.comments || '').trim()) || task.taskComments.some(comment => String(comment.content || '').trim()) || task.taskAttachments.length > 0 });
       }
-      for (const task of closed) {
+      const occurredToday = value => value && new Date(value) >= start && new Date(value) < end;
+      for (const task of closed.flatMap(completedTaskParticipationViews).filter(task => occurredToday(task.completedAt))) {
         const bucket = byMember.get(task.assigneeId);
         if (!bucket) continue;
         const mine = taskSessions.filter((session) => session.taskId === task.id && session.workerId === task.assigneeId);
@@ -115,7 +124,13 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const durationMs = session.endedAt ? Number(session.durationMs || 0) : Math.max(0, Math.min(end.getTime(), now().getTime()) - new Date(session.startedAt).getTime());
         bucket.sessions.push({ durationMs, isOverlapping: session.isOverlapping, correctedAt: session.correctedAt, closeReason: session.closeReason });
       }
-      for (const task of returned) { const bucket = byMember.get(task.assigneeId); if (bucket) bucket.returnedToday += 1; }
+      for (const task of returned) {
+        const participants = hasTaskParticipations(task) ? taskParticipations(task) : [{ memberId: task.assigneeId, returnedAt: task.returnedAt }];
+        for (const participant of participants) {
+          const bucket = byMember.get(participant.memberId);
+          if (bucket && occurredToday(participant.returnedAt)) bucket.returnedToday += 1;
+        }
+      }
       // El primer día necesita actividad nueva para no conceder puntos al instante del reinicio.
       if (launchDay) for (const bucket of byMember.values()) {
         if (!bucket.closedTasks.length && !bucket.createdTasks.length && !bucket.sessions.length && !bucket.returnedToday) bucket.returnedToday = null;

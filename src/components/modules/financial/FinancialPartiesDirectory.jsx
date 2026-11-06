@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { useOriginState } from '@/components/layout/BackToOrigin';
 import axios from 'axios';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Select from '@/components/ui/Select';
@@ -58,13 +60,13 @@ const quotationAmount = (quotation) => (quotation.total
     ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency === 'USD' ? 'USD' : 'COP', maximumFractionDigits: quotation.currency === 'USD' ? 2 : 0 }).format(quotation.total)
     : 'Con opciones');
 
-const PartyQuotations = ({ quotations }) => (
+const PartyQuotations = ({ quotations, originState }) => (
     <section className="min-w-0 space-y-2 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900 lg:col-span-2" data-party-quotations>
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Cotizaciones</h3>
         <ul className="divide-y divide-zinc-100 dark:divide-white/5">
             {quotations.map((quotation) => (
                 <li key={quotation.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
-                    <a href={`/cotizaciones/editar/${quotation.id}`} className="font-medium text-primary underline-offset-2 hover:underline">{quotation.code}</a>
+                    <Link to={`/cotizaciones/editar/${quotation.id}`} state={originState()} className="font-medium text-primary underline-offset-2 hover:underline">{quotation.code}</Link>
                     <span className="text-zinc-500">{QUOTATION_STATUS_LABELS[quotation.status] || quotation.status} · {shortDate(quotation.acceptedAt || quotation.createdAt)}</span>
                     <span className="ml-auto tabular-nums text-zinc-900 dark:text-white">{quotationAmount(quotation)}</span>
                 </li>
@@ -97,11 +99,23 @@ export default function FinancialPartiesDirectory({
     formatCurrency,
     onNotice
 }) {
+    const originState = useOriginState('Financiero · Terceros');
+    const location = useLocation();
+    const [params, setParams] = useSearchParams();
     const queryClient = useQueryClient();
-    const [expanded, setExpanded] = useState(null);
-    const [search, setSearch] = useState('');
-    const [role, setRole] = useState('');
-    const [status, setStatus] = useState('');
+    const expanded = params.get('party');
+    const search = params.get('partyQ') || '';
+    const role = PARTY_ROLES.some(item => item.value === params.get('partyRole')) ? params.get('partyRole') : '';
+    const status = ['ACTIVO', 'INACTIVO', 'POR_VINCULAR'].includes(params.get('partyStatus')) ? params.get('partyStatus') : '';
+    const setViewParam = (key, value) => setParams(current => {
+        const next = new URLSearchParams(current);
+        if (value) next.set(key, value); else next.delete(key);
+        return next;
+    }, { replace: true, state: location.state });
+    const setExpanded = value => setViewParam('party', value);
+    const setSearch = value => setViewParam('partyQ', value);
+    const setRole = value => setViewParam('partyRole', value);
+    const setStatus = value => setViewParam('partyStatus', value);
     // { kind: 'client', client, initialName, initialProfile, linkThirdPartyId, prospect } | { kind: 'third-party', thirdParty }
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -374,7 +388,7 @@ export default function FinancialPartiesDirectory({
                                                         <ProfileLine label="Responsable comercial" value={row.prospect.owner?.name} />
                                                     </dl>
                                                     <div className="flex flex-wrap gap-x-4">
-                                                        <a href={`/crm/oportunidades/${row.prospect.id}`} className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-2">Ver en el CRM</a>
+                                                        <Link to={`/crm/oportunidades/${row.prospect.id}`} state={originState()} className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-2">Ver en el CRM</Link>
                                                         {canWriteFinancials && (
                                                             <button type="button" data-prospect-make-client
                                                                 onClick={() => setDialog({ kind: 'client', client: null, initialName: row.name, initialProfile: { contactName: row.prospect.contactName || '', email: row.prospect.email || '', phone: row.prospect.phone || '' }, prospect: row.prospect })}
@@ -456,7 +470,7 @@ export default function FinancialPartiesDirectory({
                                                 </section>
                                             )}
 
-                                            {row.quotations?.length > 0 && <PartyQuotations quotations={row.quotations} />}
+                                            {row.quotations?.length > 0 && <PartyQuotations quotations={row.quotations} originState={originState} />}
 
                                             {/* La vinculación de siempre: pasar movimientos y cartera a otra ficha. */}
                                             {(row.clientId || row.unlinked) && (

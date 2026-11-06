@@ -1,6 +1,13 @@
 import prisma from '../lib/prisma.js';
 import { getOperationalEvents } from './operationalEventService.js';
 import { isVisibleOperationalEvent } from './operationalEventVisibility.js';
+import { taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
+
+const activityTaskSelect = {
+  id: true, title: true, status: true, assigneeId: true, comments: true, isPrivate: true,
+  isPriority: true, isSpecial: true, ...taskParticipationSelect,
+  client: { select: { name: true } }
+};
 
 /**
  * Calculates the current activity status of all team members.
@@ -18,15 +25,12 @@ export async function getTeamActivityStatus({ db = prisma, readEvents = getOpera
       desktopY: true,
       statusMessage: true,
       nativeTasks: {
-        where: { status: 'EN_CURSO' },
-        select: {
-          id: true,
-          title: true,
-          comments: true,
-          isPriority: true,
-          isSpecial: true,
-          client: { select: { name: true } }
-        }
+        where: { OR: [{ assigneeStatus: 'EN_CURSO' }, { assigneeStatus: null, status: 'EN_CURSO' }] },
+        select: activityTaskSelect
+      },
+      collaboratingTasks: {
+        where: { OR: [{ status: 'EN_CURSO' }, { status: null, task: { status: { not: 'REALIZADA' } } }] },
+        select: { task: { select: activityTaskSelect } }
       }
     }
   });
@@ -94,7 +98,10 @@ export function calculateMemberStatus(member, todayEvents, now) {
   // 6. DEFAULT -> Libre (Oficina Central)
 
   let status = 'LIBRE'; // Default: Always visible as Libre
-  let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
+  const work = [...(member.nativeTasks || []), ...(member.collaboratingTasks || []).map(row => row.task)]
+    .filter(Boolean).map(task => taskForMember(task, member.id))
+    .filter(task => task && (!task.status || task.status === 'EN_CURSO'));
+  let currentTask = work[0] || null;
   let prioritizedEvent = null;
 
   const memberEvents = todayEvents.filter(e => e.memberIds?.includes(member.id));
@@ -147,7 +154,7 @@ export function calculateMemberStatus(member, todayEvents, now) {
     currentTask: currentTask ? {
       id: currentTask.id,
       title: currentTask.title,
-      description: currentTask.comments,
+      description: currentTask.isPrivate ? null : currentTask.comments,
       clientName: currentTask.client?.name
     } : null,
     currentEvent: prioritizedEvent ? {

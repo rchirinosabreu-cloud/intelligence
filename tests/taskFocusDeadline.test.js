@@ -80,18 +80,22 @@ test('the server refuses changes to the locked tasks of the person with a 423 an
     task: {
       findFirst: async (args) => {
         calls.push(['findFirst', args]);
-        if (args.where.status === 'EN_CURSO') return { id: 'working', title: 'Caption Expo' };
+        if (args.where.id?.not) return { id: 'working', title: 'Caption Expo' };
         return { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2036-09-21T19:00:00.000Z'), status: 'EN_CURSO' };
       },
       findUnique: async ({ where }) => ({
         status: where.id === 'working' ? 'EN_CURSO' : 'PENDIENTE',
+        assigneeId: ['other', 'working'].includes(where.id) ? 'member-helen' : 'member-melissa',
         assignee: { userId: ['other', 'working'].includes(where.id) ? 'user-helen' : 'user-melissa' }
       })
     }
   };
   await assert.rejects(assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'other' }), (error) => error.statusCode === 423 && /En cuanto termines «Caption Expo», deberás continuar con «Redactar parrilla»/.test(error.message) && error.focusTask.id === 'focus' && error.inProgressTask.id === 'working');
-  assert.deepEqual(calls[0][1].where, { focusDeadlineAt: { not: null }, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] }, assignee: { userId: 'user-helen' } });
-  assert.deepEqual(calls[1][1].where, { status: 'EN_CURSO', assignee: { userId: 'user-helen' }, id: { not: 'focus' } }, 'the notice names what is already in progress');
+  assert.deepEqual(calls[0][1].where, { focusDeadlineAt: { not: null }, OR: [
+    { assigneeStatus: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } },
+    { assigneeStatus: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }
+  ], assignee: { userId: 'user-helen' } });
+  assert.deepEqual(calls[1][1].where, { OR: [{ assigneeStatus: { in: ['EN_CURSO'] } }, { assigneeStatus: null, status: { in: ['EN_CURSO'] } }], assignee: { userId: 'user-helen' }, id: { not: 'focus' } }, 'the notice names what is already in progress');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'working' }), null, 'what was already in progress can be finished (Rodny, 21 September 2026)');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus' }), null, 'the focus task itself can be worked and completed');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'foreign' }), null, 'tasks of other people are not hers to be locked');
@@ -100,6 +104,33 @@ test('the server refuses changes to the locked tasks of the person with a 423 an
   const free = { task: { findFirst: async () => null, findUnique: async () => { throw new Error('must not run'); } } };
   assert.equal(await assertTaskNotLocked(free, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'other' }), null);
 });
+
+for (const [label, status, workSessions, blocked] of [
+  ['parte pendiente', 'PENDIENTE', [], true],
+  ['parte pendiente con tramo antiguo inconsistente', 'PENDIENTE', [{ workerId: 'member-helen', endedAt: null }], true],
+  ['parte heredada sin reloj propio', null, [{ workerId: 'member-melissa', endedAt: null }], true],
+  ['parte heredada con reloj propio cerrado', null, [{ workerId: 'member-helen', endedAt: new Date('2036-09-21T14:00:00Z') }], true],
+  ['parte heredada con reloj propio abierto', null, [{ workerId: 'member-helen', endedAt: null }], false],
+  ['parte explícitamente en curso', 'EN_CURSO', [], false]
+]) {
+  test(`el compromiso propio protege también una colaboración: ${label}`, async () => {
+    const target = {
+      id: 'shared', status: 'DEVUELTA', sharedProgress: true,
+      assigneeId: 'member-melissa', assigneeStatus: 'DEVUELTA',
+      assignee: { id: 'member-melissa', userId: 'user-melissa' },
+      startedAt: new Date('2036-09-21T13:00:00Z'),
+      collaborators: [{ memberId: 'member-helen', status, member: { id: 'member-helen', userId: 'user-helen' } }],
+      workSessions
+    };
+    const db = { task: {
+      findFirst: async ({ where }) => where.id?.not ? null : { ...focus, assignee: { userId: 'user-helen' } },
+      findUnique: async ({ select }) => Object.fromEntries(Object.keys(select).map(key => [key, target[key]]))
+    } };
+    const operation = () => assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'shared' });
+    if (blocked) await assert.rejects(operation(), error => error.statusCode === 423 && error.focusTask.id === 'focus');
+    else assert.equal(await operation(), null, 'la parte que ya estaba en curso puede terminarse aunque otra esté devuelta');
+  });
+}
 
 test('the schema, the start chain, the allowed fields and the controller carry the commitment', () => {
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
@@ -156,8 +187,8 @@ test('the panel edits the hour with the shared calendar and only for managers; t
 
   assert.match(board, /focusDeadlineAt: task\.focusDeadlineAt/, 'the board reads the hour from the API');
   assert.match(board, /assigneeUserId: task\.assignee\?\.userId/, 'the board knows whose task it is');
-  assert.match(board, /getTaskLock\(\{ tasks, task, viewerUserId: currentUser\?\.id, viewerIsManager \}\)/);
-  assert.match(card, /isDragDisabled=\{Boolean\(lock\) \|\| movePending\}/, 'locked cards cannot be moved, even when no save is pending');
+  assert.match(board, /getTaskLock\(\{ tasks: taskCards, task, viewerUserId: currentUser\?\.id, viewerIsManager \}\)/);
+  assert.match(card, /isDragDisabled=\{Boolean\(lock\) \|\| movePending/, 'locked cards cannot be moved, even when no save is pending');
   assert.match(card, /onPointerDown=\{lock \? \(\) => onLocked\(task, lock\) : undefined\}/, 'the very first touch on a locked card (click or drag start) is the attempt');
   assert.match(card, /onClick=\{\(\) => \{ if \(!lock && !saving\) onClick\(task\); \}\}/, 'a locked or saving card never opens');
   assert.match(card, /shaking && "brain-shake"/, 'the first attempt shakes the card (Rodny, 21 September 2026)');
@@ -179,9 +210,9 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.doesNotMatch(card, /lock && ["'`]/, 'the lock never adds a class of its own to the card body');
   assert.match(board, /if \(!deepLinkLock\) setHighlightedTaskId\(taskId\);/, 'a locked task is not highlighted (red ring) when reached by deep link');
   assert.match(board, /focusLockNotice/, 'the explanation is a platform dialog');
-  assert.match(board, /const deepLinkLock = taskToOpen \? getTaskLock\(\{[\s\S]*?task: taskToOpen[\s\S]*?\}\) : null;[\s\S]*?if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(taskToOpen\);/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
+  assert.match(board, /const deepLinkLock = taskToOpen \? getTaskLock\(\{[\s\S]*?task: deepLinkCard \|\| taskToOpen[\s\S]*?\}\) : null;[\s\S]*?if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(\{ \.\.\.taskToOpen,/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
   assert.match(board, /focusLockMessage\(focusLockNotice\.focusTask, focusLockNotice\.inProgressTask\)/, 'the popup names what is already in progress');
-  assert.match(board, /if \(!isPMOrAdmin\)[\s\S]*?getTaskLock|const lock = getTaskLock\(\{ tasks, task: targetTask/, 'drag and drop respects the lock too');
+  assert.match(board, /if \(!isPMOrAdmin\)[\s\S]*?getTaskLock|const lock = getTaskLock\(\{ tasks: taskCards, task: targetTask/, 'drag and drop respects the lock too');
 });
 
 // Rodny, 21 September 2026: past the hour the lock stays, the manager who set it is told, the person can ask
@@ -231,7 +262,7 @@ test('the server tells the manager who set the hour (and the person) once per ho
   const notices = [];
   const updates = [];
   // A fixed hour in the future keeps the arithmetic of the extension deterministic whatever the wall clock says.
-  const overdueTask = { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2036-09-21T19:00:00.000Z'), focusSetById: 'user-rodny', creatorId: 'user-franci', assignee: { userId: 'user-helen', name: 'Helen' } };
+  const overdueTask = { id: 'focus', status: 'EN_CURSO', title: 'Redactar parrilla', focusDeadlineAt: new Date('2036-09-21T19:00:00.000Z'), focusSetById: 'user-rodny', creatorId: 'user-franci', assignee: { userId: 'user-helen', name: 'Helen' } };
   const db = {
     task: {
       findMany: async (args) => { updates.push(['findMany', args.where]); return [overdueTask]; },
@@ -244,7 +275,10 @@ test('the server tells the manager who set the hour (and the person) once per ho
   const now = new Date('2026-09-21T20:00:00.000Z');
 
   assert.equal(await notifyFocusOverdue({ db, now, notify }), 1);
-  assert.deepEqual(updates[0][1], { focusDeadlineAt: { not: null, lt: now }, focusOverdueNotifiedAt: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }, 'only active commitments past the hour that were not notified yet');
+  assert.deepEqual(updates[0][1], { focusDeadlineAt: { not: null, lt: now }, focusOverdueNotifiedAt: null, OR: [
+    { assigneeStatus: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } },
+    { assigneeStatus: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }
+  ] }, 'only active owner commitments past the hour that were not notified yet');
   assert.deepEqual(notices.map((n) => [n.userId, n.type]), [['user-rodny', 'TASK_FOCUS_OVERDUE'], ['user-helen', 'TASK_FOCUS_OVERDUE']], 'the manager who set the hour, then the person');
   // Rodny, 21 September 2026: the overdue is a novedad on the task, like a return or a reopen.
   assert.deepEqual(updates.find(([kind]) => kind === 'comment')[1], { taskId: 'focus', authorId: null, type: 'system_focus_overdue', content: '[FOCUS_OVERDUE]\nEl compromiso venció a las 14:00.' });

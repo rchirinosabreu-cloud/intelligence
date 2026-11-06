@@ -1,6 +1,7 @@
 import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -1446,6 +1447,7 @@ const ContentPlanDetail = () => {
   const confirm = useConfirmDialog();
   const { planId, clientSlug, period } = useParams();
   const navigate = useNavigate();
+  const navigateFrom = useNavigateFrom();
   const location = useLocation();
   const queryClient = useQueryClient();
 
@@ -1483,7 +1485,7 @@ const ContentPlanDetail = () => {
     if (itemId) params.set('item', itemId); else params.delete('item');
     navigate(
       { pathname: location.pathname, search: params.toString() },
-      { replace: true, state: { desdeElCarril: true } }
+      { replace: true, state: { ...location.state, desdeElCarril: true } }
     );
   };
 
@@ -1577,6 +1579,7 @@ const ContentPlanDetail = () => {
   // las quitaba tres segundos después; con una pieza a la vez no hay a dónde desplazarse.
 
   const currentPlanId = plan?.id || planId;
+  usePageLabel(plan ? `Parrilla · ${plan.client?.name || 'Cliente'} · ${getContentPlanMonthName(plan.month)} ${plan.year}` : null);
   const planInternalNotes = parsePlanInternalNotes(plan?.internalNotes);
 
   // Mutations
@@ -2288,7 +2291,7 @@ const ContentPlanDetail = () => {
                 onDelete={handleDeleteItem}
                 onRequestRevision={(itemId) => requestItemRevisionMutation.mutate(itemId)}
                 onDispatch={() => setDispatchItemId(selectedItem.id)}
-                navigate={navigate}
+                navigate={navigateFrom}
                 onFinalAssetUpload={handleFinalAssetUpload}
                 onFinalAssetDelete={handleFinalAssetDelete}
                 isFinalAssetUploading={finalAssetUploadMutation.isPending}

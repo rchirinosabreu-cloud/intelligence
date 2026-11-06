@@ -4,17 +4,18 @@ import ActivityMap from './ActivityMap';
 import OperationalCalendar from './OperationalCalendar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Map, Calendar } from '@/components/ui/icons';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 const Activity = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const activeView = searchParams.get('vista') === 'calendario' ? 'calendar' : 'map';
 
   const handleViewChange = (value) => {
     const nextParams = new URLSearchParams(searchParams);
     if (value === 'calendar') nextParams.set('vista', 'calendario');
     else nextParams.delete('vista');
-    setSearchParams(nextParams, { replace: true });
+    setSearchParams(nextParams, { replace: true, state: location.state });
   };
 
   return (
@@ -26,11 +27,11 @@ const Activity = () => {
 
       <Tabs value={activeView} onValueChange={handleViewChange} className="space-y-6">
         <TabsList className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-1 rounded-2xl shadow-sm inline-flex">
-          <TabsTrigger value="map" className="flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-semibold data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all">
+          <TabsTrigger value="map" className="flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-semibold data-[state=active]:bg-brand-cyan/10 data-[state=active]:text-brand-cyan-deep dark:data-[state=active]:text-brand-cyan transition-all">
             <Map className="w-4 h-4" />
             Mapa Virtual
           </TabsTrigger>
-          <TabsTrigger value="calendar" className="flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-semibold data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all">
+          <TabsTrigger value="calendar" className="flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-semibold data-[state=active]:bg-brand-cyan/10 data-[state=active]:text-brand-cyan-deep dark:data-[state=active]:text-brand-cyan transition-all">
             <Calendar className="w-4 h-4" />
             Calendario Operativo
           </TabsTrigger>

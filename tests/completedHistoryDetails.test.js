@@ -12,8 +12,9 @@ test('each completed task in the history opens its own details', async () => {
 
   assert.match(modal, /data-completed-task-toggle/, 'la tarjeta entera abre el detalle');
   assert.match(modal, /aria-expanded=\{isExpanded\}/);
-  assert.match(modal, /aria-controls=\{`completed-task-details-\$\{task\.id\}`\}/);
-  assert.match(modal, /setExpandedTaskId\(current => \(current === task\.id \? null : task\.id\)\)/, 'una abierta a la vez');
+  assert.match(modal, /aria-controls=\{`completed-task-details-\$\{key\}`\}/);
+  assert.match(modal, /const key = achievementKey\(task\)/, 'la identidad distingue participaciones del mismo Task ID');
+  assert.match(modal, /setExpandedTaskId\(current => \(current === key \? null : key\)\)/, 'una abierta a la vez');
   assert.match(modal, /isExpanded && "sm:col-span-2/, 'abierta ocupa la fila entera');
 });
 
@@ -24,7 +25,7 @@ test('the details show the recorded time and the task data', async () => {
   assert.match(modal, /import TaskWorkHistory from '\.\/TaskWorkHistory';/);
   assert.match(modal, /<TaskWorkHistory\s+taskId=\{task\.id\}/);
   assert.match(modal, /const canSeeWorkSessions = \['ADMIN', 'PROJECT_MANAGER'\]\.includes\(currentUser\?\.role\)/, 'el servidor solo entrega las sesiones a dirección');
-  assert.match(modal, /canSeeWorkSessions \? \(/, 'el resto ve el total registrado, sin sesiones');
+  assert.match(modal, /canSeeWorkSessions && !task\.isLocked \? \(/, 'el resto y quienes perdieron acceso ven el total registrado, sin pedir sesiones');
   assert.match(modal, /formatElapsedTime\(task\.accumulatedWorkMs\)/);
 
   for (const label of ['Responsable', 'Cliente', 'Creada por', 'Creada', 'Vencía', 'Cerrada', 'Categoría', 'Complejidad', 'Prioridad', 'Descripción']) {

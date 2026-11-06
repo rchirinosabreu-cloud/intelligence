@@ -27,7 +27,7 @@ test('one dialog for the whole app, opened after the server confirms the close, 
   const question = board.indexOf('askDeclaredTimeIfNeeded(savedTask)', savedResponse);
   assert.ok(responseGuard >= 0 && savedResponse > responseGuard && question > savedResponse,
     'the dialog uses the saved server response, after validating success');
-  assert.match(board, /destinationColumnId === 'realizado'\) \{\s*triggerConfetti[\s\S]{0,200}askDeclaredTimeIfNeeded\(savedTask\)/);
+  assert.match(board, /targetTask\.participation \? didCompleteParticipation\(savedTask, targetTask\.participation\.memberId\) : sourceColumnId !== 'realizado' && destinationColumnId === 'realizado'\) \{\s*triggerConfetti[\s\S]{0,200}askDeclaredTimeIfNeeded\(savedTask\)/);
   const panel = read('src/components/modules/TaskSidePanel.jsx');
   assert.match(panel, /if \(cierraLaTarea\) askDeclaredTimeIfNeeded\(updatedTask\)/);
   const dialog = read('src/components/tasks/DeclaredTimeDialog.jsx');

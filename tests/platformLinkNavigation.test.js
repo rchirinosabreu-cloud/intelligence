@@ -44,7 +44,8 @@ test('internal platform actions no longer request new browser windows', async ()
     readFile('src/components/ui/LinkDropdown.jsx', 'utf8'),
   ]);
 
-  assert.match(taskPanel, /navigate\(`\/parrillas\/\$\{/);
+  assert.match(taskPanel, /useNavigateFrom\(\)/);
+  assert.match(taskPanel, /navigateFrom\(`\/parrillas\/\$\{/);
   assert.doesNotMatch(taskPanel, /window\.open\(`\/parrillas\//);
   assert.match(quotationList, /navigate\(`\/cotizaciones\/ver\/\$\{/);
   assert.doesNotMatch(quotationList, /window\.open\(`\/cotizaciones\/ver\//);

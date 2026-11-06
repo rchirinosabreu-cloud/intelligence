@@ -73,9 +73,9 @@ const memoryDb = ({ item = baseItem(), publications = [], tasks = [] } = {}) => 
     },
     // El pendiente «Publicar» de la pieza: cuando Meta publica, se cierra solo (15 de octubre de 2026).
     task: {
-      findMany: async ({ where = {} } = {}) => state.tasks.filter((row) => (
+      findMany: async ({ where = {}, select } = {}) => state.tasks.filter((row) => (
         row.contentItemId === where.contentItemId && (!where.status?.not || row.status !== where.status.not)
-      ))
+      )).map((row) => select ? Object.fromEntries(Object.keys(select).map((key) => [key, row[key]])) : row)
     }
   };
   return { db, state };
@@ -253,6 +253,26 @@ test('cuando Meta publica, el pendiente «Publicar» de la pieza se cierra solo'
   assert.deepEqual(closed, [['task-publicar', 'REALIZADA', 'user-sara']],
     'solo el pendiente de publicar, y a nombre de quien lo tenía');
 });
+
+for (const [label, participation] of [
+  ['participación persistente sin colaboradores actuales', { sharedProgress: true, collaborators: [] }],
+  ['colaboración anterior a la activación del progreso compartido', { sharedProgress: false, collaborators: [{ memberId: 'member-diego' }] }]
+]) {
+  test(`publicar en Meta conserva las partes humanas pendientes: ${label}`, async () => {
+    const { db, state } = memoryDb({
+      publications: [{ id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }],
+      tasks: [{ id: 'task-publicar', contentItemId: 'item-1', title: '[Publicar] Post: Jean Day', status: 'EN_CURSO', assignee: { userId: 'user-sara' }, ...participation }]
+    });
+    const closed = [];
+    const [outcome] = await build({ db, closed }).processDuePublications();
+    assert.equal(outcome.status, 'PUBLISHED');
+    assert.equal(state.item.status, 'PUBLICADO');
+    assert.equal(state.publications[0].status, 'PUBLISHED');
+    assert.equal(state.publications[0].externalMediaId, 'ig-1');
+    assert.equal(state.publications[0].permalink, 'https://www.instagram.com/p/1/');
+    assert.deepEqual(closed, [], 'publicar no acredita la finalización de ninguna parte humana');
+  });
+}
 
 test('un fallo al cerrar el pendiente nunca deshace una publicación que sí salió', async () => {
   const { db, state } = memoryDb({

@@ -11,6 +11,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { analyzeTeamRhythm } from '../lib/teamRhythm.js';
 import { buildContextProfiles, recordedWorkHours } from '../lib/workPrediction.js';
+import { hasTaskParticipations } from '../lib/taskParticipation.js';
 
 export const RHYTHM_PERIODS = [7, 30, 90];
 const DAY_MS = 86_400_000;
@@ -55,10 +56,10 @@ export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) 
       const declaredMs = rows.filter((row) => row.closeReason === 'DECLARED').reduce((sum, row) => sum + sessionMs(row), 0);
       records.push({ ...base, personId: workerId, personName: names.get(workerId) || (workerId === task.assigneeId ? task.assignee?.name : null) || 'Sin nombre',
         timingIncomplete: rows.some(row => !row.endedAt || !row.startedAt || !Number.isFinite(new Date(row.endedAt) - new Date(row.startedAt)) || new Date(row.endedAt) <= new Date(row.startedAt) || (row.durationMs != null && (!Number.isFinite(Number(row.durationMs)) || Number(row.durationMs) < 0))),
-        isCollaborator: all.every(row => row.isCollaborator), partialResponsibility: workerId !== task.assigneeId || own.some(row => row.isCollaborator) || new Set(own.filter(row => !row.isCollaborator).map(row => row.workerId)).size > 1,
+        isCollaborator: all.every(row => row.isCollaborator), partialResponsibility: hasTaskParticipations(task) || workerId !== task.assigneeId || own.some(row => row.isCollaborator) || new Set(own.filter(row => !row.isCollaborator).map(row => row.workerId)).size > 1,
         measuredMs: durations.reduce((sum, ms) => sum + ms, 0),
         declaredMs,
-        reworkMs: rows.filter((row) => row.cycle?.kind && row.cycle.kind !== 'INITIAL').reduce((sum, row) => sum + sessionMs(row), 0),
+        reworkMs: rows.filter((row) => row.isRework || (row.cycle?.kind && row.cycle.kind !== 'INITIAL')).reduce((sum, row) => sum + sessionMs(row), 0),
         // Lo declarado y lo corregido por un administrador no cuentan como reloj olvidado (23 de octubre de 2026).
         longestSessionMs: Math.max(0, ...rows.filter((row) => row.closeReason !== 'DECLARED' && !row.correctedAt).map(sessionMs)),
         overlappedMs: all.filter((row) => row.isOverlapping).reduce((sum, row) => sum + sessionMs(row), 0) });
@@ -67,7 +68,7 @@ export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) 
     // el tiempo acumulado que ya tenían.
     if (task.assigneeId && !byWorker.has(task.assigneeId)) {
       const legacy = own.length ? 0 : Number(task.accumulatedWorkMs) || 0;
-      records.push({ ...base, timingIncomplete: true, personId: task.assigneeId, personName: task.assignee?.name || names.get(task.assigneeId) || 'Sin nombre', measuredMs: legacy, reworkMs: 0, longestSessionMs: 0, overlappedMs: 0 });
+      records.push({ ...base, timingIncomplete: true, partialResponsibility: hasTaskParticipations(task), personId: task.assigneeId, personName: task.assignee?.name || names.get(task.assigneeId) || 'Sin nombre', measuredMs: legacy, reworkMs: 0, longestSessionMs: 0, overlappedMs: 0 });
     }
   }
   return records;
@@ -81,6 +82,7 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const tasks = await db.task.findMany({
       where: { status: 'REALIZADA', completedAt: { gte: from, lte: to } },
       select: { id: true, title: true, completedAt: true, assigneeId: true, accumulatedWorkMs: true, aiCategory: true, aiComplexity: true, clientId: true, isPrivate: true,
+        sharedProgress: true, collaborators: { select: { memberId: true } },
         client: { select: { name: true } }, assignee: { select: { id: true, name: true } }, contentItem: { select: { format: true } } },
       orderBy: { completedAt: 'desc' },
       take: 3000
@@ -88,7 +90,7 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const ids = tasks.map((task) => task.id);
     const sessions = ids.length ? await db.taskWorkSession.findMany({
       where: { taskId: { in: ids } },
-      select: { taskId: true, workerId: true, isCollaborator: true, isOverlapping: true, closeReason: true, correctedAt: true, durationMs: true, startedAt: true, endedAt: true, cycle: { select: { kind: true } } }
+      select: { taskId: true, workerId: true, isCollaborator: true, isRework: true, isOverlapping: true, closeReason: true, correctedAt: true, durationMs: true, startedAt: true, endedAt: true, cycle: { select: { kind: true } } }
     }) : [];
     const periodSessions = includeHours ? await db.taskWorkSession.findMany({
       where: { startedAt: { lt: to }, OR: [{ endedAt: { gte: from } }, { endedAt: null }] },

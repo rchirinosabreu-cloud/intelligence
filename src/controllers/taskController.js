@@ -66,7 +66,7 @@ export const getStreak = async (req, res) => {
 
 export const getCompleted = async (req, res) => {
     try {
-        const tasks = await getCompletedTasks(req.query.date, req.query.search);
+        const tasks = await getCompletedTasks(req.query.date, req.query.search, req.user?.userId || req.user?.id);
         res.json(tasks);
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch completed tasks", details: error.message });
@@ -212,7 +212,8 @@ export const updateExistingTask = async (req, res) => {
 // Tiempo declarado: quien cerró su tarea sin cronómetro dice cuánto le tomó (9 de octubre de 2026).
 export const declareTaskTimeHandler = async (req, res) => {
     try {
-        res.json(await declareTaskTime({ db: prisma, user: req.user, taskId: req.params.taskId, minutes: req.body?.minutes }));
+        res.json(await declareTaskTime({ db: prisma, user: req.user, taskId: req.params.taskId, minutes: req.body?.minutes,
+            participantMemberId: req.body?.participantMemberId, expectedRevision: req.body?.expectedRevision }));
     } catch (error) {
         if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
         console.error('[TaskController] No se pudo guardar el tiempo declarado:', error?.message || error);

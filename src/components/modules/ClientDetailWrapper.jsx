@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ClientDetail from './ClientDetail';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Loader2 } from '@/components/ui/icons';
@@ -8,6 +8,7 @@ import { Loader2 } from '@/components/ui/icons';
 const ClientDetailWrapper = () => {
     const { clientId } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [client, setClient] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -36,7 +37,7 @@ const ClientDetailWrapper = () => {
                 // redirect to the clean slug URL
                 const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientId);
                 if (isUUID && clientData.slug) {
-                    navigate(`/cliente/${clientData.slug}`, { replace: true });
+                    navigate(`/cliente/${clientData.slug}${location.search}${location.hash}`, { replace: true, state: location.state });
                     return; // Stop execution, the new route will re-trigger the effect
                 }
 
@@ -55,7 +56,7 @@ const ClientDetailWrapper = () => {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full min-h-[50vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                <Loader2 className="w-8 h-8 animate-spin text-brand-cyan" />
             </div>
         );
     }

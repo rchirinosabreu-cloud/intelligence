@@ -76,7 +76,7 @@ test('el panel de la tarea pone el «+» junto al responsable y no deja añadir 
     assert.match(panel, /<TaskCollaboratorsPicker/);
     assert.match(picker, /aria-label="Añadir colaboradores"/);
     // Texto de Rodny, 5 de octubre de 2026.
-    assert.match(picker, /Cada colaborador registra su tiempo por separado\. Solo el responsable cierra la tarea\./);
+    assert.match(picker, /Cada persona tiene su estado y su reloj\. La tarea completa termina cuando todos finalizan su parte\./);
     assert.match(picker, /Elige primero el responsable/);
     assert.match(picker, /role="menuitemcheckbox"/);
     assert.match(picker, /aria-checked/);

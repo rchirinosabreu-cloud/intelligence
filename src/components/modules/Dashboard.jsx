@@ -450,7 +450,7 @@ function AchievementsPanel({ feed, onOpenHistory, className, variants }) {
           <EmptyState icon={Trophy} title="Aún no hay logros hoy" description="Las tareas completadas por el equipo aparecerán aquí." />
         ) : (
           feed.map((task, idx) => (
-            <div key={task.id || idx} data-completed-task-id={task.id} className="relative pl-5 pb-6 last:pb-0">
+            <div key={task.participationKey || task.id || idx} data-completed-task-id={task.id} className="relative pl-5 pb-6 last:pb-0">
               {idx < feed.length - 1 && (
                 <div className="absolute left-[3.5px] top-2 w-px h-full bg-zinc-200 dark:bg-white/10" />
               )}
@@ -465,7 +465,7 @@ function AchievementsPanel({ feed, onOpenHistory, className, variants }) {
                     </div>
                   )}
                   <span className="text-[11px] text-brand-green-deep dark:text-brand-green block font-semibold truncate">
-                    {task.assignee ? task.assignee.name : 'Equipo'} completó:
+                    {task.assignee ? task.assignee.name : 'Equipo'} {task.participantMemberId ? 'terminó su parte de:' : 'completó:'}
                   </span>
                 </div>
                 <h4 className="text-zinc-800 dark:text-zinc-200 text-sm font-semibold mb-1.5 line-clamp-2">

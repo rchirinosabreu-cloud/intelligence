@@ -1435,6 +1435,15 @@ model Task {
   completedAt       DateTime?
   creatorId         String?
   status            TaskStatus        @default(PENDIENTE)
+  // Una sola tarea; el responsable y cada colaborador conservan su avance.
+  sharedProgress    Boolean           @default(false)
+  assigneeStatus    TaskStatus?
+  assigneeCompletedAt DateTime?        @db.Timestamptz(3)
+  assigneeReturnedAt DateTime?         @db.Timestamptz(3)
+  assigneeReturnCount Int              @default(0)
+  assigneeRevision  Int               @default(0)
+  assigneeBaselineWorkMs Float         @default(0)
+  rosterVersion     Int               @default(0)
   isPriority        Boolean           @default(false)
   priority          TaskPriority?
   isSpecial         Boolean           @default(false)
@@ -1443,8 +1452,7 @@ model Task {
   // del equipo ve el titulo pero no lo abre: ver `src/lib/taskPrivacy.js`.
   isPrivate         Boolean           @default(false)
   viewers           TaskViewer[]
-  // Colaboradores (Rodny, 5 de octubre de 2026): cada uno registra su tiempo por separado;
-  // el responsable sigue siendo uno y es quien cierra. Ver `src/lib/taskCollaborators.js`.
+  // Cada participante conserva su estado y reloj; el conjunto cierra cuando todos terminan.
   collaborators     TaskCollaborator[]
   referenceUrl      String?
   specialType       String?
@@ -1466,6 +1474,7 @@ model Task {
   taskAttachments   TaskAttachment[]
   workCycles        TaskWorkCycle[]
   workSessions      TaskWorkSession[]
+  participationArchives TaskParticipationArchive[]
 
   @@index([assigneeId, status, dueDate])
   @@index([assigneeId, focusDeadlineAt])
@@ -1473,6 +1482,7 @@ model Task {
   @@index([creatorId, status, returnedAt])
   @@index([clientId, status, createdAt])
   @@index([status, completedAt])
+  @@index([assigneeStatus, assigneeCompletedAt])
   @@index([contentItemId, title])
 }
 
@@ -1496,6 +1506,7 @@ model TaskWorkCycle {
 }
 
 model TaskWorkSession {
+  isRework         Boolean @default(false)
   id               String        @id @default(uuid())
   taskId           String
   cycleId          String
@@ -1563,12 +1574,42 @@ model TaskCollaborator {
   memberId  String
   addedById String?
   createdAt DateTime @default(now())
+  status      TaskStatus?
+  completedAt DateTime? @db.Timestamptz(3)
+  returnedAt  DateTime? @db.Timestamptz(3)
+  returnCount Int @default(0)
+  revision    Int @default(0)
+  baselineWorkMs Float @default(0)
 
   task   Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   member TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, memberId])
   @@index([memberId])
+  @@index([status, completedAt])
+}
+
+// Participaciones retiradas: conservan autoría y saldo anterior sin mantener acceso al pendiente.
+model TaskParticipationArchive {
+  id             String @id @default(uuid())
+  taskId         String
+  currentTaskId  String?
+  memberId       String
+  userId         String?
+  memberName     String?
+  role           String
+  status         TaskStatus
+  completedAt    DateTime? @db.Timestamptz(3)
+  returnedAt     DateTime? @db.Timestamptz(3)
+  returnCount    Int @default(0)
+  revision       Int @default(0)
+  baselineWorkMs Float @default(0)
+  removedAt      DateTime @default(now()) @db.Timestamptz(3)
+  task           Task? @relation(fields: [currentTaskId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([taskId, memberId])
+  @@index([currentTaskId])
+  @@index([userId, completedAt])
 }
 
 model TaskViewer {

@@ -28,6 +28,7 @@ import { canUpdateTask } from '@/lib/taskEditPermissions';
 import TaskShareControl from '@/components/tasks/TaskShareControl';
 import TaskCollaboratorsPicker from '@/components/tasks/TaskCollaboratorsPicker';
 import TaskTeamTime from '@/components/tasks/TaskTeamTime';
+import TaskParticipationProgress from '@/components/tasks/TaskParticipationProgress';
 import { normalizeCollaboratorIds } from '@/lib/taskCollaborators';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
@@ -51,7 +52,8 @@ import {
     DropdownMenuContent,
 } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
@@ -274,7 +276,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const { currentUser } = useAuth();
     // "Pedir más tiempo" for the commitment of this task (Rodny, 21 September 2026).
     const [askingMoreTime, setAskingMoreTime] = useState(false);
-    const navigate = useNavigate();
+    const navigateFrom = useNavigateFrom();
+    const location = useLocation();
     const isEdition = !!taskData?.id;
 
     const [commentPopover, setCommentPopover] = useState({ commentId: null, view: null }); // view: 'quick-actions' | 'all-emojis' | null
@@ -302,6 +305,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [rosterStale, setRosterStale] = useState(false);
+    const [viewedParticipantMemberId, setViewedParticipantMemberId] = useState(taskData?.viewedParticipantMemberId || '');
+    useEffect(() => { setViewedParticipantMemberId(taskData?.viewedParticipantMemberId || ''); }, [taskData?.id, taskData?.viewedParticipantMemberId]);
     const [teamMembers, setTeamMembers] = useState([]);
     const [formData, setFormData] = useState({
         title: '',
@@ -643,6 +649,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             isDraftHydratedRef.current = false;
 
             if (isEdition && taskData) {
+                setRosterStale(false);
                 // Fetch follow status
                 const fetchFollowStatus = async () => {
                     try {
@@ -677,6 +684,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                 setFormData({
                     id: taskData.id,
+                    sharedProgress: taskData.sharedProgress,
+                    rosterVersion: taskData.rosterVersion,
+                    participants: taskData.participants,
                     title: taskData.contentItem?.objective || taskData.title || '',
                     clientId: cId,
                     assigneeId: taskData.assigneeId || '',
@@ -875,10 +885,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const canSetFocusDeadline = ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role);
-    const canEditClient = !isEdition || (!formData.contentItemId && canUpdateTask(currentUser, {
+    const canEditTask = !isEdition || canUpdateTask(currentUser, {
         creatorId: taskData?.creatorId || taskData?.creator?.id,
         assignee: { userId: taskData?.assignee?.userId || taskData?.assigneeUserId }
-    }));
+    });
+    const canEditClient = !isEdition || (!formData.contentItemId && canEditTask);
     // Crear un pendiente privado es cosa de quien dirige; cambiar la privacidad de uno
     // que ya existe, solo de quien lo creó. Si el control no se puede usar, no se pinta:
     // el servidor lo rechazaría igual y enseñarlo sería prometer algo que no se cumple.
@@ -896,6 +907,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
         setIsSubmitting(true);
         try {
+            const originalCollaborators = (taskData?.collaborators || []).map(row => row.memberId || row.id).sort();
+            const nextCollaborators = normalizeCollaboratorIds(formData.collaboratorIds, formData.assigneeId).sort();
+            const rosterChanged = isEdition && formData.sharedProgress && (formData.assigneeId !== taskData.assigneeId || JSON.stringify(originalCollaborators) !== JSON.stringify(nextCollaborators));
+            if (rosterChanged && rosterStale) throw new Error('El equipo cambió. Cierra y vuelve a abrir la tarea antes de editar sus participantes.');
             const baseUrl = getApiBaseUrl();
             let isoDate = null;
             if (formData.dueDate) {
@@ -908,14 +923,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     ? { contentObjective: formData.title }
                     : { title: formData.title }),
                 clientId: formData.clientId,
-                assigneeId: formData.assigneeId || null,
+                assigneeId: isEdition && formData.sharedProgress && !rosterChanged ? undefined : formData.assigneeId || null,
                 // La lista que llega es la que queda (5 de octubre de 2026); sin responsable, ninguna.
-                collaboratorIds: formData.assigneeId ? normalizeCollaboratorIds(formData.collaboratorIds, formData.assigneeId) : [],
+                collaboratorIds: isEdition && formData.sharedProgress && !rosterChanged ? undefined : formData.assigneeId ? nextCollaborators : [],
+                expectedRosterVersion: rosterChanged ? formData.rosterVersion : undefined,
                 dueDate: isoDate,
                 // Compromiso con hora: only managers may send it; a normal deadline sends null to clear any previous hour.
                 focusDeadlineAt: canSetFocusDeadline ? focusDeadlineIso(formData.dueDate, formData.focusTime) : undefined,
                 comments: '', // Removed general comments description completely
-                status: formData.status,
+                status: isEdition && formData.sharedProgress ? undefined : formData.status,
                 isPriority: formData.isPriority,
                 priority: formData.isPriority ? (formData.priority || 'NORMAL') : null,
                 isSpecial: formData.isSpecial,
@@ -930,7 +946,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const method = isEdition ? 'PATCH' : 'POST';
             const url = isEdition ? `${baseUrl}/api/tasks/${formData.id}` : `${baseUrl}/api/tasks`;
 
-            const cierraLaTarea = formData.status === 'REALIZADA'
+            const cierraLaTarea = !formData.sharedProgress && formData.status === 'REALIZADA'
                 && (!isEdition || formData.originalStatus !== 'REALIZADA');
 
             const res = await fetch(url, {
@@ -957,6 +973,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 onClose();
             } else {
                 const failure = await res.json().catch(() => null);
+                if (res.status === 409 && rosterChanged) setRosterStale(true);
                 throw new Error(res.status < 500 && failure?.error ? failure.error : 'No se pudo guardar la tarea.');
             }
         } catch (err) {
@@ -1963,11 +1980,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {isEdition && (formData.plan || formData.contentPlanId) && (
                             <button
                                 onClick={() => {
-                                    if (formData.plan?.id) {
-                                        navigate(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`);
-                                    } else {
-                                        navigate(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`);
-                                    }
+                                    const planId = formData.plan?.id || formData.contentPlanId;
+                                    if (!planId) return;
+                                    // Gestión consume el enlace al abrir la tarea. El regreso lo reconstruye
+                                    // para que vuelva a abrirse esta misma tarea, con sus permisos actuales.
+                                    const originParams = new URLSearchParams(location.search);
+                                    originParams.set('taskId', formData.id);
+                                    if (formData.sharedProgress && viewedParticipantMemberId) originParams.set('participantId', viewedParticipantMemberId);
+                                    const originPath = location.pathname === '/gestion'
+                                        ? `${location.pathname}?${originParams.toString()}` : undefined;
+                                    navigateFrom(`/parrillas/${encodeURIComponent(planId)}?item=${encodeURIComponent(formData.contentItemId)}`, {
+                                        originPath,
+                                        label: location.pathname === '/gestion' ? `Gestión · ${formData.title}` : undefined,
+                                    });
                                 }}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-cyan/10 transition-all border border-brand-cyan/15 dark:border-brand-cyan/30 shadow-sm"
                             >
@@ -1975,7 +2000,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </button>
                         )}
 
-                        {isEdition && formData.status === 'DEVUELTA' && !showReintegratePrompt && (
+                        {isEdition && !formData.sharedProgress && formData.status === 'DEVUELTA' && !showReintegratePrompt && (
                             <button
                                 onClick={() => setShowReintegratePrompt(true)}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-[#009EB9] text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-[#008CA4] transition-all shadow-md shadow-[#009EB9]/20"
@@ -2204,12 +2229,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <label className={taskComposerLabelClass}>Responsable</label>
                                 <TaskCollaboratorsPicker
                                     members={teamMembers}
+                                    disabled={!canEditTask || rosterStale}
                                     assigneeId={formData.assigneeId}
                                     value={formData.collaboratorIds}
                                     onChange={(ids) => setFormData(prev => ({ ...prev, collaboratorIds: normalizeCollaboratorIds(ids, prev.assigneeId) }))}
                                 >
                                     <Select
                                         aria-label="Responsable"
+                                        disabled={!canEditTask || rosterStale}
                                         value={formData.assigneeId || ''}
                                         onChange={e => setFormData({
                                             ...formData,
@@ -2222,6 +2249,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </Select>
                                 </TaskCollaboratorsPicker>
+                                {rosterStale && <p role="alert" className="text-xs text-destructive">El equipo cambió. Cierra y vuelve a abrir la tarea para revisar los participantes actuales.</p>}
                             </div>
 
                             {/* Deadline / Fecha Entrega */}
@@ -2286,7 +2314,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             {/* Estado Actual */}
                             <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Estado actual</label>
-                                <Select
+                                {formData.sharedProgress ? <p className={`${taskComposerFieldClass} flex min-h-11 items-center text-sm`}>{({ PENDIENTE: 'Pendiente', EN_CURSO: 'En proceso', REALIZADA: 'Realizada', DEVUELTA: 'Devuelta' })[formData.status]} · estado de la tarea completa</p> : <Select
                                     value={formData.status}
                                     onChange={(event) => {
                                         const nextStatus = event.target.value;
@@ -2302,7 +2330,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     <option value="EN_CURSO">EN PROCESO</option>
                                     <option value="REALIZADA">REALIZADO</option>
                                     <option value="DEVUELTA">DEVUELTO</option>
-                                </Select>
+                                </Select>}
                             </div>
 
                             {/* Prioridad */}
@@ -2392,7 +2420,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
 
                         {/* Equipo de la tarea (5 de octubre de 2026): solo si tiene colaboradores. */}
-                        {isEdition && (
+                        {isEdition && formData.sharedProgress ? (
+                            <TaskParticipationProgress task={formData} currentUserId={currentUser?.id || currentUser?.userId}
+                                selectedMemberId={viewedParticipantMemberId} onSelectMember={setViewedParticipantMemberId}
+                                onConfirmed={(saved) => {
+                                    if (saved.rosterVersion !== formData.rosterVersion) setRosterStale(true);
+                                    setFormData(prev => ({ ...prev, status: saved.status, originalStatus: saved.status, participants: saved.participants, rosterVersion: saved.rosterVersion }));
+                                    onSuccess();
+                                }} />
+                        ) : isEdition && (
                             <TaskTeamTime
                                 taskId={formData.id}
                                 currentUserId={currentUser?.id || currentUser?.userId}

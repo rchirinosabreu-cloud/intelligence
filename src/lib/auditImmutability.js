@@ -29,6 +29,8 @@ export const AUDIT_TABLES = Object.freeze([
     // Historial de cambios del gobierno de IA; su autor es `onDelete: Restrict`.
     { schema: 'public', name: 'AiGovernanceEvent', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'DeletedTaskLog', retention: null, nullableRefs: [] },
+    // La identidad histórica taskId permanece aunque la tarea ya no exista.
+    { schema: 'public', name: 'TaskParticipationArchive', retention: null, nullableRefs: ['currentTaskId'] },
     { schema: 'vault', name: 'reveal_events', retention: null, nullableRefs: [] },
     { schema: 'vault', name: 'credential_events', retention: null, nullableRefs: [] },
     { schema: 'bria_memory', name: 'agency_fact_events', retention: null, nullableRefs: [] },

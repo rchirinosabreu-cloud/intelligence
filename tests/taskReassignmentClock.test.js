@@ -31,9 +31,9 @@ test('the task service applies the rule before the status transition, for the sc
   const source = readFileSync('src/services/nativeTaskService.js', 'utf8');
   const update = source.slice(source.indexOf('export const updateTask'), source.indexOf('export const auditAndDeleteTask'));
   assert.match(source, /import \{ closeTaskWorkSession, formatTaskReturnEventContent, reassignmentEffect \} from '\.\.\/lib\/taskTiming\.js'/);
-  assert.match(update, /const reassignment = reassignmentEffect\(currentTask, \{ assigneeChanged: 'assigneeId' in updateData, assigneeId: nextAssigneeId, status: requestedStatus \}\)/);
+  assert.match(update, /const reassignment = \(hasTaskParticipations\(currentTask\) \|\| collaboratorChange\?\.shared\) \? null : reassignmentEffect\(currentTask, \{ assigneeChanged: 'assigneeId' in updateData, assigneeId: nextAssigneeId, status: requestedStatus \}\)/, 'las individuales conservan reasignación; las compartidas conservan avance por persona');
   assert.match(update, /if \(reassignment\) updateData\.status = reassignment\.status;/);
-  assert.ok(update.indexOf('const reassignment = reassignmentEffect(') < update.indexOf("if ('status' in updateData) {"), 'the rule decides the status before the lifecycle block closes the clock');
+  assert.ok(update.indexOf('const reassignment =') >= 0 && update.indexOf('const reassignment =') < update.indexOf("if ('status' in updateData) {"), 'the rule decides the status before the lifecycle block closes the clock');
   // El relevo en caliente: se cierra la sesión de quien trabajaba y arranca la del nuevo responsable, nunca la del anterior.
   assert.match(update, /else if \(reassignment\?\.handover\) \{/);
   const handover = update.slice(update.indexOf('else if (reassignment?.handover) {'), update.indexOf('if (isReopened) {'));

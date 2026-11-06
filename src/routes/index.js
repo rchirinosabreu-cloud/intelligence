@@ -2,6 +2,7 @@ import express from 'express';
 import { receivesFiles } from '../lib/uploadMarker.js';
 import * as authController from '../controllers/authController.js';
 import * as taskController from '../controllers/taskController.js';
+import { changeParticipation, getParticipationDetail } from '../controllers/taskParticipationController.js';
 import { taskCollaboratorController } from '../controllers/taskCollaboratorController.js';
 import * as clientController from '../controllers/clientController.js';
 import * as notificationController from '../controllers/notificationController.js';
@@ -273,6 +274,8 @@ router.post('/tasks/:taskId/returned-reminder/snooze', taskController.snoozeRetu
 router.post('/tasks/:taskId/focus-extension', taskController.requestTaskFocusExtension);
 router.post('/tasks/:taskId/declared-time', guardTask, taskController.declareTaskTimeHandler);
 router.patch('/tasks/:taskId', guardTask, taskController.updateExistingTask);
+router.get('/tasks/:taskId', guardTask, getParticipationDetail);
+router.patch('/tasks/:taskId/participants/:memberId', guardTask, changeParticipation);
 router.delete('/tasks/:taskId', guardTask, taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);
 router.get('/tasks/:taskId/follow-status', taskController.getFollowStatus);

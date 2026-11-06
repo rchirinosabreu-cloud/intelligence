@@ -111,7 +111,7 @@ test('el tablero ofrece reabrir a cualquiera, sin mirar el rol', async () => {
 
   // La tarjeta ya enseñaba el botón a todo el mundo: el 403 llegaba del servidor, después de
   // que la persona escribiera el motivo. Si alguna vez se le pone un rol delante, esto avisa.
-  assert.match(tablero, /lifecycleAction === 'reintegrate' \?/);
+  assert.match(tablero, /lifecycleAction === 'reintegrate' && \(!task\.participation \|\| \(isReturned \? task\.participation\.permissions\?\.canReintegrate : task\.participation\.permissions\?\.canReopen\)\) \?/, 'individuales conservan reapertura para cualquiera; compartidas usan el permiso explícito de la persona');
   assert.match(tablero, /const lifecycleAction = getTaskLifecycleAction\(task\.status\)/);
   assert.match(tablero, /sourceColumnId === 'realizado' && destinationColumnId !== 'realizado'\) \{\s*\n\s*setReopeningTask\(targetTask\);/);
 });

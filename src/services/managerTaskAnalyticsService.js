@@ -1,4 +1,6 @@
 import prisma from '../lib/prisma.js';
+import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
+import { taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -134,9 +136,9 @@ export const buildManagerTaskAnalytics = ({
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
   // Colaboradores (5 de octubre de 2026): el tiempo de un colaborador es suyo, no del responsable.
   const memberNames = new Map(members.map((member) => [member.id, member.name]));
-  const workerNameFor = (task, session) => (session?.isCollaborator
-    ? memberNames.get(session.workerId) || 'Colaborador'
-    : task?.assignee?.name || 'Sin responsable');
+  const workerNameFor = (task, session) => memberNames.get(session?.workerId)
+    || (session?.workerId === task?.assignee?.id ? task.assignee.name : null)
+    || (session?.isCollaborator ? 'Colaborador' : 'Sin responsable');
   const cyclesById = new Map(cycles.map((cycle) => [cycle.id, cycle]));
   const periodSessions = sessions.filter((session) => {
     const startedAt = asDateMs(session.startedAt);
@@ -147,12 +149,12 @@ export const buildManagerTaskAnalytics = ({
   const totalWorkMs = durations.reduce((total, value) => total + value, 0);
   let reworkMs = 0;
   for (const session of periodSessions) {
-    if (String(cyclesById.get(session.cycleId)?.kind || 'INITIAL').toUpperCase() !== 'INITIAL') {
+    if (session.isRework || String(cyclesById.get(session.cycleId)?.kind || 'INITIAL').toUpperCase() !== 'INITIAL') {
       reworkMs += durationBySession.get(session.id) || 0;
     }
   }
 
-  const openSessionTaskIds = new Set(periodSessions.filter((session) => !session.endedAt).map((session) => session.taskId));
+  const openSessions = periodSessions.filter(session => !session.endedAt);
   const openSessionsByWorker = new Map();
   for (const session of periodSessions.filter((item) => !item.endedAt && item.workerId)) {
     const workerSessions = openSessionsByWorker.get(session.workerId) || [];
@@ -166,7 +168,11 @@ export const buildManagerTaskAnalytics = ({
     const completedAt = asDateMs(task.completedAt);
     return completedAt !== null && completedAt >= cutoffMs && completedAt <= nowMs;
   }).length;
-  const activeTasks = tasks.filter((task) => String(task.status || '').toUpperCase() === 'EN_CURSO');
+  const activeParts = tasks.flatMap(task => hasTaskParticipations(task)
+    ? taskParticipations({ ...task, workSessions: task.workSessions || openSessions.filter(session => session.taskId === task.id) })
+      .filter(person => person.status === 'EN_CURSO').map(person => ({ taskId: task.id, memberId: person.memberId }))
+    : String(task.status || '').toUpperCase() === 'EN_CURSO'
+      ? [{ taskId: task.id, memberId: task.assigneeId || task.assignee?.id || null }] : []);
 
   const recentSessions = [...periodSessions]
     .sort((a, b) => (asDateMs(b.startedAt) || 0) - (asDateMs(a.startedAt) || 0))
@@ -184,7 +190,7 @@ export const buildManagerTaskAnalytics = ({
         endedAt: session.endedAt,
         durationMs: durationBySession.get(session.id) || 0,
         closeReason: session.closeReason || null,
-        cycleKind: cycle?.kind || 'INITIAL',
+        cycleKind: session.isRework ? 'REWORK' : cycle?.kind || 'INITIAL',
         isOverlapping: Boolean(session.isOverlapping),
       };
     });
@@ -197,13 +203,14 @@ export const buildManagerTaskAnalytics = ({
     medianSessionMs: percentile(durations, 0.5),
     p75SessionMs: percentile(durations, 0.75),
     completedTasks,
-    activeTasks: activeTasks.length,
+    activeTasks: new Set(activeParts.map(part => part.taskId)).size,
     openSessions: periodSessions.filter((session) => !session.endedAt).length,
     sessionCount: periodSessions.length,
     taskCount: new Set(periodSessions.map((session) => session.taskId)).size,
   };
   const dataQuality = {
-    inProgressWithoutSession: activeTasks.filter((task) => !openSessionTaskIds.has(task.id)).length,
+    inProgressWithoutSession: new Set(activeParts.filter(part => !openSessions.some(session => session.taskId === part.taskId
+      && (!part.memberId || session.workerId === part.memberId))).map(part => part.taskId)).size,
     unclassifiedTasks: tasks.filter((task) => !task.aiCategory || !task.aiComplexity).length,
     sessionsWithoutTask: periodSessions.filter((session) => !tasksById.has(session.taskId)).length,
     overlappingSessions: currentOverlappingSessionIds.size,
@@ -256,6 +263,9 @@ export const getManagerTaskAnalytics = async ({ periodDays = 30, now = new Date(
         id: true,
         title: true,
         status: true,
+        assigneeId: true,
+        startedAt: true,
+        ...taskParticipationSelect,
         createdAt: true,
         completedAt: true,
         aiCategory: true,
@@ -281,6 +291,7 @@ export const getManagerTaskAnalytics = async ({ periodDays = 30, now = new Date(
         closeReason: true,
         isOverlapping: true,
         isCollaborator: true,
+        isRework: true,
       },
     }),
     prismaClient.teamMember.findMany({ select: { id: true, name: true } }),

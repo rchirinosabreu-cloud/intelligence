@@ -10,7 +10,7 @@ import {
 export const TRACE_RETENTION_DAYS = 365;
 
 // Las alertas comerciales y la banda de avisos importantes también se leen aquí (Rodny, 27 de octubre de 2026).
-const humanEventTypes = ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_OPENED', 'SESSION_STARTED',
+const humanEventTypes = ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_PARTICIPATION_CHANGED', 'TASK_OPENED', 'SESSION_STARTED',
   'NOTIFICATION_READ', 'RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', 'TASK_ALERT_REVIEWED', 'TASK_ALERT_DISMISSED',
   'TASK_EXCESSIVE_WORK_CONFIRMED', 'TASK_RETURNED_REMINDER_SNOOZED', ...NOTICE_TRACE_TYPES];
 const personalSystemEvents = ['RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', ...NOTICE_SYSTEM_TRACE_TYPES];
@@ -30,6 +30,7 @@ const knownEventTypes = new Set([
   'TASK_CREATED',
   'TASK_ASSIGNED',
   'TASK_UPDATED',
+  'TASK_PARTICIPATION_CHANGED',
   'TASK_OPENED',
   'TASK_LIST_SYNCED',
   'SESSION_STARTED',
@@ -143,6 +144,24 @@ const eventDescription = (event, task) => {
     case 'TASK_CREATED': return `${actor} creó ${taskName}.`;
     case 'TASK_ASSIGNED': return `${taskName} fue asignada a ${subject || 'un miembro del equipo'}.`;
     case 'TASK_UPDATED': return `${actor} actualizó ${taskName}.`;
+    case 'TASK_PARTICIPATION_CHANGED': {
+      const own = Boolean(event.actorId && event.actorId === event.subjectUserId);
+      const person = subject || 'un miembro del equipo';
+      switch (event.metadata?.toStatus) {
+        case 'REALIZADA': return own ? `${actor} terminó su parte de ${taskName}.`
+          : `${actor} marcó como realizada la parte de ${person} en ${taskName}.`;
+        case 'EN_CURSO': return own ? `${actor} empezó su parte de ${taskName}.`
+          : `${actor} puso en proceso la parte de ${person} en ${taskName}.`;
+        case 'DEVUELTA': return own ? `${actor} devolvió su parte de ${taskName}.`
+          : `${actor} devolvió la parte de ${person} en ${taskName}.`;
+        case 'PENDIENTE': {
+          const verb = event.metadata?.fromStatus === 'REALIZADA' ? 'reabrió'
+            : event.metadata?.fromStatus === 'DEVUELTA' ? 'reintegró' : 'pausó';
+          return own ? `${actor} ${verb} su parte de ${taskName}.` : `${actor} ${verb} la parte de ${person} en ${taskName}.`;
+        }
+        default: return `${actor} actualizó la parte de ${person} en ${taskName}.`;
+      }
+    }
     case 'TASK_OPENED': return `${actor} abrió ${taskName}.`;
     case 'TASK_LIST_SYNCED': return `${actor} actualizó la lista de tareas.`;
     case 'RECOGNITION_GRANTED': return `${subject || actor} recibió el reconocimiento “${recognitionLabels[event.metadata?.kind] || 'Reconocimiento del equipo'}”.`;
@@ -235,7 +254,7 @@ export const getOperationalTrace = async ({
       totalEvents: events.length,
       syncs: events.filter((event) => event.eventType === 'TASK_LIST_SYNCED').length,
       taskOpens: events.filter((event) => event.eventType === 'TASK_OPENED').length,
-      taskMutations: events.filter((event) => ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED'].includes(event.eventType)).length,
+      taskMutations: events.filter((event) => ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_PARTICIPATION_CHANGED'].includes(event.eventType)).length,
       platformMutations: events.filter((event) => event.eventType === 'PLATFORM_MUTATION' && presentPlatformMutation(event.metadata).isChange).length,
       sessionStarts: events.filter((event) => event.eventType === 'SESSION_STARTED').length,
       notificationReads: events.filter((event) => event.eventType === 'NOTIFICATION_READ').length,
@@ -245,7 +264,9 @@ export const getOperationalTrace = async ({
       const task = event.taskId ? tasksById.get(event.taskId) : null;
       return {
         ...event,
-        displayLabel: event.eventType === 'PLATFORM_MUTATION' ? presentPlatformMutation(event.metadata).label
+        displayLabel: event.eventType === 'TASK_PARTICIPATION_CHANGED'
+          ? (event.metadata?.toStatus === 'REALIZADA' ? 'Parte terminada' : 'Participación actualizada')
+          : event.eventType === 'PLATFORM_MUTATION' ? presentPlatformMutation(event.metadata).label
           : ({ TASK_LIST_SYNCED: 'Lista de tareas actualizada', RECOGNITION_GRANTED: 'Reconocimiento recibido',
             TASK_ALERT_SHOWN: 'Aviso mostrado', TASK_ALERT_REVIEWED: 'Revisar tarea', TASK_ALERT_DISMISSED: 'Aviso cerrado',
             TASK_EXCESSIVE_WORK_CONFIRMED: 'Sigo trabajando', TASK_RETURNED_REMINDER_SNOOZED: 'Recordarme más tarde',

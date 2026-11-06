@@ -10,7 +10,7 @@ const fakeDb = (task, { focusTask = null } = {}) => ({
     findFirst: async ({ where } = {}) => (where?.status === 'EN_CURSO' ? null : focusTask)
   }
 });
-const base = { creatorId: 'creator', status: 'PENDIENTE', assignee: { userId: 'assignee' }, collaborators: [{ member: { userId: 'collab' } }] };
+const base = { creatorId: 'creator', status: 'PENDIENTE', assigneeId: 'member-assignee', assignee: { userId: 'assignee' }, collaborators: [{ memberId: 'member-collab', member: { userId: 'collab' } }] };
 const editor = (userId) => ({ userId, role: 'EDITOR' });
 
 const gateStatus = async (promise) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,12 +16,13 @@ const Loading = () => <div className="flex min-h-[30vh] items-center justify-cen
 const LoadError = ({ text }) => <p role="alert" className="brain-alert-surface rounded-xl p-4 text-sm">{text}</p>;
 
 export default function ClientsSection({ canManage, evaluated, team, directory, loading = false, error = '', onOpenClient, onNewClient, onSaveHighlight }) {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = MANAGER_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'operacion';
   const selectTab = (value) => {
     const next = new URLSearchParams(searchParams);
     if (value === 'operacion') next.delete('tab'); else next.set('tab', value);
-    setSearchParams(next, { replace: true });
+    setSearchParams(next, { replace: true, state: location.state });
   };
   // Un error de lectura nunca se presenta como «todo al día»: se dice y no se pinta el tablero.
   const body = (view) => (error ? <LoadError text={error} /> : loading ? <Loading /> : view);

@@ -11,6 +11,7 @@ import KeyLinksWidget from './KeyLinksWidget';
 import AnnouncementWidget from './AnnouncementWidget';
 import SocialAccountsWidget from './SocialAccountsWidget';
 import { useAuth } from '@/context/AuthContext';
+import { usePageLabel } from '@/components/layout/BackToOrigin';
 
 const ClientDetail = ({ client, onBack }) => {
   const location = useLocation();
@@ -18,6 +19,7 @@ const ClientDetail = ({ client, onBack }) => {
   const { currentUser } = useAuth();
   const canManageSocial = ['ADMIN', 'PROJECT_MANAGER'].includes(String(currentUser?.role || '').toUpperCase());
   const [isChatOpen, setIsChatOpen] = useState(false);
+  usePageLabel(client?.name ? `Espacio · ${client.name}` : null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -27,7 +29,7 @@ const ClientDetail = ({ client, onBack }) => {
         const newParams = new URLSearchParams(location.search);
         newParams.delete('openChat');
         const newSearch = newParams.toString();
-        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
+        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}${location.hash}`, { replace: true, state: location.state });
     }
   }, [location, navigate]);
 

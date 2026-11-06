@@ -6,16 +6,12 @@ import { Check, Plus, Search, X } from '@/components/ui/icons';
 import { collaboratorCandidates } from '@/lib/taskCollaborators';
 
 /**
- * Co-responsables de una tarea (Rodny, 5 de octubre de 2026: opción A, «cada quien su reloj, un
- * solo responsable que cierra»). Envuelve el campo Responsable: a su lado un «+» que abre la lista
- * del equipo, y debajo una ficha por cada co-responsable elegido.
- *
- * Es selección múltiple, así que lleva su propio control accesible (`menuitemcheckbox`), nunca el
- * `Select` de selección simple. Sin responsable no se puede añadir a nadie: alguien tiene que cerrar.
+ * Equipo de una tarea: cada persona conserva su estado y reloj. El responsable sigue siendo
+ * el contacto principal. La selección múltiple usa un control accesible y exige responsable.
  */
 // El «+» no lleva alto propio: se estira al del campo Responsable, que es el `Select` compartido
 // (min-h-11). Con un alto fijo quedaba más bajo que el campo.
-export default function TaskCollaboratorsPicker({ members, assigneeId, value, onChange, children }) {
+export default function TaskCollaboratorsPicker({ members, assigneeId, value, onChange, children, disabled: disabledProp = false }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [position, setPosition] = useState(null);
@@ -26,7 +22,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
     const selected = Array.isArray(value) ? value.map(String) : [];
     const memberById = new Map((members || []).map((member) => [String(member.id), member]));
     const candidates = collaboratorCandidates(members, assigneeId, query);
-    const disabled = !assigneeId;
+    const disabled = disabledProp || !assigneeId;
 
     const close = ({ returnFocus = true } = {}) => {
         setOpen(false);
@@ -97,7 +93,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                     aria-label="Añadir colaboradores"
                     aria-haspopup="menu"
                     aria-expanded={open}
-                    title={disabled ? 'Elige primero el responsable' : 'Añadir colaboradores'}
+                    title={disabledProp ? 'No puedes cambiar los participantes en esta vista' : disabled ? 'Elige primero el responsable' : 'Añadir colaboradores'}
                     className={cn(
                         'inline-flex w-11 shrink-0 items-center justify-center rounded-lg border border-zinc-200/70 text-zinc-500 transition-colors hover:border-brand-cyan/50 hover:text-brand-cyan-deep disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-200/70 disabled:hover:text-zinc-500 dark:border-zinc-800/70 dark:text-zinc-300 dark:hover:text-brand-cyan sm:w-10',
                         open && 'border-brand-cyan/50 text-brand-cyan-deep dark:text-brand-cyan'
@@ -119,6 +115,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                                 <span className="max-w-[9rem] truncate">{member.name.split(' ')[0]}</span>
                                 <button
                                     type="button"
+                                    disabled={disabled}
                                     onClick={() => toggle(id)}
                                     aria-label={`Quitar a ${member.name}`}
                                     className="flex h-6 w-6 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-100"
@@ -144,7 +141,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                     )}
                 >
                     <p className="px-2 pb-2 pt-1 text-xs leading-4 text-zinc-500 dark:text-zinc-400">
-                        Cada colaborador registra su tiempo por separado. Solo el responsable cierra la tarea.
+                        Cada persona tiene su estado y su reloj. La tarea completa termina cuando todos finalizan su parte.
                     </p>
                     <label className="relative block">
                         <span className="sr-only">Buscar en el equipo</span>
