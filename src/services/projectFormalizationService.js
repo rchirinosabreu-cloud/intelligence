@@ -212,7 +212,7 @@ export const startFormalization = async (db = prisma, quotationId, actor = null,
     }
 
     const clientName = created.client?.name || quotation.client_company || quotation.client_name;
-    const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA');
+    const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA', { module: 'financiero' });
     if (!administrative.length) log('[Formalización] Nadie del equipo está en el área Administrativa y contable: la solicitud de formalización no tiene a quién llegar.');
     await deliverAll(administrative, {
         type: FORMALIZATION_REQUEST_TYPE, relatedId: created.formalization.id, url: FORMALIZATION_URL,

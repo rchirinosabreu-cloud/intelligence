@@ -64,7 +64,7 @@ const buildDb = ({ receivables = [], suspensions = [], areas = {}, enabled = tru
         teamMember: { findFirst: async ({ where }) => (areas[where.userId] ? { role: '', areas: areas[where.userId] } : null) },
         user: {
             findUnique: async ({ where }) => ({ name: where.id === 'u-elisa' ? 'Elisa' : 'Alguien' }),
-            findMany: async () => Object.entries(areas).map(([id, list]) => ({ id, teamMember: { role: '', areas: list } }))
+            findMany: async () => Object.entries(areas).map(([id, list]) => ({ id, role: 'EDITOR', modulePermissions: { financiero: list.includes('ADMINISTRATIVA') }, teamMember: { role: '', areas: list } }))
         }
     };
 };

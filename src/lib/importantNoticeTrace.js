@@ -101,6 +101,7 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
                 : `${actor} registró un seguimiento${CHANNEL_PHRASES[meta.channel] ? ` ${CHANNEL_PHRASES[meta.channel]}` : ''} desde el aviso de ${who}.`;
         case NOTICE_TRACE_EVENTS.SNOOZED: return `${actor} pospuso el aviso de ${who} ${SNOOZE_PHRASES[meta.option] || 'para más tarde'}.`;
         case NOTICE_TRACE_EVENTS.CLOSED:
+            if (meta.outcome === 'RECIBIDO') return `${actor} confirmó que recibió el aviso operativo de ${who}.`;
             if (meta.outcome === 'ARCHIVAR') return `${actor} archivó ${who} desde el aviso.`;
             return `${actor} marcó ${who} como ${OUTCOME_PHRASES[meta.outcome] || 'cerrada'} desde el aviso de revisión${meta.outcome === 'GANADO' ? ': ya es cliente' : ''}.`;
         case NOTICE_TRACE_EVENTS.CLEARED: {
@@ -117,6 +118,7 @@ export const noticeTraceLink = (metadata) => {
     if (typeof url !== 'string') return null;
     if (url.startsWith('/crm/')) return { url, label: metadata.subject || 'Abrir en el CRM' };
     if (url.startsWith('/financiero')) return { url, label: metadata.subject || 'Abrir Cuentas por cobrar' };
+    if (url.startsWith('/clientes/operacion/')) return { url, label: metadata.subject || 'Abrir operación' };
     return null;
 };
 

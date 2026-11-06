@@ -28,6 +28,7 @@ export function createImportantNoticeRouter({ service = importantNotices, db = p
   router.post('/:id/shown', handle('No pudimos registrar el aviso.', (req) => service.markNoticeShown(db, req.params.id, req.user, { now: clock() })));
   router.post('/:id/follow-up', handle('No pudimos registrar el seguimiento.', (req) => service.followUpNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
   router.post('/:id/snooze', handle('No pudimos posponer el aviso.', (req) => service.snoozeNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
+  router.post('/:id/acknowledge', handle('No pudimos registrar la decisión.', req => service.acknowledgeOperationalNotice(db, req.params.id, req.user, { now: clock() })));
   router.post('/:id/close', handle('No pudimos cerrar la oportunidad.', (req) => service.closeReviewNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
   return router;
 }

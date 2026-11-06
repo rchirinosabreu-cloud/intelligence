@@ -86,8 +86,12 @@ export const planNoticePlan = ({ pending = [], open = [], today }) => {
             ...planNoticeText({ ...row, closing: isClosing(row.cycle, today) })
         }));
 
-    const create = wanted.filter((item) => !open.some((notice) => same(notice, item)));
-    const keep = new Set(open.filter((notice) => wanted.some((item) => same(notice, item))).map((notice) => notice.id));
+    const create = wanted.filter((item) => !open.some((notice) => notice.subjectId === item.subjectId));
+    const update = wanted.flatMap((item) => {
+        const existing = open.find((notice) => notice.subjectId === item.subjectId);
+        return existing && !same(existing, item) ? [{ id: existing.id, ...item }] : [];
+    });
+    const keep = new Set(open.filter((notice) => wanted.some((item) => item.subjectId === notice.subjectId)).map((notice) => notice.id));
     const close = open.filter((notice) => !keep.has(notice.id)).map((notice) => ({ id: notice.id, resolution: 'YA_ATENDIDO' }));
-    return { create, close };
+    return { create, close, update };
 };

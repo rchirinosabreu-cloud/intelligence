@@ -8,7 +8,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { FOLLOW_UP_CHANNELS, NOTICE_ARCHIVE_OUTCOME, REVIEW_OUTCOMES, SNOOZE_OPTIONS, noticeTitleHref } from '@/lib/importantNotices';
 
-// Avisos importantes (Rodny, 26 de octubre de 2026): la banda de abajo, de borde a borde y por encima del menú. Un aviso
+// Avisos importantes: tarjeta inferior con halo suave, por encima del menú. Un aviso
 // a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
 // importante. «Recordarme» va siempre al final, «Abrir» es un botón como los demás y no hay «Volver» ni nota: tocar fuera
 // del aviso o Esc devuelve a sus botones.
@@ -39,7 +39,7 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
   <button
     type="button"
     className={cn(
-      'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:opacity-60',
+      'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition-colors disabled:opacity-60',
       primary ? 'brain-notice-primary' : 'brain-notice-ghost',
       className
     )}
@@ -47,12 +47,35 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
   />
 );
 
-function NoticeBody({ notice, onDecided, onRefresh }) {
+function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance = 'halo' }) {
   const navigate = useNavigate();
   const navigateFrom = useNavigateFrom();
   const [mode, setMode] = useState('base'); // base | channels | close | snooze
   const [busy, setBusy] = useState(false);
   const contentRef = useRef(null);
+  const bandRef = useRef(null);
+  useEffect(() => {
+    if (!onHeightChange || !bandRef.current) return undefined;
+    const measure = () => onHeightChange(Math.ceil(bandRef.current.getBoundingClientRect().height));
+    const observer = new ResizeObserver(measure);
+    observer.observe(bandRef.current);
+    measure();
+    return () => { observer.disconnect(); onHeightChange(0); };
+  }, [onHeightChange]);
+  const previousMode = useRef('base');
+  const returnAction = useRef('snooze');
+  const restoreFocus = useRef(true);
+  const openOptions = (nextMode, action) => {
+    returnAction.current = action;
+    restoreFocus.current = true;
+    setMode(nextMode);
+  };
+  useEffect(() => {
+    if (previousMode.current === mode) return;
+    previousMode.current = mode;
+    const selector = mode === 'base' ? `[data-notice-action="${returnAction.current}"]` : 'button:not([disabled])';
+    if (mode !== 'base' || restoreFocus.current) contentRef.current?.querySelector(selector)?.focus({ preventScroll: true });
+  }, [mode]);
   const isReview = notice.kind === 'CRM_REVIEW';
   // Un aviso de una oportunidad: se puede archivar a la vista (Rodny, 4 de noviembre de 2026).
   const isCrm = String(notice.kind || '').startsWith('CRM_');
@@ -67,6 +90,7 @@ function NoticeBody({ notice, onDecided, onRefresh }) {
   // parrilla y se marcan las piezas una por una —que es mirarlas—, y el aviso se cae solo en cuanto están publicadas,
   // también el de la otra persona a cargo de la cuenta: por eso no hay «avisarle a la otra».
   const isPlan = String(notice.kind || '').startsWith('PARRILLA_');
+  const isOperational = String(notice.kind || '').startsWith('OPERACION_');
   const openLabel = notice.kind === 'PARRILLA_RESUMEN' ? 'Abrir Operación' : 'Abrir la parrilla';
 
   // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
@@ -87,7 +111,12 @@ function NoticeBody({ notice, onDecided, onRefresh }) {
   useEffect(() => {
     if (mode === 'base') return undefined;
     const onKey = (event) => { if (event.key === 'Escape') setMode('base'); };
-    const onPointer = (event) => { if (!contentRef.current?.contains(event.target)) setMode('base'); };
+    const onPointer = (event) => {
+      if (!contentRef.current?.contains(event.target)) {
+        restoreFocus.current = false; // El clic exterior conserva el foco donde la persona decidió ir.
+        setMode('base');
+      }
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onPointer);
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onPointer); };
@@ -115,30 +144,34 @@ function NoticeBody({ notice, onDecided, onRefresh }) {
   };
 
   return (
-    <div className="brain-notice-band" data-important-notice={notice.id} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'}>
+    <div ref={bandRef} className="brain-notice-band" data-important-notice={notice.id} data-appearance={appearance} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'}>
       <div className="brain-notice-wash" aria-hidden="true" />
       <div className="brain-notice-content">
-        <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite" className="mx-auto max-w-3xl">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-white/90">{notice.label}</p>
-          <p className="brain-notice-title mb-4 text-[22px] font-bold leading-tight text-white">
+        <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite">
+          <p className="brain-notice-label"><span className="brain-notice-dot" aria-hidden="true" />{notice.label}</p>
+          <p className="brain-notice-title">
             {titleHref ? (
-              <a href={titleHref} data-notice-title-link onClick={openTitle} className="rounded underline decoration-white/50 decoration-1 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              <a href={titleHref} data-notice-title-link onClick={openTitle} className="rounded transition-colors hover:underline">
                 {notice.message}
               </a>
             ) : notice.message}
           </p>
-          {mode === 'channels' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
-          {mode === 'snooze' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cuándo te lo recuerdo?</p>}
-          {mode === 'close' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cómo la cerramos?</p>}
-          <div className="flex flex-wrap justify-center gap-2.5" aria-busy={busy}>
+          {mode === 'channels' && <p className="mb-3 text-sm font-medium">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
+          {mode === 'snooze' && <p className="mb-3 text-sm font-medium">¿Cuándo te lo recuerdo?</p>}
+          {mode === 'close' && <p className="mb-3 text-sm font-medium">¿Cómo la cerramos?</p>}
+          <div className="flex flex-wrap gap-2" role="group" aria-label={mode === 'base' ? 'Acciones del aviso' : 'Opciones del aviso'} aria-busy={busy}>
             {mode === 'base' && (
               <>
-                {isPlan ? (
+                {isOperational ? (
+                  <NoticeButton primary disabled={busy} data-notice-action="open-operation" onClick={() => navigateFrom(notice.url)}>
+                    {notice.actionLabel || 'Revisar operación'}
+                  </NoticeButton>
+                ) : isPlan ? (
                   <NoticeButton primary disabled={busy} data-notice-action="open-plan" onClick={() => navigate(notice.url || '/clientes')}>
                     {openLabel}
                   </NoticeButton>
                 ) : (
-                  <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => setMode('channels')}>
+                  <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => openOptions('channels', 'follow-up')}>
                     {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
                   </NoticeButton>
                 )}
@@ -150,11 +183,11 @@ function NoticeBody({ notice, onDecided, onRefresh }) {
                 {/* En la revisión, «No sigue» pregunta si quedó perdida o descartada, y no hay «Abrir» (Rodny, 26 de
                     octubre de 2026). «Cerrar» se confundía con cerrar el aviso y «Descartar» elegía una de las dos. */}
                 {isReview && (
-                  <NoticeButton disabled={busy} data-notice-action="close" onClick={() => setMode('close')}>
+                  <NoticeButton disabled={busy} data-notice-action="close" onClick={() => openOptions('close', 'close')}>
                     No sigue
                   </NoticeButton>
                 )}
-                {!isReview && !isCollection && !isPlan && notice.url && (
+                {!isReview && !isCollection && !isPlan && !isOperational && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
                 )}
                 {isCrm && (
@@ -162,7 +195,8 @@ function NoticeBody({ notice, onDecided, onRefresh }) {
                     Archivar
                   </NoticeButton>
                 )}
-                <NoticeButton disabled={busy} data-notice-action="snooze" aria-haspopup="true" onClick={() => setMode('snooze')}>
+                {isOperational && notice.acknowledge && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, 'Aviso recibido')}>Entendido</NoticeButton>}
+                <NoticeButton disabled={busy} data-notice-action="snooze" onClick={() => openOptions('snooze', 'snooze')}>
                   Recordarme <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </NoticeButton>
               </>
@@ -193,7 +227,7 @@ function NoticeBody({ notice, onDecided, onRefresh }) {
 }
 
 /** La banda de avisos importantes. `onVisibleChange` deja espacio abajo en la página para que nada quede tapado. */
-export default function ImportantNoticeBand({ enabled = true, onVisibleChange }) {
+export default function ImportantNoticeBand({ enabled = true, onVisibleChange, onHeightChange, appearance = 'halo' }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: NOTICE_KEY,
@@ -223,6 +257,8 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange })
     <NoticeBody
       key={notice.id}
       notice={notice}
+      appearance={appearance}
+      onHeightChange={onHeightChange}
       onRefresh={() => queryClient.invalidateQueries({ queryKey: NOTICE_KEY })}
       onDecided={() => {
         queryClient.invalidateQueries({ queryKey: NOTICE_KEY });

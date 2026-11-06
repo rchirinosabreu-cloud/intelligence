@@ -1,6 +1,5 @@
-// La banda de avisos importantes (Rodny, 26 de octubre de 2026): «un degradado sin borde, solo degradado que se desvanece
-// suavemente arriba, es radial … el texto centrado»; por encima de todo, también del menú; verde para el seguimiento y
-// salmón solo para lo más importante; «Abrir» como botón, «Recordarme» al final, sin «Volver» ni «Nota opcional».
+// Revisión local de noviembre: tarjeta más ancha con halo suave elegida por Rodny.
+// Conserva posición, niveles, decisiones y permanencia de la banda existente.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,15 +14,15 @@ test('la banda vive en el layout para todo el equipo y deja espacio abajo en la 
     assert.match(band, /\/api\/important-notices\/current/);
 });
 
-test('cúpula radial sin borde, de borde a borde, encima del menú y debajo de los diálogos', () => {
+test('tarjeta con halo suave, encima del menú y debajo de los diálogos', () => {
     const block = css.slice(css.indexOf('.brain-notice-band {'), css.indexOf('.brain-popover-surface {'));
     assert.match(block, /z-index: 65;/, 'el menú lateral va en 60 y los diálogos desde 70');
-    assert.match(block, /inset: auto 0 0 0;/);
-    assert.match(block, /radial-gradient\(var\(--notice-spread, 62%\) 100% at 50% 100%/);
-    assert.match(block, /mask-image: radial-gradient\(var\(--notice-mask, 75%\) 100% at 50% 100%/);
-    assert.match(block, /--notice-spread: 125%; --notice-mask: 140%;/, 'en el celular la cúpula se ensancha para que el título quede sobre el color');
-    assert.doesNotMatch(block, /border(-top)?:/);
-    assert.match(block, /--notice-hue: var\(--brand-green\)/);
+    assert.match(block, /width: min\(680px, calc\(100vw - 32px\)\)/);
+    assert.match(block, /border-radius: 20px/);
+    assert.match(block, /backdrop-filter: blur\(10px\)/);
+    assert.match(block, /width: calc\(100vw - 24px\)/);
+    assert.match(band, /appearance = 'halo'/);
+    assert.match(block, /--notice-hue: var\(--brand-coral\)/);
     assert.match(block, /\[data-level="IMPORTANTE"\] \{ --notice-hue: var\(--brand-coral\); \}/);
     assert.doesNotMatch(block, /--brand-cyan|--brand-magenta/, 'un solo tono por nivel: sin azul y sin magenta');
     assert.doesNotMatch(block, /#[0-9a-f]{6}/i, 'los colores salen de los tokens de marca');
@@ -44,11 +43,11 @@ test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» s
     assert.match(base, />\s*No sigue\s*</);
     assert.match(band, /¿Cómo la cerramos\?/);
     assert.match(band, /mode === 'close' && REVIEW_OUTCOMES\.map/);
-    assert.match(base, /\{!isReview && !isCollection && !isPlan && notice\.url && \(/);
+    assert.match(base, /\{!isReview && !isCollection && !isPlan && !isOperational && notice\.url && \(/);
 
     // Un aviso de parrilla no tiene seguimiento que registrar: su botón principal abre la parrilla y las piezas se
     // marcan una por una, que es mirarlas (Rodny, 30 de octubre de 2026). «Recordarme» sigue al final.
-    assert.match(base, /\{isPlan \? \(/);
+    assert.match(base, /isPlan \? \(/);
     assert.ok(base.indexOf('data-notice-action="open-plan"') < base.indexOf('data-notice-action="snooze"'));
     assert.match(band, /const openLabel = notice\.kind === 'PARRILLA_RESUMEN' \? 'Abrir Operación' : 'Abrir la parrilla'/);
 });
@@ -82,7 +81,7 @@ test('«Archivar» a la vista en todo aviso del CRM y el título lleva a lo que 
 
 test('Esc o tocar fuera devuelve a los botones, y el éxito se dice después de la respuesta del servidor', () => {
     assert.match(band, /event\.key === 'Escape'\) setMode\('base'\)/);
-    assert.match(band, /!contentRef\.current\?\.contains\(event\.target\)\) setMode\('base'\)/);
+    assert.match(band, /!contentRef\.current\?\.contains\(event\.target\)\) \{\s*restoreFocus\.current = false;/);
     const decide = band.slice(band.indexOf('const decide'), band.indexOf('return (', band.indexOf('const decide')));
     assert.ok(decide.indexOf('await post(') < decide.indexOf('toast.success'), 'nunca un éxito antes de la respuesta');
     assert.match(band, /console\.error\('\[Avisos importantes\]', data\)/);

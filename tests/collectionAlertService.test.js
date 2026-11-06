@@ -16,7 +16,7 @@ const team = [
     { id: 'u-rodny', name: 'Rodny Chirinos', teamMember: { role: 'Project Manager', areas: ['DIRECCION', 'PROJECT_MANAGEMENT'] } },
     { id: 'u-kamila', name: 'Kamila del Toro', teamMember: { role: 'Project Manager', areas: [] } },
     { id: 'u-francys', name: 'Francys Caballero', teamMember: { role: 'Comercial y Relaciones Públicas', areas: [] } }
-];
+].map(person => ({ ...person, role: 'EDITOR', isActive: true, modulePermissions: { financiero: ['u-elisa', 'u-francisco', 'u-rodny'].includes(person.id) }, teamMember: { ...person.teamMember, isActive: true } }));
 const rec = (over) => ({ kind: 'CLIENTE', status: 'DEBE', amount: 1600000, issuedAt: null, dueDate: null, number: null, payments: [], ...over });
 const clients = () => [
     { id: 'c-nuva', name: 'Muebles Nuva', slug: 'muebles-nuva', contracts: [{ serviceType: 'PARRILLA', startDate: '2026-01-01' }], projectManager: { userId: 'u-kamila' },
@@ -239,6 +239,7 @@ const noticeDb = ({ receivables = clients()[0].accountsReceivables, role = 'Coor
     const updates = [];
     return {
         updates,
+        user: { findUnique: async () => ({ role: 'EDITOR', modulePermissions: { financiero: true }, isActive: true, teamMember: { isActive: true } }) },
         importantNotice: {
             findMany: async () => (notice.resolvedAt ? [] : [notice]),
             findFirst: async ({ where }) => (where.id ? (where.id === notice.id ? notice : null) : null),

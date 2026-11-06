@@ -167,7 +167,7 @@ export const createClientSuspensionService = ({
 
         const settings = await readCollectionSettings(db);
         if (!settings.enabled) return result;
-        const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA');
+        const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA', { module: 'financiero' });
         // Solo se propone suspender a quien de verdad se está trabajando: una cuenta archivada o sin contrato vigente
         // no tiene parrilla que congelar, y proponerlo sería el ruido del Excel de enero (la lectura de producción del
         // 30 de octubre de 2026 dio 15 candidatos, 7 de ellos archivados con saldos de enero). A mano sí se puede
