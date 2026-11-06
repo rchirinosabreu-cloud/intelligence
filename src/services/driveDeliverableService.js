@@ -84,7 +84,12 @@ async function visibleResources(db, actor) {
 
 /** Projects native current files; never creates DriveFile rows or changes ownership of the bytes. */
 export async function listDriveDeliverables({ db = prisma, actor, folderId = rootId, query = '' } = {}) {
-  const parts = parseFolder(folderId), resources = await visibleResources(db, actor);
+  let parts = parseFolder(folderId);
+  const resources = await visibleResources(db, actor);
+  if (parts.length === 5) {
+    const resource = resources.find(row => row.id === parts[4] && row.kind === parts[3] && (row.clientId || 'none') === parts[0]);
+    if (resource) parts = resourcePath(resource);
+  }
   const selected = resources.filter(resource => within(resource, parts));
   if (parts.length && !selected.length) throw fail('La carpeta de entregables no está disponible.');
   const count = list => list.reduce((sum, resource) => sum + resource.files.length, 0);
@@ -104,5 +109,6 @@ export async function listDriveDeliverables({ db = prisma, actor, folderId = roo
     }
     folders = [...groups.values()].sort((a, b) => parts.length === 1 ? b.name.localeCompare(a.name, 'es', { numeric: true }) : a.name.localeCompare(b.name, 'es', { numeric: true }));
   }
-  return { currentFolder: breadcrumbs.at(-1), breadcrumbs, folders, files };
+  return { currentFolder: breadcrumbs.at(-1), breadcrumbs, folders, files,
+    ...(folderId !== deliveryFolderId(parts) ? { redirectedFrom: folderId } : {}) };
 }

@@ -157,6 +157,14 @@ const DriveLayout = () => {
   const query = searchParams.get('q') || '';
   const requestedFolderId = searchParams.get('folderId');
   const isDeliverablesFolder = isDeliveryFolderId(requestedFolderId);
+  useEffect(() => {
+    if (!contents.redirectedFrom || contents.redirectedFrom !== requestedFolderId || !contents.currentFolder?.id) return;
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      next.set('folderId', contents.currentFolder.id);
+      return next;
+    }, { replace: true, state: location.state });
+  }, [contents.redirectedFrom, contents.currentFolder?.id, requestedFolderId, setSearchParams, location.state]);
   const history = isDeliverablesFolder ? (contents.breadcrumbs || []) : localHistory;
   const [filter, setFilter] = useState('ALL');
   const [trash, setTrash] = useState(false);

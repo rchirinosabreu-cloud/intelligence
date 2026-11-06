@@ -27,7 +27,7 @@ test('desde la pantalla no hay forma de romper el enlace del cliente', async () 
   // Rodny, 25 de septiembre de 2026: «¿no es mejor eliminar la opción de generar enlace nuevo?».
   // El botón se quitó; `rotate` sigue en el servicio y en la ruta como salida de emergencia, pero
   // ninguna pantalla lo ofrece, así que pulsar Compartir no puede romper nada.
-  assert.match(editor, /Copiar link/);
+  assert.match(editor, /aria-label="Compartir parrilla"/);
   assert.doesNotMatch(editor, /Generar un enlace nuevo/);
   assert.doesNotMatch(editor, /rotate: true/, 'ninguna pantalla pide rotar el enlace');
   assert.match(editor, /mutate\(\{ rotate: false \}\)/, 'copiar pide explícitamente no rotar');

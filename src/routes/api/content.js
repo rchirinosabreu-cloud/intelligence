@@ -11,6 +11,7 @@ import {
   getContentItemsByPlan,
   createContentItem,
   updateContentItem,
+  getContentItemLocation,
   deleteContentItem,
   sendItemToKanban,
   generateShareToken,
@@ -287,17 +288,22 @@ router.get('/items', async (req, res) => {
 
 router.post('/items', async (req, res) => {
   try {
-    const item = await createContentItem(req.body);
+    const item = await createContentItem(req.body, { actorId: req.user?.userId || req.user?.id });
     return res.status(201).json(item);
   } catch (error) {
     console.error('[API] Error creating content item:', error);
-    return res.status(500).json({ error: 'Failed to create content item', details: error.message });
+    return res.status(error.status || error.statusCode || 500).json({ error: error.status ? error.message : 'Failed to create content item', details: error.message });
   }
+});
+
+router.get('/items/:id/location', async (req, res) => {
+  try { return res.json(await getContentItemLocation(req.params.id)); }
+  catch (error) { return res.status(error.status || 500).json({ error: error.message }); }
 });
 
 router.patch('/items/:id', async (req, res) => {
   try {
-    const item = await updateContentItem(req.params.id, req.body);
+    const item = await updateContentItem(req.params.id, req.body, { actorId: req.user?.userId || req.user?.id });
     return res.json(item);
   } catch (error) {
     console.error('[API] Error updating content item:', error);

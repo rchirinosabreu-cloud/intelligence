@@ -538,7 +538,8 @@ export const createClientOperationsService = ({
     }
     await updateItem(item.id, { status: previousStatus, manualPublish: Prisma.DbNull });
     const previousPlanStatus = item.manualPublish.previousPlanStatus;
-    if (item.plan?.status === 'FINALIZADO' && previousPlanStatus && previousPlanStatus !== 'FINALIZADO') {
+    const samePlan = !item.manualPublish.previousPlanId || item.manualPublish.previousPlanId === item.plan?.id;
+    if (samePlan && item.plan?.status === 'FINALIZADO' && previousPlanStatus && previousPlanStatus !== 'FINALIZADO') {
       await db.contentPlan.update({ where: { id: item.plan.id }, data: { status: previousPlanStatus } });
     }
     return { id: item.id, status: previousStatus };

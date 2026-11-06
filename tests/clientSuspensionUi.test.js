@@ -48,7 +48,7 @@ test('el portal del cliente nunca se entera: la suspensión frena nuestro trabaj
 
 test('crear parrilla, crear pieza, despachar y programar pasan por la misma cerradura', () => {
     const publishing = contentService.indexOf('export const sendItemToKanban');
-    assert.match(contentService, /await assertNotSuspended\(prisma, \{ clientId, year, month, clientName: owner\?\.name \}\)/);
-    assert.match(contentService, /export const createContentItem = async \(data\) => \{\s*await assertPlanNotSuspended\(await planCycle\(data\?\.planId\)\)/);
+    assert.match(contentService, /await assertNotSuspended\(db, \{ clientId, year, month, clientName: owner\?\.name \}\)/);
+    assert.match(contentService, /export const createContentItem = async \(data, \{ actorId = null \} = \{\}\) => \{\s*await assertPlanNotSuspended\(await planCycle\(data\?\.planId\)\)/);
     assert.ok(contentService.indexOf('await assertPlanNotSuspended(item.plan)', publishing) > publishing, 'despachar a Kanban también');
 });
