@@ -78,6 +78,17 @@ test('a concrete path finds its operation and its parameters; a search finds by 
   assert.deepEqual(findOperations(''), []);
 });
 
+test('MIO history is a read with Parrillas access and is not mistaken for a monthly detail', () => {
+  const history = matchOperation('GET', '/content/external-plans/cuenta-ficticia/periods');
+  assert.equal(history.key, 'GET /content/external-plans/:slug/periods');
+  assert.deepEqual(history.params, { slug: 'cuenta-ficticia' });
+  assert.equal(history.write, false);
+  const month = matchOperation('GET', '/content/external-plans/cuenta-ficticia/noviembre-2026');
+  assert.equal(month.key, 'GET /content/external-plans/:slug/:period');
+  assert.deepEqual(month.params, { slug: 'cuenta-ficticia', period: 'noviembre-2026' });
+  assert.deepEqual(buildRoutePermissionIndex(apiRouter).get(history.key), { modules: ['parrillas'] });
+});
+
 test('the permission index gives each described operation what its route asks for', () => {
   const index = buildRoutePermissionIndex(apiRouter);
   assert.deepEqual(index.get('POST /global-announcements'), { roles: ['MANAGER'] });
