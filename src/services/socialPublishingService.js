@@ -352,7 +352,7 @@ export const createSocialPublishingService = ({
     const token = randomId();
     const current = now();
     const claimed = await db.socialPublication.updateMany({
-      where: { id: row.id, status: row.status, leaseToken: row.leaseToken ?? null },
+      where: { id: row.id, status: row.status, leaseToken: row.leaseToken ?? null, scheduledAt: row.scheduledAt },
       data: { status: 'PUBLISHING', leaseToken: token, leaseAt: current }
     });
     return claimed.count === 1 ? token : null;

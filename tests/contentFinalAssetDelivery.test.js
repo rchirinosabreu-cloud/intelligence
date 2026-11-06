@@ -75,9 +75,10 @@ test('el navegador sube directo, pero el servidor decide la clave y comprueba lo
   const service = await read('src/services/contentService.js');
   assert.match(
     service,
-    /if \(!key\.startsWith\(`\$\{basePath\}\/`\)\) throw new Error\('Ese archivo no pertenece a esta pieza\.'\)/,
+    /if \(!\[\.\.\.allowedBases\]\.some\(prefix => key\.startsWith\(`\$\{prefix\}\/`\)\)\) throw new Error\('Ese archivo no pertenece a esta pieza\.'\)/,
     'la clave la elige el servidor: aceptar cualquiera dejaría colgar el archivo de otro cliente'
   );
+  assert.match(service, /contentItemPeriodChange\.findMany\(\{ where: \{ itemId \}/, 'las rutas anteriores proceden solo del historial de esta pieza');
   assert.match(service, /const object = await finalStorage\.headS3Object\(key\);/, 'el peso real se lee del almacenamiento dedicado');
   assert.match(service, /object\.size > FINAL_ASSET_DIRECT_MAX_BYTES/);
   assert.match(service, /if \(object\.size <= 0\)/, 'un objeto vacío no se confirma como pieza');

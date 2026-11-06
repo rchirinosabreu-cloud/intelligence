@@ -18,10 +18,11 @@ import {
   ChevronLeft, ChevronRight, Plus, Send, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, Instagram, Facebook, Video,
-  Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
+  Edit2, Check, AlertCircle, Sparkles, StickyNote, ChevronUp, Share,
   MessageSquare, Table2, UploadCloud, Link2, Eye
 } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
+import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
 import {
@@ -1034,6 +1035,24 @@ const ContentPlanDetail = () => {
 
   const month = getMonthNumber(monthName);
 
+  const { data: linkedLocation } = useQuery({
+    queryKey: ['content-item-location', linkedItemId],
+    enabled: Boolean(linkedItemId),
+    retry: false,
+    queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/content/items/${linkedItemId}/location`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data
+  });
+  useEffect(() => {
+    if (!linkedLocation) return;
+    const same = planId ? linkedLocation.planId === planId : linkedLocation.plan.month === month
+      && linkedLocation.plan.year === Number(year) && linkedLocation.plan.client.slug === clientSlug;
+    if (same) return;
+    const search = new URLSearchParams(location.search);
+    search.set('item', linkedLocation.id); search.delete('itemId');
+    navigate(`/parrillas/${linkedLocation.planId}?${search}`, { replace: true, state: location.state });
+  }, [linkedLocation, planId, month, year, clientSlug, location.search, location.state, navigate]);
+
   // Queries
   const { data: plan, isLoading: planLoading } = useQuery({
     queryKey: ['content-plan', planId || `${clientSlug}-${period}`],
@@ -1044,16 +1063,6 @@ const ContentPlanDetail = () => {
       }
 
       const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
-      });
-      return response.data;
-    }
-  });
-
-  const { data: clients } = useQuery({
-    queryKey: ['clients-list'],
-    queryFn: async () => {
-      const response = await axios.get(`${getApiBaseUrl()}/api/db/clients`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
@@ -1164,6 +1173,12 @@ const ContentPlanDetail = () => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       setNewlyCreatedItemId(newItem.id);
       setEditingItemId(newItem.id);
+      if (newItem.periodTransfer) {
+        queryClient.invalidateQueries({ queryKey: ['content-plans'] });
+        navigate(`/parrillas/${newItem.planId}?item=${newItem.id}`, { replace: true, state: location.state });
+        toast.success('Pieza creada en la parrilla de su fecha de publicación');
+        return;
+      }
       selectPiece(newItem.id);
       toast.success('Nueva pieza añadida');
     }
@@ -1171,15 +1186,33 @@ const ContentPlanDetail = () => {
 
   const updateItemMutation = useMutation({
     mutationFn: async ({ id, ...data }) => {
-      await axios.patch(`${getApiBaseUrl()}/api/content/items/${id}`, data, {
+      const response = await axios.patch(`${getApiBaseUrl()}/api/content/items/${id}`, { ...data, expectedPlanId: currentPlanId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
+      return response.data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (item, variables) => {
       if (variables?.id === newlyCreatedItemId && Object.prototype.hasOwnProperty.call(variables, 'publishDate')) {
         setNewlyCreatedItemId(null);
       }
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      if (item?.periodTransfer) {
+        queryClient.setQueryData(['content-item-location', item.id], { id: item.id, planId: item.planId,
+          plan: { ...item.periodTransfer.toPlan, client: { slug: plan?.client?.slug || clientSlug } } });
+        for (const key of ['content-plan', 'content-plans', 'nativeTasks', 'task', 'dashboardMetrics', 'client-operations']) {
+          queryClient.invalidateQueries({ queryKey: [key] });
+        }
+        const target = item.periodTransfer.toPlan;
+        toast.success(`Pieza trasladada a ${getContentPlanMonthName(target.month)} de ${target.year}${item.periodTransfer.destinationCreated ? '. Parrilla creada.' : '.'}`);
+        const search = new URLSearchParams(location.search);
+        search.set('item', item.id); search.delete('itemId');
+        navigate(`/parrillas/${target.id}?${search}`, { replace: true, state: location.state });
+      }
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'No se pudo actualizar la pieza. Se conserva su ubicación anterior.');
+      queryClient.invalidateQueries({ queryKey: ['content-item-location'] });
+      queryClient.invalidateQueries({ queryKey: ['content-plan'] });
     }
   });
 
@@ -1531,13 +1564,13 @@ const ContentPlanDetail = () => {
           { label: plan.client?.name || 'Cliente' },
         ]}
       >
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-start gap-3 w-full sm:w-auto">
           <PlanPeriodSelector plan={plan} disabled={Boolean(editingItemId || finalAssetUploadMutation.isPending || driveAssetMutation.isPending)} />
-          <div className="flex min-w-0 flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
             <Select
+              aria-label="Estado de la parrilla"
               value={plan.status}
               onChange={(e) => updatePlanMutation.mutate({ status: e.target.value })}
-              className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest focus:ring-0 cursor-pointer px-3 py-1.5"
+              className="h-11 w-auto min-w-40 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 dark:border-white/5 dark:bg-zinc-900 dark:text-zinc-100"
             >
               <option value="PLANIFICACION">Planificación</option>
               <option value="EN_APROBACION">En Aprobación</option>
@@ -1545,35 +1578,30 @@ const ContentPlanDetail = () => {
               <option value="FINALIZADO">Finalizado</option>
             </Select>
 
-            <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
-
             <button
+              type="button"
+              aria-label="Compartir parrilla"
               onClick={() => generateShareTokenMutation.mutate({ rotate: false })}
               disabled={generateShareTokenMutation.isPending}
-              className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition-all hover:text-brand-cyan-deep dark:hover:text-brand-cyan"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 transition-colors hover:text-brand-cyan-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan/30 disabled:opacity-50 dark:border-white/5 dark:bg-zinc-900 dark:hover:text-brand-cyan"
               title={plan.shareToken ? 'Copiar el enlace de esta parrilla' : 'Crear el enlace para el cliente'}
             >
-              {generateShareTokenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}
-              {plan.shareToken ? 'Copiar link' : 'Compartir'}
+              {generateShareTokenMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share className="w-5 h-5" />}
             </button>
 
             {/* Solo aparece si hay algo que pedir: con todas las piezas ya en manos del cliente, un
                 botón que no hace nada sobra. */}
             {piecesToReview.length > 0 && (
-              <>
-                <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
                 <button
                   onClick={() => requestRevisionMutation.mutate()}
                   disabled={requestRevisionMutation.isPending}
-                  className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition-all hover:text-brand-magenta-deep dark:hover:text-brand-magenta"
+                  className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-500 transition-colors hover:text-brand-magenta-deep dark:border-white/5 dark:bg-zinc-900 dark:hover:text-brand-magenta"
                   title={`Devolver al cliente ${piecesToReview.length} pieza(s) que ya había aprobado, para que revise el material`}
                 >
                   {requestRevisionMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                   Pedir revisión ({piecesToReview.length})
                 </button>
-              </>
             )}
-          </div>
 
           <Button
             size="lg"
@@ -1587,22 +1615,10 @@ const ContentPlanDetail = () => {
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
-          <div className="flex items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-zinc-400" />
+          <div className="flex min-w-0 items-center gap-2" data-plan-owner>
+            <TeamAvatar member={team?.find(member => member.id === plan.ownerId) || plan.owner || null} size={28} className="h-7 w-7" />
             <Select
-              value={plan.clientId}
-              onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
-              className="cursor-pointer border-none bg-transparent pl-0 pr-7 text-sm font-medium text-zinc-500 transition-colors hover:text-brand-cyan-deep focus:ring-0 dark:text-zinc-400 dark:hover:text-brand-cyan"
-            >
-              {clients?.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
-            <Select
+              aria-label="Responsable de la parrilla"
               value={plan.ownerId || ''}
               onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
               className="cursor-pointer border-none bg-transparent pl-0 pr-7 text-sm font-medium text-zinc-500 transition-colors hover:text-brand-cyan-deep focus:ring-0 dark:text-zinc-400 dark:hover:text-brand-cyan"

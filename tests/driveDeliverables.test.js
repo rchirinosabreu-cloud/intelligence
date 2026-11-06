@@ -19,6 +19,15 @@ function fixture() {
   return { db, calls, list: options => listDriveDeliverables({ db, actor, ...options }) };
 }
 
+test('a saved piece folder follows its new period after authorization, preserving the file identity', async () => {
+  const f = fixture();
+  const old = deliveryFolderId(['client', 2024, 9, 'CONTENT', 'piece']);
+  const result = await f.list({ folderId: old, query: 'foto' });
+  assert.equal(result.currentFolder.id, deliveryFolderId(['client', 2025, 10, 'CONTENT', 'piece']));
+  assert.equal(result.files[0].fileId, 'p-file');
+  await assert.rejects(f.list({ folderId: old, actor: { ...actor, modulePermissions: { drive: true } } }), error => error.status === 404);
+});
+
 test('Drive virtual groups by authorized client, year, month and source, without copying files', async () => {
   const f = fixture();
   const root = await f.list({ folderId: 'deliverables' });

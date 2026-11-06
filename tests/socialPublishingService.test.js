@@ -203,7 +203,7 @@ test('the cron claims due rows by compare-and-set, publishes with signed URLs an
   assert.deepEqual(outcomes.map((outcome) => [outcome.id, outcome.status]), [['pub-instagram', 'PUBLISHED'], ['pub-facebook', 'PUBLISHED']], 'the later one waits');
 
   const claim = state.log.find(([kind]) => kind === 'updateMany');
-  assert.deepEqual(claim[1], { id: 'pub-instagram', status: 'SCHEDULED', leaseToken: null }, 'compare-and-set on the row as it was read');
+  assert.deepEqual(claim[1], { id: 'pub-instagram', status: 'SCHEDULED', leaseToken: null, scheduledAt: new Date('2036-10-03T15:30:00.000Z') }, 'compare-and-set on the row and date as they were read');
   assert.equal(claim[2].status, 'PUBLISHING');
   assert.equal(claim[2].leaseToken, 'lease-1');
 

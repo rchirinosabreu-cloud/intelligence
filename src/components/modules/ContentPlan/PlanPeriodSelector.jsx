@@ -26,9 +26,8 @@ export default function PlanPeriodSelector({ plan, external = false, disabled = 
   const current = buildOptions(plan)[0]?.value || '';
   return (
     <div className="w-full min-w-0 sm:w-56" data-plan-period-selector>
-      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400" htmlFor="plan-period">Período de la parrilla</label>
-      <Select id="plan-period" value={current} disabled={disabled || isLoading || isError || options.length < 2}
-        className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100"
+      <Select id="plan-period" aria-label="Período de la parrilla" value={current} disabled={disabled || isLoading || isError || options.length < 2}
+        className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100"
         onChange={event => {
           if (event.target.value === current || !options.some(option => option.value === event.target.value)) return;
           // Es una selección dentro del cliente, no otro origen en la cadena de regreso.

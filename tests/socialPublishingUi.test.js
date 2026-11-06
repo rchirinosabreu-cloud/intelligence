@@ -75,7 +75,8 @@ test('the plan payload carries the publications of each piece and the client acc
   assert.match(service, /publications: publicationSelect/);
   assert.match(service, /client: clientWithSocialAccounts/);
   assert.doesNotMatch(service.slice(service.indexOf('const clientWithSocialAccounts'), service.indexOf('const clientWithSocialAccounts') + 400), /encryptedToken/);
-  assert.match(service, /resyncItemPublications\(id\)/);
+  assert.match(service, /await lockPublicationSchedule\(tx, id\)/);
+  assert.match(service, /await syncPublicationSchedule\(tx, id\)/);
   assert.match(service, /formato HH:mm/);
 });
 

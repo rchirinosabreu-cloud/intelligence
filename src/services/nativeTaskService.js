@@ -1,5 +1,6 @@
 import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
+import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { hasTaskParticipations } from '../lib/taskParticipation.js';
 import { hydrateTaskParticipations, hydrateArchivedTaskParticipations } from './taskParticipationStore.js';
 import { applyTaskAggregateEffects } from './taskCompletionEffectsService.js';
@@ -702,6 +703,12 @@ export const updateTask = async (id, data, updaterId = null) => {
         });
 
         if (reciprocalContentUpdate && currentTask.contentItem) {
+            if (reciprocalContentUpdate.publishDate) {
+                reciprocalContentUpdate.publishDate = publicationDate(data.dueDate);
+                await lockPublicationSchedule(tx, currentTask.contentItemId);
+                const transfer = await transferContentPeriod(tx, { itemId: currentTask.contentItemId, date: reciprocalContentUpdate.publishDate, actorId: updaterId });
+                if (transfer) await recordPlanRecognition(tx, transfer.fromPlan.id, new Date(), { allowAward: false });
+            }
             const previousItem = currentTask.contentItem;
             const nextItem = { ...previousItem, ...reciprocalContentUpdate };
             const titleChanged = Object.prototype.hasOwnProperty.call(reciprocalContentUpdate, 'objective')
@@ -724,6 +731,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 data: reciprocalContentUpdate,
                 select: { id: true }
             });
+
+            if (reciprocalContentUpdate.publishDate) await syncPublicationSchedule(tx, currentTask.contentItemId);
 
             for (const { id: taskId, data: taskData } of siblingTaskUpdates) {
                 const siblingBefore = await prepareTaskRecognition(tx, taskId);

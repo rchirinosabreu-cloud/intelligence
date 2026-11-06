@@ -963,6 +963,7 @@ model ContentPlan {
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
   deletedAt             DateTime?
+  autoCreatedForTransfer Boolean                    @default(false)
   ownerId               String?
   internalNotes         String?
   strategicObjectives   String?
@@ -1043,6 +1044,23 @@ model ContentItem {
 
   @@index([planId, deletedAt, publishDate])
   @@index([status, publishDate])
+}
+
+model ContentItemPeriodChange {
+  id String @id @default(uuid())
+  itemId String
+  actorId String?
+  fromPlanId String
+  toPlanId String
+  previousDate DateTime
+  nextDate DateTime
+  fromYear Int
+  fromMonth Int
+  toYear Int
+  toMonth Int
+  createdAt DateTime @default(now())
+
+  @@index([itemId, createdAt])
 }
 
 model ContentPlanReview {

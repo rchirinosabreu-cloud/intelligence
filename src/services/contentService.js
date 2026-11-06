@@ -19,7 +19,7 @@ import { DRIVE_PROVIDER, driveLinkProblem, parseDriveFileId } from '../lib/drive
 import { finalAssetShapeProblem } from '../lib/finalAssetShape.js';
 import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
-import { resyncItemPublications } from './socialPublishingService.js';
+import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
@@ -313,18 +313,18 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
   return plan;
 };
 
-export const createContentPlan = async (data) => {
+const createContentPlanInTransaction = async (db, data) => {
   const { clientId, month, year, status, strategicObjectives } = data;
   // Un cliente con hoja de MIO no lleva parrillas nativas, tampoco restauradas de la papelera (29 de octubre de 2026).
-  const owner = clientId ? await prisma.client.findUnique({ where: { id: clientId }, select: { name: true, externalPlanUrl: true } }) : null;
+  const owner = clientId ? await db.client.findUnique({ where: { id: clientId }, select: { name: true, externalPlanUrl: true } }) : null;
   const sheetProblem = nativePlanProblem(owner);
   if (sheetProblem) throw Object.assign(new Error(sheetProblem), { status: 409, code: 'PLAN_IN_SHEET' });
   // Un cliente suspendido por cartera no estrena parrilla del mes congelado; el mes en curso se termina.
-  await assertNotSuspended(prisma, { clientId, year, month, clientName: owner?.name });
+  await assertNotSuspended(db, { clientId, year, month, clientName: owner?.name });
   const hasStrategicColumn = await hasStrategicObjectivesColumn();
 
   // Idempotency Shield: Check for existing plans for this period
-  const existingPlan = await prisma.contentPlan.findFirst({
+  const existingPlan = await db.contentPlan.findFirst({
     where: { clientId, month, year },
     orderBy: { createdAt: 'desc' },
     select: await getContentPlanSelect()
@@ -334,10 +334,11 @@ export const createContentPlan = async (data) => {
     // Case A: Plan is soft-deleted -> Restore it
     if (existingPlan.deletedAt) {
       console.log(`[Service] createContentPlan: Restoring soft-deleted plan ${existingPlan.id}`);
-      return await prisma.contentPlan.update({
+      return await db.contentPlan.update({
         where: { id: existingPlan.id },
         data: {
           deletedAt: null,
+          autoCreatedForTransfer: false,
           status: status || 'PLANIFICACION',
           ...buildContentPlanReviewPendingData(),
           ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives ?? existingPlan.strategicObjectives } : {})
@@ -347,14 +348,15 @@ export const createContentPlan = async (data) => {
     }
     // Case B: Plan is active -> Return it (idempotency)
     console.log(`[Service] createContentPlan: Returning existing active plan ${existingPlan.id}`);
-    return await prisma.contentPlan.findUnique({
+    return await db.contentPlan.update({
       where: { id: existingPlan.id },
+      data: { autoCreatedForTransfer: false },
       select: await getContentPlanSelect({ client: true })
     });
   }
 
   try {
-    return await prisma.contentPlan.create({
+    return await db.contentPlan.create({
       data: {
         clientId,
         month,
@@ -370,7 +372,7 @@ export const createContentPlan = async (data) => {
     // P2002: Unique constraint violation (Race Condition)
     if (error.code === 'P2002') {
       console.warn(`[Service] createContentPlan: Conflict detected (P2002). Returning existing plan.`);
-      return await prisma.contentPlan.findFirst({
+      return await db.contentPlan.findFirst({
         where: { clientId, month, year, deletedAt: null },
         select: await getContentPlanSelect({ client: true })
       });
@@ -379,20 +381,23 @@ export const createContentPlan = async (data) => {
   }
 };
 
+export const createContentPlan = async (data) => recognitionTransaction(prisma, tx => createContentPlanInTransaction(tx, data));
+
 export const updateContentPlan = async (id, data) => {
   if (data?.ownerId) {
     const current = await prisma.contentPlan.findUnique({ where: { id }, select: { ownerId: true } });
     await assertActiveTeamMembers(prisma, [data.ownerId], [current?.ownerId]);
   }
   const safeData = await filterContentPlanData(data);
-  return await prisma.contentPlan.update({
+  return await recognitionTransaction(prisma, async tx => tx.contentPlan.update({
     where: { id },
     data: {
       ...safeData,
+      autoCreatedForTransfer: false,
       ...buildContentPlanReviewPendingData()
     },
     select: await getContentPlanSelect()
-  });
+  }));
 };
 
 /**
@@ -449,7 +454,7 @@ export const getContentPlanByToken = async (token) => {
 };
 
 export const deleteContentPlan = async (id) => {
-  return await prisma.$transaction(async (tx) => {
+  return await recognitionTransaction(prisma, async (tx) => {
     const now = new Date();
     // Soft delete items
     await tx.contentItem.updateMany({
@@ -459,7 +464,7 @@ export const deleteContentPlan = async (id) => {
     // Soft delete plan
     return await tx.contentPlan.update({
       where: { id },
-      data: { deletedAt: now },
+      data: { deletedAt: now, autoCreatedForTransfer: false },
       select: { id: true }
     });
   });
@@ -574,6 +579,13 @@ export const getContentItemsByPlan = async (planId) => {
   return items.map(normalizeContentItem);
 };
 
+export const getContentItemLocation = async (id) => {
+  const item = await prisma.contentItem.findFirst({ where: { id, deletedAt: null, plan: { deletedAt: null } },
+    select: { id: true, planId: true, plan: { select: { id: true, year: true, month: true, client: { select: { slug: true } } } } } });
+  if (!item) throw Object.assign(new Error('La pieza ya no está disponible.'), { status: 404 });
+  return item;
+};
+
 /** De qué cliente y de qué mes es una parrilla, para preguntar si está congelada por una suspensión. */
 const planCycle = async (planId) => (planId
   ? prisma.contentPlan.findUnique({ where: { id: planId }, select: { clientId: true, year: true, month: true, client: { select: { name: true } } } })
@@ -584,36 +596,34 @@ const assertPlanNotSuspended = async (plan) => {
   await assertNotSuspended(prisma, { clientId: plan.clientId, year: plan.year, month: plan.month, clientName: plan.client?.name });
 };
 
-export const createContentItem = async (data) => {
+export const createContentItem = async (data, { actorId = null } = {}) => {
   await assertPlanNotSuspended(await planCycle(data?.planId));
-  const item = await prisma.contentItem.create({
-    data: withoutRetiredFields(data),
-    select: await getContentItemSelect()
+  const select = await getContentItemSelect();
+  const date = publicationDate(data.publishDate);
+  const item = await recognitionTransaction(prisma, async tx => {
+    const created = await tx.contentItem.create({ data: withoutRetiredFields({ ...data, publishDate: date }), select });
+    const periodTransfer = await transferContentPeriod(tx, { itemId: created.id, date, actorId });
+    await markContentPlanReviewPending(created.planId, { db: tx });
+    return periodTransfer ? { ...await tx.contentItem.findUnique({ where: { id: created.id }, select }), periodTransfer } : created;
   });
-
-  await markContentPlanReviewPending(item.planId);
-
   return normalizeContentItem(item);
 };
 
-export const updateContentItem = async (id, data, { fromClientReview = false } = {}) => {
+export const updateContentItem = async (id, data, { fromClientReview = false, actorId = null } = {}) => {
+  if ('planId' in (data || {}) || 'plan' in (data || {})) throw Object.assign(new Error('Cambia la fecha de publicación para trasladar la pieza de parrilla.'), { status: 400 });
   // La suspensión frena **nuestro** trabajo, no la revisión del cliente: el portal nunca puede decirle que está
   // suspendido por cartera. Una pieza de un mes congelado que él apruebe no produce ni publica nada.
   if (!fromClientReview) {
     const plan = (await prisma.contentItem.findUnique({ where: { id }, select: { plan: { select: { clientId: true, year: true, month: true, client: { select: { name: true } } } } } }))?.plan;
     await assertPlanNotSuspended(plan);
   }
-  const normalizedData = { ...data };
+  const { expectedPlanId, ...normalizedData } = data;
 
   // Ensure publishDate is handled correctly
-  if (normalizedData.publishDate) {
+  if (Object.prototype.hasOwnProperty.call(normalizedData, 'publishDate')) {
     // If it's already a string in YYYY-MM-DD format, we convert it to a UTC Date object
     // to prevent Prisma/Postgres from applying local timezone offsets.
-    if (typeof normalizedData.publishDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(normalizedData.publishDate)) {
-      normalizedData.publishDate = new Date(`${normalizedData.publishDate}T00:00:00Z`);
-    } else {
-      normalizedData.publishDate = new Date(normalizedData.publishDate);
-    }
+    normalizedData.publishDate = publicationDate(normalizedData.publishDate);
   }
 
   // Hora de publicación en reloj de Bogotá ('HH:mm'); vacío la quita. Cualquier otra cosa se rechaza
@@ -648,10 +658,12 @@ export const updateContentItem = async (id, data, { fromClientReview = false } =
   const safeData = withoutRetiredFields(normalizedData);
   const itemSelect = await getContentItemSelect();
   const updatedItem = await recognitionTransaction(prisma, async (tx) => {
+    if (scheduleChanged) await lockPublicationSchedule(tx, id);
     const previousItem = await tx.contentItem.findUnique({
       where: { id },
       select: {
         id: true,
+        planId: true,
         status: true,
         objective: true,
         format: true,
@@ -668,9 +680,15 @@ export const updateContentItem = async (id, data, { fromClientReview = false } =
     });
 
     if (!previousItem) throw new Error('Content item not found');
+    if (expectedPlanId !== undefined && expectedPlanId !== previousItem.planId) {
+      throw Object.assign(new Error('La pieza cambió de parrilla en otra pantalla. Actualiza antes de moverla otra vez.'), { status: 409 });
+    }
     if (fromClientReview && previousItem.status === 'PUBLICADO') {
       throw Object.assign(new Error(PUBLISHED_REVIEW_MESSAGE), { status: 409 });
     }
+
+    const periodTransfer = Object.prototype.hasOwnProperty.call(safeData, 'publishDate')
+      ? await transferContentPeriod(tx, { itemId: id, date: safeData.publishDate, actorId }) : null;
 
     const nextItem = { ...previousItem, ...safeData };
     const linkedTaskUpdates = buildLinkedTaskUpdates({
@@ -700,17 +718,14 @@ export const updateContentItem = async (id, data, { fromClientReview = false } =
 
     await markContentPlanReviewPending(item.planId, { db: tx });
 
-    return item;
-  });
-
-  // La pieza cambió de día o de hora: lo que estaba programado en redes la sigue (o se cancela si perdió la hora).
-  if (scheduleChanged) {
-    try {
-      await resyncItemPublications(id);
-    } catch (syncError) {
-      console.error('[Service] updateContentItem: no se pudo mover la publicación programada:', syncError.response?.data || syncError.message || syncError);
+    if (previousItem.status === 'PUBLICADO' && safeData.status && safeData.status !== 'PUBLICADO') {
+      await tx.contentPlan.updateMany({ where: { id: item.planId, status: 'FINALIZADO' }, data: { status: 'ACTIVO' } });
     }
-  }
+    if (periodTransfer) await recordPlanRecognition(tx, periodTransfer.fromPlan.id, new Date(), { allowAward: false });
+    if (scheduleChanged) await syncPublicationSchedule(tx, id);
+    const current = scheduleChanged ? await tx.contentItem.findUnique({ where: { id }, select: itemSelect }) : item;
+    return { ...current, ...(periodTransfer ? { periodTransfer } : {}) };
+  });
 
   // --- AUTOMATION: Auto-finalize ContentPlan ---
   if (normalizedData.status === 'PUBLICADO') {
@@ -992,12 +1007,15 @@ export const confirmContentItemFinalAssets = async (itemId, uploads = [], { acto
   if (list.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
 
   const { item, basePath, nextPosition } = await loadFinalAssetTarget(itemId, list.length);
+  const transfers = await prisma.contentItemPeriodChange.findMany({ where: { itemId }, select: { fromYear: true, fromMonth: true } });
+  const allowedBases = new Set([basePath, ...transfers.map(event =>
+    `content-plans/${item.plan.client.slug}/${event.fromYear}-${String(event.fromMonth).padStart(2, '0')}/${item.id}/final-assets`)]);
   assertPlatformStorageConfigured();
   const finalStorage = getPlatformStorage('PLATFORM');
 
   const verified = await Promise.all(list.map(async (upload, index) => {
     const key = String(upload?.key || '');
-    if (!key.startsWith(`${basePath}/`)) throw new Error('Ese archivo no pertenece a esta pieza.');
+    if (![...allowedBases].some(prefix => key.startsWith(`${prefix}/`))) throw new Error('Ese archivo no pertenece a esta pieza.');
 
     const object = await finalStorage.headS3Object(key);
     if (!object) throw Object.assign(new Error('El archivo no llegó al almacenamiento de entregables. Solicita una carga nueva; la entrega actual se conserva.'), { status: 409 });

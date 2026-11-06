@@ -132,6 +132,7 @@ import SecurityCheckIconData from '@hugeicons/core-free-icons/SecurityCheckIcon'
 import Settings01IconData from '@hugeicons/core-free-icons/Settings01Icon';
 import Settings02IconData from '@hugeicons/core-free-icons/Settings02Icon';
 import Share02IconData from '@hugeicons/core-free-icons/Share02Icon';
+import Share08IconData from '@hugeicons/core-free-icons/Share08Icon';
 import SmartPhone01IconData from '@hugeicons/core-free-icons/SmartPhone01Icon';
 import SparklesIconData from '@hugeicons/core-free-icons/SparklesIcon';
 import StarIconData from '@hugeicons/core-free-icons/StarIcon';
@@ -319,6 +320,7 @@ export const Send = createIcon(MailSend01IconData, 'Send');
 export const Settings = createIcon(Settings01IconData, 'Settings');
 export const Settings2 = createIcon(Settings02IconData, 'Settings2');
 export const Share2 = createIcon(Share02IconData, 'Share2');
+export const Share = createIcon(Share08IconData, 'Share');
 export const ShieldCheck = createIcon(SecurityCheckIconData, 'ShieldCheck');
 export const Smartphone = createIcon(SmartPhone01IconData, 'Smartphone');
 export const Sparkles = createIcon(SparklesIconData, 'Sparkles');
