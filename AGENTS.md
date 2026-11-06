@@ -272,7 +272,7 @@ NUNCA dispares una notificación de éxito en el Frontend (toast.success, alerta
 
 Las notificaciones de éxito y los cambios visuales en el UI (cerrar modales, mover tarjetas) SOLO deben ejecutarse dentro del bloque then (o después del await) una vez que el Backend (API/Base de datos) haya respondido con un status 200 OK o 201 Created.
 
-Excepción visual autorizada por Rodny el 5 de noviembre de 2026: el arrastre de Gestión anticipa solo la posición de la tarjeta al soltarla, identificada como «Guardando…». No anticipa el estado operativo, fechas, relojes, confeti ni éxito. Un rechazo retira la proyección sin sobrescribir datos recibidos mientras se guardaba; las reaperturas y reintegraciones conservan sus formularios y validaciones.
+Excepción visual autorizada por Rodny el 5 de noviembre de 2026: el arrastre de Gestión anticipa solo la posición de la tarjeta al soltarla. Ajuste del 6 de noviembre: «Guardando…» aparece solo si la confirmación tarda 500 ms; se cancela el temporizador al terminar o cambiar de movimiento. La protección contra otro gesto y `aria-busy` son inmediatos. No anticipa el estado operativo, fechas, relojes, confeti ni éxito. Un rechazo retira la proyección sin sobrescribir datos recibidos mientras se guardaba; las reaperturas y reintegraciones conservan sus formularios y validaciones. Contrato visual: `tests/browser/taskMoveSynchronization.mjs`.
 
 Si la base de datos falla, el usuario debe ver un error claro, no un falso éxito.
 
