@@ -27,6 +27,8 @@ import {
 import { cn } from '@/lib/utils';
 import { proposalWhatsAppText, whatsAppLink } from '@/lib/quotationDelivery';
 import { useNavigate } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
+import { useNavigationSelection } from '@/hooks/useNavigationSelection';
 import { toast } from 'react-hot-toast';
 
 // Comercial registra la aprobación (punto 3 de la solicitud de Elisa, 29 de octubre de 2026): el cliente aprobó por
@@ -103,8 +105,12 @@ function RegisterApprovalDialog({ quotation, onClose }) {
 
 const QuotationList = () => {
     const navigate = useNavigate();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('ALL');
+    const navigateFrom = useNavigateFrom();
+    const [navigation, updateNavigation] = useNavigationSelection();
+    const searchTerm = navigation.get('q') || '';
+    const statusFilter = ['ALL', 'ACTIVA', 'EXPIRADA', 'APROBADA', 'BORRADOR'].includes(navigation.get('status')) ? navigation.get('status') : 'ALL';
+    const setSearchTerm = q => updateNavigation({ q });
+    const setStatusFilter = status => updateNavigation({ status });
     const [downloadingId, setDownloadingId] = useState(null);
     const [approving, setApproving] = useState(null);
 
@@ -229,7 +235,7 @@ const QuotationList = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Historial de Cotizaciones</h1>
                     <p className="text-zinc-500 mt-1 text-sm">Auditoría comercial y gestión de propuestas.</p>
                 </div>
-                <Button onClick={() => navigate('/cotizaciones/nueva')} className="rounded-xl flex items-center gap-2">
+                <Button onClick={() => navigateFrom('/cotizaciones/nueva')} className="rounded-xl flex items-center gap-2">
                     <Plus className="w-4 h-4" /> Nueva Cotización
                 </Button>
             </div>
@@ -356,7 +362,7 @@ const QuotationList = () => {
                                                 )}
                                                 {q.status !== 'APROBADA' && (
                                                     <button
-                                                        onClick={() => navigate(`/cotizaciones/editar/${q.id}`)}
+                                                        onClick={() => navigateFrom(`/cotizaciones/editar/${q.id}`)}
                                                         className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
                                                         title="Editar cotización"
                                                     >

@@ -3,6 +3,7 @@ import { ArrowUpRight, CalendarDays, Video } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { dayLabelFor } from './DashboardUpcomingTasks';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 
 const BOGOTA = 'America/Bogota';
 
@@ -37,6 +38,7 @@ export const groupMeetingsByDay = (meetings = [], now = new Date()) => {
 
 /** Reuniones donde la persona está citada (payload `dashboard.meetings`), agrupadas por día. */
 const DashboardMeetings = ({ meetings = [], className, now }) => {
+  const navigateFrom = useNavigateFrom();
   // Fixed once per mount: a `new Date()` default would change every render and defeat the memo.
   const nowRef = useRef(now || new Date());
   const groups = useMemo(() => groupMeetingsByDay(meetings, nowRef.current), [meetings]);
@@ -59,7 +61,7 @@ const DashboardMeetings = ({ meetings = [], className, now }) => {
           className="shrink-0 rounded-lg"
           title="Abrir actividad"
           aria-label="Abrir actividad"
-          onClick={() => { window.location.href = '/actividad'; }}
+          onClick={() => navigateFrom('/actividad')}
         >
           <ArrowUpRight className="h-4 w-4" />
         </Button>

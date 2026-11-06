@@ -68,7 +68,7 @@ test('widgets never grow wider than their column: long titles truncate instead o
     assert.match(source, /<section className=\{cn\('brain-glass flex min-w-0[^']*overflow-hidden/, `${file}: the panel can shrink and clips its content`);
   }
   const upcoming = await read(files[0]);
-  assert.match(upcoming, /<a[\s\S]*?className="flex min-w-0 items-start/, 'rows can shrink so their titles truncate');
+  assert.match(upcoming, /<Link[\s\S]*?className="flex min-w-0 items-start/, 'internal links can shrink so their titles truncate');
   assert.match(upcoming, /title=\{task\.title\}/, 'the full title stays available on hover');
 });
 

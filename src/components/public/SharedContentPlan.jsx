@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/icons';
 import { toast } from 'react-hot-toast';
 import ClientAvatar from '@/components/ui/ClientAvatar';
+import PieceStatusBadge from '@/components/modules/ContentPlan/PieceStatusBadge';
+import { pieceStatusPresentation } from '@/components/modules/ContentPlan/pieceStatusPresentation';
 
 /**
  * Portal del cliente (rediseño de Rodny, 24 de septiembre de 2026).
@@ -71,22 +73,7 @@ const FormatIcon = ({ format, className }) => (
     : <ImageIcon className={className} />
 );
 
-const StatusChip = ({ item }) => (
-  isApproved(item) ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-green-soft px-3 py-1.5 text-[11px] font-bold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green">
-      <CheckCircle2 className="h-3.5 w-3.5" /> {item.status === 'PUBLICADO' ? 'Publicada' : 'Aprobada'}
-    </span>
-  ) : hasNewMaterial(item) ? (
-    // Ya la había aprobado, pero entonces era solo el texto: ahora está la pieza terminada.
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-magenta-soft px-3 py-1.5 text-[11px] font-bold text-brand-magenta-deep dark:bg-brand-magenta/15 dark:text-brand-magenta">
-      <Sparkles className="h-3.5 w-3.5" /> Material nuevo
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-yellow-soft px-3 py-1.5 text-[11px] font-bold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow">
-      <Clock className="h-3.5 w-3.5" /> Por revisar
-    </span>
-  )
-);
+const StatusChip = ({ item }) => <PieceStatusBadge item={item} publicView className="rounded-full px-3 py-1.5" />;
 
 /** La miniatura del mosaico: la primera lámina de la pieza, o un hueco si todavía no hay nada. */
 const FinalAssetThumb = ({ item }) => {
@@ -202,20 +189,18 @@ const PieceCard = ({ item, index, onOpen }) => (
         className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm"
         aria-hidden="true"
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${isApproved(item) ? 'bg-brand-green' : hasNewMaterial(item) ? 'bg-brand-magenta' : 'bg-brand-yellow'}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${pieceStatusPresentation(item, { publicView: true }).dot}`} />
       </span>
     </div>
     <div className="flex flex-col gap-1.5 p-4">
       <span className="text-[11px] font-bold text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
       <h3 className="line-clamp-2 text-sm font-bold leading-snug text-zinc-900 dark:text-zinc-50">{item.objective}</h3>
-      <div className="flex items-center gap-2 pt-0.5">
+      <div className="flex flex-wrap items-center gap-2 pt-0.5">
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
           {item.publishDate ? formatContentPlanDate(item.publishDate) : 'Sin fecha'}
         </span>
         <span className="text-zinc-300 dark:text-zinc-600">·</span>
-        <span className={`text-xs font-bold ${isApproved(item) ? 'text-brand-green-deep dark:text-brand-green' : hasNewMaterial(item) ? 'text-brand-magenta-deep dark:text-brand-magenta' : 'text-brand-yellow-deep dark:text-brand-yellow'}`}>
-          {item.status === 'PUBLICADO' ? 'Publicada' : isApproved(item) ? 'Aprobada' : hasNewMaterial(item) ? 'Material nuevo' : 'Por revisar'}
-        </span>
+        <PieceStatusBadge item={item} publicView />
       </div>
     </div>
   </button>

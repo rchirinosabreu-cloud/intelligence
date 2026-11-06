@@ -30,6 +30,8 @@ import DashboardMeetings from './dashboard/DashboardMeetings';
 import DashboardReminders from './dashboard/DashboardReminders';
 import DashboardUpcomingTasks from './dashboard/DashboardUpcomingTasks';
 import TaskRecognitionLabels from '@/components/recognitions/TaskRecognitionLabels';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
+import { useNavigationSelection } from '@/hooks/useNavigationSelection';
 
 const container = {
   hidden: { opacity: 0 },
@@ -116,7 +118,10 @@ const Dashboard = () => {
   const { currentUser } = useAuth();
   // La entrada escalonada solo en la primera visita de la sesión: al volver, el tablero ya aparece puesto.
   const firstVisit = useFirstVisit('dashboard');
-  const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || '');
+  const navigateFrom = useNavigateFrom();
+  const [navigation, updateNavigation] = useNavigationSelection();
+  const selectedUserId = navigation.get('person') || currentUser?.id || '';
+  const setSelectedUserId = person => updateNavigation({ person });
   const [assignClientId, setAssignClientId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -267,7 +272,7 @@ const Dashboard = () => {
               </Select>
             </label>
           )}
-          <Button className="gap-2 rounded-xl px-5 shadow-sm shadow-primary/15" onClick={() => { window.location.href = '/gestion'; }}>
+          <Button className="gap-2 rounded-xl px-5 shadow-sm shadow-primary/15" onClick={() => navigateFrom('/gestion')}>
             Ver gestión
             <ArrowUpRight className="w-4 h-4" />
           </Button>

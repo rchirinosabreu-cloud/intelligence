@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigationSelection } from '@/hooks/useNavigationSelection';
+import { useOriginState } from '@/components/layout/BackToOrigin';
 import { Link } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Eye } from '@/components/ui/icons';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -34,7 +36,10 @@ export default function TeamLoadMap({ refreshKey = 0 }) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(null); // { personId, day }
+  const [navigation, updateNavigation] = useNavigationSelection();
+  const originState = useOriginState();
+  const open = navigation.get('mapPerson') && navigation.get('mapDay') ? { personId: navigation.get('mapPerson'), day: navigation.get('mapDay') } : null;
+  const setOpen = value => updateNavigation({ mapPerson: value?.personId, mapDay: value?.day });
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -67,7 +72,7 @@ export default function TeamLoadMap({ refreshKey = 0 }) {
 
   const openPerson = open && data.people.find((p) => p.personId === open.personId);
   const openCell = openPerson && openPerson.cells.find((c) => c.day === open.day);
-  const toggle = (personId, day) => setOpen((current) => current && current.personId === personId && current.day === day ? null : { personId, day });
+  const toggle = (personId, day) => setOpen(open && open.personId === personId && open.day === day ? null : { personId, day });
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950" aria-labelledby="load-map-title" data-load-map>
@@ -151,7 +156,7 @@ export default function TeamLoadMap({ refreshKey = 0 }) {
                   <p className="truncate text-sm text-zinc-800 dark:text-zinc-100">{task.title}</p>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{[task.clientName, task.workType, `${formatHours(task.ms)} ${SOURCE_LABEL[task.source] || ''}`.trim()].filter(Boolean).join(' · ')}</p>
                 </div>
-                <Link to={`/gestion?taskId=${encodeURIComponent(task.id)}`} className="inline-flex min-h-11 shrink-0 items-center gap-1 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Abrir<ArrowRight className="h-3.5 w-3.5" /></Link>
+                <Link to={`/gestion?taskId=${encodeURIComponent(task.id)}`} state={originState()} className="inline-flex min-h-11 shrink-0 items-center gap-1 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Abrir<ArrowRight className="h-3.5 w-3.5" /></Link>
               </li>
             ))}
           </ul>

@@ -7,6 +7,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { askBria } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
 import { RHYTHM_POLICY } from '@/lib/workPrediction';
+import { useOriginState } from '@/components/layout/BackToOrigin';
 
 // La lectura de la semana (Rodny, 10 de octubre de 2026, Fase A de Ritmo): Bria lee Ritmo y el mapa de carga y
 // propone de 3 a 5 decisiones, cada una con su evidencia y una acción. Se genera sola los lunes a las 7 y se puede
@@ -22,11 +23,12 @@ const formatMoment = (value) => value ? new Intl.DateTimeFormat('es-CO', { dateS
 const headers = () => { const token = localStorage.getItem('authToken'); return { Authorization: token ? `Bearer ${token}` : '', 'Content-Type': 'application/json' }; };
 
 function DecisionAction({ action }) {
+  const originState = useOriginState();
   if (!action || action.kind === 'NINGUNA') return null;
   const label = action.label || 'Ver';
   const button = 'inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-zinc-200 px-3 text-xs font-medium text-zinc-700 transition-colors hover:border-brand-cyan hover:text-brand-cyan-deep dark:border-zinc-700 dark:text-zinc-200 dark:hover:text-brand-cyan';
   if (['REVISAR_TAREA', 'REASIGNAR'].includes(action.kind) && action.taskId) {
-    return <Link to={`/gestion?taskId=${encodeURIComponent(action.taskId)}`} className={button} data-reading-action={action.kind}>{label}<ArrowRight className="h-3.5 w-3.5" /></Link>;
+    return <Link to={`/gestion?taskId=${encodeURIComponent(action.taskId)}`} state={originState()} className={button} data-reading-action={action.kind}>{label}<ArrowRight className="h-3.5 w-3.5" /></Link>;
   }
   if (action.suggestedMessage) {
     return <button type="button" onClick={() => askBria(action.suggestedMessage)} className={button} data-reading-action={action.kind} title="Deja el mensaje escrito en el chat de Bria para que lo revises y lo envíes"><BriaPortrait  alt="" className="h-4 w-4 object-contain" />{label}</button>;

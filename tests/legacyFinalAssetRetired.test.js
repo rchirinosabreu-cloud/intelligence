@@ -86,10 +86,10 @@ test('el portal del cliente entrega una sola lista de archivos', () => {
 });
 
 test('la rejilla del editor ya no aparta un archivo que no se puede mover', () => {
-  const editor = read('src/components/modules/ContentPlanDetail.jsx');
-  assert.doesNotMatch(editor, /isLegacy/);
+  const media = read('src/components/modules/ContentPlan/PieceMedia.jsx');
+  assert.doesNotMatch(media, /isLegacy/);
   // Todas las miniaturas se arrastran, que es lo que define el orden del carrusel publicado.
-  assert.match(editor, /const canDrag = canReorder && !saving;/);
+  assert.match(media, /const canDrag = canReorder && !saving;/);
 });
 
 test('la pieza que entrega el servidor trae solo su lista de archivos y su portada', () => {

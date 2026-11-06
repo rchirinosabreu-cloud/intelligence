@@ -48,9 +48,10 @@ async function mount(Component, props) {
 before(async () => {
   await mkdir('output', { recursive: true });
   const outfile = path.resolve('output/client-contract-scope-ui-test.mjs');
-  await build({ stdin: { contents: "export { default as Dialog } from './src/components/modules/Clients/operations/ClientOperationDialog.jsx'; export { default as Page } from './src/components/modules/Clients/operations/ClientOperationPage.jsx';", resolveDir: process.cwd(), loader: 'jsx' }, outfile,
+  const bundle = await build({ stdin: { contents: "export { default as Dialog } from './src/components/modules/Clients/operations/ClientOperationDialog.jsx'; export { default as Page } from './src/components/modules/Clients/operations/ClientOperationPage.jsx';", resolveDir: process.cwd(), loader: 'jsx' }, outfile, metafile: true,
     bundle: true, platform: 'node', format: 'esm', packages: 'external', jsx: 'automatic',
     alias: { '@': path.resolve('src') }, loader: { '.css': 'empty' }, define: { 'import.meta.env': '{}' } });
+  assert.ok(!Object.keys(bundle.metafile.inputs).some(file => file.endsWith('ContentPlanDetail.jsx')), 'consultar una pieza desde Operación no carga el editor completo de Parrillas');
   dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost:3127', pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'HTMLTextAreaElement', 'Element', 'Node', 'NodeFilter', 'MutationObserver', 'getComputedStyle', 'navigator', 'CustomEvent', 'Event']) {
     globals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));

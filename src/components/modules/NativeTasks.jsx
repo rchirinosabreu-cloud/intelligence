@@ -37,7 +37,7 @@ import {
 import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenFocusNotice, isActiveFocusTask, isFocusOverdue, markFocusNoticeSeen, nextLockReaction } from '@/lib/taskFocus';
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
-import { compareTaskOrder } from '@/lib/taskOrder';
+import { compareTaskBoardOrder } from '@/lib/taskOrder';
 import { applyConfirmedTaskMove, projectTaskMove } from '@/lib/taskMoveConfirmation';
 import { projectTaskParticipations, taskCardKey, participationRequest, didCompleteParticipation, individualPriorityCards, individualPriorityAnchor, taskCardForDeepLink } from '@/lib/taskParticipationBoard';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
@@ -223,6 +223,7 @@ const NativeTasks = () => {
     const setDateFilter = value => updateFilters({ dateFilter: value });
     const setClientFilter = value => updateFilters({ clientFilter: value });
     const [searchQuery, setSearchQuery] = useState("");
+    const globalSearchActive = Boolean(searchQuery.trim());
 
     useEffect(() => {
         const handleSearch = (e) => {
@@ -667,7 +668,7 @@ const NativeTasks = () => {
             if (dateFilter === 'Esta Semana') return isThisWeek(task.dueDateFormatted);
             return true;
         });
-        filtered.sort(compareTaskOrder);
+        filtered.sort(compareTaskBoardOrder);
         return filtered;
     }, [taskCards, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
@@ -825,6 +826,10 @@ const NativeTasks = () => {
 
         // 1. Dragged within the same column (Reordering Priority)
         if (sourceColumnId === destinationColumnId) {
+            if (sourceColumnId === 'realizado') {
+                toast({ description: 'Realizado se ordena por fecha de cierre, con lo más reciente primero.' });
+                return;
+            }
             if (targetTask?.participation) {
                 toast({ description: 'Esta tarea comparte una prioridad para todo el equipo. Puedes mover tu parte entre estados.' });
                 return;
@@ -896,7 +901,7 @@ const NativeTasks = () => {
             const token = localStorage.getItem('authToken');
             const payload = { status: newStatusForDB };
             if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') payload.isReturned = false;
-            if (isPMOrAdmin && !targetTask.participation) {
+            if (isPMOrAdmin && !targetTask.participation && destinationColumnId !== 'realizado') {
                 payload.orderBeforeId = individualPriorityAnchor(visibleTasksInDestColumn, destination.index);
             }
             const request = participationRequest(targetTask, payload);
@@ -1086,6 +1091,8 @@ const NativeTasks = () => {
                         <div className="group relative min-w-0">
                             <Select
                                 aria-label="Responsable"
+                                disabled={globalSearchActive}
+                                aria-describedby={globalSearchActive ? 'task-global-search-notice' : undefined}
                                 value={responsibleFilter}
                                 onChange={(e) => setResponsibleFilter(e.target.value)}
                                 className="min-h-11 w-full min-w-0 appearance-none truncate rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-8 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
@@ -1102,6 +1109,8 @@ const NativeTasks = () => {
                         <div className="group relative min-w-0">
                             <Select
                                 aria-label="Cliente"
+                                disabled={globalSearchActive}
+                                aria-describedby={globalSearchActive ? 'task-global-search-notice' : undefined}
                                 value={clientFilter}
                                 onChange={(e) => setClientFilter(e.target.value)}
                                 className="min-h-11 w-full min-w-0 appearance-none truncate rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-8 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
@@ -1118,6 +1127,8 @@ const NativeTasks = () => {
                         <div className="group relative min-w-0">
                             <Select
                                 aria-label="Periodo"
+                                disabled={globalSearchActive}
+                                aria-describedby={globalSearchActive ? 'task-global-search-notice' : undefined}
                                 value={dateFilter}
                                 onChange={(e) => setDateFilter(e.target.value)}
                                 className={cn(
@@ -1141,6 +1152,14 @@ const NativeTasks = () => {
                     </div>
                 </div>
             </PageHeader>
+
+            {globalSearchActive && (
+                <div id="task-global-search-notice" role="status" className="mb-4 rounded-xl border border-brand-cyan/25 bg-brand-cyan-soft px-4 py-3 text-sm text-zinc-700 dark:bg-brand-cyan/10 dark:text-zinc-300">
+                    <p className="font-semibold text-brand-cyan-deep dark:text-brand-cyan">Búsqueda global</p>
+                    <p className="mt-1 break-words [overflow-wrap:anywhere]">Resultados para “{searchQuery.trim()}”. Responsable, cliente y periodo no se aplican mientras buscas.</p>
+                    <p className="mt-1 text-xs">Al borrar la búsqueda, volverán los filtros seleccionados.</p>
+                </div>
+            )}
 
             <TaskSidePanel
                 isOpen={isCreating || !!editingTask}
@@ -1523,6 +1542,7 @@ const NativeTasks = () => {
                                             )}
                                         </div>
                                     </div>
+                                    {col.id === 'realizado' && <p className="-mt-1 px-1 pb-3 text-xs text-zinc-500 dark:text-zinc-400">Más recientes primero</p>}
                                     <Droppable
                                         droppableId={col.id}
                                         renderClone={(provided, snapshot, rubric) => {

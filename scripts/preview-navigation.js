@@ -31,6 +31,8 @@ export async function createNavigationPreview({ port = 3711 } = {}) {
     import {BrowserRouter,Routes,Route,useLocation} from 'react-router-dom';
     import NativeTasks from '@/components/modules/NativeTasks';
     import ContentPlanDetail from '@/components/modules/ContentPlanDetail';
+    import ExternalPlanView from '@/components/modules/ContentGrids/ExternalPlanView';
+    import SharedContentPlan from '@/components/public/SharedContentPlan';
     import ContentGrids from '@/components/modules/ContentGrids';
     import Clients from '@/components/modules/Clients';
     import ClientDetailWrapper from '@/components/modules/ClientDetailWrapper';
@@ -56,6 +58,8 @@ export async function createNavigationPreview({ port = 3711 } = {}) {
       return <main className="min-h-screen bg-background p-6 text-foreground"><BackToOrigin/><Routes>
         <Route path="/inicio" element={<Start/>}/><Route path="/gestion" element={<NativeTasks/>}/>
         <Route path="/parrillas" element={<ContentGrids/>}/>
+        <Route path="/parrillas/hoja/:clientSlug/:period" element={<ExternalPlanView/>}/>
+        <Route path="/shared/:token" element={<SharedContentPlan/>}/>
         <Route path="/parrillas/:planId" element={<ContentPlanDetail/>}/>
         <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail/>}/>
         <Route path="/clientes" element={<Clients/>}/><Route path="/cliente/:clientId" element={<ClientDetailWrapper/>}/>

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { cn } from '@/lib/utils';
 import { taskDueDay } from '@/lib/taskDeadlines';
+import { Link } from 'react-router-dom';
+import { useNavigateFrom, useOriginState } from '@/components/layout/BackToOrigin';
 
 const BOGOTA = 'America/Bogota';
 
@@ -61,6 +63,8 @@ export const groupTasksByDay = (tasks = [], now = new Date()) => {
 };
 
 const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now }) => {
+  const navigateFrom = useNavigateFrom();
+  const originState = useOriginState();
   // Fixed once per mount: a `new Date()` default would change every render and defeat the memo.
   const nowRef = useRef(now || new Date());
   const groups = useMemo(() => groupTasksByDay(tasks.slice(0, limit), nowRef.current), [tasks, limit]);
@@ -83,7 +87,7 @@ const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now }) => {
           className="shrink-0 rounded-lg"
           title="Abrir gestión"
           aria-label="Abrir gestión"
-          onClick={() => { window.location.href = '/gestion'; }}
+          onClick={() => navigateFrom('/gestion')}
         >
           <ArrowUpRight className="h-4 w-4" />
         </Button>
@@ -102,8 +106,9 @@ const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now }) => {
             <ul className="min-w-0 space-y-2">
               {group.items.map((task) => (
                 <li key={task.id} className="min-w-0">
-                  <a
-                    href={`/gestion?taskId=${task.id}`}
+                  <Link
+                    to={`/gestion?taskId=${encodeURIComponent(task.id)}`}
+                    state={originState()}
                     className="flex min-w-0 items-start gap-3 rounded-xl border border-zinc-200/80 bg-white/60 px-3 py-2.5 transition-colors hover:border-zinc-300 hover:bg-white dark:border-white/10 dark:bg-zinc-950/30 dark:hover:border-white/20 dark:hover:bg-zinc-950/60"
                     title={task.title}
                   >
@@ -116,7 +121,7 @@ const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now }) => {
                         {task.isPriority ? ' · Prioritaria' : ''}
                       </span>
                     </span>
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>

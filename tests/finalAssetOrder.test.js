@@ -91,25 +91,26 @@ test('the route, the card and the publisher agree on the order', () => {
   assert.match(routes, /reorderContentItemFinalAssets\(req\.params\.id, req\.body\?\.order\)/);
   const card = readFileSync('src/components/modules/ContentPlanDetail.jsx', 'utf8');
   assert.match(card, /final-assets\/order/);
-  assert.match(card, /data-final-asset-position/);
+  const media = readFileSync('src/components/modules/ContentPlan/PieceMedia.jsx', 'utf8');
+  assert.match(media, /data-final-asset-position/);
   // Dragging is the way; the two buttons per thumbnail are gone and do not come back.
-  assert.match(card, /moveAssetToIndex\(/);
-  assert.match(card, /draggable=\{canDrag\}/);
-  assert.match(card, /onDragStart=/);
-  assert.match(card, /onDrop=/);
-  assert.doesNotMatch(card, /Mover antes|Mover después/);
+  assert.match(media, /moveAssetToIndex\(/);
+  assert.match(media, /draggable=\{canDrag\}/);
+  assert.match(media, /onDragStart=/);
+  assert.match(media, /onDrop=/);
+  assert.doesNotMatch(media, /Mover antes|Mover después/);
   // The thumbnails rearrange while dragging, as the cards of the task board do; no landing mark.
-  assert.match(card, /setPreview\(/);
-  assert.doesNotMatch(card, /data-final-asset-drop-mark|dropSide/);
+  assert.match(media, /setPreview\(/);
+  assert.doesNotMatch(media, /data-final-asset-drop-mark|dropSide/);
   // The ones that make room slide to their new place, unless the person asked for less motion.
-  assert.match(card, /\.animate\(/);
-  assert.match(card, /prefers-reduced-motion/);
+  assert.match(media, /\.animate\(/);
+  assert.match(media, /prefers-reduced-motion/);
   // An image is draggable by itself: without this the browser drags the picture, not the thumbnail.
-  assert.match(card, /<img[^>]*draggable=\{false\}/);
+  assert.match(media, /<img[^>]*draggable=\{false\}/);
   // Whoever cannot drag moves it with the arrow keys from the position badge.
-  assert.match(card, /moveAssetId\(/);
-  assert.match(card, /ArrowLeft/);
-  assert.match(card, /ArrowRight/);
+  assert.match(media, /moveAssetId\(/);
+  assert.match(media, /ArrowLeft/);
+  assert.match(media, /ArrowRight/);
   // The mutation waits for the reloaded plan, so the thumbnails never jump back for an instant.
   assert.match(card, /finalAssetOrderMutation\.mutateAsync\(/);
   // The publisher reads the files by position: what the card shows is what goes out.

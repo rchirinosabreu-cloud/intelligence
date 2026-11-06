@@ -83,8 +83,11 @@ test('content pieces support persistent multi-file carousel assets internally', 
   assert.match(publicController, /getPublicFinalAssetById/);
   assert.match(editor, /handleFinalAssetUpload/);
   assert.match(editor, /handleFinalAssetDelete/);
-  assert.match(editor, /encodeURIComponent\(asset\.storageKey/);
-  assert.match(editor, /files\.forEach\(file => uploadData\.append\('files', file\)\)/);
+  const media = await read('src/components/modules/ContentPlan/PieceMedia.jsx');
+  assert.match(media, /encodeURIComponent\(asset\.storageKey/);
+  assert.match(editor, /uploadFinalPiece\(itemId, files/);
+  const delivery = await readFile(new URL('../src/lib/contentFinalDelivery.js', import.meta.url), 'utf8');
+  assert.match(delivery, /files\.forEach\(file => body\.append\('files', file\)\)/);
   assert.match(editor, /Pieza final/);
   assert.match(shared, /URLSearchParams/);
   assert.match(shared, /FinalAssetPreview/);
