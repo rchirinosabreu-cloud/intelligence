@@ -113,7 +113,7 @@ Antes de iniciar, aplicar los ensures aditivos de participación, `ensure-task-d
 
 ### Archivos de plataforma, memoria y Drive
 
-Rodny amplió el destino nuevo para incluir **entregables y cargas manuales de Drive**. `agency-memory` queda reservado para memoria, minutas y conocimiento de la agencia. La implementación es local: **no se ha creado un bucket remoto ni cambiado variables de producción**.
+Rodny amplió el destino nuevo para incluir **entregables y cargas manuales de Drive**. `agency-memory` queda reservado para memoria, minutas y conocimiento de la agencia. Tras validar el incremento en local, autorizó crear el bucket productivo y fusionar los cambios.
 
 Auditoría en solo lectura del 5 de noviembre: `GetBucketLifecycleConfiguration` del bucket `chat-evidence-cjupwwro9k` devolvió HTTP 200 con `Rules: []`. La configuración productiva sí activa `TASK_ATTACHMENT_RETENTION_ENABLED=true`, sin días personalizados (30 por defecto), y `TEMP_UPLOAD_SWEEP_ENABLED=true`, sin días personalizados (7 por defecto). La purga de adjuntos exige comentario y tarea realizada con cierre vencido; no es una caducidad general de todos los objetos del bucket. Drive/minutas ya usan `BRIA_STORAGE_BUCKET=agency-memory-snvcqfokuqk`; eso tampoco convierte automáticamente un archivo S3 en un archivo del catálogo Drive.
 
@@ -127,7 +127,11 @@ Los entregables se consultan desde Drive y se modifican desde su origen, con enl
 
 Drive filtra nombres, carpetas, búsquedas y descargas por permisos de origen (`canOpenTask`, Gestión/Parrillas); su permiso global no concede acceso a tareas privadas. Las descargas revalidan el acceso. Los enlaces externos de Google conservan su tratamiento y no se copian ni borran automáticamente. Los permisos temporales de subida emitidos antes del cambio deben prepararse otra vez; los recibos de solicitudes ya confirmadas siguen siendo idempotentes.
 
-Antes del despliegue habrá que provisionar y configurar el bucket de plataforma sin caducidad de objetos vigentes. Tras eso, migrar los archivos antiguos sería un trabajo separado: inventario, copia verificada y cambio de referencia, conservando el origen hasta comprobar el destino. Este incremento no lo ejecuta. La aceptación local utiliza tres buckets ficticios en el mismo servidor HTTP y ninguna credencial productiva.
+El 5 de noviembre de 2026 se aprovisionó `platform-files` en Brainstudio Lab / production: ID `4fe0c755-50a5-40c1-b215-cfdd3760e3d8`, nombre S3 `platform-files-3l19m5swba`, región `sjc`, endpoint `https://t3.storageapi.dev`. Las cuatro variables `PLATFORM_STORAGE_*` de Intelligence referencian ese recurso y `PLATFORM_STORAGE_FORCE_PATH_STYLE=false`; las variables anteriores permanecen intactas. Se configuraron sin iniciar un despliegue anticipado; el PR #1266 debe aprobar CI antes de fusionar y activar el código.
+
+Verificación del recurso real: CORS `GET/HEAD/PUT` con los orígenes nativos y `ETag` expuesto; lifecycle `Rules: []`; objeto de diagnóstico propio escrito, leído y comprobado por HEAD, acceso anónimo 403 y retirada confirmada con HEAD 404. No se leyeron ni modificaron archivos de usuarios. Evidencia local sin secretos en `output/task-piece-delivery/railway-platform-verification.json`. El resultado del despliegue se consulta en Railway y en el PR #1266; la provisión por sí sola no acredita despliegue.
+
+Migrar los archivos antiguos sería un trabajo separado: inventario, copia verificada y cambio de referencia, conservando el origen hasta comprobar el destino. Este incremento no lo ejecuta. La aceptación local utiliza tres buckets ficticios en el mismo servidor HTTP y ninguna credencial productiva.
 
 El adaptador nuevo usa direcciones virtual-hosted por defecto; el servidor de prueba activa `PLATFORM_STORAGE_FORCE_PATH_STYLE=true`. No cambia el formato del almacenamiento antiguo. Referencias contrastadas: [direcciones de buckets Railway](https://docs.railway.com/storage-buckets#url-style) y [métodos CORS admitidos por S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CORSRule.html). La lista de orígenes permitidos de la plataforma se conserva.
 
