@@ -353,6 +353,27 @@ export const listExternalPlans = async (db = prisma, { now = new Date() } = {}) 
     }));
 };
 
+/** Catálogo histórico del cliente: solo snapshots de pestañas que sí se leyeron, sin consultar Google. */
+export const listExternalPlanPeriods = async (db = prisma, slug) => {
+    const client = await db.client.findFirst({
+        where: { slug: String(slug || ''), externalPlanUrl: { not: null } },
+        select: { id: true, name: true, slug: true }
+    });
+    if (!client) return null;
+    const rows = await db.externalPlanSnapshot.findMany({
+        where: { clientId: client.id, okAt: { not: null }, tabName: { not: null } },
+        select: { year: true, month: true, tabName: true, okAt: true },
+        orderBy: [{ year: 'desc' }, { month: 'desc' }]
+    });
+    return {
+        client,
+        months: rows.map(row => ({
+            year: row.year, month: row.month, label: MONTH_NAMES[row.month - 1],
+            slug: `${MONTH_SLUGS[row.month - 1]}-${row.year}`, tabName: row.tabName, readAt: isoOrNull(row.okAt)
+        }))
+    };
+};
+
 /** «noviembre-2026» → { year: 2026, month: 11 }. */
 export const parseMonthSlug = (value) => {
     const match = String(value || '').toLowerCase().match(/^([a-z]+)-(\d{4})$/);

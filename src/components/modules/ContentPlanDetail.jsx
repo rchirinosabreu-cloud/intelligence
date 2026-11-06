@@ -7,17 +7,17 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
+import { uploadFinalPiece } from '@/lib/contentFinalDelivery';
 import { driveLinkProblem } from '@/lib/driveLinks';
-import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
-import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
+import { MultiLinkInput, CoverField, FinalAssetGrid } from '@/components/modules/ContentPlan/PieceMedia';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import { APPROVAL_STATES, approvalState, canRequestRevision, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
 import { describeMetaMedia, publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
 import { kindAcceptsCover } from '@/lib/videoCover';
 import {
-  ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
+  ChevronLeft, ChevronRight, Plus, Send, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
-  Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
+  Calendar, User, LayoutGrid, Instagram, Facebook, Video,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
   MessageSquare, Table2, UploadCloud, Link2, Eye
 } from '@/components/ui/icons';
@@ -34,85 +34,10 @@ import SocialPublishingPanel from '@/components/modules/ContentPlan/SocialPublis
 import { pieceAccountLabel } from '@/lib/socialPublishing';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import BriaContentPlanReview from '@/components/modules/ContentPlan/BriaContentPlanReview';
+import PlanPeriodSelector from '@/components/modules/ContentPlan/PlanPeriodSelector';
+import PieceStatusBadge from '@/components/modules/ContentPlan/PieceStatusBadge';
+import { pieceStatusPresentation } from '@/components/modules/ContentPlan/pieceStatusPresentation';
 
-const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
-  const [links, setLinks] = useState(Array.isArray(values) ? values : (values ? [values] : []));
-
-  useEffect(() => {
-    setLinks(Array.isArray(values) ? values : (values ? [values] : []));
-  }, [values]);
-
-  const handleAddLink = () => {
-    const newLinks = [...links, ''];
-    setLinks(newLinks);
-  };
-
-  const handleUpdateLink = (index, value) => {
-    const newLinks = [...links];
-    newLinks[index] = value;
-    setLinks(newLinks);
-  };
-
-  const handleBlur = () => {
-    const filtered = links.filter(l => l.trim() !== '');
-    onChange(filtered);
-  };
-
-  const handleRemoveLink = (index) => {
-    const newLinks = links.filter((_, i) => i !== index);
-    setLinks(newLinks);
-    onChange(newLinks);
-  };
-
-  if (!isEditing) {
-    if (links.length === 0) return <span className="text-[10px] text-zinc-400 italic">No asignado</span>;
-    return (
-      <div className="flex flex-wrap gap-2">
-        {links.map((link, i) => (
-          <a
-            key={i}
-            href={link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2 py-1 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan font-bold text-[10px] rounded-xl transition-colors max-w-full truncate"
-          >
-            <ExternalLink className="w-2.5 h-2.5" />
-            {links.length > 1 ? `Enlace ${i + 1}` : 'Ver enlace'}
-          </a>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {links.map((link, i) => (
-        <div key={i} className="flex gap-2">
-          <input
-            type="text"
-            value={link}
-            onChange={(e) => handleUpdateLink(i, e.target.value)}
-            onBlur={handleBlur}
-            placeholder={placeholder}
-            className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-brand-cyan/20 outline-none transition-all"
-          />
-          <button
-            onClick={() => handleRemoveLink(i)}
-            className="brain-danger-button-icon p-2"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={handleAddLink}
-        className="flex items-center gap-1 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan transition-colors px-1"
-      >
-        <Plus className="w-3 h-3" /> Añadir enlace
-      </button>
-    </div>
-  );
-};
 
 // Helper for auto-resize textarea with internal state for performance (save on blur)
 const AutoResizeTextarea = ({ id, defaultValue, onBlur, placeholder, disabled, className }) => {
@@ -174,417 +99,6 @@ const parsePlanInternalNotes = (value) => {
  * El interceptor de `main.jsx` solo adjunta el token a nuestra API, así que la entrega al
  * almacenamiento no lleva credenciales de la plataforma.
  */
-const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
-  const base = `${getApiBaseUrl()}/api/content/items/${itemId}/final-assets`;
-  const { data: tickets } = await axios.post(`${base}/direct-upload`, {
-    files: files.map(file => ({ name: file.name, size: file.size, mimeType: file.type }))
-  });
-
-  const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0) || 1;
-  const sent = new Array(files.length).fill(0);
-
-  await Promise.all(tickets.map((ticket, index) => axios.put(ticket.url, files[index], {
-    headers: { 'Content-Type': ticket.mimeType },
-    onUploadProgress: (event) => {
-      sent[index] = event.loaded || 0;
-      const done = sent.reduce((sum, value) => sum + value, 0);
-      // Se reserva el 100 % para cuando el servidor confirme: si no, la barra se llena y sigue esperando.
-      onProgress?.(Math.min(99, Math.round((done / totalBytes) * 100)));
-    }
-  })));
-
-  const { data } = await axios.post(`${base}/confirm`, {
-    uploads: tickets.map(ticket => ({ key: ticket.key, name: ticket.name }))
-  });
-  return data;
-};
-
-/**
- * La portada de un reel (Rodny, 15 de octubre de 2026). Solo aparece donde Meta la admite —un reel—,
- * incluso antes de cargar el video, para poder preparar ambos archivos en cualquier orden.
- *
- * Lo que dice es lo que de verdad pasa al publicar: la imagen sale en la pestaña Reels, y como el reel
- * se comparte al feed, en la cuadrícula del perfil Meta recorta su cuadrado central.
- */
-const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const cover = item.cover || null;
-
-  useEffect(() => {
-    if (!cover) { setPreviewUrl(null); return undefined; }
-    let objectUrl;
-    let cancelled = false;
-    fetch(`${getApiBaseUrl()}/api/content/items/${item.id}/cover?v=${encodeURIComponent(cover.name || '')}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
-    })
-      .then((response) => { if (!response.ok) throw new Error(`Cover request failed with status ${response.status}`); return response.blob(); })
-      .then((blob) => { if (cancelled) return; objectUrl = URL.createObjectURL(blob); setPreviewUrl(objectUrl); })
-      .catch((error) => console.error('Cover preview failed:', error));
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [item.id, cover?.name, cover?.size]);
-
-  return (
-    <div className="flex min-w-0 flex-col gap-2" data-piece-cover>
-      <span className={`${FIELD_LABEL} gap-2`}>Portada del reel <span className="text-[11px] font-normal">Opcional</span></span>
-      <div className="flex min-h-[144px] items-start gap-3 rounded-xl border border-dashed border-zinc-300 bg-white p-4 dark:border-white/15 dark:bg-zinc-900">
-        {cover ? (
-          <div className="h-20 w-[45px] shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
-            {previewUrl
-              ? <img src={previewUrl} alt={cover.name || 'Portada'} className="h-full w-full object-cover" />
-              : <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" /></div>}
-          </div>
-        ) : (
-          <div className="flex h-20 w-[45px] shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 dark:border-white/15">
-            <ImageIcon className="h-4 w-4 text-zinc-400" />
-          </div>
-        )}
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
-            {cover
-              ? 'Sale en la pestaña Reels. En la cuadrícula del perfil, Meta recorta su cuadrado central.'
-              : 'Sin portada, Meta elige un fotograma del video. Vertical 9:16, JPG o PNG.'}
-          </p>
-          {isEditing && (
-            <div className="flex items-center gap-2.5">
-              <label className={`cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan ${isBusy ? 'pointer-events-none opacity-50' : ''}`}>
-                {isBusy ? 'Guardando…' : cover ? 'Cambiar' : 'Subir portada'}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  className="hidden"
-                  disabled={isBusy}
-                  onChange={(event) => {
-                    const [file] = Array.from(event.target.files || []);
-                    if (file) onUpload(item.id, file);
-                    event.target.value = '';
-                  }}
-                />
-              </label>
-              {cover && (
-                <>
-                  <span className="text-zinc-300 dark:text-zinc-600">·</span>
-                  <button type="button" onClick={() => onRemove(item.id)} disabled={isBusy} className="text-[13px] font-bold text-destructive hover:underline">
-                    Quitar
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {!isEditing && !cover && <span className="text-[12px] text-zinc-400">Sin portada.</span>}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const FinalAssetTile = ({
-  item, asset, isEditing, onDelete, isDeleting, position = null, total = 1,
-  canDrag = false, isDragged = false, isDragActive = false, isSaving = false,
-  onDragStart, onDragOver, onDragEnd, onKeyMove
-}) => {
-  const [previewUrl, setPreviewUrl] = useState(null);
-  // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
-  const drive = driveAssetUrls(asset);
-  const sourceUrl = drive
-    ? null
-    : `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
-  const isImage = !drive && (asset.mimeType || '').startsWith('image/');
-  const isVideo = !drive && (asset.mimeType || '').startsWith('video/');
-
-  useEffect(() => {
-    if (!sourceUrl) return undefined;
-    let objectUrl;
-    let cancelled = false;
-    fetch(sourceUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })
-      .then(response => {
-        if (!response.ok) throw new Error(`Asset request failed with status ${response.status}`);
-        return response.blob();
-      })
-      .then(blob => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
-      })
-      .catch(error => console.error('Final carousel asset preview failed:', error));
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [sourceUrl]);
-
-  return (
-    <div
-      data-final-asset-tile={asset.id}
-      draggable={canDrag}
-      onDragStart={onDragStart}
-      onDragEnter={onDragOver}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-      title={canDrag ? 'Arrastra para cambiar el orden' : undefined}
-      className={`group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 transition-opacity dark:border-white/10 dark:bg-zinc-950 ${
-        canDrag ? 'cursor-grab active:cursor-grabbing' : ''
-      } ${isDragged ? 'opacity-30' : isSaving ? 'opacity-60' : ''}`}
-    >
-      {/* Un reel es vertical: el marco de Drive toma la forma del formato de la pieza, no la de fábrica.
-          Mientras se arrastra, el contenido no recibe el puntero: un marco de Drive o un video se
-          tragarían el arrastre y no habría dónde soltar. */}
-      <div
-        className={`${drive ? '' : 'aspect-square'} ${isDragActive ? 'pointer-events-none' : ''}`}
-        style={drive ? { aspectRatio: driveEmbedAspect(item.format) } : undefined}
-      >
-        {drive ? (
-          <iframe
-            src={drive.embedUrl}
-            title={asset.name || 'Pieza final en Drive'}
-            className="h-full w-full border-0 bg-black"
-            allow="autoplay; encrypted-media; fullscreen"
-            allowFullScreen
-            loading="lazy"
-          />
-        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
-      </div>
-      {/* Las acciones van sobre la miniatura, no en la línea del nombre: compitiendo por el ancho de
-          una tarjeta pequeña, el nombre se recortaba hasta quedarse en una letra suelta
-          (Rodny, 25 de septiembre de 2026). Así el nombre se queda con la línea entera. */}
-      {/* El orden de los archivos es el orden del carrusel que sale en redes (Rodny, 1 de octubre de
-          2026): el número dice en qué puesto va cada lámina y, al editar, la miniatura se arrastra a
-          su sitio. Hubo dos botones por miniatura y Rodny los devolvió el mismo día («prefiero drag
-          and drop»). El número queda como asidero del teclado: con las flechas se mueve un puesto.
-          Mientras se arrastra, la miniatura atenuada es el hueco donde va a quedar. */}
-      {total > 1 && position !== null && (
-        canDrag ? (
-          <button
-            type="button"
-            data-final-asset-position
-            data-final-asset-grip={asset.id}
-            onKeyDown={(event) => {
-              const direction = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : 0;
-              if (!direction) return;
-              event.preventDefault();
-              onKeyMove?.(asset.id, direction);
-            }}
-            aria-label={`${asset.name || 'Archivo'}, puesto ${position + 1} de ${total}. Arrastra la miniatura o usa las flechas del teclado para cambiar el orden.`}
-            className="absolute left-1.5 top-1.5 flex h-6 min-w-6 cursor-grab items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white outline-none backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-brand-cyan"
-          >
-            {position + 1}
-          </button>
-        ) : (
-          <span data-final-asset-position className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white backdrop-blur-sm">
-            {position + 1}
-          </span>
-        )
-      )}
-
-      <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
-        {drive && (
-          <a
-            href={drive.openUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75"
-            aria-label={`Abrir ${asset.name || 'el archivo'} en Drive`}
-            title="Abrir en Drive"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {isEditing && (
-          <button
-            type="button"
-            onClick={() => onDelete(item.id, asset.id)}
-            disabled={isDeleting}
-            className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-destructive"
-            aria-label={`Eliminar ${asset.name || 'archivo final'}`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-
-      <span className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
-        {asset.name || 'Archivo final'}
-      </span>
-    </div>
-  );
-};
-
-/** Dónde está cada miniatura dentro de la rejilla. `offsetLeft`/`offsetTop` no ven ni el scroll ni un deslizamiento a medias. */
-const measureTilePlaces = (grid) => {
-  const places = new Map();
-  grid?.querySelectorAll('[data-final-asset-tile]').forEach((node) => {
-    places.set(node.dataset.finalAssetTile, { left: node.offsetLeft, top: node.offsetTop, node });
-  });
-  return places;
-};
-
-/**
- * Las miniaturas de la pieza final, que al editar se ordenan arrastrando (Rodny, 1 de octubre de 2026).
- *
- * Se comporta como las tarjetas del tablero de Gestión: mientras se arrastra, las demás se corren
- * para abrirle el hueco y lo que se ve es lo que queda al soltar. Hubo una línea cian que marcaba
- * dónde iba a caer y Rodny la devolvió el mismo día («no quiero que salga ese borde azul sino que
- * al hacer drag, se reorganice de una vez hasta que yo la suelte»): no reponerla.
- *
- * Es el arrastre del navegador y no `@hello-pangea/dnd`, que solo sabe de listas en una dirección:
- * esto es una rejilla que da la vuelta. Al soltar, la miniatura se queda en su sitio nuevo atenuada
- * mientras el servidor guarda; si el servidor dice que no, vuelve a donde estaba y sale el motivo.
- * Soltar fuera de la rejilla, o pulsar Escape, lo deja todo como estaba.
- * El archivo heredado de las columnas antiguas no tiene fila propia: va primero y no se mueve.
- */
-const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, onReorder }) => {
-  const gridRef = useRef(null);
-  const dragIdRef = useRef(null);
-  const previewRef = useRef(null);
-  const placesRef = useRef(new Map());
-  const slidesRef = useRef(new Map());
-  const slideNextRef = useRef(false);
-  const [dragId, setDragId] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [saving, setSaving] = useState(null);
-
-  const ids = finalAssets.map(asset => asset.id);
-  const canReorder = isEditing && ids.length > 1 && typeof onReorder === 'function';
-  // Si mientras se arrastraba o se guardaba alguien añadió o quitó un archivo, ese orden ya no vale.
-  const pending = saving && !finalAssetOrderProblem(ids, saving.order) ? saving : null;
-  const live = !pending && preview && !finalAssetOrderProblem(ids, preview) ? preview : null;
-  const shownOrder = pending?.order || live;
-  const shown = shownOrder
-    ? shownOrder.map(id => finalAssets.find(asset => asset.id === id))
-    : finalAssets;
-  const orderKey = shown.map(asset => asset.id).join('|');
-
-  // Las que hacen sitio se deslizan a su puesto nuevo en vez de saltar. La que se arrastra no: ya
-  // está en su hueco. Solo se anima un cambio de orden que hizo la persona, nunca una recarga.
-  useLayoutEffect(() => {
-    const before = placesRef.current;
-    const after = measureTilePlaces(gridRef.current);
-    placesRef.current = after;
-    const slide = slideNextRef.current;
-    slideNextRef.current = false;
-    if (!slide || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    after.forEach((place, id) => {
-      const from = before.get(id);
-      if (!from || id === dragIdRef.current || (from.left === place.left && from.top === place.top)) return;
-      slidesRef.current.get(id)?.cancel();
-      const motion = place.node.animate(
-        [{ transform: `translate(${from.left - place.left}px, ${from.top - place.top}px)` }, { transform: 'translate(0px, 0px)' }],
-        { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-      );
-      slidesRef.current.set(id, motion);
-      const settle = () => { if (slidesRef.current.get(id) === motion) slidesRef.current.delete(id); };
-      motion.onfinish = settle;
-      motion.oncancel = settle;
-    });
-  }, [orderKey]);
-
-  const focusGrip = (id) => requestAnimationFrame(() => {
-    gridRef.current?.querySelector(`[data-final-asset-grip="${id}"]`)?.focus();
-  });
-
-  const endDrag = () => {
-    dragIdRef.current = null;
-    previewRef.current = null;
-    setDragId(null);
-    setPreview(null);
-  };
-
-  const commit = async (order, movedId, { keepFocus = false } = {}) => {
-    if (saving || order.join('|') === ids.join('|')) return;
-    placesRef.current = measureTilePlaces(gridRef.current);
-    slideNextRef.current = true;
-    setSaving({ order, movedId });
-    // React recoloca el nodo y el navegador le quita el foco: se le devuelve para seguir con las flechas.
-    if (keepFocus) focusGrip(movedId);
-    try {
-      await onReorder(item.id, order);
-    } catch {
-      // El motivo lo dice quien guarda; aquí la miniatura solo vuelve a su sitio.
-      slideNextRef.current = true;
-    } finally {
-      setSaving(null);
-      if (keepFocus) focusGrip(movedId);
-    }
-  };
-
-  // El navegador solo deja soltar donde el último `dragenter` o `dragover` dijo que sí, y un gesto
-  // rápido suelta antes del primer `dragover`: por eso van los dos, en la miniatura y en la rejilla
-  // (el hueco entre dos miniaturas también es un sitio válido para soltar).
-  const allowDrop = (event) => {
-    // Solo cuenta una miniatura de esta rejilla; un archivo traído del escritorio no es esto.
-    if (!dragIdRef.current) return false;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    return true;
-  };
-
-  return (
-    <div
-      ref={gridRef}
-      className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
-      onDragEnter={allowDrop}
-      onDragOver={allowDrop}
-      onDrop={(event) => {
-        const movedId = dragIdRef.current;
-        if (!movedId) return;
-        event.preventDefault();
-        const order = previewRef.current || ids;
-        endDrag();
-        commit(order, movedId);
-      }}
-    >
-      {shown.map((asset, position) => {
-        const canDrag = canReorder && !saving;
-        return (
-          <FinalAssetTile
-            key={asset.id}
-            item={item}
-            asset={asset}
-            isEditing={isEditing}
-            onDelete={onDelete}
-            isDeleting={isDeleting}
-            position={position}
-            total={shown.length}
-            canDrag={canDrag}
-            isDragged={dragId === asset.id}
-            isDragActive={Boolean(dragId)}
-            isSaving={pending?.movedId === asset.id}
-            onDragStart={canDrag ? (event) => {
-              event.dataTransfer.effectAllowed = 'move';
-              event.dataTransfer.setData('text/plain', asset.name || 'Archivo');
-              dragIdRef.current = asset.id;
-              previewRef.current = ids;
-              placesRef.current = measureTilePlaces(gridRef.current);
-              // Fuera del evento: si la miniatura cambia de aspecto dentro de `dragstart`, Chrome
-              // cancela el arrastre antes de empezar.
-              setTimeout(() => { if (dragIdRef.current === asset.id) setDragId(asset.id); }, 0);
-            } : undefined}
-            onDragOver={canDrag ? (event) => {
-              if (!allowDrop(event)) return;
-              const movedId = dragIdRef.current;
-              // Una miniatura que todavía se desliza pasa por debajo del puntero sin que la persona
-              // la haya buscado: no cuenta hasta que llega a su sitio. Sin esto el orden baila.
-              if (asset.id === movedId || slidesRef.current.has(asset.id)) return;
-              const current = previewRef.current || ids;
-              const next = moveAssetToIndex(current, movedId, current.indexOf(asset.id));
-              if (next === current) return;
-              previewRef.current = next;
-              slideNextRef.current = true;
-              setPreview(next);
-            } : undefined}
-            onDragEnd={canDrag ? () => {
-              // Si llega con el arrastre todavía vivo es que no se soltó dentro de la rejilla.
-              if (!dragIdRef.current) return;
-              slideNextRef.current = true;
-              endDrag();
-            } : undefined}
-            onKeyMove={(assetId, direction) => commit(moveAssetId(ids, assetId, direction), assetId, { keepFocus: true })}
-          />
-        );
-      })}
-    </div>
-  );
-};
 
 /**
  * Entregar la pieza final como enlace de Drive.
@@ -664,16 +178,6 @@ const DriveLinkDialog = ({ itemId, onClose, onSubmit, isPending }) => {
   );
 };
 
-const PIECE_STATUS_BAR = {
-  APROBADO: 'bg-brand-green',
-  REALIZADO: 'bg-brand-green',
-  PROGRAMADO: 'bg-brand-magenta',
-  PUBLICADO: 'bg-brand-green',
-  EN_REVISION: 'bg-brand-yellow',
-  EN_PRODUCCION: 'bg-brand-cyan',
-  DEVUELTO: 'bg-destructive'
-};
-
 const shortPieceDate = (value) => (value
   ? new Date(value).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', timeZone: 'UTC' })
   : 'Sin fecha');
@@ -712,12 +216,7 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
               isSelected ? 'bg-zinc-100 dark:bg-white/10' : 'hover:bg-zinc-50 dark:hover:bg-white/5'
             }`}
           >
-            {/* Aprobada pero con una revisión pedida no es verde: el cliente todavía debe su respuesta. */}
-            <span className={`h-9 w-1 shrink-0 rounded-full ${
-              approvalState(item) === APPROVAL_STATES.MATERIAL_NUEVO
-                ? 'bg-brand-magenta'
-                : PIECE_STATUS_BAR[item.status] || 'bg-zinc-200 dark:bg-white/15'
-            }`} />
+            <span aria-hidden="true" className={`h-9 w-1 shrink-0 rounded-full ${pieceStatusPresentation(item).dot}`} />
             <span className="min-w-0 flex-grow">
               <span className={`block truncate text-[13px] leading-tight ${isSelected ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>
                 {item.objective || `Pieza ${index + 1}`}
@@ -726,6 +225,7 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
                 {accountLabel && <><span data-piece-account className="font-bold text-zinc-600 dark:text-zinc-300">{accountLabel}</span> · </>}
                 {item.format} · {shortPieceDate(item.publishDate)}
               </span>
+              <PieceStatusBadge item={item} className="mt-1" />
             </span>
           </button>
         );
@@ -743,17 +243,6 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
     </div>
   </nav>
 );
-
-const PIECE_CHIP = {
-  APROBADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
-  REALIZADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
-  PROGRAMADO: 'bg-brand-magenta-soft text-brand-magenta-deep dark:bg-brand-magenta/25 dark:text-zinc-100',
-  PUBLICADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
-  EN_REVISION: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow',
-  EN_PRODUCCION: 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan',
-  DEVUELTO: 'bg-destructive/10 text-destructive'
-};
-const NEUTRAL_CHIP = 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
 
 /**
  * El mes como mes (Rodny, 24 de septiembre de 2026).
@@ -796,7 +285,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
                     key={piece.id}
                     type="button"
                     onClick={() => onOpenPiece(piece.id)}
-                    className={`flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition-opacity hover:opacity-80 ${PIECE_CHIP[piece.status] || NEUTRAL_CHIP}`}
+                    className={`flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition-opacity hover:opacity-80 ${pieceStatusPresentation(piece).chip}`}
                   >
                     <span className="truncate text-[9px] font-black uppercase tracking-wider opacity-80">
                       {piece.format}
@@ -805,6 +294,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
                     <span className="line-clamp-2 text-[11px] font-medium leading-tight text-zinc-700 dark:text-zinc-200">
                       {piece.objective}
                     </span>
+                    <PieceStatusBadge item={piece} className="max-w-full px-0 text-[10px]" />
                   </button>
                 ))}
 
@@ -1069,7 +559,7 @@ const ContentItemCard = ({
           </div>
 
           <div className="flex w-44 flex-col gap-1.5">
-            <span className={FIELD_LABEL}>Estado</span>
+            <span className={`flex items-center justify-between gap-2 ${FIELD_LABEL}`}>Estado <PieceStatusBadge item={item} /></span>
             {/* Con una publicación esperando salir el estado es de la cola: el desplegable explica en vez
                 de escribir, porque ponerla en «Publicado» a mano mataba la publicación (15 de octubre de
                 2026). No lleva `disabled`: sí hace algo, y apagarlo lo esconde del teclado y del lector
@@ -1475,7 +965,7 @@ const ContentPlanDetail = () => {
   const anclaRef = useRef(null);
   const reservaRef = useRef(null);
 
-  const selectPiece = (itemId) => {
+  const selectPiece = (itemId, { view } = {}) => {
     // Dónde está ahora la tarjeta en pantalla: ahí mismo tiene que aparecer la siguiente.
     const actual = document.querySelector('[id^="item-"]');
     anclaRef.current = actual ? actual.getBoundingClientRect().top : null;
@@ -1483,6 +973,7 @@ const ContentPlanDetail = () => {
     const params = new URLSearchParams(location.search);
     params.delete('itemId');
     if (itemId) params.set('item', itemId); else params.delete('item');
+    if (view === 'editor') params.delete('view');
     navigate(
       { pathname: location.pathname, search: params.toString() },
       { replace: true, state: { ...location.state, desdeElCarril: true } }
@@ -1525,7 +1016,12 @@ const ContentPlanDetail = () => {
   // `null` mientras no haya una subida directa en curso; un número entre 0 y 99 mientras la hay.
   const [directUploadPercent, setDirectUploadPercent] = useState(null);
   const [driveLinkItemId, setDriveLinkItemId] = useState(null);
-  const [planView, setPlanView] = useState('editor');
+  const planView = new URLSearchParams(location.search).get('view') === 'calendar' ? 'calendar' : 'editor';
+  const setPlanView = view => {
+    const params = new URLSearchParams(location.search);
+    if (view === 'calendar') params.set('view', view); else params.delete('view');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true, state: location.state });
+  };
 
   // Parse period (month-year)
   const [monthName, year] = (period || '').split('-');
@@ -1688,21 +1184,9 @@ const ContentPlanDetail = () => {
   });
 
   const finalAssetUploadMutation = useMutation({
-    mutationFn: async ({ itemId, files, mode }) => {
-      if (mode === 'direct') return uploadFinalAssetsDirect(itemId, files, setDirectUploadPercent);
-
-      const uploadData = new FormData();
-      files.forEach(file => uploadData.append('files', file));
-      const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/final-assets`, uploadData, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      return response.data;
-    },
+    mutationFn: ({ itemId, files }) => uploadFinalPiece(itemId, files, { onProgress: setDirectUploadPercent }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      queryClient.invalidateQueries({ queryKey: ['content-plan'] });
       toast.success('Archivos finales cargados');
     },
     onError: (error) => {
@@ -1984,7 +1468,7 @@ const ContentPlanDetail = () => {
      * Un solo salto no basta: lo que hay **encima** —el panel de Bria, los textos que se auto-ajustan—
      * termina de asentarse después, cambia de alto y se lleva la tarjeta consigo; por eso aterrizaba
      * cortada por arriba (Rodny, 25 de septiembre de 2026: «me deja muy abajo»). Se recoloca durante
-     * un segundo y medio, y se suelta en cuanto la persona toca el scroll: mandar ella, no nosotros.
+     * un segundo y medio, y se suelta en cuanto la persona interactúa: mandar ella, no nosotros.
      */
     const hasta = Date.now() + 1500;
     const seguir = () => {
@@ -1997,6 +1481,8 @@ const ContentPlanDetail = () => {
     window.addEventListener('wheel', soltar, { passive: true, once: true });
     window.addEventListener('touchstart', soltar, { passive: true, once: true });
     window.addEventListener('keydown', soltar, { once: true });
+    // Un clic puede volver a la cabecera y abrir un menú. No arrastrarlo fuera de la pantalla.
+    window.addEventListener('pointerdown', soltar, { passive: true, once: true, capture: true });
 
     return () => {
       cancelado = true;
@@ -2004,8 +1490,9 @@ const ContentPlanDetail = () => {
       window.removeEventListener('wheel', soltar);
       window.removeEventListener('touchstart', soltar);
       window.removeEventListener('keydown', soltar);
+      window.removeEventListener('pointerdown', soltar, true);
     };
-  }, [linkedItemId, plan, planView]);
+  }, [linkedItemId, plan, planView, location.state?.desdeElCarril]);
 
   if (planLoading) {
     return (
@@ -2044,8 +1531,9 @@ const ContentPlanDetail = () => {
           { label: plan.client?.name || 'Cliente' },
         ]}
       >
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <PlanPeriodSelector plan={plan} disabled={Boolean(editingItemId || finalAssetUploadMutation.isPending || driveAssetMutation.isPending)} />
+          <div className="flex min-w-0 flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
             <Select
               value={plan.status}
               onChange={(e) => updatePlanMutation.mutate({ status: e.target.value })}
@@ -2166,7 +1654,7 @@ const ContentPlanDetail = () => {
       <BriaContentPlanReview
         planId={currentPlanId}
         planUpdatedAt={plan.updatedAt}
-        onOpenItem={(id) => { scrolledForRef.current = null; selectPiece(id); setPlanView('editor'); }}
+        onOpenItem={(id) => { scrolledForRef.current = null; selectPiece(id, { view: 'editor' }); }}
       />
 
       {/* Internal Notes Panel */}
@@ -2261,7 +1749,7 @@ const ContentPlanDetail = () => {
             items={orderedPlanItems}
             year={Number(plan.year)}
             month={Number(plan.month)}
-            onOpenPiece={(id) => { selectPiece(id); setPlanView('editor'); }}
+            onOpenPiece={(id) => selectPiece(id, { view: 'editor' })}
             onAdd={handleAddItem}
             accounts={plan?.client?.socialAccounts || []}
           />

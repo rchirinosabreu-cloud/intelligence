@@ -16,14 +16,11 @@ import { cn } from '@/lib/utils';
 import BriaMemoryPanel from './BriaMemoryPanel';
 import BriaObserverInbox from './BriaObserverInbox';
 import TeamRhythmPanel from './TeamRhythmPanel';
+import { useNavigationSelection } from '@/hooks/useNavigationSelection';
+import { usePageLabel } from '@/components/layout/BackToOrigin';
 
 const PERIODS = [7, 30, 90];
 const TABS = ['observer', 'ritmo', 'memory'];
-// Bria enlaza directo a una pestaña (`/manager?tab=ritmo`).
-const initialTab = () => {
-  const requested = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tab');
-  return TABS.includes(requested) ? requested : 'observer';
-};
 const TAB_HEADINGS = {
   // La bandeja ya dice «Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo».
   observer: { title: 'Observer', description: 'Señales que Bria detecta por su cuenta, cada una con su evidencia.' },
@@ -127,9 +124,14 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
 };
 
 export default function ManagerTaskAnalytics() {
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const [rhythmView, setRhythmView] = useState('week');
-  const [periodDays, setPeriodDays] = useState(30);
+  const [navigation, updateNavigation] = useNavigationSelection();
+  const activeTab = TABS.includes(navigation.get('tab')) ? navigation.get('tab') : 'observer';
+  const rhythmView = navigation.get('rhythmView') === 'history' ? 'history' : 'week';
+  const periodDays = PERIODS.includes(Number(navigation.get('days'))) ? Number(navigation.get('days')) : 30;
+  const setActiveTab = tab => updateNavigation({ tab });
+  const setRhythmView = rhythmView => updateNavigation({ rhythmView });
+  const setPeriodDays = days => updateNavigation({ days });
+  usePageLabel(activeTab === 'ritmo' ? 'Manager · Ritmo' : 'Manager');
   const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');

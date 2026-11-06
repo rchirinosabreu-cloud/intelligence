@@ -91,9 +91,10 @@ test('el navegador sube directo, pero el servidor decide la clave y comprueba lo
   assert.match(routes, /router\.post\('\/items\/:id\/final-assets\/confirm'/);
 
   const screen = await read('src/components/modules/ContentPlanDetail.jsx');
-  assert.match(screen, /const uploadFinalAssetsDirect = async/);
-  assert.match(screen, /axios\.put\(ticket\.url, files\[index\]/, 'el archivo va al almacenamiento, no al servidor');
-  assert.match(screen, /Math\.min\(99,/, 'el 100 % se reserva para la confirmación del servidor');
+  const delivery = await read('src/lib/contentFinalDelivery.js');
+  assert.match(screen, /uploadFinalPiece\(itemId, files/);
+  assert.match(delivery, /client\.put\(ticket\.url, files\[index\]/, 'el archivo va al almacenamiento, no al servidor');
+  assert.match(delivery, /Math\.min\(99,/, 'el 100 % se reserva para la confirmación del servidor');
   assert.match(screen, /Subiendo al almacenamiento…/);
 });
 
@@ -145,8 +146,8 @@ test('un reel de Drive se ve vertical, no achatado', async () => {
   // Un 9:16 a lo ancho de la columna mediría mil píxeles de alto: hay que acotar el ancho.
   assert.match(shared, /isVerticalPiece \? 'max-w-\[380px\]'/);
 
-  const editor = await read('src/components/modules/ContentPlanDetail.jsx');
-  assert.match(editor, /aspectRatio: driveEmbedAspect\(item\.format\)/, 'la miniatura del editor también');
+  const media = await read('src/components/modules/ContentPlan/PieceMedia.jsx');
+  assert.match(media, /aspectRatio: driveEmbedAspect\(item\.format\)/, 'la miniatura compartida por el editor y la vista rápida también');
 });
 
 test('el único sitio ajeno que la plataforma incrusta es el reproductor de Drive', async () => {

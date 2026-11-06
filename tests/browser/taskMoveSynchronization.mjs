@@ -13,6 +13,10 @@ import { recognitionDemoMember as fixtureMember, recognitionDemoUser as fixtureU
 
 const recognitionDemoUser = { ...fixtureUser, name: 'Camila Vega' };
 const recognitionDemoMember = { ...fixtureMember, name: recognitionDemoUser.name };
+const todayDueDate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T00:00:00.000Z`;
+};
 
 let preview, browser, app, style;
 before(async () => {
@@ -25,7 +29,7 @@ before(async () => {
     import {MemoryRouter} from 'react-router-dom';
     import NativeTasks from '@/components/modules/NativeTasks';
     import BrainToaster from '@/components/ui/BrainToaster';
-    import {AuthProvider} from '@/context/AuthContext';
+    import {AuthProvider,useAuth} from '@/context/AuthContext';
     import {ConfirmDialogProvider} from '@/components/ui/ConfirmDialog';
     import {markTaskTimingTutorialSeen,markTaskTimingTutorialAfternoonSeen} from '@/lib/taskTiming';
     const user=${JSON.stringify({ ...recognitionDemoUser, role: 'ADMIN' })};
@@ -34,7 +38,8 @@ before(async () => {
     markTaskTimingTutorialSeen(localStorage,user.id); markTaskTimingTutorialAfternoonSeen(localStorage,user.id);
     const queryClient=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
     window.__moveQueryClient=queryClient;
-    createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><ConfirmDialogProvider><MemoryRouter initialEntries={['/gestion']}><main className="min-h-screen bg-background p-6 text-foreground"><NativeTasks/></main><BrainToaster/></MemoryRouter></ConfirmDialogProvider></AuthProvider></QueryClientProvider>);
+    const AuthenticatedBoard=()=>{const {currentUser,isLoading}=useAuth(); return currentUser&&!isLoading?<NativeTasks/>:null;};
+    createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><ConfirmDialogProvider><MemoryRouter initialEntries={['/gestion']}><main className="min-h-screen bg-background p-6 text-foreground"><AuthenticatedBoard/></main><BrainToaster/></MemoryRouter></ConfirmDialogProvider></AuthProvider></QueryClientProvider>);
   `;
   const bundle = await build({ stdin: { contents: source, resolveDir: process.cwd(), loader: 'jsx' }, write: false, bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', minify: true,
     alias: { '@': path.resolve('src') }, loader: { '.css': 'empty', '.png': 'dataurl', '.svg': 'dataurl', '.jpg': 'dataurl', '.webp': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env': '{}' } });
@@ -76,7 +81,7 @@ for (const [from, to, key, dark] of [
   const now = new Date().toISOString();
   const original = {
     id: 'move-test', title: 'Revisar propuesta de campaña', status: from, sortOrder: 0,
-    dueDate: now, createdAt: now, completedAt: null, startedAt: from === 'EN_CURSO' ? now : null,
+    dueDate: todayDueDate(), createdAt: now, completedAt: null, startedAt: from === 'EN_CURSO' ? now : null,
     accumulatedWorkMs: 0, clientId: 'sample', client: { name: 'Agencia Faro' },
     creator: recognitionDemoUser, creatorId: recognitionDemoUser.id,
     assignee: recognitionDemoMember, assigneeId: recognitionDemoMember.id,
@@ -95,6 +100,7 @@ for (const [from, to, key, dark] of [
     if (path === '/api/tasks/move-test' && route.request().method() === 'PATCH') {
       writes++;
       assert.equal(route.request().postDataJSON().status, to);
+      if (to === 'REALIZADA') assert.equal(Object.hasOwn(route.request().postDataJSON(), 'orderBeforeId'), false, 'completion position comes from the confirmed date, not a manual priority');
       patchSeen.resolve();
       await allowSave.promise;
       return route.fulfill({ json: saved });
@@ -156,7 +162,7 @@ for (const [from, to, key, dark] of [
 
 const makeTask = (status = 'PENDIENTE') => {
   const now = new Date().toISOString();
-  return { id: 'move-test', title: 'Revisar propuesta de campaña', status, sortOrder: 0, dueDate: now, createdAt: now,
+  return { id: 'move-test', title: 'Revisar propuesta de campaña', status, sortOrder: 0, dueDate: todayDueDate(), createdAt: now,
     startedAt: status === 'EN_CURSO' ? now : null, completedAt: status === 'REALIZADA' ? now : null,
     accumulatedWorkMs: 0, clientId: 'sample', client: { name: 'Agencia Faro' },
     creator: recognitionDemoUser, creatorId: recognitionDemoUser.id, assignee: recognitionDemoMember, assigneeId: recognitionDemoMember.id,
@@ -181,7 +187,12 @@ async function openBoard({ initial = makeTask(), additionalTasks = [], read, pat
   });
   await page.goto(`${preview.origin}/gestion?admin`, { waitUntil: 'commit' });
   const card = status => page.locator(`[data-rfd-droppable-id="${columnOf(status)}"] [data-rfd-draggable-id="move-test"]`);
-  await card(initial.status).waitFor({ timeout: 25000 });
+  try { await card(initial.status).waitFor({ timeout: 25000 }); }
+  catch (error) {
+    console.error(JSON.stringify({ events, text: (await page.locator('body').innerText()).slice(0, 2500) }));
+    await page.close();
+    throw error;
+  }
   if (dark) await page.evaluate(() => document.documentElement.classList.add('dark'));
   return { page, card, events };
 }
@@ -196,6 +207,85 @@ async function drag(board, from, to) {
   }
   await board.page.keyboard.press('Space');
 }
+
+async function selectFilter(page, label, option) {
+  await page.getByRole('combobox', { name: label, exact: true }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}
+
+test('global search labels suspended filters, finds outside them and restores their saved values', { timeout: 30000 }, async () => {
+  const outside = { ...makeTask(), id: 'outside-filter', title: 'Buscable sin fecha', dueDate: null,
+    client: { name: 'Otra cuenta' }, assigneeId: 'other-member', assignee: { id: 'other-member', name: 'Otra persona', userId: 'other-user' } };
+  const board = await openBoard({ additionalTasks: [outside] });
+  const { page } = board;
+  const outsideCard = page.locator('[data-rfd-draggable-id="outside-filter"]');
+  try {
+    await selectFilter(page, 'Cliente', 'Agencia Faro');
+    await selectFilter(page, 'Periodo', '⚠️ Solo Vencidos');
+    const labels = ['Responsable', 'Cliente', 'Periodo'];
+    const saved = await Promise.all(labels.map(label => page.getByRole('combobox', { name: label, exact: true }).innerText()));
+    assert.equal(await outsideCard.count(), 0);
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('global-search-changed', { detail: { query: 'Buscable' } })));
+    const notice = page.getByRole('status').filter({ hasText: 'Búsqueda global' });
+    await notice.waitFor();
+    assert.match(await notice.innerText(), /Buscable/);
+    assert.match(await notice.innerText(), /Responsable, cliente y periodo no se aplican/);
+    for (const label of labels) assert.equal(await page.getByRole('combobox', { name: label, exact: true }).isDisabled(), true, `${label} is visibly suspended`);
+    await outsideCard.waitFor();
+    assert.equal(board.events.writes, 0);
+    await page.screenshot({ path: 'output/task-move-synchronization/global-search-light.png', animations: 'disabled' });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: 'output/task-move-synchronization/global-search-mobile-dark.png', animations: 'disabled', fullPage: true });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'the search notice must fit mobile width');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('global-search-changed', { detail: { query: '  ' } })));
+    await notice.waitFor({ state: 'hidden' });
+    for (const label of labels) assert.equal(await page.getByRole('combobox', { name: label, exact: true }).isDisabled(), false);
+    assert.deepEqual(await Promise.all(labels.map(label => page.getByRole('combobox', { name: label, exact: true }).innerText())), saved);
+    assert.equal(await outsideCard.count(), 0);
+    assert.deepEqual(board.events.errors, []);
+  } finally { await page.close(); }
+});
+
+test('Realizado orders personal completions, refuses manual rank changes and keeps the reopen reason', { timeout: 30000 }, async () => {
+  const at = hour => { const date = new Date(); date.setHours(hour, 0, 0, 0); return date.toISOString(); };
+  const initial = { ...makeTask('REALIZADA'), completedAt: at(11), sortOrder: 50 };
+  const older = { ...makeTask('REALIZADA'), id: 'older-individual', title: 'Entrega anterior', completedAt: at(10), sortOrder: 0 };
+  const shared = { ...makeTask(), id: 'shared-completions', title: 'Entrega compartida', sharedProgress: true, rosterVersion: 1, sortOrder: 99,
+    participants: [
+      { memberId: recognitionDemoMember.id, member: recognitionDemoMember, role: 'ASSIGNEE', status: 'REALIZADA', completedAt: at(12), revision: 2, permissions: { canReopen: true } },
+      { memberId: 'other-member', member: { id: 'other-member', name: 'Otra persona' }, role: 'COLLABORATOR', status: 'REALIZADA', completedAt: at(9), revision: 2, permissions: { canReopen: true } },
+      { memberId: 'pending-member', member: { id: 'pending-member', name: 'Parte pendiente' }, role: 'COLLABORATOR', status: 'PENDIENTE', completedAt: null, revision: 0, permissions: { canChangeStatus: true } },
+    ] };
+  const board = await openBoard({ initial, additionalTasks: [older, shared], reorder: route => route.fulfill({ json: { order: [] } }) });
+  const { page } = board;
+  const doneOrder = () => page.locator('[data-rfd-droppable-id="realizado"] [data-rfd-draggable-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-rfd-draggable-id')));
+  const expected = [JSON.stringify([shared.id, recognitionDemoMember.id]), initial.id, older.id, JSON.stringify([shared.id, 'other-member'])];
+  try {
+    await selectFilter(page, 'Responsable', 'Todos los responsables');
+    await selectFilter(page, 'Periodo', 'Todos');
+    assert.deepEqual(await doneOrder(), expected);
+    await page.reload({ waitUntil: 'commit' });
+    await board.card('REALIZADA').waitFor();
+    assert.deepEqual(await doneOrder(), expected, 'completion ordering survives a reload');
+    const before = await page.evaluate(() => window.__moveQueryClient.getQueryData(['nativeTasks']));
+    await board.card('REALIZADA').focus();
+    await page.keyboard.press('Space'); await page.waitForTimeout(150);
+    await page.keyboard.press('ArrowUp'); await page.waitForTimeout(150);
+    await page.keyboard.press('Space');
+    await page.getByText('Realizado se ordena por fecha de cierre, con lo más reciente primero.', { exact: true }).waitFor();
+    assert.equal(board.events.writes, 0, 'moving within Realizado must not write a priority');
+    assert.deepEqual(await doneOrder(), expected);
+    assert.deepEqual(await page.evaluate(() => window.__moveQueryClient.getQueryData(['nativeTasks'])), before);
+    await page.screenshot({ path: 'output/task-move-synchronization/completion-order.png', animations: 'disabled' });
+    await drag(board, 'REALIZADA', 'PENDIENTE');
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('heading', { name: 'Reabrir tarea', exact: true }).waitFor();
+    assert.equal(board.events.writes, 0, 'a cross-column reopen still needs its reason before saving');
+    assert.deepEqual(board.events.errors, []);
+  } finally { await page.close(); }
+});
 
 test('a successful PATCH remains visible when the following GET fails', { timeout: 30000 }, async () => {
   const initial = makeTask();

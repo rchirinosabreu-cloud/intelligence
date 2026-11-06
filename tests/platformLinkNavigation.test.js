@@ -45,7 +45,8 @@ test('internal platform actions no longer request new browser windows', async ()
   ]);
 
   assert.match(taskPanel, /useNavigateFrom\(\)/);
-  assert.match(taskPanel, /navigateFrom\(`\/parrillas\/\$\{/);
+  assert.match(taskPanel, /navigateFrom\(path \|\| `\/parrillas\/\$\{/);
+  assert.match(taskPanel, /onClick=\{\(\) => openLinkedPlan\(\)\}/);
   assert.doesNotMatch(taskPanel, /window\.open\(`\/parrillas\//);
   assert.match(quotationList, /navigate\(`\/cotizaciones\/ver\/\$\{/);
   assert.doesNotMatch(quotationList, /window\.open\(`\/cotizaciones\/ver\//);

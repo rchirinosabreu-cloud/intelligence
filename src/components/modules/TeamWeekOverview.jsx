@@ -8,6 +8,8 @@ import WeeklyReadingCard from './WeeklyReadingCard';
 import TeamLoadMap from './TeamLoadMap';
 import AssignmentScenario from './AssignmentScenario';
 import { RHYTHM_POLICY } from '@/lib/workPrediction';
+import { useNavigationSelection } from '@/hooks/useNavigationSelection';
+import { useOriginState } from '@/components/layout/BackToOrigin';
 
 const hours = (ms) => { const m = Math.round((ms || 0) / 60_000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`; };
 const day = (value) => value ? new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' }).format(new Date(`${value}T12:00:00Z`)) : 'Sin fecha';
@@ -30,7 +32,11 @@ const RISK = { vencida: 'Fecha vencida', riesgo: 'Supera la capacidad hasta esa 
 const SOURCE = { persona: 'Misma persona, cliente y complejidad', sin_estimacion: 'Sin historial predictivo válido' };
 
 function PersonRow({ person, people, until, onHistory }) {
-  const [open, setOpen] = useState(false);
+  const [navigation, updateNavigation] = useNavigationSelection();
+  const openPeople = navigation.getAll('person');
+  const open = openPeople.includes(person.personId);
+  const setOpen = value => updateNavigation({ person: value ? [...new Set([...openPeople, person.personId])] : openPeople.filter(id => id !== person.personId) });
+  const originState = useOriginState();
   const [scenario, setScenario] = useState(null);
   const detailId = useId();
   const [label, tone] = STATUS[person.status] || STATUS.sin_datos;
@@ -54,7 +60,7 @@ function PersonRow({ person, people, until, onHistory }) {
             <p className={cn('mt-1 text-xs', ['riesgo', 'vencida'].includes(task.risk) ? STATUS.revisar[1] : 'text-zinc-600 dark:text-zinc-400')}>{task.dueDay ? RISK[task.risk] || (task.queueComplete === false ? 'No se puede prever: cola con datos insuficientes' : 'Sin previsión respaldada') : 'Asigna una fecha para prever esta entrega'} · {SOURCE[task.source]}{task.confidence === 'suficiente' && ` (${task.sample} mediciones)`}{task.needsReview ? ' · Revisa cuánto falta: ya alcanzó su tiempo habitual' : ''}{task.deadlineAt && ` · Límite ${new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(new Date(task.deadlineAt))}`}</p>
             {task.risk === 'riesgo' && <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Hasta esa fecha: {hours(task.committedToDeadlineMs)} pendientes acumuladas frente a {hours(task.capacityToDeadlineMs)} de capacidad.</p>}
           </div>
-          <div className="shrink-0"><Link to={`/gestion?taskId=${encodeURIComponent(task.id)}`} className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Abrir <ArrowRight className="h-3 w-3" /></Link>{task.clientId && <button type="button" aria-expanded={scenario === task.id} onClick={() => setScenario(scenario === task.id ? null : task.id)} className="block min-h-11 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{scenario === task.id ? 'Cerrar escenario' : 'Simular'}</button>}</div>
+          <div className="shrink-0"><Link to={`/gestion?taskId=${encodeURIComponent(task.id)}`} state={originState()} className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Abrir <ArrowRight className="h-3 w-3" /></Link>{task.clientId && <button type="button" aria-expanded={scenario === task.id} onClick={() => setScenario(scenario === task.id ? null : task.id)} className="block min-h-11 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{scenario === task.id ? 'Cerrar escenario' : 'Simular'}</button>}</div>
         </li>)}
       </ul>}
       {scenario && person.tasks.some(t => t.id === scenario) && <AssignmentScenario key={scenario} task={person.tasks.find(t => t.id === scenario)} personId={person.personId} people={people} />}
@@ -64,10 +70,13 @@ function PersonRow({ person, people, until, onHistory }) {
 
 export default function TeamWeekOverview({ refreshKey = 0, onHistory }) {
   const [stored, setData] = useState(null), [error, setError] = useState('');
-  const [selectedWindow, setSelectedWindow] = useState('week');
+  const [navigation, updateNavigation] = useNavigationSelection();
+  const selectedWindow = ['today', 'tomorrow', 'week', 'next_week'].includes(navigation.get('window')) ? navigation.get('window') : 'week';
   const data = stored?.window === selectedWindow ? stored : null;
   const request = useRef(null);
-  const [filter, setFilter] = useState('all'), [mapOpen, setMapOpen] = useState(false);
+  const filter = ['all', 'attention', 'space'].includes(navigation.get('filter')) ? navigation.get('filter') : 'all';
+  const setFilter = filter => updateNavigation({ filter });
+  const mapOpen = navigation.get('map') === 'open';
   const load = useCallback(async () => {
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
@@ -87,7 +96,7 @@ export default function TeamWeekOverview({ refreshKey = 0, onHistory }) {
   const people = [...(data?.people || [])].sort((a, b) => (b.overdueCount + b.riskCount + b.tightCount) - (a.overdueCount + a.riskCount + a.tightCount) || a.personName.localeCompare(b.personName, 'es'));
   const visible = people.filter(p => filter === 'attention' ? p.overdueCount + p.riskCount + p.tightCount > 0 : filter === 'space' ? p.canReceive : true);
   return <section className="space-y-5" aria-label="Previsión de la semana" data-forecast-window={data?.window}>
-    <div className="flex flex-wrap gap-1" aria-label="Horizonte de la previsión">{[['today','Hoy'],['tomorrow','Mañana'],['week','Semana actual'],['next_week','Próxima semana']].map(([value,label]) => <button key={value} type="button" aria-pressed={selectedWindow === value} onClick={() => { setSelectedWindow(value); setFilter('all'); }} className={cn('min-h-11 rounded-lg px-3 text-xs font-medium', selectedWindow === value ? 'bg-zinc-200/70 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}</div>
+    <div className="flex flex-wrap gap-1" aria-label="Horizonte de la previsión">{[['today','Hoy'],['tomorrow','Mañana'],['week','Semana actual'],['next_week','Próxima semana']].map(([value,label]) => <button key={value} type="button" aria-pressed={selectedWindow === value} onClick={() => updateNavigation({ window: value, filter: 'all' })} className={cn('min-h-11 rounded-lg px-3 text-xs font-medium', selectedWindow === value ? 'bg-zinc-200/70 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}</div>
     {error && <div role="alert" className="brain-alert-surface rounded-2xl p-4 text-sm"><AlertCircle className="mr-2 inline h-4 w-4 text-destructive" />{error}<button type="button" onClick={load} className="ml-3 min-h-11 underline">Reintentar</button></div>}
     {!data && !error && <div role="status" className="h-52 animate-pulse rounded-2xl bg-zinc-200/70 dark:bg-zinc-900"><span className="sr-only">Leyendo la semana…</span></div>}
     {data && <>
@@ -112,7 +121,7 @@ export default function TeamWeekOverview({ refreshKey = 0, onHistory }) {
       </section>
     </>}
     <WeeklyReadingCard refreshKey={refreshKey} compact />
-    <details onToggle={e => setMapOpen(e.currentTarget.open)} className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <details open={mapOpen} onToggle={e => { if (e.currentTarget.open !== mapOpen) updateNavigation({ map: e.currentTarget.open ? 'open' : null }); }} className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">Explorar las fechas de entrega · próximos 10 días hábiles</summary>
       {mapOpen && <div className="px-3 pb-3"><p className="px-2 pb-3 text-xs text-zinc-500 dark:text-zinc-400">Este mapa agrupa entregas por vencimiento; la previsión de arriba cuenta los días anteriores disponibles para trabajarlas.</p><TeamLoadMap refreshKey={refreshKey} /></div>}
     </details>

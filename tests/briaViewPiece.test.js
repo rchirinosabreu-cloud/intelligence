@@ -15,8 +15,10 @@ test('«Ver pieza» pide a la parrilla que abra la pieza, en vez de buscarla en 
 test('la parrilla le pasa al panel cómo abrir una pieza, la misma vía que usa el calendario', async () => {
   const detail = await read('src/components/modules/ContentPlanDetail.jsx');
   assert.match(detail, /<BriaContentPlanReview[\s\S]{0,200}onOpenItem=/);
-  // El calendario ya resolvía esto: seleccionar y volver al editor.
-  assert.match(detail, /onOpenPiece=\{\(id\) => \{ selectPiece\(id\); setPlanView\('editor'\); \}\}/);
+  // Una sola actualización de URL selecciona la pieza y el editor; dos navegaciones competirían.
+  assert.match(detail, /onOpenPiece=\{\(id\) => selectPiece\(id, \{ view: 'editor' \}\)\}/);
+  assert.match(detail, /onOpenItem=\{\(id\) => \{ scrolledForRef\.current = null; selectPiece\(id, \{ view: 'editor' \}\); \}\}/);
+  assert.match(detail, /if \(view === 'editor'\) params\.delete\('view'\)/);
 });
 
 test('abrir una pieza desde un hallazgo siempre la deja delante, aunque ya estuviera elegida', async () => {

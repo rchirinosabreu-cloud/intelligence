@@ -3,12 +3,29 @@ import { taskDueDay } from './taskDeadlines.js';
 const compareText = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const createdTime = task => new Date(task.createdAt || 0).getTime() || 0;
 
-// One comparator for the board and the server. Old rows can share rank zero;
+// The shared manual queue comparator. Old rows can share rank zero;
 // dates, creation time and identity make those ties stable across refreshes.
 export const compareTaskOrder = (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
   || compareText(taskDueDay(a.dueDate) || '9999-12-31', taskDueDay(b.dueDate) || '9999-12-31')
   || createdTime(a) - createdTime(b)
   || compareText(a.id, b.id);
+
+const completed = task => task.status === 'REALIZADA' || task.status === 'REALIZADO';
+const completionTime = task => {
+  const value = task.participation ? task.participation.completedAt : task.completedAt;
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(time) ? time : -Infinity;
+};
+
+// Completed cards follow their own completion, not a shared/manual priority.
+// Open cards keep the server queue; an unknown personal date never borrows another person's.
+export const compareTaskBoardOrder = (a, b) => {
+  const aCompleted = completed(a), bCompleted = completed(b);
+  if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+  if (!aCompleted) return compareTaskOrder(a, b);
+  return completionTime(b) - completionTime(a)
+    || compareText(String(a.boardKey || a.id), String(b.boardKey || b.id));
+};
 
 export const mergeFilteredTaskOrder = (tasks, orderedIds) => {
   const selected = new Set(orderedIds);

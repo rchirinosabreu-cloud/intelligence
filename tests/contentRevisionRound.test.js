@@ -93,6 +93,8 @@ test('la marca la pone el servidor cuando llega material a una pieza aprobada', 
 test('el portal deja decidir otra vez y nunca deja al cliente sin salida', async () => {
   const portal = await read('src/components/public/SharedContentPlan.jsx');
   const controller = await read('src/controllers/publicController.js');
+  const badge = await read('src/components/modules/ContentPlan/PieceStatusBadge.jsx');
+  const { pieceStatusPresentation } = await import('../src/components/modules/ContentPlan/pieceStatusPresentation.js');
 
   assert.match(controller, /revisionRequestedAt: item\.revisionRequestedAt/, 'el estado viaja al portal');
 
@@ -103,7 +105,10 @@ test('el portal deja decidir otra vez y nunca deja al cliente sin salida', async
   // Con material nuevo vuelven los dos botones y se dice por qué.
   assert.match(portal, /Ya está la pieza terminada/);
   assert.match(portal, /Habías aprobado el texto/);
-  assert.match(portal, /Material nuevo/);
+  assert.match(portal, /<PieceStatusBadge item=\{item\} publicView/);
+  assert.match(badge, /pieceStatusPresentation\(item, \{ publicView \}\)/);
+  assert.equal(pieceStatusPresentation({ status: 'APROBADO', revisionRequestedAt: '2026-10-05' }, { publicView: true }).label, 'Material nuevo',
+    'el mismo distintivo compartido debe explicar que la aprobación anterior no cubre el material nuevo');
 
   // Y una pieza cerrada tampoco es un callejón sin salida.
   assert.match(portal, /¿Quieres pedir un cambio\?/);

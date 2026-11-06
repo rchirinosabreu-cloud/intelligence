@@ -1,6 +1,6 @@
 import BriaPortrait from '@/components/bria/BriaPortrait';
 import Select from '@/components/ui/Select';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
@@ -23,6 +23,8 @@ import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusDeadlineIso,
 import { TIME_CORRECTION_EVENT_TYPE } from '@/lib/taskWorkCorrection';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
+import { hasModuleAccess } from '@/lib/platformModules';
+import { lazyWithRecovery } from '@/pwa/preloadRecovery';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
 import { canUpdateTask } from '@/lib/taskEditPermissions';
 import TaskShareControl from '@/components/tasks/TaskShareControl';
@@ -61,6 +63,7 @@ import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
+const PiecePeekDialog = lazyWithRecovery(() => import('./Clients/operations/PiecePeekDialog'));
 
 // Hours a manager can commit a task to (Bogotá wall clock, quarter hours of the working day).
 const FOCUS_HOURS = QUARTER_HOURS.filter((hour) => hour >= '06:00' && hour <= '21:45');
@@ -274,6 +277,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const { toast } = useToast();
     const confirm = useConfirmDialog();
     const { currentUser } = useAuth();
+    const [showPiece, setShowPiece] = useState(false);
+    const viewPieceRef = useRef(null);
+    useEffect(() => { setShowPiece(false); }, [isOpen, taskData?.id]);
     // "Pedir más tiempo" for the commitment of this task (Rodny, 21 September 2026).
     const [askingMoreTime, setAskingMoreTime] = useState(false);
     const navigateFrom = useNavigateFrom();
@@ -1907,6 +1913,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const selectedPriorityValue = formData.isPriority ? (formData.priority || 'NORMAL') : 'NONE';
     const selectedPriorityLabel = taskPriorityOptions.find(option => option.value === selectedPriorityValue)?.label || 'Sin prioridad';
 
+    const linkedPlanId = formData.plan?.id || taskData?.contentPlanId || taskData?.contentItem?.planId;
+    const canViewPiece = Boolean(formData.contentItemId && linkedPlanId && hasModuleAccess(currentUser, 'parrillas'));
+    const openLinkedPlan = (path) => {
+        const originParams = new URLSearchParams(location.search);
+        originParams.set('taskId', formData.id);
+        if (formData.sharedProgress && viewedParticipantMemberId) originParams.set('participantId', viewedParticipantMemberId);
+        const originPath = location.pathname === '/gestion' ? `${location.pathname}?${originParams.toString()}` : undefined;
+        setShowPiece(false);
+        navigateFrom(path || `/parrillas/${encodeURIComponent(linkedPlanId)}?item=${encodeURIComponent(formData.contentItemId)}`, {
+            originPath,
+            label: location.pathname === '/gestion' ? `Gestión · ${formData.title}` : undefined,
+        });
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent
@@ -1915,19 +1935,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 onPointerDownOutside={(e) => {
                     const target = e.target;
                     const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
-                    if (previewImage || isToolbar) {
+                    if (previewImage || showPiece || isToolbar) {
                         e.preventDefault();
                     }
                 }}
                 onInteractOutside={(e) => {
                     const target = e.target;
                     const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
-                    if (previewImage || isToolbar) {
+                    if (previewImage || showPiece || isToolbar) {
                         e.preventDefault();
                     }
                 }}
                 onEscapeKeyDown={(e) => {
-                    if (previewImage) {
+                    if (previewImage || showPiece) {
                         e.preventDefault();
                     }
                 }}
@@ -1977,23 +1997,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
                         )}
 
-                        {isEdition && (formData.plan || formData.contentPlanId) && (
+                        {isEdition && canViewPiece && <button type="button" ref={viewPieceRef} onClick={() => setShowPiece(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-zinc-700 dark:text-zinc-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-white/5 transition-all border border-zinc-200 dark:border-white/10 shadow-sm">
+                            <Eye size={11} />Ver pieza
+                        </button>}
+                        {isEdition && linkedPlanId && (
                             <button
-                                onClick={() => {
-                                    const planId = formData.plan?.id || formData.contentPlanId;
-                                    if (!planId) return;
-                                    // Gestión consume el enlace al abrir la tarea. El regreso lo reconstruye
-                                    // para que vuelva a abrirse esta misma tarea, con sus permisos actuales.
-                                    const originParams = new URLSearchParams(location.search);
-                                    originParams.set('taskId', formData.id);
-                                    if (formData.sharedProgress && viewedParticipantMemberId) originParams.set('participantId', viewedParticipantMemberId);
-                                    const originPath = location.pathname === '/gestion'
-                                        ? `${location.pathname}?${originParams.toString()}` : undefined;
-                                    navigateFrom(`/parrillas/${encodeURIComponent(planId)}?item=${encodeURIComponent(formData.contentItemId)}`, {
-                                        originPath,
-                                        label: location.pathname === '/gestion' ? `Gestión · ${formData.title}` : undefined,
-                                    });
-                                }}
+                                type="button"
+                                onClick={() => openLinkedPlan()}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-cyan/10 transition-all border border-brand-cyan/15 dark:border-brand-cyan/30 shadow-sm"
                             >
                                 <LayoutGrid size={11} /> Abrir Parrilla
@@ -3018,6 +3029,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 </div>
 
             </DialogContent>
+
+            {isOpen && showPiece && canViewPiece && <Suspense fallback={null}>
+                <PiecePeekDialog key={`${formData.id}:${formData.contentItemId}`} nested allowDelivery returnFocusRef={viewPieceRef}
+                    piece={{ id: formData.contentItemId, planId: linkedPlanId, title: formData.title,
+                        format: taskData?.contentItem?.format || 'Pieza', status: taskData?.contentItem?.status,
+                        date: taskData?.contentItem?.publishDate }}
+                    onClose={() => setShowPiece(false)} onOpenFull={openLinkedPlan} />
+            </Suspense>}
 
             <FocusExtensionDialog
                 task={{

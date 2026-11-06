@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useNavigationSelection } from '@/hooks/useNavigationSelection';
 import PageHeader from '@/components/ui/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Database, Settings } from '@/components/ui/icons';
@@ -7,6 +8,8 @@ import CatalogManagement from './CatalogManagement';
 import { QuotationGuideButton } from '@/components/onboarding/OnboardingProvider';
 
 const QuotationsLayout = () => {
+    const [navigation, updateNavigation] = useNavigationSelection();
+    const tab = navigation.get('tab') === 'catalog' ? 'catalog' : 'history';
     return (
         <div className="space-y-6">
             <PageHeader
@@ -14,7 +17,7 @@ const QuotationsLayout = () => {
                 subtitle="Gestión de propuestas, tarifas y acuerdos comerciales."
             ><QuotationGuideButton /></PageHeader>
 
-            <Tabs defaultValue="history" className="w-full">
+            <Tabs value={tab} onValueChange={tab => updateNavigation({ tab })} className="w-full">
                 <TabsList className="bg-zinc-100 dark:bg-zinc-800/50 p-1 rounded-2xl mb-8 border border-zinc-200 dark:border-zinc-800 w-full max-w-md">
                     <TabsTrigger value="history" className="rounded-xl flex items-center gap-2 flex-1">
                         <FileText className="w-4 h-4" /> Historial

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -7,7 +7,9 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import { changeLine, platformStatusFromSheet, sameStatus } from '@/lib/externalPlan';
 import { humanizeReviewRequestError } from '@/lib/briaReviewDiagnostics';
-import { PIECE_STATUS } from '@/components/modules/Clients/operations/operationTones';
+import PlanPeriodSelector from '@/components/modules/ContentPlan/PlanPeriodSelector';
+import PieceStatusBadge from '@/components/modules/ContentPlan/PieceStatusBadge';
+import { usePageLabel } from '@/components/layout/BackToOrigin';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import Select from '@/components/ui/Select';
 import {
@@ -33,10 +35,9 @@ const urlsIn = (text) => (String(text || '').match(/https?:\/\/[^\s]+/g) || []).
 const CHANGE_KIND_LABEL = { STATUS: 'Cambió de estado', SHEET_COMMENT: 'Comentario nuevo', GOOGLE_COMMENT: 'Comentario nuevo', GOOGLE_REPLY: 'Respuesta nueva' };
 
 function StatusChip({ status }) {
-  const meta = PIECE_STATUS[platformStatusFromSheet(status)] || PIECE_STATUS.BORRADOR;
   return (
-    <span title={status ? `En la hoja: ${status}` : 'Sin estado en la hoja'} className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-semibold', meta.chip)}>
-      {meta.label}
+    <span title={status ? `En la hoja: ${status}` : 'Sin estado en la hoja'}>
+      <PieceStatusBadge item={{ status: platformStatusFromSheet(status) }} />
     </span>
   );
 }
@@ -96,8 +97,13 @@ function ReplyBox({ onSend, onCancel, sending }) {
   );
 }
 
-function CommentThread({ comment, onReply, sending }) {
+function CommentThread({ comment, onReply, sending, onReplyOpenChange }) {
   const [replying, setReplying] = useState(false);
+  useEffect(() => {
+    if (!replying || !onReplyOpenChange) return undefined;
+    onReplyOpenChange(true);
+    return () => onReplyOpenChange(false);
+  }, [replying, onReplyOpenChange]);
   return (
     <li className={cn('rounded-xl border p-3 text-sm', comment.resolved ? 'border-zinc-100 bg-zinc-50 dark:border-white/5 dark:bg-white/[0.03]' : 'border-brand-cyan/30 bg-brand-cyan-soft/40 dark:border-brand-cyan/20 dark:bg-brand-cyan/5')} data-google-comment={comment.id}>
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500 dark:text-zinc-400">
@@ -146,7 +152,7 @@ function StatusPicker({ piece, options, onChange, saving }) {
 }
 
 // También la usa la vista rápida de Operación, sin borde propio porque ya va dentro de una ventana (30 de octubre de 2026).
-export function PieceCard({ piece, editable, statusOptions, onStatus, savingRow, onReply, replying, className }) {
+export function PieceCard({ piece, editable, statusOptions, onStatus, savingRow, onReply, replying, onReplyOpenChange, className }) {
   const links = urlsIn(piece.content);
   return (
     <article className={cn(CARD, piece.changed?.length && 'ring-1 ring-brand-yellow/60', className)} data-external-piece={piece.row}>
@@ -189,7 +195,7 @@ export function PieceCard({ piece, editable, statusOptions, onStatus, savingRow,
       {piece.comments?.length > 0 && (
         <div className="mt-4">
           <p className={cn(LABEL, 'flex items-center gap-1.5')}><MessageSquare className="h-3.5 w-3.5" />Comentarios de Google ({piece.comments.length})</p>
-          <ul className="mt-2 space-y-2">{piece.comments.map((comment) => <CommentThread key={comment.id} comment={comment} onReply={editable ? onReply : null} sending={replying} />)}</ul>
+          <ul className="mt-2 space-y-2">{piece.comments.map((comment) => <CommentThread key={comment.id} comment={comment} onReply={editable ? onReply : null} sending={replying} onReplyOpenChange={onReplyOpenChange} />)}</ul>
         </div>
       )}
     </article>
@@ -199,17 +205,23 @@ export function PieceCard({ piece, editable, statusOptions, onStatus, savingRow,
 export default function ExternalPlanView() {
   const { clientSlug, period } = useParams();
   const queryClient = useQueryClient();
+  const [openReplies, setOpenReplies] = useState(0);
+  const trackReplyOpen = useCallback((open) => {
+    setOpenReplies((count) => count + (open ? 1 : -1));
+  }, []);
   const key = ['external-plan', clientSlug, period];
   const { data: plan, isLoading, error } = useQuery({
     queryKey: key,
     queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/content/external-plans/${encodeURIComponent(clientSlug)}/${encodeURIComponent(period)}`, { headers: authHeaders() })).data,
     staleTime: 30_000,
   });
+  usePageLabel(plan ? `Parrilla · ${plan.client.name} · ${plan.label} ${plan.year}` : null);
   const refresh = useMutation({
     mutationFn: async () => (await axios.post(`${getApiBaseUrl()}/api/content/external-plans/${encodeURIComponent(clientSlug)}/refresh`, {}, { headers: authHeaders() })).data,
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: key });
       queryClient.invalidateQueries({ queryKey: ['external-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['external-plan-periods', clientSlug] });
       if (result?.ok) toast.success('Hoja de MIO leída.');
       else toast.error(result?.problem || 'No pudimos leer la hoja.');
     },
@@ -295,7 +307,8 @@ export default function ExternalPlanView() {
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
+          <PlanPeriodSelector plan={plan} external disabled={openReplies > 0 || changeStatus.isPending || replyComment.isPending} />
           <button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending} className={cn(TEXT_ACTION, 'border border-zinc-200 dark:border-white/10')} data-external-refresh>
             {refresh.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Leer ahora
           </button>
@@ -342,7 +355,7 @@ export default function ExternalPlanView() {
         <section className={CARD} data-external-loose-comments>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50"><MessageSquare className="h-4 w-4" />Comentarios de Google sin pieza</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Abiertos y recientes, pero no citan el texto de ninguna pieza de este mes.</p>
-          <ul className="mt-3 space-y-2">{plan.looseComments.map((comment) => <CommentThread key={comment.id} comment={comment} onReply={plan.editable ? sendReply : null} sending={replyComment.isPending} />)}</ul>
+          <ul className="mt-3 space-y-2">{plan.looseComments.map((comment) => <CommentThread key={comment.id} comment={comment} onReply={plan.editable ? sendReply : null} sending={replyComment.isPending} onReplyOpenChange={trackReplyOpen} />)}</ul>
         </section>
       )}
 
@@ -376,6 +389,7 @@ export default function ExternalPlanView() {
               savingRow={changeStatus.isPending ? changeStatus.variables?.piece?.row : null}
               onReply={sendReply}
               replying={replyComment.isPending}
+              onReplyOpenChange={trackReplyOpen}
             />
           ))}
         </div>

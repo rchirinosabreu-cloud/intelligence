@@ -2,6 +2,7 @@ import express from 'express';
 import {
     getExternalPlanMonth,
     listExternalPlans,
+    listExternalPlanPeriods,
     parseMonthSlug,
     refreshExternalPlanBySlug,
     replyToExternalComment,
@@ -12,6 +13,7 @@ import {
 // pide el permiso de Parrillas. Lee la hoja y escribe en ella solo el estado de una pieza y la respuesta a un comentario.
 export const createExternalPlansRouter = ({
     list = listExternalPlans,
+    periods = listExternalPlanPeriods,
     getMonth = getExternalPlanMonth,
     refresh = refreshExternalPlanBySlug,
     updateStatus = updateExternalPieceStatus,
@@ -25,6 +27,17 @@ export const createExternalPlansRouter = ({
         } catch (error) {
             console.error('[Parrillas MIO] No se pudo listar:', error?.message || error);
             return res.status(500).json({ error: 'No pudimos cargar las parrillas de MIO.' });
+        }
+    });
+
+    router.get('/:slug/periods', async (req, res) => {
+        try {
+            const result = await periods(undefined, req.params.slug);
+            if (!result) return res.status(404).json({ error: 'Ese cliente no tiene una hoja de MIO vinculada.' });
+            return res.json(result);
+        } catch (error) {
+            console.error('[Parrillas MIO] No se pudo consultar períodos:', error?.message || error);
+            return res.status(500).json({ error: 'No pudimos consultar los períodos de MIO.' });
         }
     });
 

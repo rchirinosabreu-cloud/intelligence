@@ -64,6 +64,8 @@ test('el editor ofrece el calendario como otra forma de mirar el mismo mes', asy
   assert.match(editor, /aria-pressed=\{planView === option\.key\}/, 'el selector dice cuál vista está activa');
   assert.match(editor, /planView === 'calendar' \?/, 'el calendario sustituye al editor, no se apila debajo');
   // Tocar una pieza en el calendario la abre en el editor: son dos vistas del mismo mes, no dos sitios.
-  assert.match(editor, /setPlanView\('editor'\)/);
+  assert.match(editor, /onOpenPiece=\{\(id\) => selectPiece\(id, \{ view: 'editor' \}\)\}/,
+    'abrir la pieza y elegir editor actualiza la misma dirección, sin perder la selección');
+  assert.match(editor, /if \(view === 'editor'\) params\.delete\('view'\)/);
   assert.match(editor, /Sin fecha todavía/, 'lo que no tiene fecha se ve, no se esconde');
 });
