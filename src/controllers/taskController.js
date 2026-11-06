@@ -267,7 +267,7 @@ export const deleteExistingTask = async (req, res) => {
         await auditAndDeleteTask(req.params.taskId, reason, req.user?.userId);
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: "Failed to delete task", details: error.message });
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : "Failed to delete task", details: error.message });
     }
 };
 

@@ -1,4 +1,5 @@
 import { compareTaskOrder, mergeFilteredTaskOrder, taskEntersNewQueue } from '../lib/taskOrder.js';
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import { recognitionTransaction } from './recognitionService.js';
 import { hasTaskParticipations, taskParticipations, aggregateParticipationStatus } from '../lib/taskParticipation.js';
 
@@ -37,14 +38,14 @@ export const reorderTaskSelection = async ({ db, user, reorderList, previousIds 
     throw fail('El orden anterior no corresponde a la selección.');
   }
   return recognitionTransaction(db, async tx => {
-    const selected = await tx.task.findMany({ where: { id: { in: orderedIds } }, select: orderSelect });
+    const selected = await tx.task.findMany({ where: { id: { in: orderedIds }, AND: [activeTaskSourceWhere] }, select: orderSelect });
     if (selected.length !== orderedIds.length || new Set(selected.map(task => task.status)).size !== 1) {
       throw fail('Los pendientes cambiaron. Actualiza el tablero.', 409);
     }
     if (previousIds && selected.sort(compareTaskOrder).some((task, index) => task.id !== previousIds[index])) {
       throw fail('La prioridad cambió. Actualiza el tablero antes de ordenar.', 409);
     }
-    const column = await tx.task.findMany({ where: { status: selected[0].status }, select: orderSelect });
+    const column = await tx.task.findMany({ where: { status: selected[0].status, AND: [activeTaskSourceWhere] }, select: orderSelect });
     return saveOrder(tx, mergeFilteredTaskOrder(column, orderedIds));
   });
 };
@@ -73,7 +74,7 @@ export const updateOrderedTask = async (tx, args, current) => {
   const status = data.status ?? current.status;
   let column;
   if (hasIndex || (hasAnchor && anchor !== null)) {
-    column = (await tx.task.findMany({ where: { status }, select: orderSelect })).filter(task => task.id !== args.where.id).sort(compareTaskOrder);
+    column = (await tx.task.findMany({ where: { status, AND: [activeTaskSourceWhere] }, select: orderSelect })).filter(task => task.id !== args.where.id).sort(compareTaskOrder);
     if (hasAnchor && !column.some(task => task.id === anchor)) throw fail('El destino cambió. Actualiza el tablero.', 409);
   }
   if (hasAnchor || hasIndex || taskEntersNewQueue(current, data)) data.sortOrder = await nextTaskOrder(tx, status);

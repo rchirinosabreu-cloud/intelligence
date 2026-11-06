@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
 import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js';
 import { attachTaskRecognitions } from './recognitionService.js';
@@ -678,7 +679,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
             }
           },
           nativeTasks: {
-            where: { status: { in: ACTIVE_STATUSES } },
+            where: { status: { in: ACTIVE_STATUSES }, AND: [activeTaskSourceWhere] },
             select: {
               id: true,
               status: true,
@@ -690,6 +691,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
       },
       nativeTasks: {
         where: {
+          AND: [activeTaskSourceWhere],
           OR: [
             { status: { in: ACTIVE_STATUSES } },
             completedTaskParticipationWhere({ gte: dashboardDayWindow.start, lt: dashboardDayWindow.end })
@@ -702,7 +704,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         ]
       },
       collaboratingTasks: {
-        where: { task: { OR: [
+        where: { task: { AND: [activeTaskSourceWhere], OR: [
           { status: { in: ACTIVE_STATUSES } },
           completedTaskParticipationWhere({ gte: dashboardDayWindow.start, lt: dashboardDayWindow.end })
         ] } },
@@ -730,7 +732,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     isCommunityManagerRole(member.role)
       ? prisma.task.findMany({
         where: {
-          ...buildContextChallengeTaskWhere({ userId, now: dashboardNow })
+          ...buildContextChallengeTaskWhere({ userId, now: dashboardNow }),
+          AND: [activeTaskSourceWhere]
         },
         orderBy: { createdAt: 'desc' },
         select: {
@@ -809,7 +812,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     prisma.task.findMany({
       where: {
         creatorId: userId,
-        status: 'DEVUELTA'
+        status: 'DEVUELTA',
+        AND: [activeTaskSourceWhere]
       },
       include: dashboardTaskInclude,
       orderBy: [

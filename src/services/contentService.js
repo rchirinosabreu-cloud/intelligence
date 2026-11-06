@@ -23,6 +23,7 @@ import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, tran
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
+import { retireContentTasks } from './contentTaskRetirementService.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
@@ -453,12 +454,20 @@ export const getContentPlanByToken = async (token) => {
   return plan;
 };
 
-export const deleteContentPlan = async (id) => {
+export const deleteContentPlan = async (id, { actorId = null } = {}) => {
   return await recognitionTransaction(prisma, async (tx) => {
+    const existing = await tx.contentPlan.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
+    if (!existing) throw Object.assign(new Error('La parrilla ya no existe.'), { status: 404 });
+    if (existing.deletedAt) return { id };
     const now = new Date();
+    const items = await tx.contentItem.findMany({ where: { planId: id, deletedAt: null }, select: { id: true }, orderBy: { id: 'asc' } });
+    for (const item of items) await lockPublicationSchedule(tx, item.id);
+    await retireContentTasks(tx, { itemIds: items.map(item => item.id), actorId, at: now });
+    await tx.socialPublication.updateMany({ where: { contentItemId: { in: items.map(item => item.id) }, status: 'SCHEDULED' },
+      data: { status: 'CANCELLED', cancelledAt: now, nextAttemptAt: null, leaseToken: null, leaseAt: null, error: 'Se eliminó la parrilla.' } });
     // Soft delete items
     await tx.contentItem.updateMany({
-      where: { planId: id },
+      where: { planId: id, deletedAt: null },
       data: { deletedAt: now }
     });
     // Soft delete plan
@@ -663,6 +672,8 @@ export const updateContentItem = async (id, data, { fromClientReview = false, ac
       where: { id },
       select: {
         id: true,
+        deletedAt: true,
+        plan: { select: { deletedAt: true } },
         planId: true,
         status: true,
         objective: true,
@@ -680,6 +691,7 @@ export const updateContentItem = async (id, data, { fromClientReview = false, ac
     });
 
     if (!previousItem) throw new Error('Content item not found');
+    if (previousItem.deletedAt || previousItem.plan?.deletedAt) throw Object.assign(new Error('La pieza fue retirada.'), { status: 409 });
     if (expectedPlanId !== undefined && expectedPlanId !== previousItem.planId) {
       throw Object.assign(new Error('La pieza cambió de parrilla en otra pantalla. Actualiza antes de moverla otra vez.'), { status: 409 });
     }
@@ -752,11 +764,19 @@ export const updateContentItem = async (id, data, { fromClientReview = false, ac
   return normalizeContentItem(updatedItem);
 };
 
-export const deleteContentItem = async (id) => {
-  return await prisma.$transaction(async (tx) => {
+export const deleteContentItem = async (id, { actorId = null } = {}) => {
+  return await recognitionTransaction(prisma, async (tx) => {
+    const previous = await tx.contentItem.findUnique({ where: { id }, select: { id: true, planId: true, deletedAt: true } });
+    if (!previous) throw Object.assign(new Error('La pieza ya no existe.'), { status: 404 });
+    if (previous.deletedAt) return previous;
+    await lockPublicationSchedule(tx, id);
+    const at = new Date();
+    await retireContentTasks(tx, { itemIds: [id], actorId, at });
+    await tx.socialPublication.updateMany({ where: { contentItemId: id, status: 'SCHEDULED' },
+      data: { status: 'CANCELLED', cancelledAt: at, nextAttemptAt: null, leaseToken: null, leaseAt: null, error: 'Se eliminó la pieza.' } });
     const item = await tx.contentItem.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: { deletedAt: at },
       select: { id: true, planId: true }
     });
     await markContentPlanReviewPending(item.planId, { db: tx });

@@ -51,7 +51,7 @@ test('high frequency polling is slowed and pauses while the document is hidden',
 test('personal dashboard bounds task history and comment payloads', async () => {
   const source = await read('src/services/personalDashboardService.js');
 
-  assert.match(source, /nativeTasks:\s*{\s*where:\s*{\s*OR:/s);
+  assert.match(source, /nativeTasks:\s*{\s*where:\s*{\s*AND:\s*\[activeTaskSourceWhere\],\s*OR:/s);
   assert.match(source, /completedAt:\s*{\s*gte:\s*dashboardDayWindow\.start/s);
   assert.match(source, /taskComments:\s*{\s*where:\s*{\s*authorId:\s*{\s*not:\s*userId/s);
   assert.match(source, /taskComments:[\s\S]*?take:\s*1/);

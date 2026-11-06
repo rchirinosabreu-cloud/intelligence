@@ -96,3 +96,13 @@ test('Bogota week windows begin on Monday and include the previous week', () => 
   assert.equal(windows.previous.start.toISOString(), '2026-08-03T05:00:00.000Z');
   assert.equal(windows.previous.end.toISOString(), '2026-08-10T05:00:00.000Z');
 });
+test('retired source tasks retain activity history without counting as outstanding work', () => {
+  const now = new Date('2026-11-06T15:00:00Z');
+  const snapshot = service.buildOperationalHealthSnapshot({ now, tasks: [
+    { id: 'retired', status: 'EN_CURSO', createdAt: now, contentItem: { deletedAt: now } },
+    { id: 'retired-plan', status: 'PENDIENTE', createdAt: now, contentItem: { plan: { deletedAt: now } } },
+    { id: 'independent', status: 'PENDIENTE', createdAt: now },
+  ] });
+  assert.equal(snapshot.quality.openTasks, 1);
+  assert.equal(snapshot.modules.find(module => module.id === 'gestion').current, 3);
+});

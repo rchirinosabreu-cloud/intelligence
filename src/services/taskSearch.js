@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // Búsqueda de pendientes con los filtros de Gestión (Rodny, 11 de octubre de 2026: «Todos los pendientes de Jarlan,
 // pónselos a Kamila como responsable» … «Dime cuántos pendientes están sin asignar»). Es **una sola** función para
 // la herramienta `buscar_pendientes` y para el lote de `cambiar_pendientes`: así lo que Bria cuenta y lo que Bria
@@ -99,7 +100,7 @@ export const describeSearch = (total, filters = {}, resolved = {}) => {
  */
 export const searchTasks = async ({ db, filters = {}, today, select, take = TASK_SEARCH_MAX }) => {
   const resolved = {};
-  const where = {};
+  const where = { AND: [activeTaskSourceWhere] };
   let statuses = statusesFor(filters.estado);
   if (filters.vencidas) {
     statuses = statuses.filter((status) => status !== 'REALIZADA');

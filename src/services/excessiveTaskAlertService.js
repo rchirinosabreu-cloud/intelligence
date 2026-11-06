@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
 import { getTaskElapsedMs } from '../lib/taskTiming.js';
 import { EXCESSIVE_TASK_THRESHOLD_HOURS, EXCESSIVE_TASK_THRESHOLD_MS } from '../lib/taskWorkAlerts.js';
@@ -95,7 +96,7 @@ export async function getMyExcessiveTaskAlerts(userId, now = new Date(), db = pr
 
   const [tasks, collaborations] = await Promise.all([
     db.task.findMany({
-      where: { assigneeId: member.id, OR: [{ assigneeStatus: 'EN_CURSO' }, { assigneeStatus: null, status: 'EN_CURSO' }] },
+      where: { assigneeId: member.id, AND: [activeTaskSourceWhere], OR: [{ assigneeStatus: 'EN_CURSO' }, { assigneeStatus: null, status: 'EN_CURSO' }] },
       select: {
         id: true,
         title: true,
@@ -109,7 +110,7 @@ export async function getMyExcessiveTaskAlerts(userId, now = new Date(), db = pr
       },
     }),
     db.taskCollaborator.findMany({
-      where: { memberId: member.id, OR: [
+      where: { memberId: member.id, task: activeTaskSourceWhere, OR: [
         { status: 'EN_CURSO' }, { status: null, task: { status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } } }
       ] },
       select: {
@@ -166,6 +167,7 @@ export async function confirmExcessiveTaskWork(userId, taskId, at = new Date(), 
   const task = await db.task.findFirst({
     where: {
       id: taskId,
+      AND: [activeTaskSourceWhere],
       OR: [
         { assignee: { userId } },
         { collaborators: { some: { member: { userId } } } },

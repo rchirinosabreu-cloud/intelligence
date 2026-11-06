@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { taskRetiredAt, taskSourceSelect } from '../lib/taskRetirement.js';
 import { readParticipationRoster } from './teamRosterService.js';
 import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
 
@@ -187,7 +188,7 @@ export const buildOperationalHealthSnapshot = ({
     userId: userByTeamMemberId.get(message.authorId)
   }));
 
-  const openTasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.has(task.status));
+  const openTasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.has(task.status) && !taskRetiredAt(task));
   const missingAssignee = openTasks.filter((task) => !task.assigneeId);
   const missingDate = openTasks.filter((task) => !task.dueDate);
   const missingContext = openTasks.filter((task) => !hasHumanContext(task));
@@ -357,6 +358,7 @@ export const getOperationalHealth = async ({ requester, now = new Date(), db = p
       select: {
         id: true, title: true, status: true, creatorId: true, createdAt: true,
         dueDate: true, assigneeId: true, comments: true,
+        ...taskSourceSelect,
         client: { select: { id: true, name: true } },
         taskComments: {
           where: { type: 'human' },

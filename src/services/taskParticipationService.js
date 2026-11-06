@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { assertTaskSourceActive } from '../lib/taskRetirement.js';
 import { hasTaskParticipations, taskParticipations, aggregateParticipationStatus, participationPermissions, participationTransitionProblem } from '../lib/taskParticipation.js';
 import { canOpenTask } from '../lib/taskPrivacy.js';
 import { RETURN_REASONS, REOPEN_REASONS } from '../lib/taskTiming.js';
@@ -56,6 +57,7 @@ export async function changeTaskParticipation({ db = prisma, transaction, taskId
     if (!task) throw fail(404, 'La tarea ya no existe.');
     if (!hasTaskParticipations(task)) throw fail(409, 'Esta tarea no tiene participaciones compartidas.');
     if (!canOpenTask(task, actorId)) throw fail(403, 'No tienes acceso a esta tarea.');
+    assertTaskSourceActive(task);
     let parts = taskParticipations(task);
     const own = parts.find(p => p.memberId === memberId);
     if (!own) throw fail(409, 'Esta persona ya no participa en la tarea. Actualiza el tablero.');

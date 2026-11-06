@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { TASK_PRIVACY_SELECT, canOpenTask } from '../lib/taskPrivacy.js';
+import { taskRetiredAt, taskSourceSelect } from '../lib/taskRetirement.js';
 
 // El tablero ya no manda el contenido de un pendiente privado a quien no puede abrirlo,
 // pero los comentarios, los adjuntos y la propia tarea tienen rutas propias. «No poder
@@ -20,7 +21,7 @@ export const requireTaskAccess = (dependencies = {}) => async (req, res, next) =
     try {
         const task = await prismaClient.task.findUnique({
             where: { id: taskId },
-            select: { id: true, ...TASK_PRIVACY_SELECT }
+            select: { id: true, ...TASK_PRIVACY_SELECT, ...taskSourceSelect }
         });
         // Una tarea que no existe no es asunto de este guardián: cada controlador ya
         // responde su propio 404, y contestar aquí cambiaría respuestas que hoy se esperan.
@@ -29,6 +30,12 @@ export const requireTaskAccess = (dependencies = {}) => async (req, res, next) =
         const viewerUserId = req.user?.userId || req.user?.id || null;
         if (!canOpenTask(task, viewerUserId)) {
             return res.status(403).json({ error: 'TASK_PRIVATE', message: TASK_PRIVATE_FORBIDDEN });
+        }
+        if (taskRetiredAt(task)) {
+            const detailRequest = req.method === 'GET' && req.path.replace(/\/$/, '') === `/tasks/${taskId}`;
+            if (detailRequest || !['GET', 'HEAD'].includes(req.method)) {
+                return res.status(detailRequest ? 410 : 409).json({ code: 'TASK_RETIRED', error: 'La tarea fue retirada porque se eliminó su pieza o parrilla.' });
+            }
         }
         return next();
     } catch (error) {

@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { assertTaskSourceActive, taskSourceSelect } from '../lib/taskRetirement.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction } from './recognitionService.js';
 import { createNotification } from './notificationService.js';
@@ -145,11 +146,12 @@ const loadWorkContext = async (tx, { taskId, userId }) => {
   const [task, member] = await Promise.all([
     tx.task.findUnique({
       where: { id: taskId },
-      select: { id: true, status: true, sharedProgress: true, assigneeId: true, startedAt: true, accumulatedWorkMs: true, collaborators: { select: { memberId: true } } }
+      select: { id: true, ...taskSourceSelect, status: true, sharedProgress: true, assigneeId: true, startedAt: true, accumulatedWorkMs: true, collaborators: { select: { memberId: true } } }
     }),
     tx.teamMember.findFirst({ where: { userId, isActive: true }, select: { id: true } })
   ]);
   if (!task) throw httpError(404, 'La tarea ya no existe.', 'TASK_NOT_FOUND');
+  assertTaskSourceActive(task);
   if (hasTaskParticipations(task)) throw httpError(409, 'El reloj acompaña el estado de tu participación. Actualiza el tablero y mueve tu parte.', 'TASK_PARTICIPATION_REQUIRED');
   const isAssignee = Boolean(member) && task.assigneeId === member.id;
   const isCollaborator = Boolean(member) && task.collaborators.some((row) => row.memberId === member.id);

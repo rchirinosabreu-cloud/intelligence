@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import {
   FOCUS_ACTIVE_STATUSES, FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, bogotaTimeOf, extendedFocusDeadline, focusExtensionRequestMessage,
   focusLockMessage, focusOverdueMessages, formatFocusExtensionEventContent, formatFocusOverdueEventContent, isManagerUser, parseFocusExtensionRequest
@@ -18,6 +19,7 @@ export const findActiveFocusTaskForUser = async (db, userId) => {
   return db.task.findFirst({
     where: {
       focusDeadlineAt: { not: null },
+      AND: [activeTaskSourceWhere],
       ...ownerStatusWhere([...FOCUS_ACTIVE_STATUSES]),
       assignee: { userId }
     },
@@ -46,7 +48,7 @@ export const assertTaskNotLocked = async (db, { user, taskId }) => {
   // What was already in progress can still be finished (Rodny, 21 September 2026); everything else waits.
   if (ownPart.status === 'EN_CURSO') return null;
   const inProgressTask = await db.task.findFirst({
-    where: { ...ownerStatusWhere(['EN_CURSO']), assignee: { userId }, id: { not: focusTask.id } },
+    where: { ...ownerStatusWhere(['EN_CURSO']), assignee: { userId }, id: { not: focusTask.id }, AND: [activeTaskSourceWhere] },
     select: { id: true, title: true }
   });
   const error = new Error(focusLockMessage(focusTask, inProgressTask));
@@ -69,6 +71,7 @@ export const notifyFocusOverdue = async ({ db = prisma, now = new Date(), notify
     where: {
       focusDeadlineAt: { not: null, lt: now },
       focusOverdueNotifiedAt: null,
+      AND: [activeTaskSourceWhere],
       ...ownerStatusWhere([...FOCUS_ACTIVE_STATUSES])
     },
     select: {

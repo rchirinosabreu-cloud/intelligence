@@ -12,6 +12,7 @@
 // La reserva de un pendiente privado (poder abrirlo) se comprueba antes, con requireTaskAccess o canOpenTask.
 
 import prisma from '../lib/prisma.js';
+import { assertTaskSourceActive } from '../lib/taskRetirement.js';
 import { canUpdateTask, isManagerRole } from '../config/security.js';
 import { canChangeTaskPrivacy } from '../lib/taskPrivacy.js';
 import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
@@ -45,13 +46,14 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
       collaborators: { select: { member: { select: { userId: true } } } },
       contentItem: {
         select: {
-          publishDate: true, publishTime: true, publications: { select: { status: true } },
-          plan: { select: { clientId: true, year: true, month: true, client: { select: { name: true } } } }
+          deletedAt: true, publishDate: true, publishTime: true, publications: { select: { status: true } },
+          plan: { select: { deletedAt: true, clientId: true, year: true, month: true, client: { select: { name: true } } } }
         }
       }
     }
   });
   if (!task) throw gateError(404, 'Task not found');
+  assertTaskSourceActive(task);
   // Un cliente suspendido por cartera congela el mes entero, «no importa incluso si llega a estar realizada»: el
   // pendiente que salió de esa parrilla tampoco se mueve. Solo el que nació de una pieza; los demás siguen su curso.
   const suspendedPlan = task.contentItem?.plan;

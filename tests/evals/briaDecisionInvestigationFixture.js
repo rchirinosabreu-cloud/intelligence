@@ -49,6 +49,7 @@ export const createDecisionInvestigationFixture = (ai, { initialTurns = [] } = {
     if ('equals' in value) return factKey(actual) === factKey(value.equals);
     if ('lt' in value) return actual != null && +new Date(actual) < +new Date(value.lt);
     if ('some' in value) return (actual || []).some(item => matches(item, value.some));
+    if ('is' in value) return value.is === null ? actual == null : actual != null && matches(actual, value.is);
     return matches(actual, value);
   });
   const tasks = [target];

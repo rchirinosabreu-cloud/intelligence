@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
 import { taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
@@ -52,6 +53,7 @@ export async function getMyReturnedTaskAlerts(userId, now = new Date(), db = pri
   const tasks = await db.task.findMany({
     where: {
       creatorId: userId,
+      AND: [activeTaskSourceWhere],
       status: 'DEVUELTA',
       OR: [
         { returnedAt: { lte: thresholdDate } },
@@ -91,7 +93,7 @@ export async function getMyReturnedTaskAlerts(userId, now = new Date(), db = pri
 
 export async function snoozeReturnedTaskReminder(userId, taskId, at = new Date(), db = prisma) {
   const task = await db.task.findFirst({
-    where: { id: taskId, status: 'DEVUELTA', creatorId: userId },
+    where: { id: taskId, status: 'DEVUELTA', creatorId: userId, AND: [activeTaskSourceWhere] },
     select: { id: true, title: true },
   });
 

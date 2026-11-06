@@ -10,7 +10,7 @@ import {
 export const TRACE_RETENTION_DAYS = 365;
 
 // Las alertas comerciales y la banda de avisos importantes también se leen aquí (Rodny, 27 de octubre de 2026).
-const humanEventTypes = ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_PARTICIPATION_CHANGED', 'TASK_OPENED', 'SESSION_STARTED',
+const humanEventTypes = ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_PARTICIPATION_CHANGED', 'TASK_RETIRED', 'TASK_OPENED', 'SESSION_STARTED',
   'NOTIFICATION_READ', 'RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', 'TASK_ALERT_REVIEWED', 'TASK_ALERT_DISMISSED',
   'TASK_EXCESSIVE_WORK_CONFIRMED', 'TASK_RETURNED_REMINDER_SNOOZED', ...NOTICE_TRACE_TYPES];
 const personalSystemEvents = ['RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', ...NOTICE_SYSTEM_TRACE_TYPES];
@@ -31,6 +31,7 @@ const knownEventTypes = new Set([
   'TASK_ASSIGNED',
   'TASK_UPDATED',
   'TASK_PARTICIPATION_CHANGED',
+  'TASK_RETIRED',
   'TASK_OPENED',
   'TASK_LIST_SYNCED',
   'SESSION_STARTED',
@@ -267,7 +268,7 @@ export const getOperationalTrace = async ({
         displayLabel: event.eventType === 'TASK_PARTICIPATION_CHANGED'
           ? (event.metadata?.toStatus === 'REALIZADA' ? 'Parte terminada' : 'Participación actualizada')
           : event.eventType === 'PLATFORM_MUTATION' ? presentPlatformMutation(event.metadata).label
-          : ({ TASK_LIST_SYNCED: 'Lista de tareas actualizada', RECOGNITION_GRANTED: 'Reconocimiento recibido',
+            : ({ TASK_RETIRED: 'Tarea retirada al eliminar su contenido', TASK_LIST_SYNCED: 'Lista de tareas actualizada', RECOGNITION_GRANTED: 'Reconocimiento recibido',
             TASK_ALERT_SHOWN: 'Aviso mostrado', TASK_ALERT_REVIEWED: 'Revisar tarea', TASK_ALERT_DISMISSED: 'Aviso cerrado',
             TASK_EXCESSIVE_WORK_CONFIRMED: 'Sigo trabajando', TASK_RETURNED_REMINDER_SNOOZED: 'Recordarme más tarde',
             ...NOTICE_TRACE_LABELS,

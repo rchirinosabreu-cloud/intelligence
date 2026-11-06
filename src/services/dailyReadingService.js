@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // La memoria del tiempo y la mañana de dirección (Rodny, 19 de octubre de 2026: «quiero que BRIA sea mi project, mis
 // ojos, mi cerebro … una guía, una ayuda continua»). Tres pasos, cada uno una vez por día aunque el servidor se
 // reinicie:
@@ -215,7 +216,7 @@ export const createDailyReadingService = ({
       const [ops, items, open, closed, sessions, members] = await Promise.all([
         operations.listOperations(),
         db.contentItem.findMany({ where: { deletedAt: null, status: { not: 'PUBLICADO' }, publishDate: { gte: new Date(end.getTime() - 45 * DAY) }, plan: { deletedAt: null, status: { not: 'FINALIZADO' } } }, select: { status: true, revisionRequestedAt: true, plan: { select: { clientId: true } } }, take: 5000 }),
-        db.task.findMany({ where: { status: { in: OPEN } }, select: { id: true, status: true, dueDate: true, focusDeadlineAt: true, assigneeId: true, creatorId: true, clientId: true, ...taskParticipationSelect }, take: 5000 }),
+db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }, select: { id: true, status: true, dueDate: true, focusDeadlineAt: true, assigneeId: true, creatorId: true, clientId: true, ...taskParticipationSelect }, take: 5000 }),
         db.task.findMany({ where: completedTaskParticipationWhere({ gte: start, lt: end }), select: { id: true, status: true, assigneeId: true, clientId: true, completedAt: true, ...taskParticipationSelect }, take: 3000 }),
         db.taskWorkSession.findMany({ where: { startedAt: { gte: start, lt: end }, endedAt: { not: null }, isOverlapping: false }, select: { workerId: true, durationMs: true, closeReason: true, correctedAt: true, task: { select: { clientId: true } } }, take: 10000 }),
         db.teamMember.findMany({ where: { isActive: true }, select: { id: true, userId: true, name: true, user: { select: { role: true } } } })

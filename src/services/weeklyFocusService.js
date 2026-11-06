@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // El foco de la semana en el servidor (10 de octubre de 2026): los lunes desde las 7 (Bogotá), para cada persona con
 // Bria, un chat nuevo con su resumen y un aviso en la campana. Una vez por semana y persona aunque el servidor se
 // reinicie (`weekly_focus_deliveries`). Lo escribe la plataforma; no pasa por el modelo.
@@ -36,7 +37,7 @@ export const createWeeklyFocusService = ({
     /** Las tareas abiertas de la persona, como responsable o colaborando, con el día de Bogotá. */
     async readTasks(memberId) {
       const rows = await db.task.findMany({
-        where: { status: { in: OPEN }, OR: [{ assigneeId: memberId }, { collaborators: { some: { memberId } } }] },
+where: { status: { in: OPEN }, AND: [activeTaskSourceWhere], OR: [{ assigneeId: memberId }, { collaborators: { some: { memberId } } }] },
         select: { id: true, title: true, status: true, dueDate: true, assigneeId: true, client: { select: { name: true } } },
         orderBy: { dueDate: 'asc' }, take: 300
       });
