@@ -41,7 +41,7 @@ const fakeDb = ({ notices = [], leads = {} } = {}) => {
     };
     return db;
 };
-const waitingLead = { stage: 'PROPUESTA_ENVIADA', archivedAt: null, activities: [] };
+const waitingLead = { updatedAt: NOW, stage: 'PROPUESTA_ENVIADA', archivedAt: null, activities: [] };
 const notice = (patch = {}) => ({
     id: 'n1', userId: 'u-francys', kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', subjectId: 'l1', label: 'Seguimiento comercial',
     message: 'Café Altura lleva 10 días sin responder la COT-0042', url: '/crm/oportunidades/l1', createdAt: at('2026-10-26T14:00:00Z'), ...patch
@@ -52,7 +52,7 @@ test('la banda muestra el aviso que toca, con su nivel y su texto, y nada de otr
     const { notice: current } = await currentImportantNotice(db, 'u-francys', NOW);
     assert.deepEqual(current, {
         id: 'n1', kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', label: 'Seguimiento comercial',
-        message: 'Café Altura lleva 10 días sin responder la COT-0042', url: '/crm/oportunidades/l1'
+        message: 'Café Altura lleva 10 días sin responder la COT-0042', url: '/crm/oportunidades/l1', sourceRevision: NOW.toISOString()
     });
 });
 
@@ -104,42 +104,21 @@ test('«Recordarme» lo pospone sin cerrarlo, y vuelve a su hora', async () => {
     await assert.rejects(snoozeNotice(db, 'n1', { option: 'para siempre' }, crmUser, { now: NOW }), { statusCode: 400 });
 });
 
-test('«No sigue» solo existe en la revisión y cierra la oportunidad como perdida, descartada, ganada o archivada', async () => {
-    const calls = [];
-    const archived = [];
-    const crm = { changeStage: async (...args) => { calls.push(args); return {}; }, archiveLead: async (_db, id) => { archived.push(id); return {}; } };
-    const review = () => fakeDb({ notices: [notice({ kind: 'CRM_REVIEW', level: 'IMPORTANTE' })] });
-    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice()] }), 'n1', { outcome: 'PERDIDO' }, crmUser, { crm, now: NOW }), { statusCode: 409 });
-    await assert.rejects(closeReviewNotice(review(), 'n1', { outcome: 'INVENTADO' }, crmUser, { crm, now: NOW }), { statusCode: 400 });
-    // Ya es cliente (con Andy «sí se hizo», reunión del 4 de noviembre de 2026): pasa a Ganado, nunca a Perdido.
-    const won = review();
-    await closeReviewNotice(won, 'n1', { outcome: 'GANADO' }, crmUser, { crm, now: NOW });
-    assert.deepEqual(calls.at(-1).slice(1, 3), ['l1', { stage: 'GANADO', note: 'Ya es cliente: marcada como ganada desde el aviso de revisión.' }]);
-    assert.equal(won.rows[0].resolution, 'GANADA');
-    // Archivar: no es una etapa, se conservan los datos y no vuelve a avisar. Vale en la revisión y en el recordatorio
-    // (Rodny, 4 de noviembre de 2026: «debe aparecer la opción de archivar»).
-    const filed = review();
-    await closeReviewNotice(filed, 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW });
-    assert.deepEqual(archived, ['l1']);
-    assert.equal(filed.rows[0].resolution, 'ARCHIVADA');
-    const reminder = fakeDb({ notices: [notice()] });
-    await closeReviewNotice(reminder, 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW });
-    assert.deepEqual(archived, ['l1', 'l1']);
-    assert.equal(reminder.rows[0].resolution, 'ARCHIVADA');
-    // Un aviso de cartera o de parrilla no es una oportunidad: no hay nada que archivar.
-    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice({ kind: 'CARTERA_MENSUAL' })] }), 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW }), { statusCode: 403 });
-    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice()] }), 'n1', { outcome: 'ARCHIVAR' }, { userId: 'u-francys', role: 'EDITOR', modulePermissions: {} }, { crm, now: NOW }), { statusCode: 403 });
-    calls.length = 0;
-    // Perdida: el cliente no la tomó, con el motivo que el CRM exige para Perdido.
-    const lost = review();
-    await closeReviewNotice(lost, 'n1', { outcome: 'PERDIDO' }, crmUser, { crm, now: NOW });
-    assert.deepEqual(calls[0].slice(1, 3), ['l1', { stage: 'PERDIDO', lostReason: 'Sin respuesta del cliente.' }]);
-    assert.equal(lost.rows[0].resolution, 'PERDIDA');
-    // Descartada: no sigue por decisión nuestra, con la nota de por qué.
-    const discarded = review();
-    await closeReviewNotice(discarded, 'n1', { outcome: 'DESCARTADO' }, crmUser, { crm, now: NOW });
-    assert.deepEqual(calls[1].slice(1, 3), ['l1', { stage: 'DESCARTADO', note: 'Descartada desde el aviso de revisión: sin respuesta del cliente.' }]);
-    assert.equal(discarded.rows[0].resolution, 'DESCARTADA');
+test('cualquier aviso comercial confirma el resultado en su origen, con motivo real y revisión vigente', async () => {
+    const calls=[]; const crm={changeStage:async(_db,id,payload)=>calls.push({id,payload}),archiveLead:async()=>calls.push('archive')};
+    const body={confirmed:true,expectedUpdatedAt:NOW.toISOString(),reason:'El cliente eligió otra propuesta'};
+    for(const kind of ['CRM_FOLLOW_UP','CRM_REVIEW']) for(const outcome of ['PERDIDO','DESCARTADO','GANADO','ARCHIVAR']) {
+        const db=fakeDb({notices:[notice({kind})],leads:{l1:waitingLead}});
+        await closeReviewNotice(db,'n1',{...body,outcome},crmUser,{crm,now:NOW});
+        assert.ok(db.rows[0].resolvedAt);
+        if(outcome==='PERDIDO') assert.equal(calls.at(-1).payload.lostReason,body.reason);
+        if(outcome==='DESCARTADO') assert.equal(calls.at(-1).payload.note,body.reason);
+    }
+    for(const [patch,statusCode] of [[{confirmed:false},400],[{reason:''},400],[{expectedUpdatedAt:'2026-01-01T00:00:00Z'},409]]) {
+        const db=fakeDb({notices:[notice()],leads:{l1:waitingLead}});const count=calls.length;
+        await assert.rejects(closeReviewNotice(db,'n1',{...body,outcome:'PERDIDO',...patch},crmUser,{crm,now:NOW}),{statusCode});
+        assert.equal(calls.length,count);assert.equal(db.rows[0].resolvedAt,null);
+    }
 });
 
 test('un aviso nuevo de la misma oportunidad reemplaza al que seguía abierto', async () => {

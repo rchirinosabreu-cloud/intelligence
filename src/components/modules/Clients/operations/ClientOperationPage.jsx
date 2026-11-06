@@ -4,9 +4,10 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import { ContractContinuitySummary } from './ContractContinuityDecision';
 import { cn } from '@/lib/utils';
 import {
-  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, OPERATION_STAGES, SERVICE_TYPES,
+  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES,
   canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
@@ -263,7 +264,7 @@ function Suspension({ client, onOpen }) {
       className={cn('mb-4 rounded-xl border p-3 text-sm', suspension
         ? 'border-destructive/40 bg-destructive/10 text-zinc-800 dark:text-zinc-100'
         : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
-      <p className="font-semibold">{suspension ? 'Suspendido por cartera' : 'Cumple la condición para suspenderlo'}</p>
+      <p className="font-semibold">{suspension ? 'Suspensión confirmada' : 'Riesgo administrativo · Sin suspensión aplicada'}</p>
       {suspension ? (
         <>
           <p className="mt-1">
@@ -273,7 +274,7 @@ function Suspension({ client, onOpen }) {
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Se levanta sola en cuanto se ponga al día.</p>
         </>
       ) : (
-        <p className="mt-1">Lleva {candidate.days} días vencido. El mes en curso se termina; desde el siguiente no se haría parrilla ni producción.</p>
+        <p className="mt-1">No hay una suspensión registrada. Administración debe revisar la continuidad del próximo período; este aviso no cambia la vigencia del contrato ni detiene el trabajo actual.</p>
       )}
       {canSuspend && onOpen && (
         <button type="button" onClick={onOpen} data-client-suspension-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
@@ -294,10 +295,10 @@ function UnbackedWork({ client, today, onAuthorize }) {
       className={cn('mb-4 rounded-xl border p-3 text-sm', finding.authorized
         ? 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300'
         : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
-      <p className="font-semibold">{finding.authorized ? 'Continuidad autorizada' : 'Contrato registrado por revisar'}</p>
+      <p className="font-semibold">{finding.noRenewal ? 'Pendientes del contrato finalizado' : finding.authorized ? 'Continuidad autorizada' : 'Contrato registrado por revisar'}</p>
       <p className="mt-1">{finding.text}</p>
-      {!finding.authorized && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Renueva el contrato con «Editar» o aprueba una cotización nueva.</p>}
-      {client.canAuthorizeWork && onAuthorize && (
+      {!finding.authorized && !finding.noRenewal && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Renueva el contrato con «Editar» o aprueba una cotización nueva.</p>}
+      {!finding.noRenewal && client.canAuthorizeWork && onAuthorize && (
         <button type="button" onClick={onAuthorize} data-work-authorization-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
           {finding.authorized ? 'Cambiar la autorización' : 'Autorizar seguir'}
         </button>
@@ -369,7 +370,9 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
         <Field label="Agencia">{labelOf(CLIENT_AGENCIES, client.agency)}</Field>
         <Field label="Complejidad">{labelOf(CLIENT_COMPLEXITY, client.complexity)}</Field>
         <Field label="Tipo">{labelOf(SERVICE_TYPES, contract?.serviceType)}</Field>
-        <Field label="Estado del contrato">{labelOf(CONTRACT_STATUSES, contract?.status)}</Field>
+        <Field label="Estado del contrato">{contract?.status === 'ACTIVO' && contract.renewalDecision === 'NO_RENOVAR'
+          ? contract.endDate < today ? 'Finalizado sin renovación' : 'Vigente · no renovará'
+          : labelOf(CONTRACT_STATUSES, contract?.status)}</Field>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-zinc-100 pt-4 dark:border-white/5">
         <Person role="Project manager" member={client.projectManager} />
@@ -380,7 +383,7 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
       {contract ? (
         <div className="mt-3 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Vigencia">{shortDate(contract.startDate)} – {contract.endDate ? shortDate(contract.endDate) : 'sin cierre'}</Field>
+            <Field label="Vigencia">{shortDate(contract.startDate, { year: true })} – {contract.endDate ? shortDate(contract.endDate, { year: true }) : 'sin cierre'}</Field>
             <Field label="Ciclo">{contract.cutDay > 1 ? `Del ${contract.cutDay} al ${contract.cutDay - 1}` : 'Mes calendario'}</Field>
           </div>
           {quota > 0 && (
@@ -393,6 +396,7 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
             </div>
           )}
           <ContractScopeSummary contract={contract} />
+          <ContractContinuitySummary client={client} />
           {contract.notes && <details className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><summary className="cursor-pointer py-1 font-medium">Notas del contrato</summary><p className="mt-2 whitespace-pre-line">{contract.notes}</p></details>}
         </div>
       ) : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">Sin contrato no hay contra qué medir. {canManage && 'Cárgalo con «Editar».'}</p>}

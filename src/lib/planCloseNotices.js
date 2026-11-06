@@ -13,12 +13,13 @@
 //
 // Lógica pura: la usan el reloj que reparte los avisos, la banda y las pruebas.
 import { closeOpensOn } from './monthlyClose.js';
+import { clientOperationPlanPath } from './clientOperationAlerts.js';
 
 export const PLAN_NOTICE_KIND = 'PARRILLA_SIN_PUBLICAR';
 export const PLAN_DIGEST_KIND = 'PARRILLA_RESUMEN';
 /** A partir de aquí se resume: cuatro cuentas o más salen en un solo aviso. */
 export const PLAN_DIGEST_THRESHOLD = 3;
-export const PLAN_DIGEST_URL = '/clientes?tab=operacion';
+export const PLAN_DIGEST_URL = '/parrillas';
 
 export const isPlanNotice = (notice) => String(notice?.kind || '').startsWith('PARRILLA_');
 
@@ -60,7 +61,7 @@ export const planDigestText = (count, { closing, monthLabel }) => ({
         : `${count} cuentas tienen piezas que pasaron su fecha y siguen sin publicar`
 });
 
-const same = (notice, wanted) => notice.subjectId === wanted.subjectId && notice.message === wanted.message && notice.level === wanted.level;
+const same = (notice, wanted) => notice.subjectId === wanted.subjectId && notice.message === wanted.message && notice.level === wanted.level && notice.url === wanted.url && notice.label === wanted.label;
 
 /**
  * Qué avisos de parrilla crear y cuáles cerrar para una persona en este pase.
@@ -82,7 +83,7 @@ export const planNoticePlan = ({ pending = [], open = [], today }) => {
         : pending.map((row) => ({
             kind: PLAN_NOTICE_KIND,
             subjectId: planSubjectId(row.clientId, row.cycle),
-            url: row.slug ? `/clientes/operacion/${row.slug}` : PLAN_DIGEST_URL,
+            url: row.planUrl || clientOperationPlanPath(row, row.cycle),
             ...planNoticeText({ ...row, closing: isClosing(row.cycle, today) })
         }));
 

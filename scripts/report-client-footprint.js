@@ -26,6 +26,7 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'Board', label: 'tableros de inspiración', recent: 'updatedAt' },
   { table: 'ClientHealth', label: 'registros de salud del mes (en desuso)', recent: 'updatedAt' },
   { table: 'ClientContract', label: 'contratos', recent: 'updatedAt' },
+  { table: 'ClientContractDecision', label: 'decisiones de continuidad del contrato', recent: 'createdAt' },
   { table: 'ClientMonthlyReport', label: 'informes mensuales', recent: 'createdAt' },
   { table: 'ClientMonthlyClose', label: 'cierres de mes confirmados', recent: 'closedAt' },
   { table: 'ClientWorkAuthorization', label: 'autorizaciones para trabajar sin propuesta', recent: 'createdAt' },

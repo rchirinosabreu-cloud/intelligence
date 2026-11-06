@@ -62,7 +62,7 @@ test('el mismo aviso le llega al community manager y al project manager', async 
     assert.equal(nuevos[0].kind, PLAN_NOTICE_KIND);
     assert.equal(nuevos[0].subjectId, 'c1:2026-10');
     assert.equal(nuevos[0].message, '2 piezas pasaron su fecha y siguen sin publicar');
-    assert.equal(nuevos[0].url, '/clientes/operacion/finas-asesores');
+    assert.equal(nuevos[0].url, '/parrillas/finas-asesores/octubre-2026');
 });
 
 test('con una sola de las dos personas, el aviso igual sale', async () => {
@@ -70,6 +70,12 @@ test('con una sola de las dos personas, el aviso igual sale', async () => {
     const result = await run(db, [cuenta({ projectManager: null })]);
     assert.equal(result.sent, 1);
     assert.equal(db.notices[0].userId, 'u-cm');
+});
+
+test('la misma persona como PM y community no duplica cuentas ni genera un resumen falso',async()=>{
+    const db=fakeDb();
+    const result=await run(db,[cuenta({projectManager:{userId:'u-cm'}})]);
+    assert.equal(result.sent,1);assert.equal(db.notices[0].kind,PLAN_NOTICE_KIND);
 });
 
 test('una cuenta sin nadie a cargo no se pierde en silencio: queda dicho', async () => {

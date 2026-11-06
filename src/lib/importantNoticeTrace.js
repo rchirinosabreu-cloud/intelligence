@@ -44,6 +44,8 @@ const CLEARED_REASONS = {
     AL_DIA: 'el cliente se puso al día con lo que tenía vencido',
     // Avisos de parrilla (30 de octubre de 2026): le llegan al CM y al PM, y basta con que una marque las piezas.
     PUBLICADAS: 'las piezas ya quedaron publicadas',
+    FUENTE_ACTUALIZADA: 'ya no hay publicaciones pendientes asignadas a esta persona en el período del aviso',
+    ACCESO_ACTUALIZADO: 'el aviso ya no corresponde al acceso vigente de esta persona',
     PAUTA_ATENDIDA: 'ya se actualizó el gasto o se revisó la campaña',
     PAUTA_INACTIVA: 'la pauta ya no está activa'
 };

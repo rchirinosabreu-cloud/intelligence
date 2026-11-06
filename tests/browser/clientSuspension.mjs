@@ -39,8 +39,9 @@ try {
         const aviso = page.locator('[data-client-suspension="candidate"]');
         assert.equal(await aviso.count(), 1, 'se ofrece suspender a quien puede decidirlo');
         const texto = await aviso.innerText();
-        assert.match(texto, /Cumple la condición/);
-        assert.match(texto, /109 días/);
+        assert.match(texto, /Sin suspensión aplicada/);
+        assert.match(texto, /No hay una suspensión registrada/);
+        assert.match(texto, /no cambia la vigencia del contrato/);
         await page.screenshot({ path: `${OUT}/1-propuesta-${tema}.png`, fullPage: false });
 
         // 2. El diálogo no deja suspender sin decir quién lo autorizó.
@@ -58,16 +59,27 @@ try {
         // 3. Suspendida: la página dice desde cuándo, quién la autorizó y desde qué mes.
         await page.locator('[data-suspension-reason]').fill('No paga desde julio y no responde a la gestión de cobro.');
         await page.locator('[data-suspension-save]').click();
-        await page.waitForSelector('[data-client-suspension="active"]');
+        await page.waitForSelector('[data-client-suspension="active"]').catch(async error => {
+            await page.screenshot({ path: `${OUT}/error-suspension.png` });
+            throw new Error(`${error.message}\n${await page.locator('[data-suspension-dialog]').innerText().catch(() => 'Diálogo cerrado')}\n${problems.join('\n')}`);
+        });
         const activa = await page.locator('[data-client-suspension="active"]').innerText();
-        assert.match(activa, /Suspendido por cartera/);
+        assert.match(activa, /Suspensión confirmada/);
         assert.match(activa, /Francisco Villa/);
         assert.match(activa, /noviembre de 2026/);
         assert.match(activa, /Se levanta sola/);
         assert.match(activa, /Levantar la suspensión/);
         await page.screenshot({ path: `${OUT}/3-suspendido-${tema}.png` });
 
-        console.log(`${tema}: propuesta, diálogo y suspensión activa`);
+        await page.locator('[data-client-suspension-open]').click();
+        await page.locator('[data-suspension-dialog="lift"]').waitFor();
+        assert.equal(await page.locator('[data-suspension-authorized-by]').count(), 0);
+        await page.locator('[data-suspension-reason]').fill('Administración autorizó retomar el trabajo en esta prueba local.');
+        await page.locator('[data-suspension-save]').click();
+        await page.locator('[data-client-suspension="candidate"]').waitFor();
+        assert.equal(await page.locator('[data-client-suspension="active"]').count(), 0);
+
+        console.log(`${tema}: riesgo, suspensión confirmada y levantamiento`);
         await context.close();
     }
 

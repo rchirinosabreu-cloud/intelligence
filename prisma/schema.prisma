@@ -774,6 +774,11 @@ model ClientContract {
   cutDay         Int      @default(1)
   deliverables   Json     @default("[]")
   scopeDetails   Json?    @db.JsonB
+  renewalDecision       String    @default("PENDIENTE")
+  renewalDecisionAt     DateTime? @db.Timestamptz(3)
+  renewalDecisionById   String?
+  renewalDecisionByName String?
+  renewalDecisionNote   String?
   storiesPerWeek Int      @default(0)
   productionDays Int      @default(0)
   monthlyReport  Boolean  @default(false)
@@ -786,6 +791,22 @@ model ClientContract {
   client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, startDate])
+}
+
+/// Historial inmutable de decisiones contractuales. Identidades históricas sin cascadas.
+model ClientContractDecision {
+  id               String   @id @default(uuid())
+  clientId         String
+  contractId       String
+  decision         String
+  previousDecision String
+  endDate          String
+  actorId          String
+  actorName        String
+  note             String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([contractId, createdAt])
 }
 
 /// El informe de un mes se entregó (2 de octubre de 2026): quién y cuándo. Una fila por cliente y mes.

@@ -36,7 +36,7 @@ export const runUnbackedWorkAlerts = async (db = prisma, { now = new Date(), not
         where: { isArchived: false },
         select: {
             id: true, name: true, slug: true,
-            contracts: { orderBy: CONTRACT_ORDER, select: { id: true, status: true, startDate: true, endDate: true, createdAt: true } },
+            contracts: { orderBy: CONTRACT_ORDER, select: { id: true, status: true, startDate: true, endDate: true, createdAt: true, renewalDecision: true } },
             workAuthorizations: { orderBy: { createdAt: 'desc' }, take: 1, select: { until: true, reason: true, authorizedByName: true } },
             contentPlans: {
                 where: { deletedAt: null, OR: [{ year, month }, { year: next.year, month: next.month }] },

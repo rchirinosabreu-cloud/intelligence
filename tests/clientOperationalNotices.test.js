@@ -38,6 +38,20 @@ test('riesgo operativo no expone cifras ni da una suspensión por decidida', () 
   assert.match(row.message,/podría/);
   assert.doesNotMatch(JSON.stringify(row),/cartera|deuda|saldo|\$/i);
 });
+
+test('un riesgo administrativo no cambia la vigencia ni afirma suspensión aplicada', () => {
+  const row=plan(client(),'2026-11-06',{riskOn:'2026-11-06'}).find(n=>n.kind==='OPERACION_CONTINUIDAD');
+  assert.match(row.message,/operación no está suspendida/i);
+  assert.match(row.message,/vigencia del contrato/i);
+  assert.match(row.message,/riesgo administrativo/i);
+});
+
+test('la renovación distingue el año del vencimiento y una corrección futura retira el aviso', () => {
+  const c=client(); c.contracts[0].startDate='2025-08-01'; c.contracts[0].endDate='2026-07-31';
+  assert.match(plan(c,'2026-11-06').find(n=>n.kind==='OPERACION_RENOVACION').message,/2026/);
+  c.contracts[0].endDate='2027-07-31';
+  assert.ok(!plan(c,'2026-11-06').some(n=>n.kind==='OPERACION_RENOVACION'));
+});
 test('suspensión confirmada prevalece sobre riesgo y tiene decisión de recibido', () => {
   const rows=plan(client(),'2026-11-06',{riskOn:'2026-11-20',suspension:{id:'s',fromCycle:'2026-12',liftedAt:null}});
   assert.ok(!rows.some(n=>n.kind==='OPERACION_CONTINUIDAD'));

@@ -5,6 +5,7 @@ import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { clientOperationalNotices, operationalDayAfter } from '../lib/clientOperationalNotices.js';
 import { suspensionCandidate } from '../lib/clientSuspension.js';
 import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
+import { assertNoticeResponsePolicy } from '../lib/alertResponsePolicy.js';
 
 export async function readOperationalNotices(db, userId, now) {
     const actor = await db.user.findUnique({ where: { id: userId }, select: {
@@ -17,7 +18,7 @@ export async function readOperationalNotices(db, userId, now) {
         select: {
             id: true, name: true, slug: true, isArchived: true,
             projectManager: { select: { userId: true, isActive: true } },
-            contracts: { select: { id: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true, createdAt: true } },
+            contracts: { select: { id: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true, createdAt: true, updatedAt: true, renewalDecision: true } },
             monthlyReports: { where: { year: { gte: Number(today.slice(0, 4)) - 1 } }, select: { year: true, month: true, status: true } },
             monthlyCloses: { where: { year: { gte: Number(today.slice(0, 4)) - 1 } }, select: { year: true, month: true } },
             suspensions: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, fromCycle: true, liftedAt: true } },
@@ -56,6 +57,7 @@ export async function syncOperationalNotices(db, userId, now, read = readOperati
         const wanted = await read(tx, userId, now);
         const activeIds = [];
         for (const item of wanted) {
+            assertNoticeResponsePolicy(item);
             const id = `op-${createHash('sha256').update(`${userId}:${item.subjectId}`).digest('hex')}`;
             activeIds.push(id);
             const old = await tx.importantNotice.findUnique({ where: { id } });

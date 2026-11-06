@@ -66,7 +66,7 @@ function fixture() {
       findFirst: async ({ where }) => observations.find((o) => o.id === where.id && o.clientId === where.clientId) || null,
       delete: async (args) => { writes.push(['observation.delete', args]); return {}; },
     },
-    user: { findMany: async ({ where }) => [{ id: 'u-kamila', name: 'Kamila' }].filter((u) => where.id.in.includes(u.id)) },
+    user: { findUnique: async () => null, findMany: async ({ where }) => [{ id: 'u-kamila', name: 'Kamila' }].filter((u) => where.id.in.includes(u.id)) },
     clientContract: {
       create: async (args) => { writes.push(['contract.create', args]); return args.data; },
       update: async (args) => { writes.push(['contract.update', args]); return args.data; },

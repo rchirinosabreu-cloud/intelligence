@@ -88,7 +88,7 @@ export const collectionStillDue = async (db, notice, now = new Date()) => {
         if (!client) return { reason: 'AL_DIA', subject: null };
         if (client.suspensions?.length) return { reason: 'YA_ATENDIDO', subject: client.name };
         const still = suspensionCandidate({ receivables: client.accountsReceivables, today: bogotaToday(now), settings });
-        return still ? handled(notice.subjectId, client.name, still.receivableIds) : { reason: 'AL_DIA', subject: client.name };
+        return still ? (await handled(notice.subjectId, client.name, still.receivableIds)) || { receivableIds: still.receivableIds } : { reason: 'AL_DIA', subject: client.name };
     }
     if (notice.kind === 'CARTERA_MENSUAL') {
         const client = await db.client.findUnique({

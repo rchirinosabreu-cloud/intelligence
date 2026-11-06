@@ -376,6 +376,8 @@ const operacionDeCliente = {
       motivos: (row.evaluation?.reasons || []).map((reason) => reason.text),
       contrato: contract ? {
         tipo: contract.serviceType, estado: contract.status, inicio: contract.startDate, fin: contract.endDate ?? null, diaDeCorte: contract.cutDay ?? 1,
+        continuidad: { decision: contract.renewalDecision || 'PENDIENTE', registradaEl: contract.renewalDecisionAt ?? null,
+          registradaPor: contract.renewalDecisionByName ?? null, nota: contract.renewalDecisionNote ?? null },
         piezasPorMes: (contract.deliverables || []).reduce((sum, d) => sum + (Number(d.quantity) || 0), 0),
         entregablesPorFormato: (contract.deliverables || []).map((d) => ({ formato: d.format, cantidad: Number(d.quantity) || 0 })),
         ...(unreadableScope || contractScope.alcanceDetallado?.stories != null ? {} : { historiasPorSemana: contract.storiesPerWeek ?? 0 }),

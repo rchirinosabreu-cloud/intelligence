@@ -34,7 +34,7 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
     const today = bogotaToday(now);
     const contracts = await db.clientContract.findMany({
         select: {
-            id: true, clientId: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true,
+            id: true, clientId: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true, renewalDecision: true,
             client: {
                 select: {
                     id: true, name: true, slug: true, isArchived: true,

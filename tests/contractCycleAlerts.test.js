@@ -95,6 +95,14 @@ const run = async (db) => {
     return { result, bells };
 };
 
+test('no renovación confirmada conserva campanas de cierre y facturación sin solicitar renovar', async () => {
+    const c = clientOf('c-final');
+    const { bells } = await run(fakeDb([contract({ monthlyReport: true, endDate: '2026-11-10', renewalDecision: 'NO_RENOVAR', client: c })]));
+    assert.ok(bells.some(b => b.type === 'CIERRE_MENSUAL'));
+    assert.ok(bells.some(b => b.type === 'FACTURACION_MENSUAL'));
+    assert.equal(bells.some(b => b.type === 'RENOVACION_CONTRATO'), false);
+});
+
 test('los avisos usan el cierre, el informe y la renovación ya registrados', async () => {
     const c=clientOf('c-1',{monthlyCloses:[{year:2026,month:10}],monthlyReports:[{year:2026,month:10,status:'ENVIADO'}]});
     const db=fakeDb([contract({monthlyReport:true,endDate:'2026-11-10',client:c}),contract({id:'next',startDate:'2026-11-11',endDate:'2027-01-01',client:c})]);

@@ -37,9 +37,9 @@ export const runPlanCloseNotices = async (db = prisma, {
             log(`[Parrillas] ${row.clientName}: ${row.overdue} piezas sin publicar y la cuenta no tiene a quién avisarle.`);
             continue;
         }
-        for (const person of people) {
-            if (!byPerson.has(person.userId)) byPerson.set(person.userId, []);
-            byPerson.get(person.userId).push(row);
+        for (const userId of new Set(people.map(person => person.userId))) {
+            if (!byPerson.has(userId)) byPerson.set(userId, []);
+            byPerson.get(userId).push(row);
         }
     }
 

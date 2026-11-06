@@ -7,11 +7,13 @@ import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { FOLLOW_UP_CHANNELS, NOTICE_ARCHIVE_OUTCOME, REVIEW_OUTCOMES, SNOOZE_OPTIONS, noticeTitleHref } from '@/lib/importantNotices';
+import ContractContinuityDecision from '@/components/modules/Clients/operations/ContractContinuityDecision';
+import { noticeResponsePolicy, noticeAllows } from '@/lib/alertResponsePolicy';
 
 // Avisos importantes: tarjeta inferior con halo suave, por encima del menú. Un aviso
 // a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
-// importante. «Recordarme» va siempre al final, «Abrir» es un botón como los demás y no hay «Volver» ni nota: tocar fuera
-// del aviso o Esc devuelve a sus botones.
+// importante. «Recordarme» va al final. Tocar fuera o Esc devuelve a los botones sin resolver el aviso.
+// Las decisiones de negocio muestran consecuencias y confirmación; el registro nativo determina su resolución.
 const NOTICE_KEY = ['important-notice'];
 const POLL_MS = 60 * 1000;
 
@@ -50,8 +52,10 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
 function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance = 'halo' }) {
   const navigate = useNavigate();
   const navigateFrom = useNavigateFrom();
-  const [mode, setMode] = useState('base'); // base | channels | close | snooze
+  const [mode, setMode] = useState('base'); // base | channels | close | confirm | snooze
   const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState(null);
+  const [reason, setReason] = useState('');
   const contentRef = useRef(null);
   const bandRef = useRef(null);
   useEffect(() => {
@@ -76,25 +80,25 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
     const selector = mode === 'base' ? `[data-notice-action="${returnAction.current}"]` : 'button:not([disabled])';
     if (mode !== 'base' || restoreFocus.current) contentRef.current?.querySelector(selector)?.focus({ preventScroll: true });
   }, [mode]);
-  const isReview = notice.kind === 'CRM_REVIEW';
+  const policy = noticeResponsePolicy(notice);
   // Un aviso de una oportunidad: se puede archivar a la vista (Rodny, 4 de noviembre de 2026).
-  const isCrm = String(notice.kind || '').startsWith('CRM_');
+  const isCrm = policy?.family === 'CRM';
   const titleHref = noticeTitleHref(notice);
   // Cartera vencida (28 de octubre de 2026): la decide Elisa. «Ya le escribí» deja la gestión de cobro en la
   // trazabilidad y «Registrar pago» abre Cuentas por cobrar; el aviso sale solo cuando el cliente se pone al día.
-  const isCollection = String(notice.kind || '').startsWith('CARTERA_');
+  const isCollection = policy?.family === 'COLLECTION';
   // Propuesta de suspender (30 de octubre de 2026): lleva a la página del cliente, donde está «Suspender». La
   // suspensión no se decide desde la banda porque exige decir quién la autorizó y por qué.
   const isSuspension = notice.kind === 'CARTERA_SUSPENSION';
   // Parrilla con piezas sin publicar (30 de octubre de 2026): aquí no hay seguimiento que registrar. Se abre la
   // parrilla y se marcan las piezas una por una —que es mirarlas—, y el aviso se cae solo en cuanto están publicadas,
   // también el de la otra persona a cargo de la cuenta: por eso no hay «avisarle a la otra».
-  const isPlan = String(notice.kind || '').startsWith('PARRILLA_');
-  const isOperational = String(notice.kind || '').startsWith('OPERACION_');
-  const openLabel = notice.kind === 'PARRILLA_RESUMEN' ? 'Abrir Operación' : 'Abrir la parrilla';
-  // Pauta (6 de noviembre de 2026): igual que la parrilla, el aviso no se decide aquí. Se abre la pauta, se actualiza el
-  // gasto o se apaga la campaña, y el aviso se cae solo.
-  const isAd = String(notice.kind || '').startsWith('PAUTA_');
+  const isPlan = policy?.family === 'PLAN';
+  const isAd = policy?.family === 'ADS';
+  const isOperational = policy?.family === 'OPERATION';
+  const selectOutcome = value => { setOutcome(value); setReason(''); openOptions('confirm', value === NOTICE_ARCHIVE_OUTCOME ? 'archive' : 'close'); };
+  const needsReason = ['PERDIDO', 'DESCARTADO'].includes(outcome);
+  const outcomeLabel = outcome === NOTICE_ARCHIVE_OUTCOME ? 'Archivar oportunidad' : REVIEW_OUTCOMES.find(item => item.value === outcome)?.label;
 
   // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
   // pestaña visible: una pestaña de fondo no le muestra nada a nadie. El servidor lo anota una vez por aparición.
@@ -159,67 +163,81 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
               </a>
             ) : notice.message}
           </p>
+          {mode === 'base' && policy?.explanation && <p className="mb-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300" data-notice-effect>{policy.explanation}</p>}
           {mode === 'channels' && <p className="mb-3 text-sm font-medium">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
           {mode === 'snooze' && <p className="mb-3 text-sm font-medium">¿Cuándo te lo recuerdo?</p>}
-          {mode === 'close' && <p className="mb-3 text-sm font-medium">¿Cómo la cerramos?</p>}
+          {mode === 'close' && <p className="mb-3 text-sm font-medium">¿Qué resultado confirmó el cliente o el equipo?</p>}
+          {mode === 'confirm' && <div className="mb-4 space-y-3 text-sm">
+            <p className="font-semibold">{outcomeLabel}</p>
+            <p>{outcome === NOTICE_ARCHIVE_OUTCOME ? 'Se archivará la oportunidad, conservando sus datos e historial.' : 'Se guardará este resultado en la oportunidad del CRM para todo el equipo.'}</p>
+            {needsReason && <label className="block">Motivo de la decisión<textarea aria-label="Motivo de la decisión" value={reason} onChange={event => setReason(event.target.value)} maxLength={1000} rows={2} disabled={busy} className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm" /></label>}
+          </div>}
           <div className="flex flex-wrap gap-2" role="group" aria-label={mode === 'base' ? 'Acciones del aviso' : 'Opciones del aviso'} aria-busy={busy}>
             {mode === 'base' && (
               <>
                 {isOperational ? (
-                  <NoticeButton primary disabled={busy} data-notice-action="open-operation" onClick={() => navigateFrom(notice.url)}>
-                    {notice.actionLabel || 'Revisar operación'}
+                  <NoticeButton primary disabled={busy} data-notice-action="open-operation" onClick={() => navigateFrom(notice.kind === 'OPERACION_RENOVACION' ? `${notice.url}?action=renew-contract` : notice.url)}>
+                    {policy.openLabel}
                   </NoticeButton>
                 ) : isPlan ? (
                   <NoticeButton primary disabled={busy} data-notice-action="open-plan" onClick={() => navigate(notice.url || '/clientes')}>
-                    {openLabel}
+                    {policy.openLabel}
                   </NoticeButton>
                 ) : isAd ? (
                   <NoticeButton primary disabled={busy} data-notice-action="open-ad-budget" onClick={() => navigateFrom(notice.url || '/pautas')}>
-                    {notice.kind === 'PAUTA_RESUMEN' ? 'Abrir Pautas' : 'Abrir la pauta'}
+                    {policy.openLabel}
                   </NoticeButton>
-                ) : (
+                ) : noticeAllows(notice, 'follow-up') ? (
                   <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => openOptions('channels', 'follow-up')}>
                     {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
                   </NoticeButton>
-                )}
+                ) : titleHref && <NoticeButton primary onClick={() => navigateFrom(titleHref)}>Abrir aviso</NoticeButton>}
                 {isCollection && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action={isSuspension ? 'suspend' : 'pay'} onClick={() => navigate(notice.url)}>
                 {isSuspension ? 'Revisar suspensión' : 'Registrar pago'}
               </NoticeButton>
                 )}
-                {/* En la revisión, «No sigue» pregunta si quedó perdida o descartada, y no hay «Abrir» (Rodny, 26 de
-                    octubre de 2026). «Cerrar» se confundía con cerrar el aviso y «Descartar» elegía una de las dos. */}
-                {isReview && (
+                {/* El resultado es de la oportunidad, no un cierre genérico de la tarjeta. */}
+                {noticeAllows(notice, 'close') && (
                   <NoticeButton disabled={busy} data-notice-action="close" onClick={() => openOptions('close', 'close')}>
-                    No sigue
+                    Resolver oportunidad
                   </NoticeButton>
                 )}
-                {!isReview && !isCollection && !isPlan && !isOperational && !isAd && notice.url && (
+                {isCrm && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
                 )}
                 {isCrm && (
-                  <NoticeButton disabled={busy} data-notice-action="archive" onClick={() => decide('close', { outcome: NOTICE_ARCHIVE_OUTCOME }, 'Oportunidad archivada: la encuentras en «Ver archivadas»')}>
+                  <NoticeButton disabled={busy} data-notice-action="archive" onClick={() => selectOutcome(NOTICE_ARCHIVE_OUTCOME)}>
                     Archivar
                   </NoticeButton>
                 )}
-                {isOperational && notice.acknowledge && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, 'Aviso recibido')}>Entendido</NoticeButton>}
-                <NoticeButton disabled={busy} data-notice-action="snooze" onClick={() => openOptions('snooze', 'snooze')}>
+                {noticeAllows(notice, 'acknowledge') && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, 'Aviso recibido')}>Recibido</NoticeButton>}
+                {isOperational && notice.continuity && <ContractContinuityDecision clientId={notice.continuity.clientId}
+                  clientName={notice.label.split(' · ').slice(1).join(' · ')} onDecided={onDecided}
+                  contract={{ id: notice.continuity.contractId, endDate: notice.continuity.endDate, updatedAt: notice.continuity.expectedUpdatedAt }} />}
+                {noticeAllows(notice, 'snooze') && <NoticeButton disabled={busy} data-notice-action="snooze" onClick={() => openOptions('snooze', 'snooze')}>
                   Recordarme <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                </NoticeButton>
+                </NoticeButton>}
               </>
             )}
             {mode === 'channels' && FOLLOW_UP_CHANNELS.map((channel) => (
               <NoticeButton key={channel.value} disabled={busy} data-notice-channel={channel.value}
-                onClick={() => decide('follow-up', { channel: channel.value, ...(notice.kind === 'CARTERA_MENSUAL' ? { receivableIds: notice.receivableIds } : {}) }, isCollection ? 'Gestión de cobro registrada' : 'Seguimiento registrado en el CRM')}>
+                onClick={() => decide('follow-up', { channel: channel.value, ...(isCollection ? { receivableIds: notice.receivableIds } : {}) }, isCollection ? 'Gestión de cobro registrada' : 'Seguimiento registrado en el CRM')}>
                 {channel.label}
               </NoticeButton>
             ))}
             {mode === 'close' && REVIEW_OUTCOMES.map((outcome) => (
               <NoticeButton key={outcome.value} disabled={busy} data-notice-outcome={outcome.value}
-                onClick={() => decide('close', { outcome: outcome.value }, outcome.done || `La oportunidad pasó a ${outcome.stage}`)}>
+                onClick={() => selectOutcome(outcome.value)}>
                 {outcome.label}
               </NoticeButton>
             ))}
+            {mode === 'confirm' && <>
+              <NoticeButton disabled={busy} onClick={() => setMode('base')}>Volver</NoticeButton>
+              <NoticeButton primary disabled={busy || (needsReason && !reason.trim()) || !notice.sourceRevision}
+                onClick={() => decide('close', { outcome, confirmed: true, reason, expectedUpdatedAt: notice.sourceRevision }, 'Decisión registrada en el CRM')}>Confirmar decisión</NoticeButton>
+              {!notice.sourceRevision && <p role="alert" className="text-xs text-destructive">Actualiza el aviso para confirmar sobre la oportunidad vigente.</p>}
+            </>}
             {mode === 'snooze' && SNOOZE_OPTIONS.map((option) => (
               <NoticeButton key={option.value} disabled={busy} data-notice-snooze={option.value}
                 onClick={() => decide('snooze', { option: option.value }, `Te lo recuerdo ${option.label.charAt(0).toLowerCase()}${option.label.slice(1)}`)}>
@@ -271,6 +289,8 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange, o
         queryClient.invalidateQueries({ queryKey: NOTICE_KEY });
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
         queryClient.invalidateQueries({ queryKey: ['crm'] });
+        queryClient.invalidateQueries({ queryKey: ['client-operations'] });
+        queryClient.invalidateQueries({ queryKey: ['financial-collection-activities'] });
       }}
     />
   );

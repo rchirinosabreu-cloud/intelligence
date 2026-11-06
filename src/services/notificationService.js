@@ -6,6 +6,23 @@ import { recordOperationalTrace } from './operationalTraceService.js';
 import { sendPushForNotification } from './pushNotificationService.js';
 import { notificationPage, notificationPageArgs } from '../lib/notificationFeed.js';
 import { normalizeNotificationPreferences } from '../lib/teamNotifications.js';
+import { userCanReceiveFinancialNotices } from './teamAreaService.js';
+
+// El historial se conserva. Los permisos actuales filtran antes de paginar, contar o marcar leído.
+const visibleNotificationsWhere = async (db, userId) => {
+    if (await userCanReceiveFinancialNotices(db, userId)) return { userId };
+    return { userId, AND: [
+        { OR: [
+            { type: null },
+            { type: 'CARTERA_RIESGO' }, // Riesgo operativo del PM, sin importes ni enlace a Financiero.
+            { AND: [{ NOT: { type: { startsWith: 'CARTERA_' } } }, { type: { notIn: ['FORMALIZACION_PENDIENTE', 'FACTURACION_MENSUAL'] } }] },
+        ] },
+        { OR: [{ url: null }, { NOT: { OR: [
+            { url: '/financiero' }, { url: { startsWith: '/financiero?' } },
+            { url: { startsWith: '/financiero/' } }, { url: { startsWith: '/financiero#' } },
+        ] } }] },
+    ] };
+};
 
 export const createNotification = async (
     data,
@@ -139,15 +156,16 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
     }
 };
 
-export const markAllNotificationsAsRead = async (userId) => {
+export const markAllNotificationsAsRead = async (userId, { db = prisma } = {}) => {
     try {
-        const unreadNotifications = await prisma.notification.findMany({
-            where: { userId, isRead: false },
+        const where = { ...await visibleNotificationsWhere(db, userId), isRead: false };
+        const unreadNotifications = await db.notification.findMany({
+            where,
             select: { id: true, taskId: true, type: true }
         });
         const readAt = new Date();
-        await prisma.notification.updateMany({
-            where: { userId, isRead: false },
+        await db.notification.updateMany({
+            where: { ...where, id: { in: unreadNotifications.map(n => n.id) } },
             data: { isRead: true, readAt }
         });
         Promise.all(unreadNotifications.map((notification) => recordOperationalTrace({
@@ -156,7 +174,7 @@ export const markAllNotificationsAsRead = async (userId) => {
             subjectUserId: userId,
             taskId: notification.taskId || null,
             metadata: { notificationType: notification.type || 'GENERAL' },
-            occurredAt: readAt
+            occurredAt: readAt, db
         }))).catch((traceError) => {
             console.error('[NotificationService] Bulk read trace failed:', traceError?.message || traceError);
         });
@@ -174,11 +192,13 @@ export const markAllNotificationsAsRead = async (userId) => {
  * (Rodny, 26 de octubre de 2026). El conteo se hace aparte, sobre todo el historial, para
  * que la campana diga la verdad y no lo que cupo en la página.
  */
-export const getNotifications = async (userId, { cursor = null, unreadOnly = false, limit } = {}) => {
+export const getNotifications = async (userId, { cursor = null, unreadOnly = false, limit, db = prisma } = {}) => {
     try {
+        const visible = await visibleNotificationsWhere(db, userId);
+        const args = notificationPageArgs({ userId, cursor, unreadOnly, limit });
         const [rows, unreadCount] = await Promise.all([
-            prisma.notification.findMany(notificationPageArgs({ userId, cursor, unreadOnly, limit })),
-            prisma.notification.count({ where: { userId, isRead: false } })
+            db.notification.findMany({ ...args, where: { ...args.where, ...visible } }),
+            db.notification.count({ where: { ...visible, isRead: false } })
         ]);
         return { ...notificationPage(rows, limit), unreadCount };
     } catch (error) {
@@ -203,16 +223,17 @@ export const saveNotificationPreferences = async (userId, preferences, { db = pr
     return normalized;
 };
 
-export const markAsRead = async (notificationId, userId) => {
+export const markAsRead = async (notificationId, userId, { db = prisma } = {}) => {
     try {
-        const notification = await prisma.notification.findFirst({
-            where: { id: notificationId, userId },
+        const visible = await visibleNotificationsWhere(db, userId);
+        const notification = await db.notification.findFirst({
+            where: { ...visible, id: notificationId, userId },
             select: { id: true, taskId: true, type: true, isRead: true }
         });
         if (!notification) return false;
         const readAt = new Date();
-        const result = await prisma.notification.updateMany({
-            where: { id: notificationId, userId, isRead: false },
+        const result = await db.notification.updateMany({
+            where: { ...visible, id: notificationId, isRead: false },
             data: { isRead: true, readAt }
         });
         if (result.count > 0) {
@@ -222,7 +243,7 @@ export const markAsRead = async (notificationId, userId) => {
                 subjectUserId: userId,
                 taskId: notification.taskId || null,
                 metadata: { notificationType: notification.type || 'GENERAL' },
-                occurredAt: readAt
+                occurredAt: readAt, db
             }).catch((traceError) => {
                 console.error('[NotificationService] Read trace failed:', traceError?.message || traceError);
             });

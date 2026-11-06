@@ -19,6 +19,16 @@ const context = account => ({
 });
 const detail = async account => (await toolByName('operacion_de_cliente').run({ slug: account.slug }, context(account))).data.operacion;
 
+test('detalle y cartera operativa entregan la decisión contractual sin declarar saldados los pendientes', async () => {
+  const account = row();
+  Object.assign(account.contract, { renewalDecision: 'NO_RENOVAR', renewalDecisionAt: '2026-11-06T20:00:00Z', renewalDecisionByName: 'PM de prueba', renewalDecisionNote: 'Acuerdo confirmado.' });
+  const operation = await detail(account);
+  assert.equal(operation.contrato.continuidad.decision, 'NO_RENOVAR');
+  assert.equal(operation.contrato.estado, 'ACTIVO');
+  const result = await toolByName('cartera_de_operacion').run({}, context(account));
+  assert.equal(result.data.cuentas[0].contrato.continuidad.decision, 'NO_RENOVAR');
+});
+
 test('an existing report is delivered only when sent; earlier workflow states never prove delivery', async t => {
   for (const status of ['PENDIENTE', 'EN_ELABORACION', 'EN_REVISION', 'ENVIADO', 'DESCONOCIDO']) {
     await t.test(status, async () => {

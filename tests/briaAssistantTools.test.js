@@ -199,7 +199,7 @@ test('operacion_de_cliente compacts the traffic light with its reasons, for mana
     clientId: 'c1', contexto: { clientId: 'c1', estado: 'NO_DISPONIBLE', parcial: true, hechos: [], nota: 'No se pudo contrastar la memoria de esta cuenta. Los contadores no prueban por sí solos un compromiso vigente.', aprendizajesAnteriores: { estado: 'NO_DISPONIBLE', parcial: true, registros: [], nota: 'No se pudo consultar la memoria anterior; esto no demuestra ausencia de acuerdos.' } },
     cliente: 'Nattal', slug: 'nattal', agencia: 'BRAIN', complejidad: 'MEDIA', projectManager: 'Kamila', communityManager: 'Jarlan',
     semaforo: 'amarillo', motivos: ['1 tarea vencida en Gestión.'],
-    contrato: { tipo: 'PARRILLA', estado: 'ACTIVO', inicio: '2026-01-01', fin: null, diaDeCorte: 1, piezasPorMes: 4, entregablesPorFormato: [{ formato: 'Post', cantidad: 4 }], historiasPorSemana: 0, jornadasPorMes: 0, notas: null, informeMensual: true },
+    contrato: { tipo: 'PARRILLA', estado: 'ACTIVO', inicio: '2026-01-01', fin: null, diaDeCorte: 1, piezasPorMes: 4, entregablesPorFormato: [{ formato: 'Post', cantidad: 4 }], historiasPorSemana: 0, jornadasPorMes: 0, notas: null, informeMensual: true, continuidad: { decision: 'PENDIENTE', nota: null, registradaEl: null, registradaPor: null } },
     mesActual: { nombre: 'Octubre 2026', dia: 6, de: 31, piezasContratadas: 4, piezasCreadas: 3, redactadas: 2, disenadas: 1, aprobadas: 1, programadas: 1, publicadas: 0, vencidas: 0, informeEntregado: false },
     tareasAbiertas: 2, tareasVencidas: 1,
     ultimaObservacion: 'El cliente pide mover el reel. (Kamila, 2026-10-01)',

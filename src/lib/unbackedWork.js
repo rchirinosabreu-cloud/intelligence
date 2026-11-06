@@ -47,6 +47,10 @@ export const unbackedWork = ({ contract, work = {}, authorization = null }, toda
     const busy = (work.openTasks || 0) > 0 || (work.plans || []).length > 0;
     if (!busy) return null;
     const what = workText(work);
+    if (contract?.renewalDecision === 'NO_RENOVAR') return {
+        gap, authorized: false, what, noRenewal: true,
+        text: `El contrato finalizó sin renovación el ${short(contract.endDate)}. Quedan pendientes por revisar: ${what}.`,
+    };
     const why = gap === 'SIN_CONTRATO'
         ? 'sin contrato cargado'
         : gap === 'TERMINADO' ? 'con el contrato terminado' : `con el contrato vencido desde el ${short(contract.endDate)}`;
@@ -61,7 +65,8 @@ export const unbackedWork = ({ contract, work = {}, authorization = null }, toda
 
 /** El aviso a Dirección. Sin cifras de dinero: la campana también llega al celular. */
 export const unbackedWorkNoticeText = (clientName, finding) => (
-    `${clientName || 'Un cliente'} tiene trabajo en curso sin propuesta aprobada (${finding.what}): renueva el contrato o autoriza seguir.`
+    finding.noRenewal ? `${clientName || 'Un cliente'} finalizó sin renovación. Revisa y resuelve los pendientes del contrato (${finding.what}).`
+        : `${clientName || 'Un cliente'} tiene trabajo en curso sin propuesta aprobada (${finding.what}): renueva el contrato o autoriza seguir.`
 );
 
 /** Valida la autorización: motivo obligatorio y una fecha entre hoy y cuatro meses. Devuelve el problema o null. */

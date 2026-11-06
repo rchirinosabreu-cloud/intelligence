@@ -62,7 +62,7 @@ test('notification reads are scoped to the authenticated user', async () => {
   const service = await read('src/services/notificationService.js');
 
   assert.match(controller, /markAsRead\(req\.params\.id,\s*req\.user\.userId\)/);
-  assert.match(service, /where:\s*\{\s*id:\s*notificationId,\s*userId\s*\}/);
+  assert.match(service, /where:\s*\{\s*\.\.\.visible,\s*id:\s*notificationId,\s*userId\s*\}/);
 });
 
 test('the retired integrations API (stored credentials) is no longer mounted', async () => {

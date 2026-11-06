@@ -1,0 +1,94 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import pg from 'pg';
+import { PrismaClient } from '@prisma/client';
+import { briaTestDatabaseUrl } from './support/briaTestDatabase.js';
+import { setContractContinuity } from '../src/services/contractContinuityService.js';
+import { ensureContractContinuitySchema } from '../scripts/ensure-contract-continuity-schema.js';
+import { ensureAuditImmutability } from '../src/lib/auditImmutability.js';
+
+const testUrl = briaTestDatabaseUrl();
+test('decisión compartida: autor, historial, concurrencia, permisos y pendientes conservados', { skip: !testUrl, timeout: 90000 }, async t => {
+  const schema = `continuity_${randomUUID().replaceAll('-', '')}`;
+  const pgClient = new pg.Client({ connectionString: testUrl });
+  await pgClient.connect();
+  await pgClient.query(`CREATE SCHEMA "${schema}"`);
+  await pgClient.query(`SET search_path TO "${schema}"`);
+  const url = new URL(testUrl); url.searchParams.set('schema', schema);
+  const db = new PrismaClient({ datasources: { db: { url: url.href } } });
+  t.after(async () => { await db.$disconnect(); await pgClient.query(`DROP SCHEMA "${schema}" CASCADE`); await pgClient.end(); });
+  const ddl = execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: url.href }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const tables = new Set(['User', 'TeamMember', 'Client', 'ClientContract', 'ClientContractDecision', 'ImportantNotice', 'Notification']);
+  for (const [s] of ddl.matchAll(/CREATE TYPE "[^"]+" AS ENUM \([\s\S]*?\);/g)) await pgClient.query(s);
+  for (const [s, name] of ddl.matchAll(/CREATE TABLE "([^"]+)" \([\s\S]*?\n\);/g)) if (tables.has(name)) await pgClient.query(s);
+  for (const [s, name] of ddl.matchAll(/CREATE (?:UNIQUE )?INDEX "[^"]+" ON "([^"]+)"[^;]+;/g)) if (tables.has(name)) await pgClient.query(s);
+  for (const [s, name, target] of ddl.matchAll(/ALTER TABLE "([^"]+)" ADD CONSTRAINT [^;]+?REFERENCES "([^"]+)"[^;]+;/g)) if (tables.has(name) && tables.has(target)) await pgClient.query(s);
+  const pm = await db.user.create({ data: { name: 'PM ficticia', email: 'pm@example.invalid', password: 'fixture', role: 'PROJECT_MANAGER', modulePermissions: { clientes: true, financiero: false } } });
+  const member = await db.teamMember.create({ data: { userId: pm.id, name: pm.name, role: 'PM' } });
+  const other = await db.user.create({ data: { name: 'Otra PM', email: 'other@example.invalid', password: 'fixture', role: 'PROJECT_MANAGER', modulePermissions: { clientes: true } } });
+  await db.teamMember.create({ data: { userId: other.id, name: other.name, role: 'PM' } });
+  const client = await db.client.create({ data: { name: 'Cliente ficticio', slug: 'cliente-ficticio', projectManagerId: member.id } });
+  const contract = await db.clientContract.create({ data: { clientId: client.id, startDate: '2026-01-19', endDate: '2026-11-18', deliverables: [{ format: 'Post', quantity: 6 }], monthlyReport: true } });
+  const body = { contractId: contract.id, expectedUpdatedAt: contract.updatedAt.toISOString(), endDate: contract.endDate, decision: 'NO_RENOVAR', confirmed: true, note: 'Confirmado con el cliente.' };
+  const now = new Date('2026-11-06T20:00:00Z');
+  const save = (input = body, userId = pm.id) => setContractContinuity(db, client.id, input, userId, { now });
+  for (const kind of ['RENOVACION', 'CONTINUIDAD', 'CICLO']) for (const userId of [pm.id, other.id]) {
+    await db.importantNotice.create({ data: { userId, kind: `OPERACION_${kind}`, subjectId: `OP:${client.id}:${kind}:${contract.id}`, level: 'IMPORTANTE', label: 'Aviso', message: 'Aviso de prueba' } });
+  }
+  const debt = await db.notification.create({ data: { userId: other.id, type: 'CARTERA_VENCIDA', relatedId: client.id, message: 'Cobro pendiente' } });
+  const financialRisk = await db.notification.create({ data: { userId: other.id, type: 'CARTERA_RIESGO', relatedId: client.id, url: '/financiero', message: 'Revisar cobro', createdAt: now } });
+  const renewalBell = await db.notification.create({ data: { userId: other.id, type: 'RENOVACION_CONTRATO', relatedId: client.id, message: 'Renovar', createdAt: now } });
+  await assert.rejects(save(body, other.id), e => e.status === 403);
+  await assert.rejects(save({ ...body, confirmed: false }), e => e.status === 400);
+  await assert.rejects(save({ ...body, endDate: '2026-11-19' }), e => e.status === 409);
+  await assert.rejects(save({ ...body, expectedUpdatedAt: '2026-01-01T00:00:00Z' }), e => e.status === 409);
+  await save();
+  const saved = await db.clientContract.findUnique({ where: { id: contract.id } });
+  assert.equal(saved.renewalDecision, 'NO_RENOVAR');
+  assert.equal(saved.renewalDecisionById, pm.id);
+  assert.equal(saved.renewalDecisionByName, pm.name);
+  assert.equal(saved.renewalDecisionAt.toISOString(), now.toISOString());
+  for (const key of ['startDate','endDate','status','deliverables','monthlyReport']) assert.deepEqual(saved[key], contract[key]);
+  assert.deepEqual(await db.client.findUnique({ where: { id: client.id } }), client);
+  assert.deepEqual(await db.notification.findUnique({ where: { id: debt.id } }), debt);
+  assert.deepEqual(await db.notification.findUnique({ where: { id: financialRisk.id } }), financialRisk);
+  assert.equal((await db.notification.findUnique({ where: { id: renewalBell.id } })).isRead, true);
+  assert.equal(await db.importantNotice.count({ where: { resolvedAt: null, kind: { in: ['OPERACION_CONTINUIDAD','OPERACION_RENOVACION'] } } }), 0);
+  assert.equal(await db.importantNotice.count({ where: { resolvedAt: null, kind: 'OPERACION_CICLO' } }), 2);
+  assert.equal(await db.clientContractDecision.count(), 1);
+  await assert.rejects(save(), e => e.status === 409);
+  await assert.rejects(save({ ...body, decision: 'PENDIENTE', expectedUpdatedAt: saved.updatedAt.toISOString(), note: '' }), e => e.status === 400);
+  await save({ ...body, decision: 'PENDIENTE', expectedUpdatedAt: saved.updatedAt.toISOString(), note: 'El cliente volvió a solicitar una propuesta.' });
+  assert.equal((await db.clientContract.findUnique({ where: { id: contract.id } })).renewalDecision, 'PENDIENTE');
+  assert.equal(await db.clientContractDecision.count(), 2);
+  const fresh = await db.clientContract.findUnique({ where: { id: contract.id } });
+  const concurrent = await Promise.allSettled([save({ ...body, expectedUpdatedAt: fresh.updatedAt.toISOString() }), save({ ...body, expectedUpdatedAt: fresh.updatedAt.toISOString() })]);
+  assert.equal(concurrent.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(concurrent.find(r => r.status === 'rejected').reason.status, 409);
+  assert.equal(await db.clientContractDecision.count(), 3);
+  await db.user.update({ where: { id: pm.id }, data: { modulePermissions: { clientes: false } } });
+  await assert.rejects(save(), e => e.status === 403);
+});
+
+test('esquema aditivo e idempotente conserva contratos y protege el historial', { skip: !testUrl }, async () => {
+  const schema = `continuity_schema_${randomUUID().replaceAll('-', '')}`;
+  const client = new pg.Client({ connectionString: testUrl });
+  await client.connect();
+  try {
+    await client.query(`CREATE SCHEMA "${schema}"`);
+    await client.query(`SET search_path TO "${schema}"`);
+    await client.query('CREATE TABLE "ClientContract" ("id" TEXT PRIMARY KEY, "status" TEXT, "endDate" TEXT)');
+    await client.query(`INSERT INTO "ClientContract" VALUES ('old','ACTIVO','2027-07-31')`);
+    await ensureContractContinuitySchema(client);
+    await ensureContractContinuitySchema(client);
+    const row = (await client.query('SELECT * FROM "ClientContract"')).rows[0];
+    assert.equal(row.status, 'ACTIVO'); assert.equal(row.endDate, '2027-07-31');
+    assert.equal(row.renewalDecision, 'PENDIENTE'); assert.equal(row.renewalDecisionAt, null);
+    await ensureAuditImmutability(client, { functionSchema: schema, tables: [{ schema, name: 'ClientContractDecision', retention: null, nullableRefs: [] }] });
+    await client.query(`INSERT INTO "ClientContractDecision" ("id","clientId","contractId","decision","previousDecision","endDate","actorId","actorName") VALUES ('event','client','old','NO_RENOVAR','PENDIENTE','2027-07-31','actor','PM ficticio')`);
+    await assert.rejects(client.query(`UPDATE "ClientContractDecision" SET "decision"='PENDIENTE'`), /no se puede modificar/);
+    await assert.rejects(client.query('DELETE FROM "ClientContractDecision"'), /no se puede modificar/);
+  } finally { await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await client.end(); }
+});

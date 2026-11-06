@@ -43,6 +43,7 @@ test('PostgreSQL: gestiones de cobro idempotentes y alcance transaccional', { sk
     const first = await debt('2026-08-01');
     const second = await debt('2026-09-01');
     const later = await debt('2026-10-01');
+    await db.accountsReceivable.update({where:{id:later.id},data:{dueDate:new Date('2026-12-01T12:00:00Z')}});
     const foreign = await debt('2026-09-01', other.id);
 
     await t.test('dos reintentos simultáneos dejan una fila y conservan la identidad original', async () => {
@@ -65,6 +66,8 @@ test('PostgreSQL: gestiones de cobro idempotentes y alcance transaccional', { sk
 
     await t.test('el aviso registra exactamente las dos obligaciones mostradas, dejando fuera una posterior', async () => {
         const notice = await db.importantNotice.create({ data: { userId: user.id, kind: 'CARTERA_MENSUAL', level: 'IMPORTANTE', subjectId: client.id, label: 'Cartera vencida', message: 'Dos obligaciones mostradas', createdAt: now } });
+        await assert.rejects(followUpNotice(db,notice.id,{channel:'LLAMADA',receivableIds:[first.id]},actor,{now}),{statusCode:409});
+        assert.equal(await db.collectionActivity.count({where:{noticeId:{startsWith:notice.id}}}),0);
         await followUpNotice(db, notice.id, { channel: 'LLAMADA', receivableIds: [first.id, second.id] }, actor, { now, log: () => {} });
         const rows = await db.collectionActivity.findMany({ where: { noticeId: { startsWith: `${notice.id}:` } } });
         assert.deepEqual(rows.map((row) => row.receivableId).sort(), [first.id, second.id].sort());

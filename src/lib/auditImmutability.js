@@ -31,6 +31,7 @@ export const AUDIT_TABLES = Object.freeze([
     { schema: 'public', name: 'DeletedTaskLog', retention: null, nullableRefs: [] },
     // La identidad histórica taskId permanece aunque la tarea ya no exista.
     { schema: 'public', name: 'TaskParticipationArchive', retention: null, nullableRefs: ['currentTaskId'] },
+    { schema: 'public', name: 'ClientContractDecision', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'TaskDeliverableEvent', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'ContentItemDeliveryChange', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'ContentItemPeriodChange', retention: null, nullableRefs: [] },

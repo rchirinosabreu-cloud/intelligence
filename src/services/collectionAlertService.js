@@ -6,6 +6,7 @@
 // La campana también llega al celular, por eso nunca lleva cifras. Lo ya avisado queda en `CollectionAlert`, una fila
 // por asunto, ciclo y paso: nada se repite aunque el reloj corra dos veces.
 import prisma from '../lib/prisma.js';
+import { selectedContract } from '../lib/clientContractSelection.js';
 import { createNotification } from './notificationService.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import { clientCollectionAlerts, collectionBellText, collectionNoticeText } from '../lib/receivableCollections.js';
@@ -60,7 +61,7 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
         where: { accountsReceivables: { some: OPEN_CLIENT_RECEIVABLES } },
         select: {
             id: true, name: true, slug: true,
-            contracts: { select: { serviceType: true, startDate: true } },
+            contracts: { select: { id: true, serviceType: true, startDate: true, createdAt: true, renewalDecision: true } },
             projectManager: { select: { userId: true } },
             accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS }
         }
@@ -111,7 +112,7 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
                 queue(userId, COLLECTION_ALERT_TYPE, { subjectId: alert.subjectId, who: client.name, message: collectionBellText(alert, client.name, 'DIRECCION'), url: COLLECTION_URL });
             }
             const pm = client.projectManager?.userId;
-            if (pm && !administrative.includes(pm) && !direction.includes(pm)) {
+            if (pm && selectedContract(client.contracts, today)?.renewalDecision !== 'NO_RENOVAR' && !administrative.includes(pm) && !direction.includes(pm)) {
                 queue(pm, COLLECTION_RISK_TYPE, { subjectId: client.id, who: client.name, message: collectionBellText(alert, client.name, 'PM'), url: client.slug ? `/clientes/operacion/${client.slug}` : '/clientes' });
             }
         }
