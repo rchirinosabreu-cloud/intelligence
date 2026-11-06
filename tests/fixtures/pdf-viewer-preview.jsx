@@ -32,6 +32,10 @@ function Pagina() {
     <div className="min-h-screen bg-zinc-50 p-8 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <h1 className="mb-1 text-xl font-bold">Visor de PDF</h1>
       <p className="mb-6 text-sm text-zinc-500" data-pdfjs-version>Comprobando pdf.js y su worker…</p>
+      <div className="mb-4 flex gap-3">
+        <button onClick={() => setData(hacerPdf())}>Abrir otro PDF</button>
+        <button onClick={() => setData(null)}>Cerrar PDF</button>
+      </div>
       <div data-pdf-viewer className="mx-auto max-w-3xl">
         {data ? <PdfDocumentPreview data={data} name="prueba.pdf" /> : null}
       </div>
