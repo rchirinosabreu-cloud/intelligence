@@ -45,7 +45,7 @@ export const canOpenTask = (task, viewerUserId) => {
 // en un solo sitio, para que el día que `Task` gane un campo de contenido se añada
 // también aquí y no se escape solo.
 const TASK_BODY_FIELDS = Object.freeze([
-    'comments', 'taskComments', 'taskAttachments', 'referenceUrl',
+    'comments', 'taskComments', 'taskAttachments', 'deliverables', 'referenceUrl',
     'contentItem', 'contentItemId', 'specialType', 'aiCategory', 'aiComplexity'
 ]);
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
-import { ExternalLink, Trash2, Plus, Loader2, Image as ImageIcon, FileText } from '@/components/ui/icons';
+import { Download, ExternalLink, Trash2, Plus, Loader2, Image as ImageIcon, FileText } from '@/components/ui/icons';
 
 const FIELD_LABEL = 'flex h-5 items-center text-xs font-medium text-zinc-500 dark:text-zinc-400';
 
@@ -168,14 +168,17 @@ export const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
 const FinalAssetTile = ({
   item, asset, isEditing, onDelete, isDeleting, position = null, total = 1,
   canDrag = false, isDragged = false, isDragActive = false, isSaving = false,
-  onDragStart, onDragOver, onDragEnd, onKeyMove
+  onDragStart, onDragOver, onDragEnd, onKeyMove, assetUrls, onOpenAsset
 }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
   const drive = driveAssetUrls(asset);
+  const customUrls = assetUrls?.(asset);
   const sourceUrl = drive
     ? null
-    : `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
+    : customUrls ? customUrls.previewUrl : `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
   const isImage = !drive && (asset.mimeType || '').startsWith('image/');
   const isVideo = !drive && (asset.mimeType || '').startsWith('video/');
 
@@ -200,6 +203,21 @@ const FinalAssetTile = ({
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [sourceUrl]);
+
+  const download = async () => {
+    if (downloading || !customUrls?.downloadUrl) return;
+    setDownloading(true); setDownloadError('');
+    try {
+      const response = await fetch(customUrls.downloadUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
+      if (!response.ok) throw new Error('No pudimos descargar el archivo. Revisa tu acceso e intenta otra vez.');
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url; link.download = asset.name || 'entregable';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { console.error('[Entregables] No se pudo descargar:', error.message); setDownloadError(error.message); }
+    finally { setDownloading(false); }
+  };
 
   return (
     <div
@@ -230,7 +248,11 @@ const FinalAssetTile = ({
             allowFullScreen
             loading="lazy"
           />
-        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
+        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : onOpenAsset ? (
+          <button type="button" onClick={() => onOpenAsset(asset)} aria-label={`Ver ${asset.name || 'archivo'}`} className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-sm text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-white/5">
+            <FileText className="h-8 w-8" />{asset.mimeType === 'application/pdf' ? 'PDF' : 'Archivo'}
+          </button>
+        ) : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
       </div>
       {/* Las acciones van sobre la miniatura, no en la línea del nombre: compitiendo por el ancho de
           una tarjeta pequeña, el nombre se recortaba hasta quedarse en una letra suelta
@@ -265,6 +287,10 @@ const FinalAssetTile = ({
       )}
 
       <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
+        {customUrls?.downloadUrl && <button type="button" onClick={download} disabled={downloading} aria-label={`Descargar ${asset.name || 'archivo'}`}
+          className="grid h-11 w-11 place-items-center rounded-lg bg-zinc-800/80 text-white backdrop-blur-sm transition hover:bg-zinc-900 disabled:opacity-50 dark:bg-zinc-950/80 dark:hover:bg-zinc-900">
+          {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+        </button>}
         {drive && (
           <a
             href={drive.openUrl}
@@ -293,6 +319,7 @@ const FinalAssetTile = ({
       <span className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
         {asset.name || 'Archivo final'}
       </span>
+      {downloadError && <p role="alert" className="px-2.5 pb-2 text-xs text-destructive">{downloadError}</p>}
     </div>
   );
 };
@@ -320,7 +347,7 @@ const measureTilePlaces = (grid) => {
  * Soltar fuera de la rejilla, o pulsar Escape, lo deja todo como estaba.
  * El archivo heredado de las columnas antiguas no tiene fila propia: va primero y no se mueve.
  */
-export const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, onReorder }) => {
+export const FinalAssetGrid = ({ item, finalAssets, isEditing, reorderable = isEditing, onDelete, isDeleting, onReorder, assetUrls, onOpenAsset }) => {
   const gridRef = useRef(null);
   const dragIdRef = useRef(null);
   const previewRef = useRef(null);
@@ -332,7 +359,7 @@ export const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDelet
   const [saving, setSaving] = useState(null);
 
   const ids = finalAssets.map(asset => asset.id);
-  const canReorder = isEditing && ids.length > 1 && typeof onReorder === 'function';
+  const canReorder = reorderable && ids.length > 1 && typeof onReorder === 'function';
   // Si mientras se arrastraba o se guardaba alguien añadió o quitó un archivo, ese orden ya no vale.
   const pending = saving && !finalAssetOrderProblem(ids, saving.order) ? saving : null;
   const live = !pending && preview && !finalAssetOrderProblem(ids, preview) ? preview : null;
@@ -428,6 +455,8 @@ export const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDelet
             key={asset.id}
             item={item}
             asset={asset}
+            assetUrls={assetUrls}
+            onOpenAsset={onOpenAsset}
             isEditing={isEditing}
             onDelete={onDelete}
             isDeleting={isDeleting}

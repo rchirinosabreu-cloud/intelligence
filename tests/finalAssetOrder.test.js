@@ -66,29 +66,43 @@ test('the server rewrites every position in one transaction and returns the file
     { id: 'c', contentItemId: 'item-1', position: 2, name: '03.png' }
   ];
   const log = [];
+  const item = { id: 'item-1', finalAssetsRevision: 0, status: 'BORRADOR', deletedAt: null };
+  const changes = [];
   const sorted = () => [...rows].sort((x, y) => x.position - y.position);
   const db = {
+    contentItem: {
+      findUnique: async ({ where }) => where.id === item.id ? { ...item } : null,
+      update: async ({ data }) => Object.assign(item, data)
+    },
+    contentItemDeliveryChange: { create: async ({ data }) => { changes.push(data); return data; }, findMany: async () => changes },
+    contentItemDeliveryUpload: { findMany: async () => [] },
+    contentAssetDeletion: { findMany: async () => [] },
+    $queryRaw: async () => { log.push(['lock']); return [{ id: item.id }]; },
     contentItemFinalAsset: {
       findMany: async ({ where }) => sorted().filter((row) => row.contentItemId === where.contentItemId),
       update: ({ where, data }) => { log.push([where.id, data.position]); Object.assign(rows.find((row) => row.id === where.id), data); return Promise.resolve(); }
     },
-    $transaction: async (operations) => { log.push(['transaction', operations.length]); await Promise.all(operations); }
+    $transaction: async operation => { log.push(['transaction-start']); const result = await operation(db); log.push(['transaction-end']); return result; }
   };
   const result = await reorderContentItemFinalAssets('item-1', ['c', 'a', 'b'], { db });
   assert.deepEqual(result.map((row) => row.id), ['c', 'a', 'b']);
   assert.deepEqual(sorted().map((row) => [row.id, row.position]), [['c', 0], ['a', 1], ['b', 2]]);
-  assert.deepEqual(log.at(-1), ['transaction', 3], 'all positions change together or none does');
+  assert.deepEqual(log, [['transaction-start'], ['lock'], ['c', 0], ['a', 1], ['b', 2], ['transaction-end']], 'all positions change under one parent lock and transaction');
+  assert.equal(item.finalAssetsRevision, 1);
+  assert.equal(changes[0].action, 'REORDERED');
+  assert.deepEqual(changes[0].files.map(row => row.id), ['c', 'a', 'b']);
 
   await assert.rejects(reorderContentItemFinalAssets('item-1', ['c', 'a'], { db }), (error) => error.status === 400 && /todos los archivos/.test(error.message));
   await assert.rejects(reorderContentItemFinalAssets('item-1', ['c', 'a', 'x'], { db }), (error) => error.status === 400);
   await assert.rejects(reorderContentItemFinalAssets('ghost', ['a'], { db }), (error) => error.status === 404);
   assert.deepEqual(sorted().map((row) => row.id), ['c', 'a', 'b'], 'a rejected order changes nothing');
+  assert.equal(item.finalAssetsRevision, 1, 'invalid orders do not advance the delivery');
 });
 
 test('the route, the card and the publisher agree on the order', () => {
   const routes = readFileSync('src/routes/api/content.js', 'utf8');
   assert.match(routes, /router\.put\('\/items\/:id\/final-assets\/order'/);
-  assert.match(routes, /reorderContentItemFinalAssets\(req\.params\.id, req\.body\?\.order\)/);
+  assert.match(routes, /reorderContentItemFinalAssets\(req\.params\.id, req\.body\?\.order, \{ actor: req\.user, expectedRevision: req\.body\?\.expectedRevision \}\)/);
   const card = readFileSync('src/components/modules/ContentPlanDetail.jsx', 'utf8');
   assert.match(card, /final-assets\/order/);
   const media = readFileSync('src/components/modules/ContentPlan/PieceMedia.jsx', 'utf8');

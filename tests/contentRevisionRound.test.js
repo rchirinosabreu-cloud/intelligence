@@ -67,17 +67,18 @@ test('una pieza publicada queda cerrada aunque conserve una marca antigua de rev
 test('la marca la pone el servidor cuando llega material a una pieza aprobada', async () => {
   const service = await read('src/services/contentService.js');
 
-  assert.match(service, /const requestRevisionIfApproved = async \(itemId\)/);
+  const delivery = await read('src/services/contentDeliveryService.js');
   // Los tres caminos que añaden material: formulario, subida directa y enlace de Drive. Si uno se queda
   // fuera, esa vía deja la pieza en verde con material nuevo. (El cuarto, el adjunto único antiguo, se
   // retiró el 28 de octubre de 2026.)
-  assert.equal(
-    (service.match(/await requestRevisionIfApproved\(/g) || []).length,
-    3,
-    'los tres caminos que añaden material piden la revisión'
-  );
-  // Marcar la revisión no puede tumbar una subida que sí funcionó.
-  assert.match(service, /catch \(error\) \{\s*console\.error\('\[Service\] No se pudo marcar la pieza para una revisión nueva/);
+  for (const name of ['uploadContentItemFinalAssets', 'addContentItemDriveAsset', 'confirmContentItemFinalAssets']) {
+    const body = service.slice(service.indexOf(`export const ${name}`)).split(/\nexport const /)[0];
+    assert.match(body, /mutateContentDelivery\(item\.id, \{ actor, expectedRevision, action: 'ADDED' \}/, name);
+  }
+  // La entrega y su marca ahora se guardan juntas: un fallo conserva el material anterior completo.
+  assert.match(delivery, /material && shouldRequestRevisionOnNewAsset\(item\) && !item\.revisionRequestedAt/);
+  assert.match(delivery, /revisionRequestedAt: clock\(\)/);
+  assert.match(delivery, /const result = await db\.\$transaction/);
 
   // Cambiar el estado es una decisión nueva y cierra la ronda; editar el caption no.
   assert.match(service, /hasOwnProperty\.call\(normalizedData, 'status'\)\) \{\s*normalizedData\.revisionRequestedAt = null;/);

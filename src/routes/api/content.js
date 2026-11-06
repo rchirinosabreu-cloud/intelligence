@@ -26,8 +26,9 @@ import {
   getContentItemCover,
   removeContentItemCover
 } from '../../services/contentService.js';
-import { getFromS3Stream } from '../../services/s3Service.js';
+import { getPlatformStorage } from '../../services/platformStorageService.js';
 import { reorderContentItemFinalAssets } from '../../services/finalAssetOrderService.js';
+import { getContentDelivery, replaceContentDelivery, prepareContentDelivery, confirmContentDelivery } from '../../services/contentDeliveryService.js';
 import { isDriveAsset } from '../../lib/finalAssetShape.js';
 import {
   getContentPlanReview,
@@ -37,10 +38,12 @@ import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewSch
 import { createClientCriteriaRouter } from './clientCriteria.js';
 import { createExternalPlansRouter } from './externalPlans.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
+import { boundedUploadMemoryStorage } from '../../lib/boundedUploadStorage.js';
 import {
   FINAL_ASSET_MAX_BYTES,
   FINAL_ASSET_MAX_FILES,
   FINAL_ASSET_MAX_TOTAL_BYTES,
+  FINAL_ASSETS_PER_ITEM,
   fileTooLargeMessage,
   tooManyFilesMessage,
   tooMuchAtOnceMessage
@@ -56,6 +59,10 @@ const upload = multer({
 const carouselUpload = multer({
   storage: uploadMemoryStorage(),
   limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: FINAL_ASSET_MAX_FILES }
+});
+const deliveryUpload = multer({
+  storage: boundedUploadMemoryStorage({ maxTotalBytes: FINAL_ASSET_MAX_TOTAL_BYTES, tooLargeMessage: 'El conjunto supera 200 MB. Usa la subida directa.' }),
+  limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: FINAL_ASSETS_PER_ITEM }
 });
 
 /**
@@ -338,14 +345,47 @@ router.delete('/items/:id/cover', async (req, res) => {
   }
 });
 
+const deliveryError = (res, error) => {
+  const configurationError = String(error.code || '').startsWith('PLATFORM_STORAGE_');
+  const status = Number(error.status) >= 400 && Number(error.status) < 500 ? Number(error.status) : configurationError && error.status === 503 ? 503 : 500;
+  if (status === 500) {
+    console.error('[Content delivery]', error.code || error.name || 'UNKNOWN');
+    if (process.env.NODE_ENV === 'test') console.error(error.stack);
+  }
+  return res.status(status).json({ error: status === 500 ? 'No fue posible guardar la entrega. La anterior se conserva.' : error.message });
+};
+
+router.get('/items/:id/delivery', async (req, res) => {
+  try { return res.json(await getContentDelivery(req.params.id)); }
+  catch (error) { return deliveryError(res, error); }
+});
+
+router.post('/items/:id/delivery/replace', receivesFiles(receiveFinalAssets(deliveryUpload.array('files', FINAL_ASSETS_PER_ITEM)), { field: 'files', max: FINAL_ASSETS_PER_ITEM }), async (req, res) => {
+  try {
+    return res.status(201).json(await replaceContentDelivery(req.params.id, req.files, { actor: req.user, expectedRevision: req.body?.expectedRevision, requestId: req.body?.requestId }));
+  } catch (error) { return deliveryError(res, error); }
+});
+
+router.post('/items/:id/delivery/direct-upload', async (req, res) => {
+  try {
+    return res.json(await prepareContentDelivery(req.params.id, req.body?.files, { actor: req.user, expectedRevision: req.body?.expectedRevision, requestId: req.body?.requestId }));
+  } catch (error) { return deliveryError(res, error); }
+});
+
+router.post('/items/:id/delivery/confirm', async (req, res) => {
+  try {
+    return res.status(201).json(await confirmContentDelivery(req.params.id, { actor: req.user, uploadId: req.body?.uploadId, expectedRevision: req.body?.expectedRevision }));
+  } catch (error) { return deliveryError(res, error); }
+});
+
 router.post('/items/:id/final-assets', receivesFiles(receiveFinalAssets(carouselUpload.array('files', FINAL_ASSET_MAX_FILES)), { field: 'files', max: FINAL_ASSET_MAX_FILES }), async (req, res) => {
   try {
-    const assets = await uploadContentItemFinalAssets(req.params.id, req.files);
+    const assets = await uploadContentItemFinalAssets(req.params.id, req.files, { actor: req.user, expectedRevision: req.body?.expectedRevision });
     return res.status(201).json(assets);
   } catch (error) {
     console.error('[API] Error uploading final carousel assets:', error.response?.data || error);
     // Un archivo rechazado por su contenido es un 400 con su motivo: en producción un 5xx pierde el mensaje.
-    return res.status(error.status === 400 ? 400 : 500).json({ error: error.message || 'Failed to upload final assets', details: error.message });
+    return deliveryError(res, error);
   }
 });
 
@@ -354,11 +394,11 @@ router.post('/items/:id/final-assets', receivesFiles(receiveFinalAssets(carousel
  */
 router.post('/items/:id/final-assets/drive', async (req, res) => {
   try {
-    const assets = await addContentItemDriveAsset(req.params.id, req.body || {});
+    const assets = await addContentItemDriveAsset(req.params.id, req.body || {}, { actor: req.user, expectedRevision: req.body?.expectedRevision });
     return res.status(201).json(assets);
   } catch (error) {
     console.error('[API] Error adding a Drive final asset:', error.response?.data || error.message);
-    return res.status(400).json({ error: error.message });
+    return res.status(error.status || 400).json({ error: error.message });
   }
 });
 
@@ -372,17 +412,17 @@ router.post('/items/:id/final-assets/direct-upload', async (req, res) => {
     return res.json(tickets);
   } catch (error) {
     console.error('[API] Error signing a direct upload:', error.response?.data || error.message);
-    return res.status(400).json({ error: error.message });
+    return res.status(error.status || 400).json({ error: error.message });
   }
 });
 
 router.post('/items/:id/final-assets/confirm', async (req, res) => {
   try {
-    const assets = await confirmContentItemFinalAssets(req.params.id, req.body?.uploads);
+    const assets = await confirmContentItemFinalAssets(req.params.id, req.body?.uploads, { actor: req.user, expectedRevision: req.body?.expectedRevision });
     return res.status(201).json(assets);
   } catch (error) {
     console.error('[API] Error confirming a direct upload:', error.response?.data || error.message);
-    return res.status(400).json({ error: error.message });
+    return res.status(error.status || 400).json({ error: error.message });
   }
 });
 
@@ -392,7 +432,7 @@ router.post('/items/:id/final-assets/confirm', async (req, res) => {
  */
 router.put('/items/:id/final-assets/order', async (req, res) => {
   try {
-    return res.json(await reorderContentItemFinalAssets(req.params.id, req.body?.order));
+    return res.json(await reorderContentItemFinalAssets(req.params.id, req.body?.order, { actor: req.user, expectedRevision: req.body?.expectedRevision }));
   } catch (error) {
     console.error('[API] Error reordering final assets:', error.response?.data || error.message);
     const status = Number(error.status) >= 400 && Number(error.status) < 500 ? error.status : 500;
@@ -406,7 +446,7 @@ router.get('/items/:id/final-assets/:assetId', async (req, res) => {
     if (!asset) return res.status(404).json({ error: 'Final asset not found' });
     // Un enlace de Drive no tiene bytes nuestros que servir: se abre en Drive, no por aquí.
     if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
-    const object = await getFromS3Stream(asset.storageKey);
+    const object = await getPlatformStorage(asset.storageArea).getFromS3Stream(asset.storageKey);
     res.setHeader('Content-Type', asset.mimeType || object.ContentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || 'pieza-final')}"`);
     res.setHeader('Cache-Control', 'private, max-age=300');
@@ -419,10 +459,10 @@ router.get('/items/:id/final-assets/:assetId', async (req, res) => {
 
 router.delete('/items/:id/final-assets/:assetId', async (req, res) => {
   try {
-    return res.json(await deleteContentItemFinalAssetById(req.params.id, req.params.assetId));
+    return res.json(await deleteContentItemFinalAssetById(req.params.id, req.params.assetId, { actor: req.user, expectedRevision: req.body?.expectedRevision }));
   } catch (error) {
     console.error('[API] Error deleting final carousel asset:', error.response?.data || error);
-    return res.status(500).json({ error: error.message || 'Failed to delete final asset', details: error.message });
+    return deliveryError(res, error);
   }
 });
 

@@ -407,7 +407,8 @@ model DriveFile {
   mimeType        String
   sizeBytes       Int
   storageProvider String       @default("RAILWAY")
-  storageKey      String       @unique
+  storageKey      String
+  storageArea     String       @default("LEGACY")
   source          String       @default("UPLOAD")
   category        String       @default("GENERAL")
   metadata        Json?
@@ -421,6 +422,7 @@ model DriveFile {
   @@index([folderId, deletedAt, name])
   @@index([deletedAt, updatedAt])
   @@index([source, category])
+  @@unique([storageArea, storageKey])
 }
 
 model PasswordResetCode {
@@ -1011,6 +1013,8 @@ model ContentItem {
   finalAssetMimeType String?
   finalAssetSize     Int?
   finalAssets        ContentItemFinalAsset[]
+  finalAssetsRevision Int @default(0)
+  deliveryUploads ContentItemDeliveryUpload[]
   /// Portada del video (Rodny, 15 de octubre de 2026: «a veces los videos que se publican necesitan
   /// portadas»). Una por pieza, aparte de la rejilla de archivos finales, cuyo orden es el del
   /// carrusel. Ver `scripts/ensure-content-cover-schema.js` y `src/lib/videoCover.js`.
@@ -1115,10 +1119,57 @@ model ContentPlanReviewFinding {
 /// Una pieza final es **o** un archivo guardado por nosotros (`storageKey`, `mimeType`, `size`)
 /// **o** un enlace a Google Drive (`externalUrl`, `externalProvider`, `externalFileId`), nunca las dos
 /// cosas ni ninguna. La regla vive en `src/lib/finalAssetShape.js` porque el esquema no puede decirlo.
+// Metadata only: no obsolete object keys, URLs or historical downloads; survives deletion of a piece.
+model ContentItemDeliveryChange {
+  id String @id @default(uuid())
+  contentItemId String
+  revision Int
+  action String
+  actorId String?
+  actorName String?
+  at DateTime @default(now()) @db.Timestamptz(3)
+  files Json
+  previousFiles Json
+  @@unique([contentItemId, revision])
+  @@index([contentItemId, at])
+}
+
+// Staging belongs to the uploader and never replaces current material until all files are verified.
+model ContentItemDeliveryUpload {
+  id String @id @default(uuid())
+  contentItemId String
+  requestId String
+  actorId String
+  expectedRevision Int
+  manifest Json
+  storageArea String @default("LEGACY")
+  state String @default("PENDING")
+  committedRevision Int?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  @@unique([contentItemId, requestId])
+  @@index([state, expiresAt])
+}
+
+// Durable outbox: deleting a row and deleting an object cannot be one database transaction.
+model ContentAssetDeletion {
+  id String @id @default(uuid())
+  storageKey String
+  storageArea String @default("LEGACY")
+  availableAt DateTime @default(now()) @db.Timestamptz(3)
+  attempts Int @default(0)
+  lastError String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([availableAt])
+  @@unique([storageArea, storageKey])
+}
+
 model ContentItemFinalAsset {
   id               String      @id @default(uuid())
   contentItemId    String
-  storageKey       String?     @unique
+  storageKey       String?
+  storageArea      String      @default("LEGACY")
   name             String
   mimeType         String?
   size             Int?
@@ -1130,6 +1181,7 @@ model ContentItemFinalAsset {
   contentItem      ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
 
   @@index([contentItemId, position, createdAt])
+  @@unique([storageArea, storageKey])
 }
 
 /// Cuenta de Instagram o Facebook de un cliente (29 de septiembre de 2026). La conecta un administrador
@@ -1472,6 +1524,8 @@ model Task {
   taskComments      TaskComment[]
   followers         TaskFollower[]
   taskAttachments   TaskAttachment[]
+  deliverableRevision Int              @default(0)
+  deliverables      TaskDeliverable[]
   workCycles        TaskWorkCycle[]
   workSessions      TaskWorkSession[]
   participationArchives TaskParticipationArchive[]
@@ -1484,6 +1538,58 @@ model Task {
   @@index([status, completedAt])
   @@index([assigneeStatus, assigneeCompletedAt])
   @@index([contentItemId, title])
+}
+
+model TaskDeliverable {
+  id           String   @id @default(uuid())
+  taskId       String
+  storageKey   String
+  storageArea  String   @default("LEGACY")
+  name         String
+  mimeType     String
+  size         BigInt
+  position     Int
+  authorId     String
+  authorName   String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position])
+  @@unique([storageArea, storageKey])
+}
+
+// Historial permanente: sin FK/cascade, sin URLs activas ni claves de almacenamiento.
+model TaskDeliverableEvent {
+  id            String   @id @default(uuid())
+  taskId        String
+  requestId     String
+  requestHash   String
+  revision      Int
+  action        String
+  actorId       String
+  actorName     String
+  cycleId       String?
+  files         Json
+  previousFiles Json
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([taskId, requestId])
+  @@unique([taskId, revision])
+}
+
+// Cola operativa durable; sobrevive al borrado de tarea/cliente, se retira al limpiar.
+model TaskDeliverableCleanup {
+  id            String   @id @default(uuid())
+  taskId        String
+  storageKey    String
+  storageArea   String   @default("LEGACY")
+  attempts      Int      @default(0)
+  lastErrorCode String?
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([nextAttemptAt])
+  @@unique([storageArea, storageKey])
 }
 
 model TaskWorkCycle {

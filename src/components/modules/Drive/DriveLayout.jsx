@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ChevronRight, Download, Edit, Eye, File, FileText, Folder, FolderOpen,
   Loader2, Plus, RefreshCcw, RotateCcw, Search, Trash2, Upload, X
@@ -9,6 +10,11 @@ import PageHeader from '@/components/ui/PageHeader';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import PdfDocumentPreview from './PdfDocumentPreview';
+import { FinalAssetGrid } from '@/components/modules/ContentPlan/PieceMedia';
+import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { hasModuleAccess } from '@/lib/platformModules';
+import { useAuth } from '@/context/AuthContext';
 
 const formatDate = value => value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -34,6 +40,24 @@ const triggerDownload = (blob, name) => {
 
 const BRIA_ARTIFACT_KINDS = new Set(['MINUTE', 'TRANSCRIPT', 'SUMMARY_PDF', 'ANALYSIS_PDF']);
 const BRIA_PDF_KINDS = new Set(['SUMMARY_PDF', 'ANALYSIS_PDF']);
+const DELIVERY_KINDS = new Set(['CONTENT_DELIVERABLE', 'TASK_DELIVERABLE']);
+const isDeliveryFolderId = id => id === 'deliverables' || id?.startsWith('deliverables:');
+const isTextFile = file => file.mimeType?.startsWith('text/') || file.mimeType?.includes('json') || /\.(txt|md|csv|tsv|json|log|xml|yaml|yml)$/i.test(file.name || '');
+// Native previews use authenticated bytes in memory. Large deliveries remain downloadable,
+// but opening a card must not allocate a multi-gigabyte blob just to show a preview.
+const deliveryPreviewLimitMb = file => /^(image|video)\//.test(file.mimeType || '') ? 100 : file.mimeType === 'application/pdf' ? 25 : isTextFile(file) ? 2 : 0;
+const readDeliveryFile = async (file, download = false) => {
+  const path = download ? file.downloadUrl : file.fileUrl;
+  if (!path?.startsWith('/api/')) throw new Error('Este archivo se consulta desde su pieza de origen.');
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+  });
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || result.message || 'No fue posible abrir el entregable.');
+  }
+  return response.blob();
+};
 
 const JsonList = ({ title, items, renderItem = item => String(item) }) => {
   if (!Array.isArray(items) || items.length === 0) return null;
@@ -53,12 +77,12 @@ const JsonList = ({ title, items, renderItem = item => String(item) }) => {
 
 const MinuteDocument = ({ content }) => (
   <div>
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-300">Resumen ejecutivo</p>
+    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan-deep dark:text-brand-cyan">Resumen ejecutivo</p>
     <h3 className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-white">{content.summaryTitle || 'Resumen de la reunión'}</h3>
     {content.summarySubtitle && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{content.summarySubtitle}</p>}
     <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-zinc-700 dark:text-zinc-200">{content.executiveSummary || 'Sin resumen disponible.'}</p>
     <div className="my-7 h-px bg-zinc-200 dark:bg-zinc-800" />
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">Análisis de Bria</p>
+    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan-deep dark:text-brand-cyan">Análisis de Bria</p>
     <h3 className="mt-2 text-xl font-semibold text-zinc-950 dark:text-white">{content.analysisTitle || 'Lectura operativa'}</h3>
     {content.analysisSubtitle && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{content.analysisSubtitle}</p>}
     <JsonList title="Temas" items={content.topics} />
@@ -71,13 +95,13 @@ const MinuteDocument = ({ content }) => (
 
 const TranscriptDocument = ({ content }) => (
   <div>
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">Transcripción de Fireflies</p>
+    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan-deep dark:text-brand-cyan">Transcripción de Fireflies</p>
     <h3 className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-white">{content.title || 'Reunión'}</h3>
     <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{formatDate(content.date)}</p>
     <div className="mt-6 space-y-3">
       {(content.sentences || []).map((sentence, index) => (
         <div key={`sentence-${index}`} className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">{sentence.speaker_name || 'Participante'}</p>
+          <p className="text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">{sentence.speaker_name || 'Participante'}</p>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-200">{sentence.text || sentence.raw_text || ''}</p>
         </div>
       ))}
@@ -99,9 +123,9 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
             <DialogDescription className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{file?.kind === 'TRANSCRIPT' ? 'Transcripción' : file?.kind === 'MINUTE' ? 'Datos estructurados de Bria' : file?.kind === 'SUMMARY_PDF' ? 'Resumen ejecutivo en PDF' : file?.kind === 'ANALYSIS_PDF' ? 'Análisis operativo en PDF' : file?.mimeType}</DialogDescription>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onDownload} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">
+            {(!DELIVERY_KINDS.has(file?.kind) || file?.downloadUrl) && <button type="button" onClick={onDownload} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">
               <Download className="h-4 w-4" /> Descargar
-            </button>
+            </button>}
             <button type="button" onClick={onClose} aria-label="Cerrar visor" className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"><X className="h-5 w-5" /></button>
           </div>
         </header>
@@ -110,9 +134,12 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
           {!loading && preview?.type === 'minute' && <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm dark:bg-zinc-950 sm:p-9"><MinuteDocument content={preview.content} /></div>}
           {!loading && preview?.type === 'transcript' && <div className="mx-auto max-w-3xl"><TranscriptDocument content={preview.content} /></div>}
           {!loading && preview?.type === 'image' && <img src={preview.url} alt={file?.name || 'Vista previa'} className="mx-auto max-h-[68vh] rounded-xl object-contain" />}
+          {!loading && preview?.type === 'video' && <video src={preview.url} aria-label={file?.name} controls className="mx-auto max-h-[68vh] max-w-full rounded-xl" />}
+          {!loading && preview?.type === 'external' && <FinalAssetGrid item={{ id: file.source?.itemId, format: file.source?.format }} finalAssets={[file]} isEditing={false} />}
           {!loading && preview?.type === 'pdf' && <PdfDocumentPreview data={preview.data} name={file?.name} />}
           {!loading && preview?.type === 'text' && <pre className="mx-auto max-w-4xl whitespace-pre-wrap rounded-2xl bg-white p-6 text-sm leading-6 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">{preview.text}</pre>}
           {!loading && preview?.type === 'unsupported' && <div className="flex h-72 flex-col items-center justify-center text-center"><File className="h-10 w-10 text-zinc-400" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Vista previa no disponible</p><p className="mt-1 text-sm text-zinc-500">Puedes descargar el archivo para abrirlo en tu dispositivo.</p></div>}
+          {!loading && preview?.type === 'large' && <div className="flex h-72 flex-col items-center justify-center text-center"><File className="h-10 w-10 text-zinc-400" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Este archivo supera el límite de vista previa ({preview.limitMb} MB).</p><p className="mt-1 text-sm text-muted-foreground">Puedes descargarlo completo para abrirlo en tu dispositivo.</p></div>}
         </div>
       </DialogContent>
     </Dialog>
@@ -121,9 +148,16 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
 
 const DriveLayout = () => {
   const confirm = useConfirmDialog();
+  const { currentUser } = useAuth();
+  const navigateFrom = useNavigateFrom();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [contents, setContents] = useState({ folders: [], files: [] });
-  const [history, setHistory] = useState([]);
-  const [query, setQuery] = useState('');
+  const [localHistory, setLocalHistory] = useState([]);
+  const query = searchParams.get('q') || '';
+  const requestedFolderId = searchParams.get('folderId');
+  const isDeliverablesFolder = isDeliveryFolderId(requestedFolderId);
+  const history = isDeliverablesFolder ? (contents.breadcrumbs || []) : localHistory;
   const [filter, setFilter] = useState('ALL');
   const [trash, setTrash] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -143,31 +177,51 @@ const DriveLayout = () => {
   const [busyId, setBusyId] = useState(null);
   const fileInputRef = useRef(null);
   const previewUrlRef = useRef(null);
+  const loadRequestRef = useRef(0);
+  const previewRequestRef = useRef(0);
+  const invalidateLoad = useCallback(() => { loadRequestRef.current++; }, []);
 
-  const activeFolder = history.at(-1) || null;
-  const activeFolderId = activeFolder?.id || null;
+  const activeFolder = isDeliverablesFolder ? contents.currentFolder : history.at(-1) || null;
+  const activeFolderId = requestedFolderId || activeFolder?.id || null;
   const isBriaFolder = activeFolderId === 'bria-minutes';
+  const isAutomaticFolder = isBriaFolder || isDeliverablesFolder;
+  usePageLabel(isDeliverablesFolder ? 'Drive · Entregables' : 'Drive');
+
+  const updateView = patch => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(patch)) value ? next.set(key, value) : next.delete(key);
+    setSearchParams(next, { replace: true, state: location.state });
+  };
+  const setQuery = value => updateView({ q: value });
+  const setHistory = value => {
+    const next = typeof value === 'function' ? value(history) : value;
+    setLocalHistory(next);
+    updateView({ folderId: isDeliveryFolderId(next.at(-1)?.id) ? next.at(-1).id : null });
+  };
 
   const load = useCallback(async () => {
+    const request = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
       const result = await frontendApiService.getDriveContents({ folderId: trash ? null : activeFolderId, query, trash });
-      setContents(result);
+      if (request === loadRequestRef.current) setContents(result);
     } catch (requestError) {
       console.error('[Drive] Error cargando contenido:', requestError);
-      setError(requestError.message);
+      if (request === loadRequestRef.current) setError(requestError.message);
     } finally {
-      setLoading(false);
+      if (request === loadRequestRef.current) setLoading(false);
     }
   }, [activeFolderId, query, trash]);
 
   useEffect(() => {
+    setLoading(true);
     const timer = setTimeout(load, 250);
-    return () => clearTimeout(timer);
-  }, [load]);
+    return () => { clearTimeout(timer); invalidateLoad(); };
+  }, [load, invalidateLoad]);
 
   useEffect(() => () => {
+    previewRequestRef.current++;
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
 
@@ -180,43 +234,57 @@ const DriveLayout = () => {
   };
 
   const openPreview = async file => {
+    const request = ++previewRequestRef.current;
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = null;
     setPreviewFile(file);
     setPreview(null);
     setPreviewLoading(true);
     try {
-      if (BRIA_PDF_KINDS.has(file.kind)) {
+      if (DELIVERY_KINDS.has(file.kind) && file.externalProvider) {
+        setPreview({ type: 'external' });
+      } else if (DELIVERY_KINDS.has(file.kind) && !deliveryPreviewLimitMb(file)) {
+        setPreview({ type: 'unsupported' });
+      } else if (DELIVERY_KINDS.has(file.kind) && file.sizeBytes > deliveryPreviewLimitMb(file) * 1024 ** 2) {
+        setPreview({ type: 'large', limitMb: deliveryPreviewLimitMb(file) });
+      } else if (BRIA_PDF_KINDS.has(file.kind)) {
         const blob = await frontendApiService.getDriveArtifactBlob(file.meetingId, file.kind);
+        if (request !== previewRequestRef.current) return;
         setPreview({ type: 'pdf', data: await blob.arrayBuffer() });
       } else if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
         const result = await frontendApiService.getDriveFile(file.meetingId, file.kind);
+        if (request !== previewRequestRef.current) return;
         setPreview({ type: file.kind === 'MINUTE' ? 'minute' : 'transcript', content: result.file.content });
       } else {
-        const blob = await frontendApiService.getManagedDriveFile(file.id);
-        if (file.mimeType?.startsWith('image/')) {
-          const url = URL.createObjectURL(blob); previewUrlRef.current = url; setPreview({ type: 'image', url });
+        const blob = DELIVERY_KINDS.has(file.kind) ? await readDeliveryFile(file) : await frontendApiService.getManagedDriveFile(file.id);
+        if (request !== previewRequestRef.current) return;
+        if (file.mimeType?.startsWith('image/') || file.mimeType?.startsWith('video/')) {
+          const url = URL.createObjectURL(blob); previewUrlRef.current = url; setPreview({ type: file.mimeType.startsWith('video/') ? 'video' : 'image', url });
         } else if (file.mimeType === 'application/pdf') {
           setPreview({ type: 'pdf', data: await blob.arrayBuffer() });
-        } else if (file.mimeType?.startsWith('text/') || file.mimeType?.includes('json')) {
+        } else if (isTextFile(file)) {
           setPreview({ type: 'text', text: await blob.text() });
         } else {
           setPreview({ type: 'unsupported' });
         }
       }
     } catch (requestError) {
-      console.error('[Drive] Error abriendo archivo:', requestError);
-      toast.error(requestError.message || 'No fue posible abrir el archivo.');
-      setPreviewFile(null);
+      console.error('[Drive] Error abriendo archivo:', requestError.message);
+      if (request === previewRequestRef.current) {
+        toast.error(requestError.message || 'No fue posible abrir el archivo.');
+        setPreviewFile(null);
+      }
     } finally {
-      setPreviewLoading(false);
+      if (request === previewRequestRef.current) setPreviewLoading(false);
     }
   };
 
   const downloadFile = async file => {
     try {
       let blob;
-      if (BRIA_PDF_KINDS.has(file.kind)) {
+      if (DELIVERY_KINDS.has(file.kind)) {
+        blob = await readDeliveryFile(file, true);
+      } else if (BRIA_PDF_KINDS.has(file.kind)) {
         blob = await frontendApiService.getDriveArtifactBlob(file.meetingId, file.kind, { download: true });
       } else if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
         const result = await frontendApiService.getDriveFile(file.meetingId, file.kind);
@@ -224,9 +292,9 @@ const DriveLayout = () => {
       } else {
         blob = await frontendApiService.getManagedDriveFile(file.id, { download: true });
       }
-      triggerDownload(blob, file.name);
+      triggerDownload(blob, file.downloadName || file.name);
     } catch (requestError) {
-      console.error('[Drive] Error descargando archivo:', requestError);
+      console.error('[Drive] Error descargando archivo:', requestError.message);
       toast.error(requestError.message || 'No fue posible descargar el archivo.');
     }
   };
@@ -246,7 +314,7 @@ const DriveLayout = () => {
   // Subir es una sola función: el botón y el arrastre entran por aquí, así que no hay dos
   // caminos que se puedan desincronizar.
   const uploadMany = async files => {
-    if (!files.length) return;
+    if (!files.length || trash || isAutomaticFolder) return;
     setUploading(true);
     try {
       for (const file of files) await frontendApiService.uploadDriveFile({ file, folderId: activeFolderId });
@@ -270,7 +338,7 @@ const DriveLayout = () => {
   // que es de solo lectura: el servidor lo rechazaría y sería prometer algo que no se
   // cumple. Se cuentan las entradas y salidas porque al pasar por encima de una tarjeta
   // hija el navegador dispara `dragleave` del padre y la marca se apagaría sola.
-  const canDrop = !trash && !isBriaFolder;
+  const canDrop = !trash && !isAutomaticFolder;
   const onDragEnter = event => {
     if (!canDrop || !event.dataTransfer?.types?.includes('Files')) return;
     event.preventDefault();
@@ -393,13 +461,13 @@ const DriveLayout = () => {
     <div className="mx-auto w-full max-w-7xl space-y-6 pb-10">
       <PageHeader
         title="Brainstudio Drive"
-        subtitle="Organiza archivos de la agencia y consulta los documentos que Bria genera automáticamente."
+        subtitle="Organiza archivos de la agencia y consulta sus entregables y documentos."
       >
-        {!trash && !isBriaFolder && (
+        {!trash && !isAutomaticFolder && (
           <div className="flex flex-wrap gap-2">
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={uploadFiles} />
             <button type="button" onClick={() => setNewFolderOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><Plus className="h-4 w-4" /> Nueva carpeta</button>
-            <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-60"><Upload className="h-4 w-4" /> {uploading ? 'Subiendo...' : 'Subir archivos'}</button>
+            <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60"><Upload className="h-4 w-4" /> {uploading ? 'Subiendo...' : 'Subir archivos'}</button>
           </div>
         )}
       </PageHeader>
@@ -408,20 +476,21 @@ const DriveLayout = () => {
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm">
             <button type="button" onClick={() => { setHistory([]); setTrash(false); }} className="shrink-0 rounded-lg px-2 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">Mi unidad</button>
-            {history.map((folder, index) => <React.Fragment key={folder.id}><ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" /><button type="button" onClick={() => setHistory(previous => previous.slice(0, index + 1))} className="max-w-48 truncate rounded-lg px-2 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">{folder.name}</button></React.Fragment>)}
+            {history.map((folder, index) => <React.Fragment key={folder.id}><ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" /><button type="button" onClick={() => setHistory(previous => previous.slice(0, index + 1))} className="max-w-48 shrink-0 truncate rounded-lg px-2 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">{folder.name}</button></React.Fragment>)}
             {trash && <><ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" /><span className="font-medium text-zinc-700 dark:text-zinc-200">Papelera</span></>}
           </div>
           <div className="flex gap-2">
             <label className="relative min-w-0 flex-1 md:w-72">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-zinc-400" />
-              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar archivos" className="h-10 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-9 pr-3 text-sm text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white" />
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar archivos" className="h-10 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-9 pr-3 text-sm text-zinc-900 outline-none focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white" />
             </label>
             <button type="button" onClick={() => { setHistory([]); setTrash(value => !value); }} aria-label="Papelera" className={`brain-danger-button-icon flex h-10 w-10 items-center justify-center rounded-xl border ${trash ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'border-zinc-200 dark:border-zinc-800'}`}><Trash2 className="h-4 w-4" /></button>
             <button type="button" onClick={load} aria-label="Actualizar Drive" className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800"><RefreshCcw className="h-4 w-4" /></button>
           </div>
         </div>
 
-        {isBriaFolder && <div className="flex flex-wrap gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">{[['ALL', 'Todos'], ['SUMMARY_PDF', 'Resúmenes PDF'], ['ANALYSIS_PDF', 'Análisis PDF'], ['MINUTE', 'Datos JSON'], ['TRANSCRIPT', 'Transcripciones']].map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${filter === value ? 'bg-violet-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>{label}</button>)}</div>}
+        {isBriaFolder && <div className="flex flex-wrap gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">{[['ALL', 'Todos'], ['SUMMARY_PDF', 'Resúmenes PDF'], ['ANALYSIS_PDF', 'Análisis PDF'], ['MINUTE', 'Datos JSON'], ['TRANSCRIPT', 'Transcripciones']].map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${filter === value ? 'bg-primary text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>{label}</button>)}</div>}
+        {isDeliverablesFolder && <p className="border-b border-zinc-200 px-4 py-3 text-sm text-muted-foreground dark:border-zinc-800">Los archivos vigentes de cada tarea y pieza. Para actualizar una entrega, abre su origen.</p>}
 
         {/* Arrastrar y soltar archivos aquí (Rodny, 14 de octubre de 2026). La zona envuelve
             todo el contenido, no solo el estado vacío: con archivos ya cargados también se
@@ -445,31 +514,33 @@ const DriveLayout = () => {
           )}
           {error && <div className="brain-alert-surface flex items-center gap-2 rounded-xl p-4 text-sm"><AlertCircle className="h-4 w-4" /> {error}</div>}
           {loading && <div className="flex h-72 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" /> Cargando Drive...</div>}
-          {!loading && !error && contents.folders.length === 0 && visibleFiles.length === 0 && <div className="flex h-72 flex-col items-center justify-center text-center"><FolderOpen className="h-11 w-11 text-zinc-300 dark:text-zinc-700" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Esta ubicación está vacía</p><p className="mt-1 text-sm text-zinc-500">{trash ? 'La Papelera no tiene elementos.' : canDrop ? 'Arrastra archivos aquí, o súbelos con el botón de arriba.' : 'Crea una carpeta o sube el primer archivo.'}</p></div>}
+          {!loading && !error && contents.folders.length === 0 && visibleFiles.length === 0 && <div className="flex h-72 flex-col items-center justify-center text-center"><FolderOpen className="h-11 w-11 text-zinc-300 dark:text-zinc-700" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Esta ubicación está vacía</p><p className="mt-1 text-sm text-zinc-500">{trash ? 'La Papelera no tiene elementos.' : isDeliverablesFolder ? query ? 'No hay entregables que coincidan con esta búsqueda.' : 'Aquí aparecerán las entregas que puedas consultar.' : canDrop ? 'Arrastra archivos aquí, o súbelos con el botón de arriba.' : 'Todavía no hay documentos disponibles.'}</p></div>}
           {!loading && !error && (contents.folders.length > 0 || visibleFiles.length > 0) && (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {contents.folders.map(folder => (
-                <article key={folder.id} className="group rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 transition hover:border-violet-300 hover:bg-violet-50/40 dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-violet-800 dark:hover:bg-violet-950/20">
+                <article key={folder.id} className="group rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 transition hover:border-brand-cyan/40 hover:bg-brand-cyan-soft/40 dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-brand-cyan/30 dark:hover:bg-brand-cyan/10">
                   <button type="button" onClick={() => openFolder(folder)} className="flex w-full items-start gap-3 text-left">
-                    <span className="rounded-xl bg-violet-100 p-2.5 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300"><Folder className="h-5 w-5" /></span>
+                    <span className="rounded-xl bg-brand-cyan-soft p-2.5 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan"><Folder className="h-5 w-5" /></span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{folder.name}</span><span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{folder.subtitle || (folder.system ? 'Carpeta automática del sistema' : 'Carpeta de Drive')}</span></span>
                   </button>
                   {!folder.system && !trash && <div className="mt-3 flex justify-end gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-800"><button type="button" onClick={() => beginEdit(folder, 'folder')} className="rounded-lg p-2 text-zinc-400 hover:bg-white hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Renombrar ${folder.name}`}><Edit className="h-4 w-4" /></button><button type="button" onClick={() => sendToTrash(folder, 'folder')} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Enviar ${folder.name} a papelera`}><Trash2 className="h-4 w-4" /></button></div>}
-                  {!folder.system && trash && <div className="mt-3 flex justify-end border-t border-zinc-200 pt-2 dark:border-zinc-800"><button type="button" onClick={() => restoreItem(folder, 'folder')} className="rounded-lg px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30">Restaurar</button></div>}
+                  {!folder.system && trash && <div className="mt-3 flex justify-end border-t border-zinc-200 pt-2 dark:border-zinc-800"><button type="button" onClick={() => restoreItem(folder, 'folder')} className="rounded-lg px-3 py-2 text-xs font-medium text-brand-cyan-deep hover:bg-brand-cyan-soft dark:text-brand-cyan dark:hover:bg-brand-cyan/10">Restaurar</button></div>}
                 </article>
               ))}
               {visibleFiles.map(file => (
-                <article key={file.id} className="group flex flex-col rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-cyan-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-cyan-800">
-                  <button type="button" onClick={() => openPreview(file)} className="flex flex-1 items-start gap-3 text-left">
-                    <span className={`rounded-xl p-2.5 ${BRIA_PDF_KINDS.has(file.kind) ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' : file.kind === 'TRANSCRIPT' ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'}`}><FileText className="h-5 w-5" /></span>
-                    <span className="min-w-0 flex-1"><span className="block line-clamp-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-white">{file.name}</span><span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{formatDate(file.meetingAt || file.updatedAt || file.createdAt)} · {formatSize(file.sizeBytes, file.mimeType)}</span></span>
+                <article key={file.id} className="group flex min-w-0 flex-col rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-brand-cyan/40 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-brand-cyan/30">
+                  <button type="button" onClick={() => openPreview(file)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+                    <span className={`rounded-xl p-2.5 ${BRIA_PDF_KINDS.has(file.kind) ? 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan' : file.kind === 'TRANSCRIPT' ? 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'}`}><FileText className="h-5 w-5" /></span>
+                    <span className="min-w-0 flex-1"><span className="block break-words line-clamp-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-white">{file.name}</span><span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{formatDate(file.meetingAt || file.updatedAt || file.createdAt)} · {formatSize(file.sizeBytes, file.mimeType)}</span>{DELIVERY_KINDS.has(file.kind) && <><span className="mt-2 block text-xs text-muted-foreground">{file.kind === 'TASK_DELIVERABLE' ? 'Tarea' : 'Pieza'} · {file.source?.clientName} · {file.source?.title}</span>{file.originalName && <span className="mt-1 block break-words text-xs text-muted-foreground">{file.originalName}</span>}</>}</span>
                   </button>
                   <div className="mt-3 flex items-center justify-end gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-800">
-                    {!trash && <><button type="button" onClick={() => openPreview(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Ver ${file.name}`}><Eye className="h-4 w-4" /></button><button type="button" onClick={() => downloadFile(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Descargar ${file.name}`}><Download className="h-4 w-4" /></button></>}
+                    {!trash && <><button type="button" onClick={() => openPreview(file)} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Ver ${file.name}`}><Eye className="h-4 w-4" /></button>{(!DELIVERY_KINDS.has(file.kind) || file.downloadUrl) && <button type="button" onClick={() => downloadFile(file)} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Descargar ${file.name}`}><Download className="h-4 w-4" /></button>}</>}
+                    {file.kind === 'TASK_DELIVERABLE' && file.canOpenSource && file.source?.taskId && hasModuleAccess(currentUser, 'gestion') && <button type="button" onClick={() => navigateFrom(`/gestion?taskId=${encodeURIComponent(file.source.taskId)}`)} className="mr-auto min-h-11 rounded-lg px-2 text-sm text-primary hover:bg-muted">Abrir tarea</button>}
+                    {file.kind === 'CONTENT_DELIVERABLE' && file.canOpenSource && file.source?.planId && file.source?.itemId && hasModuleAccess(currentUser, 'parrillas') && <button type="button" onClick={() => navigateFrom(`/parrillas/${encodeURIComponent(file.source.planId)}?item=${encodeURIComponent(file.source.itemId)}`)} className="mr-auto min-h-11 rounded-lg px-2 text-sm text-primary hover:bg-muted">Abrir pieza</button>}
                     {BRIA_ARTIFACT_KINDS.has(file.kind) && !trash && <button type="button" disabled={busyId === file.id} onClick={() => sendToTrash(file, 'file')} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button>}
                     {file.kind === 'UPLOAD' && !trash && <><button type="button" onClick={() => beginEdit(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Renombrar ${file.name}`}><Edit className="h-4 w-4" /></button>{activeFolderId && <button type="button" onClick={() => moveToRoot(file)} className="rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Mover a raíz</button>}<button type="button" onClick={() => sendToTrash(file, 'file')} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button></>}
-                    {file.kind === 'UPLOAD' && trash && <button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="rounded-lg px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30">Restaurar</button>}
-                    {BRIA_ARTIFACT_KINDS.has(file.kind) && trash && <><button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button><button type="button" disabled={busyId === file.id} onClick={() => deletePermanently(file)} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Eliminar ${file.name} permanentemente`}><Trash2 className="h-4 w-4" /></button></>}
+                    {file.kind === 'UPLOAD' && trash && <button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="rounded-lg px-3 py-2 text-xs font-medium text-brand-cyan-deep hover:bg-brand-cyan-soft disabled:opacity-50 dark:text-brand-cyan dark:hover:bg-brand-cyan/10">Restaurar</button>}
+                    {BRIA_ARTIFACT_KINDS.has(file.kind) && trash && <><button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-brand-cyan-deep hover:bg-brand-cyan-soft disabled:opacity-50 dark:text-brand-cyan dark:hover:bg-brand-cyan/10"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button><button type="button" disabled={busyId === file.id} onClick={() => deletePermanently(file)} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Eliminar ${file.name} permanentemente`}><Trash2 className="h-4 w-4" /></button></>}
                   </div>
                 </article>
               ))}
@@ -485,7 +556,7 @@ const DriveLayout = () => {
             <DialogDescription className="sr-only">Crea una carpeta nueva en la ubicación actual.</DialogDescription>
             <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Nombre</span><input autoFocus value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
             <label className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Descripción <span className="font-normal text-zinc-400">(opcional)</span></span><input value={folderSubtitle} onChange={event => setFolderSubtitle(event.target.value)} maxLength={240} placeholder="Qué guarda esta carpeta" className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setNewFolderOpen(false)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Crear carpeta</button></div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setNewFolderOpen(false)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90">Crear carpeta</button></div>
           </form>
         </DialogContent>
       </Dialog>
@@ -496,11 +567,11 @@ const DriveLayout = () => {
             <DialogDescription className="sr-only">Cambia el nombre del archivo o carpeta seleccionado.</DialogDescription>
             <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Nombre</span><input autoFocus value={editName} onChange={event => setEditName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
             {editTarget?.type === 'folder' && <label className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Descripción <span className="font-normal text-zinc-400">(opcional)</span></span><input value={editSubtitle} onChange={event => setEditSubtitle(event.target.value)} maxLength={240} placeholder="Qué guarda esta carpeta" className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>}
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditTarget(null)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Guardar</button></div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditTarget(null)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90">Guardar</button></div>
           </form>
         </DialogContent>
       </Dialog>
-      <PreviewDialog file={previewFile} preview={preview} loading={previewLoading} onClose={() => { setPreviewFile(null); setPreview(null); }} onDownload={() => downloadFile(previewFile)} />
+      <PreviewDialog file={previewFile} preview={preview} loading={previewLoading} onClose={() => { previewRequestRef.current++; setPreviewFile(null); setPreview(null); }} onDownload={() => downloadFile(previewFile)} />
     </div>
   );
 };

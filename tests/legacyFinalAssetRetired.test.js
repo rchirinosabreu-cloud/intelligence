@@ -67,7 +67,12 @@ test('las rutas del archivo único ya no existen', () => {
 test('el servidor no vuelve a escribir esas columnas aunque se las pidan', () => {
   // Siguen existiendo en la base, así que un PATCH con esos campos las escribiría y nadie las mostraría.
   const service = read('src/services/contentService.js');
-  assert.match(service, /const RETIRED_FINAL_ASSET_FIELDS = \['finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize'\]/);
+  const guardedFields = service.match(/const RETIRED_FINAL_ASSET_FIELDS = \[([^\]]+)\]/)?.[1];
+  assert.ok(guardedFields, 'se conserva la lista explícita de campos que no puede escribir el PATCH');
+  for (const field of [...LEGACY_COLUMNS, 'finalAssetsRevision', 'deliveryUploads', 'finalAssets']) {
+    assert.ok(guardedFields.includes(`'${field}'`), `${field} no puede saltarse la transacción de entrega`);
+  }
+  assert.match(service, /for \(const field of RETIRED_FINAL_ASSET_FIELDS\) delete safe\[field\]/);
   assert.match(service, /const withoutRetiredFields = /);
   // Y el único sitio donde el servicio las nombra es esa lista: ni las lee ni las entrega.
   for (const column of LEGACY_COLUMNS) {

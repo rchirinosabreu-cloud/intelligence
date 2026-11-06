@@ -17,6 +17,17 @@ net.Socket.prototype.connect = function (...input) {
 };
 const storage = await startTaskPieceStorage();
 process.env.AWS_ENDPOINT_URL = storage.origin;
+process.env.BRIA_STORAGE_ENDPOINT = storage.origin;
+process.env.BRIA_STORAGE_ACCESS_KEY_ID = 'local-agency-memory';
+process.env.BRIA_STORAGE_SECRET_ACCESS_KEY = 'fictitious-agency-memory-secret';
+process.env.BRIA_STORAGE_BUCKET = 'task-piece-agency-memory-test';
+if (process.env.TEST_PLATFORM_STORAGE_DISABLED !== 'true') {
+  process.env.PLATFORM_STORAGE_ENDPOINT = storage.origin;
+  process.env.PLATFORM_STORAGE_ACCESS_KEY_ID = 'local-final-deliveries';
+  process.env.PLATFORM_STORAGE_SECRET_ACCESS_KEY = 'fictitious-final-deliveries-secret';
+  process.env.PLATFORM_STORAGE_BUCKET = 'task-piece-platform-test';
+  process.env.PLATFORM_STORAGE_FORCE_PATH_STYLE = 'true';
+}
 const express = (await import('express')).default;
 const prisma = (await import('../src/lib/prisma.js')).default;
 const apiRouter = (await import('../src/routes/index.js')).default;
@@ -24,7 +35,17 @@ const { operationalAuditMiddleware } = await import('../src/middlewares/operatio
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 app.use(operationalAuditMiddleware);
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', demo: true, isolatedTaskPieceTest: true }));
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', demo: true, isolatedTaskPieceTest: true, storageOrigin: storage.origin,
+  deliveryBucket: process.env.PLATFORM_STORAGE_BUCKET || null, evidenceBucket: process.env.AWS_S3_BUCKET_NAME,
+  memoryBucket: process.env.BRIA_STORAGE_BUCKET }));
+// Executes only against this guarded, fictitious database and its in-memory object store.
+app.post('/__test/cleanup-deliverables', async (_req, res, next) => {
+  try {
+    const { cleanupContentDeliveryUploads } = await import('../src/services/contentDeliveryService.js');
+    const { cleanupTaskDeliverables } = await import('../src/services/taskDeliverableService.js');
+    res.json({ content: await cleanupContentDeliveryUploads(), tasks: await cleanupTaskDeliverables() });
+  } catch (error) { next(error); }
+});
 app.use('/api', apiRouter);
 app.use((error, _req, res, _next) => { console.error('[Tarea y pieza local]', error.message); res.status(error.statusCode || error.status || 500).json({ error: error.message }); });
 await prisma.$connect();

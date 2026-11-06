@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ExternalLink, Loader2 } from '@/components/ui/icons';
@@ -11,6 +11,7 @@ import { PIECE_STATUS } from './operationTones';
 import { CoverField, FinalAssetGrid, MultiLinkInput } from '@/components/modules/ContentPlan/PieceMedia';
 import PieceDeliveryForm from '@/components/modules/ContentGrids/PieceDeliveryForm';
 import { approvalState } from '@/lib/contentApproval';
+import DeliveryHistory from '@/components/tasks/DeliveryHistory';
 
 // La vista rápida de una pieza desde Operación (Rodny, 30 de octubre de 2026: «debería poder dar click … o quizá
 // debería abrírseme allí sin tener que cambiar de módulo»). Se mira la pieza sin salir de la página del cliente; editarla
@@ -25,10 +26,41 @@ export const sheetPeriod = (year, month) => `${MONTH_NAMES[month - 1].toLowerCas
 
 function NativePiece({ piece, plan, isLoading, error, allowDelivery, onBusyChange }) {
   const queryClient = useQueryClient();
-  if (isLoading) return <p className="flex items-center gap-2 py-6 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" />Cargando la pieza…</p>;
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
   const item = plan?.items?.find((row) => row.id === piece.id);
+  const deliveryKey = ['content-delivery', piece.id];
+  const delivery = useQuery({ queryKey: deliveryKey, enabled: Boolean(allowDelivery && item && !error), retry: false, staleTime: 30_000, refetchOnMount: 'always',
+    queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/content/items/${encodeURIComponent(piece.id)}/delivery`, { headers: authHeaders() })).data });
+  const validDelivery = Number.isInteger(delivery.data?.revision) && Array.isArray(delivery.data?.files);
+  const deliveryReady = validDelivery && !delivery.error && !delivery.isFetching;
+  const refreshDelivery = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: deliveryKey }),
+    queryClient.invalidateQueries({ queryKey: ['content-plan'] }),
+  ]);
+  const orderMutation = useMutation({
+    mutationFn: async ({ itemId, order, expectedRevision }) => (await axios.put(`${getApiBaseUrl()}/api/content/items/${encodeURIComponent(itemId)}/final-assets/order`,
+      { order, expectedRevision }, { headers: authHeaders() })).data,
+    onSuccess: async (finalAssets, { itemId }) => {
+      // El recibo ya confirma el orden; las lecturas posteriores completan cualquier cambio de la pieza.
+      queryClient.setQueriesData({ queryKey: ['content-plan'] }, (stored) => stored?.items ? {
+        ...stored, items: stored.items.map(item => item.id === itemId ? { ...item, finalAssets } : item),
+      } : stored);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: deliveryKey }),
+        queryClient.invalidateQueries({ queryKey: ['content-plan'] }),
+        queryClient.invalidateQueries({ queryKey: ['client-operations'] }),
+      ]);
+    },
+    onError: (failure) => {
+      console.error('[Pieza final] No se pudo ordenar:', failure.response?.data?.error || failure.message, failure.response?.status || failure.code || 'UNKNOWN');
+      return refreshDelivery();
+    },
+  });
+  useEffect(() => { onBusyChange?.(deliveryBusy || orderMutation.isPending); }, [deliveryBusy, orderMutation.isPending, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
+  if (isLoading) return <p className="flex items-center gap-2 py-6 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" />Cargando la pieza…</p>;
   if (error || !item) return <p role="alert" className="py-6 text-sm text-destructive">{error?.response?.status === 403 ? 'No tienes acceso a esta parrilla.' : 'No pudimos cargar esta pieza. Puedes cerrar y volver a intentarlo.'}</p>;
-  const assets = item.finalAssets || [];
+  const assets = allowDelivery ? validDelivery && !delivery.error ? delivery.data.files : [] : item.finalAssets || [];
   return (
     <div className="space-y-5" data-piece-peek-native>
       <dl className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
@@ -51,8 +83,18 @@ function NativePiece({ piece, plan, isLoading, error, allowDelivery, onBusyChang
       <div>
         <p className={LABEL}>Pieza final{assets.length > 1 ? ` · ${assets.length} archivos` : ''}</p>
         {assets.length
-          ? <div className="mt-2 [&_img]:object-contain [&_video]:object-contain"><FinalAssetGrid item={item} finalAssets={assets} isEditing={false} /></div>
-          : <p className="mt-1 text-sm text-zinc-500">Sin pieza final todavía.</p>}
+          ? <div className="mt-2 [&_img]:object-contain [&_video]:object-contain"><FinalAssetGrid item={item} finalAssets={assets} isEditing={false}
+            reorderable={allowDelivery && deliveryReady && !deliveryBusy} onReorder={(itemId, order) => orderMutation.mutateAsync({ itemId, order, expectedRevision: delivery.data.revision })} /></div>
+          : allowDelivery && delivery.isLoading ? <p role="status" className="mt-1 text-sm text-muted-foreground">Cargando entrega…</p>
+            : !allowDelivery || deliveryReady ? <p className="mt-1 text-sm text-zinc-500">Sin pieza final todavía.</p> : null}
+        {allowDelivery && (delivery.error || delivery.data && !validDelivery) && <div role="alert" className="mt-2 space-y-2 text-sm text-destructive">
+          <p>{delivery.error?.response?.data?.error || 'No pudimos consultar los archivos actuales de la entrega.'}</p>
+          <button type="button" onClick={() => delivery.refetch()} className="min-h-11 rounded-lg border px-3">Reintentar consulta de entrega</button>
+        </div>}
+        {allowDelivery && assets.length > 1 && <p className="mt-2 text-xs text-muted-foreground">Arrastra las miniaturas para ordenar el carrusel. También puedes usar las flechas del teclado desde su número.</p>}
+        {orderMutation.isPending && <p role="status" className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Guardando orden…</p>}
+        {orderMutation.isSuccess && <p role="status" className="mt-2 text-sm text-muted-foreground">Orden guardado</p>}
+        {orderMutation.isError && <p role="alert" className="mt-2 text-sm text-destructive">{orderMutation.error?.response?.data?.error || 'No se pudo guardar el orden. Inténtalo de nuevo.'}</p>}
       </div>
       {item.cover && <CoverField item={item} isEditing={false} />}
       {item.comments && (
@@ -67,8 +109,11 @@ function NativePiece({ piece, plan, isLoading, error, allowDelivery, onBusyChang
           <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-800 [overflow-wrap:anywhere] dark:text-zinc-100">{item.internalNotes}</p>
         </div>
       )}
-      {allowDelivery && <PieceDeliveryForm key={item.id} itemId={item.id} onBusyChange={onBusyChange}
+      {allowDelivery && <DeliveryHistory history={deliveryReady ? delivery.data.history : []} />}
+      {allowDelivery && <PieceDeliveryForm key={item.id} itemId={item.id} onBusyChange={setDeliveryBusy} disabled={orderMutation.isPending || !deliveryReady}
+        existingCount={assets.length} expectedRevision={deliveryReady ? delivery.data.revision : undefined} onConflict={refreshDelivery}
         onStored={() => Promise.all([
+          queryClient.invalidateQueries({ queryKey: deliveryKey }),
           queryClient.invalidateQueries({ queryKey: ['content-plan'] }),
           queryClient.invalidateQueries({ queryKey: ['tasks'] }),
           queryClient.invalidateQueries({ queryKey: ['client-operations'] }),

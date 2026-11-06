@@ -6,6 +6,31 @@ import { createServiceHealthProbes } from '../src/services/serviceHealthProbes.j
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
+test('platform files probe only their bucket and never share chat or agency memory', async () => {
+  const calls = [];
+  const shared = { AWS_ENDPOINT_URL: 'https://storage.test', AWS_ACCESS_KEY_ID: 'chat', AWS_SECRET_ACCESS_KEY: 'chat-secret', AWS_S3_BUCKET_NAME: 'chat-files' };
+  const createS3Client = config => ({ send: async command => { calls.push({ config, command: command.constructor.name, bucket: command.input.Bucket }); return {}; } });
+  const missing = createServiceHealthProbes({ env: shared, createS3Client });
+  assert.equal((await missing['storage-platform']()).status, 'NOT_CONFIGURED');
+  assert.deepEqual(calls, []);
+  const dedicated = { ...shared, PLATFORM_STORAGE_ENDPOINT: 'https://storage.test', PLATFORM_STORAGE_ACCESS_KEY_ID: 'platform', PLATFORM_STORAGE_SECRET_ACCESS_KEY: 'platform-secret', PLATFORM_STORAGE_BUCKET: 'platform-files' };
+  const ready = createServiceHealthProbes({ env: dedicated, createS3Client });
+  assert.equal((await ready['storage-platform']()).status, 'OK');
+  assert.equal(calls.length, 1); assert.equal(calls[0].command, 'HeadBucketCommand');
+  assert.equal(calls[0].bucket, 'platform-files'); assert.equal(calls[0].config.accessKeyId, 'platform');
+  assert.equal(calls[0].config.forcePathStyle, false, 'new Railway buckets use virtual-hosted addressing');
+  const sharedAgain = createServiceHealthProbes({ env: { ...dedicated, PLATFORM_STORAGE_BUCKET: 'chat-files' }, createS3Client });
+  const rejected = await sharedAgain['storage-platform']();
+  assert.equal(rejected.status, 'FAIL'); assert.equal(rejected.critical, true);
+  assert.equal(calls.length, 1, 'a known shared destination is rejected before network');
+  const sharedMemory = createServiceHealthProbes({ env: { ...dedicated, BRIA_STORAGE_ENDPOINT: 'https://storage.test/', BRIA_STORAGE_BUCKET: 'platform-files' }, createS3Client });
+  assert.equal((await sharedMemory['storage-platform']()).status, 'FAIL');
+  assert.equal(calls.length, 1, 'agency memory cannot receive general files');
+  const localPathStyle = createServiceHealthProbes({ env: { ...dedicated, PLATFORM_STORAGE_FORCE_PATH_STYLE: 'true' }, createS3Client });
+  assert.equal((await localPathStyle['storage-platform']()).status, 'OK');
+  assert.equal(calls[1].config.forcePathStyle, true);
+});
+
 test('Bria attachments have a dedicated read-only storage probe without shared credentials', async () => {
   let input;
   const probes = createServiceHealthProbes({ env: { BRIA_CHAT_STORAGE_ENDPOINT: 'https://example.test', BRIA_CHAT_STORAGE_BUCKET: 'bria-chat-files', BRIA_CHAT_STORAGE_ACCESS_KEY_ID: 'bria', BRIA_CHAT_STORAGE_SECRET_ACCESS_KEY: 'fixture' }, createS3Client: config => ({ send: async command => { input = { config, command: command.constructor.name, bucket: command.input.Bucket }; return {}; } }) });

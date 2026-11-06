@@ -21,8 +21,8 @@ const sqlFiles = (await Promise.all(['vault.sql', 'bria-agency-facts.sql', 'bria
 test('el catálogo cubre todos los registros de auditoría y de historial', () => {
     assert.deepEqual(AUDIT_TABLES.map((spec) => `${spec.schema}.${spec.name}`).sort(), [
         'bria_memory.agency_fact_events', 'bria_memory.decision_events', 'bria_memory.learning_events',
-        'public.AiGovernanceEvent', 'public.AiUsageEvent', 'public.DeletedTaskLog',
-        'public.FinancialAuditEvent', 'public.OperationalTraceEvent', 'public.TaskParticipationArchive',
+        'public.AiGovernanceEvent', 'public.AiUsageEvent', 'public.ContentItemDeliveryChange', 'public.DeletedTaskLog',
+        'public.FinancialAuditEvent', 'public.OperationalTraceEvent', 'public.TaskDeliverableEvent', 'public.TaskParticipationArchive',
         'vault.credential_events', 'vault.reveal_events'
     ]);
 });
@@ -34,6 +34,17 @@ test('el archivo de participaciones conserva el identificador histórico y nunca
     assert.doesNotMatch(archive, /@relation\([^)]*fields: \[taskId\]/, 'borrar la tarea no cambia ni borra su identificador histórico');
     assert.doesNotMatch(archive, /onDelete: Cascade/);
     assert.equal(byName('TaskParticipationArchive')?.retention, null, 'no se purga este historial');
+});
+
+test('las historias de entregas conservan identidad y autor sin cascadas ni purga', () => {
+    for (const [name, resource] of [['TaskDeliverableEvent', 'taskId'], ['ContentItemDeliveryChange', 'contentItemId']]) {
+        const model = schema.match(new RegExp(`model ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1];
+        assert.ok(model, `${name} existe`);
+        assert.match(model, new RegExp(`\\b${resource}\\s+String\\b`));
+        assert.doesNotMatch(model, /@relation|onDelete: Cascade/, 'ningún borrado operativo puede alterar esta evidencia');
+        assert.equal(byName(name)?.retention, null);
+        assert.deepEqual(byName(name)?.nullableRefs, []);
+    }
 });
 
 test('solo los dos registros con retención admiten la purga, con la misma antigüedad que su servicio', () => {

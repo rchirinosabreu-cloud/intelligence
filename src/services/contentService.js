@@ -3,7 +3,8 @@ import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, recordPlanRecognition } from './recognitionService.js';
 import { updateOrderedTask } from './taskOrderService.js';
 import { createTask } from './nativeTaskService.js';
-import { uploadToS3, deleteFromS3, createSignedUpload, headS3Object, getS3ObjectBuffer } from './s3Service.js';
+import { uploadToS3, deleteFromS3, getS3ObjectBuffer } from './s3Service.js';
+import { getPlatformStorage, assertPlatformStorageConfigured } from './platformStorageService.js';
 import { derivedKeyFor } from './socialImageDerivativeService.js';
 import { COVER_MAX_BYTES, coverFileProblem, publicCover, withPublicCover } from '../lib/videoCover.js';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -21,6 +22,7 @@ import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from 
 import { resyncItemPublications } from './socialPublishingService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
+import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
@@ -122,6 +124,7 @@ const contentItemBaseSelect = {
   comments: true,
   deletedAt: true,
   revisionRequestedAt: true,
+  finalAssetsRevision: true,
   publications: publicationSelect
 };
 
@@ -131,7 +134,7 @@ const contentItemBaseSelect = {
  * en la base, en desuso y sin lectores, así que un `PATCH` con esos campos las escribiría y nadie las
  * mostraría nunca: se quitan de lo que entra.
  */
-const RETIRED_FINAL_ASSET_FIELDS = ['finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize'];
+const RETIRED_FINAL_ASSET_FIELDS = ['finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize', 'finalAssetsRevision', 'deliveryUploads', 'finalAssets', 'storageArea'];
 const withoutRetiredFields = (data) => {
   if (!data || typeof data !== 'object') return data;
   if (!RETIRED_FINAL_ASSET_FIELDS.some((field) => field in data)) return data;
@@ -806,7 +809,7 @@ export const getContentItemCover = async (itemId) => {
   return { buffer: await getS3ObjectBuffer(item.coverKey), name: item.coverName, mimeType: item.coverMimeType };
 };
 
-export const uploadContentItemFinalAssets = async (itemId, files = []) => {
+export const uploadContentItemFinalAssets = async (itemId, files = [], { actor, expectedRevision } = {}) => {
   if (!Array.isArray(files) || files.length === 0) throw new Error('Selecciona al menos un archivo');
   if (files.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
   const oversized = files.find(file => Number(file?.size || file?.buffer?.length || 0) > FINAL_ASSET_MAX_BYTES);
@@ -819,27 +822,26 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
   const mismatched = files.map(file => fileContentProblem({ name: file.originalname, mimeType: file.mimetype, bytes: file.buffer })).find(Boolean);
   if (mismatched) throw Object.assign(new Error(mismatched), { status: 400 });
 
-  const { item, basePath, nextPosition } = await loadFinalAssetTarget(itemId, files.length);
-  const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath, { maxBytes: FINAL_ASSET_MAX_BYTES })));
+  const { item, basePath } = await loadFinalAssetTarget(itemId, files.length);
+  assertPlatformStorageConfigured();
+  const finalStorage = getPlatformStorage('PLATFORM');
+  const settled = await Promise.allSettled(files.map(file => finalStorage.uploadToS3(file, basePath, { maxBytes: FINAL_ASSET_MAX_BYTES })));
+  const uploads = settled.filter(result => result.status === 'fulfilled').map(result => result.value);
 
   try {
-    await prisma.$transaction(uploads.map((upload, index) => prisma.contentItemFinalAsset.create({
-      data: {
-        contentItemId: item.id,
-        storageKey: upload.key,
-        name: upload.name,
-        mimeType: upload.mimeType,
-        size: upload.size,
-        position: nextPosition + index
-      }
-    })));
+    const failed = settled.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+    const delivery = await mutateContentDelivery(item.id, { actor, expectedRevision, action: 'ADDED' }, async (tx, _item, current) => {
+      const nextPosition = Math.max(-1, ...current.map(asset => asset.position)) + 1;
+      for (const [index, upload] of uploads.entries()) await tx.contentItemFinalAsset.create({ data: {
+        contentItemId: item.id, storageKey: upload.key, storageArea: 'PLATFORM', name: upload.name, mimeType: upload.mimeType, size: upload.size, position: nextPosition + index
+      } });
+    });
+    return delivery.files;
   } catch (error) {
-    await Promise.allSettled(uploads.map(upload => deleteFromS3(upload.key)));
+    await discardContentDeliveryObjects(uploads.map(upload => upload.key), 'PLATFORM');
     throw error;
   }
-
-  await requestRevisionIfApproved(item.id);
-  return listFinalAssets(item.id);
 };
 
 /**
@@ -866,34 +868,6 @@ const loadFinalAssetTarget = async (itemId, incoming = 1) => {
     basePath: `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final-assets`,
     nextPosition: (item.finalAssets[0]?.position ?? -1) + 1
   };
-};
-
-const listFinalAssets = (itemId) => prisma.contentItemFinalAsset.findMany({
-  where: { contentItemId: itemId },
-  orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
-});
-
-/**
- * El cliente aprobó lo que tenía delante. Si después le ponemos material a esa pieza —la foto, el
- * video— aprobó otra cosa, así que se le pide otra vuelta (Rodny, 5 de octubre de 2026). Lo llaman
- * los tres caminos que añaden material: el formulario, la subida directa y el enlace de Drive.
- *
- * Nunca falla hacia fuera: marcar la revisión no puede tumbar una subida que sí funcionó.
- */
-const requestRevisionIfApproved = async (itemId) => {
-  try {
-    const item = await prisma.contentItem.findUnique({
-      where: { id: itemId },
-      select: { id: true, status: true, revisionRequestedAt: true }
-    });
-    if (!item || !shouldRequestRevisionOnNewAsset(item) || item.revisionRequestedAt) return;
-    await prisma.contentItem.updateMany({
-      where: { id: itemId, status: { in: REVIEWABLE_ITEM_STATUSES }, revisionRequestedAt: null, deletedAt: null },
-      data: { revisionRequestedAt: new Date() }
-    });
-  } catch (error) {
-    console.error('[Service] No se pudo marcar la pieza para una revisión nueva:', error.message);
-  }
 };
 
 /** «Pedir nueva revisión» a mano, desde el editor. Solo tiene sentido en una pieza ya aprobada. */
@@ -949,17 +923,12 @@ const storageKeyFor = (basePath, name) => {
  * El enlace se resuelve aquí en su identificador y se guarda ya resuelto; lo que no se puede saber desde
  * aquí es si el cliente podrá abrirlo, y de eso avisa la pantalla al pegarlo.
  */
-export const addContentItemDriveAsset = async (itemId, { url, name } = {}) => {
+export const addContentItemDriveAsset = async (itemId, { url, name } = {}, { actor, expectedRevision } = {}) => {
   const problem = driveLinkProblem(url);
   if (problem) throw new Error(problem);
 
   const externalFileId = parseDriveFileId(url);
-  const { item, basePath: _basePath, nextPosition } = await loadFinalAssetTarget(itemId);
-
-  const duplicate = await prisma.contentItemFinalAsset.findFirst({
-    where: { contentItemId: item.id, externalFileId }
-  });
-  if (duplicate) throw new Error('Ese archivo de Drive ya está en esta pieza.');
+  const { item } = await loadFinalAssetTarget(itemId);
 
   const data = {
     contentItemId: item.id,
@@ -970,15 +939,17 @@ export const addContentItemDriveAsset = async (itemId, { url, name } = {}) => {
     externalUrl: String(url).trim(),
     externalProvider: DRIVE_PROVIDER,
     externalFileId,
-    position: nextPosition
+    position: 0
   };
 
   const shapeProblem = finalAssetShapeProblem(data);
   if (shapeProblem) throw new Error(shapeProblem);
 
-  await prisma.contentItemFinalAsset.create({ data });
-  await requestRevisionIfApproved(item.id);
-  return listFinalAssets(item.id);
+  const delivery = await mutateContentDelivery(item.id, { actor, expectedRevision, action: 'ADDED' }, async (tx, _item, current) => {
+    if (current.some(asset => asset.externalFileId === externalFileId)) throw new Error('Ese archivo de Drive ya está en esta pieza.');
+    await tx.contentItemFinalAsset.create({ data: { ...data, position: Math.max(-1, ...current.map(asset => asset.position)) + 1 } });
+  });
+  return delivery.files;
 };
 
 /**
@@ -991,17 +962,19 @@ export const createFinalAssetUploadTickets = async (itemId, files = []) => {
   if (list.length === 0) throw new Error('Selecciona al menos un archivo');
   if (list.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
 
-  const oversized = list.find(file => Number(file?.size || 0) > FINAL_ASSET_DIRECT_MAX_BYTES);
-  if (oversized) throw new Error(fileTooLargeMessage(oversized, FINAL_ASSET_DIRECT_MAX_BYTES));
+  const oversized = list.find(file => Number(file?.size || 0) > CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES);
+  if (oversized) throw Object.assign(new Error(fileTooLargeMessage(oversized, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES)), { status: 400 });
   if (list.some(file => !/^image\/|^video\//.test(String(file?.mimeType || '')))) {
     throw new Error('Solo se permiten imágenes o videos para la pieza final');
   }
 
   const { basePath } = await loadFinalAssetTarget(itemId, list.length);
+  assertPlatformStorageConfigured();
+  const finalStorage = getPlatformStorage('PLATFORM');
 
   return Promise.all(list.map(async (file) => {
     const key = storageKeyFor(basePath, file.name);
-    const { url } = await createSignedUpload({ key, contentType: file.mimeType });
+    const { url } = await finalStorage.createSignedUpload({ key, contentType: file.mimeType });
     return { key, url, name: String(file.name || 'pieza-final'), mimeType: file.mimeType };
   }));
 };
@@ -1013,22 +986,24 @@ export const createFinalAssetUploadTickets = async (itemId, files = []) => {
  * se aceptara cualquier clave, alguien podría colgar en su parrilla un archivo de otro cliente. Y el peso
  * y el tipo se leen del almacenamiento, no de lo que declaró el navegador, que es una promesa, no un hecho.
  */
-export const confirmContentItemFinalAssets = async (itemId, uploads = []) => {
+export const confirmContentItemFinalAssets = async (itemId, uploads = [], { actor, expectedRevision } = {}) => {
   const list = Array.isArray(uploads) ? uploads : [];
   if (list.length === 0) throw new Error('No hay archivos que confirmar');
   if (list.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
 
   const { item, basePath, nextPosition } = await loadFinalAssetTarget(itemId, list.length);
+  assertPlatformStorageConfigured();
+  const finalStorage = getPlatformStorage('PLATFORM');
 
   const verified = await Promise.all(list.map(async (upload, index) => {
     const key = String(upload?.key || '');
     if (!key.startsWith(`${basePath}/`)) throw new Error('Ese archivo no pertenece a esta pieza.');
 
-    const object = await headS3Object(key);
-    if (!object) throw new Error('El archivo no llegó completo al almacenamiento. Vuelve a intentarlo.');
+    const object = await finalStorage.headS3Object(key);
+    if (!object) throw Object.assign(new Error('El archivo no llegó al almacenamiento de entregables. Solicita una carga nueva; la entrega actual se conserva.'), { status: 409 });
     if (object.size <= 0) throw new Error('El archivo llegó vacío al almacenamiento. Vuelve a intentarlo.');
-    if (object.size > FINAL_ASSET_DIRECT_MAX_BYTES) {
-      throw new Error(fileTooLargeMessage({ name: upload?.name, size: object.size }, FINAL_ASSET_DIRECT_MAX_BYTES));
+    if (object.size > FINAL_ASSET_DIRECT_MAX_BYTES || object.size > CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES) {
+      throw Object.assign(new Error(fileTooLargeMessage({ name: upload?.name, size: object.size }, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES)), { status: 400 });
     }
     if (!/^image\/|^video\//.test(object.mimeType || '')) {
       throw new Error('Solo se permiten imágenes o videos para la pieza final');
@@ -1037,6 +1012,7 @@ export const confirmContentItemFinalAssets = async (itemId, uploads = []) => {
     return {
       contentItemId: item.id,
       storageKey: key,
+      storageArea: 'PLATFORM',
       name: String(upload?.name || '').trim() || 'pieza-final',
       mimeType: object.mimeType,
       size: object.size,
@@ -1051,29 +1027,27 @@ export const confirmContentItemFinalAssets = async (itemId, uploads = []) => {
   if (shapeProblem) throw new Error(shapeProblem);
 
   try {
-    await prisma.$transaction(verified.map(data => prisma.contentItemFinalAsset.create({ data })));
+    const delivery = await mutateContentDelivery(item.id, { actor, expectedRevision, action: 'ADDED' }, async (tx, _item, current) => {
+      const position = Math.max(-1, ...current.map(asset => asset.position)) + 1;
+      for (const [index, data] of verified.entries()) await tx.contentItemFinalAsset.create({ data: { ...data, position: position + index } });
+    });
+    return delivery.files;
   } catch (error) {
-    await Promise.allSettled(verified.map(data => deleteFromS3(data.storageKey)));
+    await discardContentDeliveryObjects(verified.map(data => data.storageKey), 'PLATFORM');
     throw error;
   }
-
-  await requestRevisionIfApproved(item.id);
-  return listFinalAssets(item.id);
 };
 
 export const getContentItemFinalAssetById = async (itemId, assetId) => (
   prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } })
 );
 
-export const deleteContentItemFinalAssetById = async (itemId, assetId) => {
-  const asset = await prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } });
-  if (!asset) throw new Error('Archivo final no encontrado');
-
-  await prisma.contentItemFinalAsset.delete({ where: { id: asset.id } });
-  deleteFromS3(asset.storageKey).catch(error => {
-    console.error('[Service] Failed to delete carousel asset from storage:', error.response?.data || error.message);
+export const deleteContentItemFinalAssetById = async (itemId, assetId, { actor, expectedRevision } = {}) => {
+  await mutateContentDelivery(itemId, { actor, expectedRevision, action: 'REMOVED' }, async (tx, _item, current) => {
+    if (!current.some(asset => asset.id === assetId)) throw Object.assign(new Error('Archivo final no encontrado'), { status: 404 });
+    await tx.contentItemFinalAsset.delete({ where: { id: assetId } });
   });
-  return { success: true, id: asset.id };
+  return { success: true, id: assetId };
 };
 
 export const addClientComment = async (itemId, comment) => {
