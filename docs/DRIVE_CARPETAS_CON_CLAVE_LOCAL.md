@@ -1,6 +1,6 @@
 # Carpetas de Drive con contraseña — prueba local, 6 de noviembre de 2026
 
-Rodny eligió un bloqueo dentro de Intelligence, también para administradores sin la clave. El acceso directo al bucket de Railway queda fuera de este bloqueo: no se cifran los archivos. Este incremento permanece en local, separado de la corrección de comentarios fusionada en el PR #1269.
+Rodny eligió un bloqueo dentro de Intelligence, también para administradores sin la clave. El acceso directo al bucket de Railway queda fuera de este bloqueo: no se cifran los archivos. Rodny autorizó la fusión de este incremento el 6 de noviembre de 2026, tras revisar la muestra local; es independiente de la corrección de comentarios fusionada en el PR #1269.
 
 ## Recorrido
 
@@ -30,4 +30,4 @@ La interfaz limpia los archivos y las vistas previas al bloquear, caducar, cambi
 
 Con `NODE_ENV=test` y la base dedicada `postgresql://shared_tasks_test@127.0.0.1:55451/shared_tasks_demo`, ejecutar `node scripts/preview-drive-password.mjs`. Usa API 8098 y aplicación 3184; solo datos ficticios, sin cron ni conexiones externas. El esquema aditivo se prepara en ese clúster.
 
-El acceso vigente queda en `output/drive-password/access.json`. La carpeta de prueba usa la clave `Clave local de Drive 2026`. La muestra permanece en `http://127.0.0.1:3184/drive`; los ensayos HTTP usan 8097 para no interferir con ella. No se han aplicado estos cambios ni el esquema de contraseñas a producción.
+El acceso vigente queda en `output/drive-password/access.json`. La carpeta de prueba usa la clave `Clave local de Drive 2026`. La muestra permanece en `http://127.0.0.1:3184/drive`; los ensayos HTTP usan 8097 para no interferir con ella. La publicación aplica las tablas mediante el arranque aditivo; los datos y claves ficticios de esta muestra no se transfieren a producción.

@@ -12,7 +12,7 @@ test('Drive real: dirección necesita clave, descarga autorizada, bloqueo y móv
   page.setDefaultTimeout(20000);
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   try {
-    await page.goto(`${access.origin}/drive?folderId=${access.folderId}`);
+    await page.goto(`${access.origin}/drive?folderId=${access.folderId}`, { waitUntil: 'domcontentloaded' });
     await page.locator('input[type=email]').fill(access.users.manager.email);
     await page.locator('input[type=password]').fill(access.users.manager.password);
     await page.getByRole('button', { name: 'Acceder', exact: true }).click();
@@ -35,11 +35,14 @@ test('Drive real: dirección necesita clave, descarga autorizada, bloqueo y móv
     assert.equal(await page.getByText('pieza-de-prueba.png', { exact: true }).count(), 0);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => localStorage.setItem('theme', 'dark'));
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Desbloquear carpeta', exact: true }).click();
     await dialog.getByLabel('Contraseña', { exact: true }).waitFor();
     await page.screenshot({ path: 'output/drive-password/real-movil-oscuro.png', animations: 'disabled' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     assert.deepEqual(errors, []);
+  } catch (error) {
+    await page.screenshot({ path: 'output/drive-password/real-fallo.png', animations: 'disabled' });
+    throw error;
   } finally { await browser.close(); }
 });
