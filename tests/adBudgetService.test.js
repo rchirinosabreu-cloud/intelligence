@@ -322,7 +322,7 @@ test('una campaña activa pasada su fecha pide confirmar y se cae al finalizarla
     assert.equal((await adNoticeStillNeeded(db, notice, at('2026-11-06'))).reason, 'PAUTA_ATENDIDA');
 });
 
-test('una campaña que termina después del cierre avisa y se cae al corregir la fecha: lo de Bonsai', async () => {
+test('una campaña que termina después del cierre avisa y se cae al corregir la fecha', async () => {
     const db = newDb({
         budgets: [{ ...endova, id: 'b1' }],
         cycles: [{ id: 'c', budgetId: 'b1', cycleKey: '2026-10', amount: 300000, spent: 91000, spentAsOf: '2026-11-06', closedAt: null }],

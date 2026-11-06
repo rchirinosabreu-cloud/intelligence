@@ -14,7 +14,8 @@ const client = (id, name, cutDay) => ({ id, name, slug: id, isArchived: false, p
 
 export const clients = [
     client('foobspain', 'Foobespain', 1),
-    client('bonsai', 'Bonsai', 11),
+    client('muestra', 'Cliente de muestra (cierra pronto)', 11),
+    client('bonsai', 'Bonsai', 19),
     client('promo-group', 'Promo Group', 15),
     client('new-pueblito', 'New Pueblito', 1),
     client('pablo-hoff', 'Pablo Hoff', 1),
@@ -30,7 +31,8 @@ export const budgets = [
     budget('b-wonder', 'foobspain', 100, { brand: 'Wine & Wonder', currency: 'USD', payer: 'TARJETA_CLIENTE' }),
     budget('b-summit', 'foobspain', 100, { brand: 'Wine Summit', currency: 'USD', payer: 'TARJETA_CLIENTE' }),
     budget('b-foobe', 'foobspain', 100, { brand: 'FoobeSpain', currency: 'USD', payer: 'TARJETA_CLIENTE' }),
-    budget('b-bonsai', 'bonsai', 1000000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN' }),
+    budget('b-bonsai', 'bonsai', 1000000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN', notes: 'Cierre el 18. Falta leer en Meta el gasto desde el 19 de octubre.' }),
+    budget('b-muestra', 'muestra', 1000000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN' }),
     budget('b-endova', 'promo-group', 300000, { brand: 'Endova', objective: 'Interacción', payer: 'TARJETA_BRAIN' }),
     budget('b-pueblito', 'new-pueblito', 300000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN', notes: 'Pendiente: que el cliente ponga su tarjeta.' }),
     budget('b-hoff', 'pablo-hoff', 200000, { payer: 'TARJETA_BRAIN', notes: 'Pendiente: que el cliente ponga su tarjeta.' }),
@@ -46,8 +48,8 @@ export const cycles = [
     cycle('y2', 'b-wonder', '2026-11', 100, 7, '2026-11-06'),
     cycle('y3', 'b-summit', '2026-10', 100, 29, '2026-10-31', { closedAt: closed }),
     cycle('y4', 'b-foobe', '2026-10', 100, 3.53, '2026-10-31', { closedAt: closed }),
-    cycle('y5', 'b-bonsai', '2026-09', 1000000, 906154, '2026-10-09', { closedAt: closed }),
-    cycle('y6', 'b-bonsai', '2026-10', 1000000, 768000, '2026-11-06'),
+    cycle('y5', 'b-muestra', '2026-09', 1000000, 906154, '2026-10-09', { closedAt: closed }),
+    cycle('y6', 'b-muestra', '2026-10', 1000000, 768000, '2026-11-06'),
     cycle('y7', 'b-endova', '2026-09', 300000, 300000, '2026-10-14', { closedAt: closed }),
     cycle('y8', 'b-endova', '2026-10', 300000, 91000, '2026-11-03'),
     cycle('y9', 'b-pueblito', '2026-10', 300000, 60000, '2026-10-31', { closedAt: closed }),
@@ -67,7 +69,7 @@ export const readings = [
 const campaign = (id, budgetId, name, extra = {}) => ({ id, budgetId, name, status: 'ACTIVA', createdAt: new Date('2026-10-20T12:00:00Z'), ...extra });
 
 export const campaigns = [
-    campaign('k1', 'b-bonsai', 'Tiempo récord de pedido', { objective: 'Mensajes de WhatsApp', startDate: '2026-10-21', endDate: '2026-11-18', link: 'https://www.instagram.com/p/Desd3Hgx5Yc/' }),
+    campaign('k1', 'b-muestra', 'Tiempo récord de pedido', { objective: 'Mensajes de WhatsApp', startDate: '2026-10-21', endDate: '2026-11-18', link: 'https://www.instagram.com/p/Desd3Hgx5Yc/' }),
     campaign('k2', 'b-endova', 'Convocatorias', { objective: 'Interacción', startDate: '2026-10-20', endDate: '2026-11-10', planned: 100000 }),
     campaign('k3', 'b-summit', 'Evento Wine Summit', { objective: 'Interacción', startDate: '2026-10-09', endDate: '2026-10-21', notes: 'Se reactivó el 29 de octubre.' }),
     campaign('k4', 'b-wonder', '¿Cómo se vive una experiencia en Wine and Wonder?', { startDate: '2026-11-01', endDate: '2026-11-20', planned: 72 })

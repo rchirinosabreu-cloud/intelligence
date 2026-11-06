@@ -32,17 +32,17 @@ const noHorizontalScroll = (page) => page.evaluate(() => document.documentElemen
 test('el tablero dice qué hay que revisar, y los filtros lo acotan', async () => {
   const { page, errors } = await open();
   await shot(page, '01-tablero');
-  const bonsai = await row(page, 'b-bonsai').innerText();
-  assert.match(bonsai, /\$ 768\.000/);
-  assert.match(bonsai, /Va atrasada/);
-  assert.match(bonsai, /Cierra en 4 días/);
-  assert.match(bonsai, /Termina el 18 nov, después del cierre del 10 nov/, 'Bonsai estaba hasta el 18 y cierra el 10');
+  const sample = await row(page, 'b-muestra').innerText();
+  assert.match(sample, /\$ 768\.000/);
+  assert.match(sample, /Va atrasada/);
+  assert.match(sample, /Cierra en 4 días/);
+  assert.match(sample, /Termina el 18 nov, después del cierre del 10 nov/, 'una campaña que pasa el cierre se señala');
   assert.match(await row(page, 'b-summit').innerText(), /Debía terminar el 21 oct/);
   assert.match(await row(page, 'b-pueblito').innerText(), /Incluye \$ 240\.000 del ciclo anterior/, 'el saldo de octubre se suma a noviembre');
   assert.match(await row(page, 'b-wonder').innerText(), /USD 7 de USD 114/, 'cada marca lleva su moneda y su saldo');
   await page.locator('[data-ad-filter="cierran"]').click();
   await page.waitForTimeout(200);
-  assert.ok(await row(page, 'b-bonsai').count());
+  assert.ok(await row(page, 'b-muestra').count());
   assert.equal(await row(page, 'b-pueblito').count(), 0);
   await page.locator('[data-ad-filter="cierran"]').click();
   assert.deepEqual(errors, []);
@@ -131,9 +131,9 @@ test('el gasto final de un ciclo anterior se pide y deja firme el saldo', async 
 });
 
 test('todo se corrige y se deshace: lectura, cierre, presupuesto, saldo, campaña y pauta', async () => {
-  const { page, errors } = await open('?pauta=b-bonsai');
-  const bonsai = row(page, 'b-bonsai');
-  const detail = bonsai.locator('[data-ad-detail]');
+  const { page, errors } = await open('?pauta=b-muestra');
+  const sample = row(page, 'b-muestra');
+  const detail = sample.locator('[data-ad-detail]');
   await detail.locator('[data-ad-reading="r2"]').waitFor();
   await page.waitForTimeout(300);
   await shot(page, '08-corregir');
@@ -148,14 +148,14 @@ test('todo se corrige y se deshace: lectura, cierre, presupuesto, saldo, campañ
   await amount.pressSequentially('700000');
   await spend.locator('button[type=submit]').click();
   await spend.waitFor({ state: 'detached' });
-  await page.waitForFunction(() => document.querySelector('[data-ad-budget="b-bonsai"]').innerText.includes('$ 700.000 de'));
+  await page.waitForFunction(() => document.querySelector('[data-ad-budget="b-muestra"]').innerText.includes('$ 700.000 de'));
   await detail.locator('[data-ad-changes]').waitFor();
   assert.match(await detail.locator('[data-ad-changes]').innerText(), /de \$ 768\.000 a \$ 700\.000/);
 
   // Eliminarla deshace: vuelve la lectura anterior.
   await detail.locator('[data-ad-reading="r2"] [data-ad-reading-delete]').click();
   await page.getByRole('button', { name: 'Eliminar', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('[data-ad-budget="b-bonsai"]').innerText.includes('$ 512.000 de'));
+  await page.waitForFunction(() => document.querySelector('[data-ad-budget="b-muestra"]').innerText.includes('$ 512.000 de'));
 
   // Reabrir un ciclo cerrado y corregir su presupuesto.
   const september = detail.locator('[data-ad-history="2026-09"]');
@@ -202,7 +202,7 @@ test('todo se corrige y se deshace: lectura, cierre, presupuesto, saldo, campañ
   await edit.locator('[data-ad-delete]').click();
   await page.getByRole('button', { name: 'Eliminar', exact: true }).click();
   await edit.waitFor({ state: 'detached' });
-  await bonsai.waitFor({ state: 'detached' });
+  await sample.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
   await page.close();
 });

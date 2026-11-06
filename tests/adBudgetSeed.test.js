@@ -12,7 +12,9 @@ test('todo lo de la reunión es una pauta válida y lo incierto lo dice su nota'
     }
     const multik = MEETING_BUDGETS.find((row) => row.client === 'Multi-K');
     assert.deepEqual([multik.amount, multik.closesOn], [350000, '2026-11-18'], 'lo que confirmó Rodny');
-    assert.match(MEETING_BUDGETS.find((row) => row.client === 'Bonsai').notes, /Confirmar contra el contrato/);
+    const bonsai = MEETING_BUDGETS.find((row) => row.client === 'Bonsai');
+    assert.equal(bonsai.closesOn, '2026-11-18', 'lo que confirmó Rodny');
+    assert.equal(bonsai.spent, undefined, 'los 768.000 se midieron con otras fechas: no valen para este ciclo');
 });
 
 test('el cliente se encuentra sin importar mayúsculas ni guiones, y nunca se adivina entre dos', () => {
@@ -33,7 +35,8 @@ test('cargar dos veces no duplica, y avisa si el contrato da otro cierre', () =>
     const closeOf = () => '2026-11-18';
     const first = planSeed({ clients, existing: [], closeOf });
     assert.equal(first.filter((item) => item.action === 'CREAR').length, MEETING_BUDGETS.length);
-    assert.equal(first.find((item) => item.row.client === 'Bonsai').differs, true);
+    assert.equal(first.find((item) => item.row.client === 'Bonsai').differs, false);
+    assert.equal(first.find((item) => item.row.client === 'Promo Group').differs, true);
     const again = planSeed({ clients, existing: [{ clientId: '2', brand: null, platform: 'META' }], closeOf });
     assert.equal(again.find((item) => item.row.client === 'Bonsai').action, 'YA_EXISTE');
 });

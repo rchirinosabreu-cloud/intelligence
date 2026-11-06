@@ -87,7 +87,7 @@ test('una pauta que va por debajo del ritmo dice cuánto hay que gastar por día
     assert.match(result.reasons[0], /por día hasta el 28 nov/);
 });
 
-test('Bonsai: 768.000 de 1.000.000 a pocos días del cierre es rojo y dice lo que falta', () => {
+test('768.000 de 1.000.000 a pocos días del cierre es rojo y dice lo que falta', () => {
     const cycle = cycleFromKey('2026-10', 10);
     const result = evaluateAdCycle({ budget: budget(), cycle, row: row(768000, '2026-11-06'), today: '2026-11-06' });
     assert.equal(cycle.end, '2026-11-09');
@@ -161,7 +161,7 @@ test('una campaña activa pasada su fecha pide confirmar: la pauta del 21 que si
     assert.equal(result.level, 'yellow');
 });
 
-test('una campaña que termina después del cierre del cliente se señala: Bonsai estaba hasta el 18 y cierra el 10', () => {
+test('una campaña que termina después del cierre del cliente se señala', () => {
     const cycle = cycleFromKey('2026-10', 10);
     const flags = campaignFlags({ id: 'c', status: 'ACTIVA', endDate: '2026-11-18' }, cycle, '2026-11-06');
     assert.equal(flags[0].code, 'PASA_EL_CIERRE');
