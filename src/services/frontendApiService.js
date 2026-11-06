@@ -10,6 +10,15 @@ const getAuthHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('authToken')}`
 });
 
+const drivePasswordRequest = async (id, action, method, body) => {
+  const response = await fetch(`${getBaseUrl()}/api/drive/folders/${encodeURIComponent(id)}/${action}`, {
+    method, headers: getAuthHeaders(), ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(result.message || 'No fue posible actualizar el acceso.'), { code: result.error, folderId: result.folderId });
+  return result;
+};
+
 // Helper for delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -290,10 +299,14 @@ const frontendApiService = {
     const response = await fetch(`${getBaseUrl()}/api/drive/contents?${params}`, { headers: getAuthHeaders() });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `No fue posible cargar Drive (${response.status})`);
+      throw Object.assign(new Error(error.message || `No fue posible cargar Drive (${response.status})`), { code: error.error, folderId: error.folderId });
     }
     return response.json();
   },
+
+  setDriveFolderPassword: (id, body) => drivePasswordRequest(id, 'password', 'PUT', body),
+  unlockDriveFolder: (id, password) => drivePasswordRequest(id, 'unlock', 'POST', { password }),
+  lockDriveFolders: id => drivePasswordRequest(id, 'lock', 'POST'),
 
   getDriveFiles: async ({ query, kind } = {}) => {
     const params = new URLSearchParams();

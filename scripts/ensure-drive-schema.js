@@ -37,6 +37,22 @@ try {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS "DriveFolderProtection" (
+      "folderId" TEXT PRIMARY KEY REFERENCES "DriveFolder"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      "passwordHash" TEXT NOT NULL,
+      "revision" TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "DriveFolderUnlock" (
+      "folderId" TEXT NOT NULL REFERENCES "DriveFolderProtection"("folderId") ON DELETE CASCADE ON UPDATE CASCADE,
+      "userId" TEXT NOT NULL,
+      "sessionHash" TEXT NOT NULL,
+      "revision" TEXT NOT NULL,
+      "expiresAt" TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY ("folderId", "userId", "sessionHash")
+    );
+    CREATE INDEX IF NOT EXISTS "DriveFolderUnlock_userId_sessionHash_idx" ON "DriveFolderUnlock"("userId", "sessionHash");
+    CREATE INDEX IF NOT EXISTS "DriveFolderUnlock_expiresAt_idx" ON "DriveFolderUnlock"("expiresAt");
+
     ALTER TABLE "DriveFile" ADD COLUMN IF NOT EXISTS "storageArea" TEXT NOT NULL DEFAULT 'LEGACY';
     CREATE UNIQUE INDEX IF NOT EXISTS "DriveFile_storageArea_storageKey_key"
       ON "DriveFile"("storageArea", "storageKey");

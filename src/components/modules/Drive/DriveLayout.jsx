@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ChevronRight, Download, Edit, Eye, File, FileText, Folder, FolderOpen,
-  Loader2, Plus, RefreshCcw, RotateCcw, Search, Trash2, Upload, X
+  Loader2, Lock, Plus, RefreshCcw, RotateCcw, Search, Trash2, Upload, X
 } from '@/components/ui/icons';
 import frontendApiService from '../../../services/frontendApiService';
 import { toast } from 'react-hot-toast';
@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import PdfDocumentPreview from './PdfDocumentPreview';
+import FolderPasswordDialog from './FolderPasswordDialog';
 import { FinalAssetGrid } from '@/components/modules/ContentPlan/PieceMedia';
 import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -165,11 +166,13 @@ const DriveLayout = () => {
       return next;
     }, { replace: true, state: location.state });
   }, [contents.redirectedFrom, contents.currentFolder?.id, requestedFolderId, setSearchParams, location.state]);
-  const history = isDeliverablesFolder ? (contents.breadcrumbs || []) : localHistory;
+  const history = contents.breadcrumbs?.length ? contents.breadcrumbs : localHistory;
   const [filter, setFilter] = useState('ALL');
   const [trash, setTrash] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [lockedFolderId, setLockedFolderId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderName, setFolderName] = useState('');
@@ -190,7 +193,7 @@ const DriveLayout = () => {
   const invalidateLoad = useCallback(() => { loadRequestRef.current++; }, []);
 
   const activeFolder = isDeliverablesFolder ? contents.currentFolder : history.at(-1) || null;
-  const activeFolderId = requestedFolderId || activeFolder?.id || null;
+  const activeFolderId = requestedFolderId || null;
   const isBriaFolder = activeFolderId === 'bria-minutes';
   const isAutomaticFolder = isBriaFolder || isDeliverablesFolder;
   usePageLabel(isDeliverablesFolder ? 'Drive · Entregables' : 'Drive');
@@ -204,23 +207,52 @@ const DriveLayout = () => {
   const setHistory = value => {
     const next = typeof value === 'function' ? value(history) : value;
     setLocalHistory(next);
-    updateView({ folderId: isDeliveryFolderId(next.at(-1)?.id) ? next.at(-1).id : null });
+    updateView({ folderId: next.at(-1)?.id || null });
   };
 
   const load = useCallback(async () => {
     const request = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
+    setLockedFolderId(null);
     try {
       const result = await frontendApiService.getDriveContents({ folderId: trash ? null : activeFolderId, query, trash });
       if (request === loadRequestRef.current) setContents(result);
     } catch (requestError) {
       console.error('[Drive] Error cargando contenido:', requestError);
-      if (request === loadRequestRef.current) setError(requestError.message);
+      if (request === loadRequestRef.current) {
+        setContents({ folders: [], files: [] });
+        previewRequestRef.current++;
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+        setPreviewFile(null); setPreview(null);
+        setError(requestError.message);
+        if (requestError.code === 'DRIVE_FOLDER_LOCKED') { setLockedFolderId(requestError.folderId); setLocalHistory([]); }
+      }
     } finally {
       if (request === loadRequestRef.current) setLoading(false);
     }
-  }, [activeFolderId, query, trash]);
+  }, [activeFolderId, query, trash, currentUser?.id]);
+
+  useEffect(() => {
+    setContents({ folders: [], files: [] }); setLocalHistory([]); setPasswordTarget(null);
+    previewRequestRef.current++;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewFile(null); setPreview(null);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!contents.unlockExpiresAt) return;
+    const timer = setTimeout(() => {
+      previewRequestRef.current++;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+      setPreviewFile(null); setPreview(null); setContents({ folders: [], files: [] });
+      load();
+    }, Math.max(0, new Date(contents.unlockExpiresAt).getTime() - Date.now()));
+    return () => clearTimeout(timer);
+  }, [contents.unlockExpiresAt, load]);
 
   useEffect(() => {
     setLoading(true);
@@ -236,9 +268,26 @@ const DriveLayout = () => {
   const visibleFiles = useMemo(() => contents.files.filter(file => filter === 'ALL' || file.kind === filter), [contents.files, filter]);
 
   const openFolder = folder => {
+    if (folder.locked) { setPasswordTarget({ ...folder, mode: 'unlock', openAfter: !trash }); return; }
     setTrash(false);
     setFilter('ALL');
     setHistory(previous => [...previous, folder]);
+  };
+
+  const passwordSaved = async target => {
+    setPasswordTarget(null);
+    if (target.mode === 'unlock' && target.openAfter) openFolder({ ...target, locked: false });
+    else await load();
+  };
+  const lockFolders = async () => {
+    try {
+      await frontendApiService.lockDriveFolders(activeFolderId);
+      previewRequestRef.current++;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+      setPreviewFile(null); setPreview(null); setContents({ folders: [], files: [] });
+      await load();
+    } catch (failure) { toast.error(failure.message); }
   };
 
   const openPreview = async file => {
@@ -346,7 +395,7 @@ const DriveLayout = () => {
   // que es de solo lectura: el servidor lo rechazaría y sería prometer algo que no se
   // cumple. Se cuentan las entradas y salidas porque al pasar por encima de una tarjeta
   // hija el navegador dispara `dragleave` del padre y la marca se apagaría sola.
-  const canDrop = !trash && !isAutomaticFolder;
+  const canDrop = !trash && !isAutomaticFolder && !lockedFolderId && !loading && !error;
   const onDragEnter = event => {
     if (!canDrop || !event.dataTransfer?.types?.includes('Files')) return;
     event.preventDefault();
@@ -471,7 +520,7 @@ const DriveLayout = () => {
         title="Brainstudio Drive"
         subtitle="Organiza archivos de la agencia y consulta sus entregables y documentos."
       >
-        {!trash && !isAutomaticFolder && (
+        {!trash && !isAutomaticFolder && !lockedFolderId && !error && (
           <div className="flex flex-wrap gap-2">
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={uploadFiles} />
             <button type="button" onClick={() => setNewFolderOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><Plus className="h-4 w-4" /> Nueva carpeta</button>
@@ -488,6 +537,7 @@ const DriveLayout = () => {
             {trash && <><ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" /><span className="font-medium text-zinc-700 dark:text-zinc-200">Papelera</span></>}
           </div>
           <div className="flex gap-2">
+            {activeFolderId && history.some(folder => folder.passwordProtected) && !lockedFolderId && <button type="button" onClick={lockFolders} className="inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-sm"><Lock className="h-4 w-4" />Bloquear carpetas</button>}
             <label className="relative min-w-0 flex-1 md:w-72">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-zinc-400" />
               <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar archivos" className="h-10 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-9 pr-3 text-sm text-zinc-900 outline-none focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white" />
@@ -520,7 +570,7 @@ const DriveLayout = () => {
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{activeFolder ? `Se guardarán en ${activeFolder.name}` : 'Se guardarán en Mi unidad'}</p>
             </div>
           )}
-          {error && <div className="brain-alert-surface flex items-center gap-2 rounded-xl p-4 text-sm"><AlertCircle className="h-4 w-4" /> {error}</div>}
+          {error && <div className="brain-alert-surface flex flex-wrap items-center gap-2 rounded-xl p-4 text-sm"><AlertCircle className="h-4 w-4" /><span>{error}</span>{lockedFolderId && <button type="button" onClick={() => setPasswordTarget({ id: lockedFolderId, mode: 'unlock' })} className="ml-auto min-h-11 rounded-xl bg-primary px-4 text-primary-foreground">Desbloquear carpeta</button>}</div>}
           {loading && <div className="flex h-72 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" /> Cargando Drive...</div>}
           {!loading && !error && contents.folders.length === 0 && visibleFiles.length === 0 && <div className="flex h-72 flex-col items-center justify-center text-center"><FolderOpen className="h-11 w-11 text-zinc-300 dark:text-zinc-700" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Esta ubicación está vacía</p><p className="mt-1 text-sm text-zinc-500">{trash ? 'La Papelera no tiene elementos.' : isDeliverablesFolder ? query ? 'No hay entregables que coincidan con esta búsqueda.' : 'Aquí aparecerán las entregas que puedas consultar.' : canDrop ? 'Arrastra archivos aquí, o súbelos con el botón de arriba.' : 'Todavía no hay documentos disponibles.'}</p></div>}
           {!loading && !error && (contents.folders.length > 0 || visibleFiles.length > 0) && (
@@ -528,10 +578,10 @@ const DriveLayout = () => {
               {contents.folders.map(folder => (
                 <article key={folder.id} className="group rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 transition hover:border-brand-cyan/40 hover:bg-brand-cyan-soft/40 dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-brand-cyan/30 dark:hover:bg-brand-cyan/10">
                   <button type="button" onClick={() => openFolder(folder)} className="flex w-full items-start gap-3 text-left">
-                    <span className="rounded-xl bg-brand-cyan-soft p-2.5 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan"><Folder className="h-5 w-5" /></span>
-                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{folder.name}</span><span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{folder.subtitle || (folder.system ? 'Carpeta automática del sistema' : 'Carpeta de Drive')}</span></span>
+                    <span className="rounded-xl bg-brand-cyan-soft p-2.5 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">{folder.passwordProtected ? <Lock className="h-5 w-5" /> : <Folder className="h-5 w-5" />}</span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{folder.name}</span><span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{folder.locked ? 'Protegida con contraseña' : folder.subtitle || (folder.system ? 'Carpeta automática del sistema' : 'Carpeta de Drive')}</span></span>
                   </button>
-                  {!folder.system && !trash && <div className="mt-3 flex justify-end gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-800"><button type="button" onClick={() => beginEdit(folder, 'folder')} className="rounded-lg p-2 text-zinc-400 hover:bg-white hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Renombrar ${folder.name}`}><Edit className="h-4 w-4" /></button><button type="button" onClick={() => sendToTrash(folder, 'folder')} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Enviar ${folder.name} a papelera`}><Trash2 className="h-4 w-4" /></button></div>}
+                  {!folder.system && !trash && <div className="mt-3 flex justify-end gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-800">{folder.canManagePassword && <button type="button" onClick={() => setPasswordTarget({ ...folder, mode: 'manage' })} className="min-h-11 min-w-11 rounded-lg p-2 text-zinc-500 hover:bg-muted" aria-label={`${folder.passwordProtected ? 'Contraseña de' : 'Proteger'} ${folder.name}`}><Lock className="mx-auto h-4 w-4" /></button>}<button type="button" disabled={folder.locked} onClick={() => beginEdit(folder, 'folder')} className="rounded-lg p-2 text-zinc-400 hover:bg-white hover:text-zinc-700 disabled:opacity-40 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Renombrar ${folder.name}`}><Edit className="h-4 w-4" /></button><button type="button" disabled={folder.locked} onClick={() => sendToTrash(folder, 'folder')} className="brain-danger-button-icon rounded-lg p-2 disabled:opacity-40" aria-label={`Enviar ${folder.name} a papelera`}><Trash2 className="h-4 w-4" /></button></div>}
                   {!folder.system && trash && <div className="mt-3 flex justify-end border-t border-zinc-200 pt-2 dark:border-zinc-800"><button type="button" onClick={() => restoreItem(folder, 'folder')} className="rounded-lg px-3 py-2 text-xs font-medium text-brand-cyan-deep hover:bg-brand-cyan-soft dark:text-brand-cyan dark:hover:bg-brand-cyan/10">Restaurar</button></div>}
                 </article>
               ))}
@@ -557,6 +607,7 @@ const DriveLayout = () => {
         </div>
       </section>
 
+      {passwordTarget && <FolderPasswordDialog key={`${passwordTarget.id}:${passwordTarget.mode}`} target={passwordTarget} onClose={() => setPasswordTarget(null)} onSuccess={passwordSaved} />}
       <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
         <DialogContent overlayClassName="z-[80]" className="z-[81] max-w-md rounded-2xl border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
           <form onSubmit={createFolder}>

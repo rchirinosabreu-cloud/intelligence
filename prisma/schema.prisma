@@ -395,9 +395,31 @@ model DriveFolder {
   parent      DriveFolder?  @relation("DriveFolderTree", fields: [parentId], references: [id], onDelete: Restrict)
   children    DriveFolder[] @relation("DriveFolderTree")
   files       DriveFile[]
+  protection  DriveFolderProtection?
 
   @@index([parentId, deletedAt, name])
   @@index([deletedAt, updatedAt])
+}
+
+model DriveFolderProtection {
+  folderId     String @id
+  passwordHash String
+  revision     String
+  folder       DriveFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  unlocks      DriveFolderUnlock[]
+}
+
+model DriveFolderUnlock {
+  folderId    String
+  userId      String
+  sessionHash String
+  revision    String
+  expiresAt   DateTime @db.Timestamptz(6)
+  protection  DriveFolderProtection @relation(fields: [folderId], references: [folderId], onDelete: Cascade)
+
+  @@id([folderId, userId, sessionHash])
+  @@index([userId, sessionHash])
+  @@index([expiresAt])
 }
 
 model DriveFile {
