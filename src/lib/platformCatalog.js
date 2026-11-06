@@ -15,6 +15,7 @@
 //   su frase rompe CI, así Bria crece con la plataforma sin que nadie se acuerde de avisarle.
 
 export const PLATFORM_EXCLUDED = [
+  { match: /^\w+ \/drive\/folders\/[^/]+\/(password|unlock|lock)$/, reason: 'las contraseñas y el desbloqueo de carpetas se gestionan solo en Drive; las claves nunca se solicitan ni pasan por Bria' },
   { match: /^\w+ \/(public|quotations\/public|login|password-reset|services-catalog)(\/|$)/, reason: 'puerta pública o de inicio de sesión' },
   { match: /^POST \/users$/, reason: 'crear cuentas es de la pantalla de Equipo' },
   { match: /^\w+ \/(minutes\/fireflies\/webhook|activity\/google-calendar\/webhook|whatsapp\/webhook)$/, reason: 'avisos de proveedores externos' },

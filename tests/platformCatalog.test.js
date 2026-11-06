@@ -65,6 +65,15 @@ test('what Bria must never touch stays excluded even if someone describes it lat
   }
 });
 
+test('Drive passwords stay outside Bria while ordinary folder operations remain available', () => {
+  for (const key of ['PUT /drive/folders/:id/password', 'POST /drive/folders/:id/unlock', 'POST /drive/folders/:id/lock']) {
+    assert.ok(isExcludedOperation(key), key);
+    assert.equal(PLATFORM_OPERATIONS[key], undefined);
+  }
+  assert.ok(PLATFORM_OPERATIONS['GET /drive/contents']);
+  assert.ok(PLATFORM_OPERATIONS['POST /drive/folders']);
+});
+
 test('a concrete path finds its operation and its parameters; a search finds by Spanish words', () => {
   const op = matchOperation('PATCH', '/tasks/abc-123?x=1');
   assert.deepEqual([op.key, op.params], ['PATCH /tasks/:taskId', { taskId: 'abc-123' }]);
