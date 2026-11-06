@@ -254,7 +254,6 @@ function History({ months, monthlyReport, today, onReport, onClose, onReopen }) 
  */
 function Suspension({ client, onOpen }) {
   const { suspension, suspensionCandidate: candidate, canSuspend } = client;
-  if (!suspension && client.contract?.renewalDecision === 'NO_RENOVAR') return null;
   if (!suspension && !(canSuspend && candidate)) return null;
   const monthLabel = (cycle) => {
     const [year, month] = String(cycle || '').split('-').map(Number);

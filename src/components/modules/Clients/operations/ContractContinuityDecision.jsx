@@ -54,13 +54,16 @@ export default function ContractContinuityDecision({ clientId, contract, clientN
           queryClient.invalidateQueries({ queryKey: ['client-operations'] });
           queryClient.invalidateQueries({ queryKey: ['important-notice'] });
         }
-        throw new Error(data.error || 'No pudimos guardar la decisión.');
+        throw Object.assign(new Error(data.error || 'No pudimos guardar la decisión.'), { response: { data } });
       }
       setOpen(false);
       toast.success(correcting ? 'Continuidad pendiente de confirmar.' : 'Decisión de no renovar registrada.');
       for (const queryKey of [['client-operations'], ['important-notice'], ['notifications']]) queryClient.invalidateQueries({ queryKey });
       onDecided?.();
-    } catch (error) { setFailure(error.message); }
+    } catch (error) {
+      console.error('[ContractContinuity] No se pudo guardar la decisión:', error.response?.data || error);
+      setFailure(error.message);
+    }
     finally { setBusy(false); }
   };
   return <Dialog open={open} onOpenChange={changeOpen}>

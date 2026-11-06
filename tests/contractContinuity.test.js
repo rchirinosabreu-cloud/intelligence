@@ -1,8 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { clientOperationalNotices } from '../src/lib/clientOperationalNotices.js';
 import { contractCycleAlerts } from '../src/lib/contractCycleAlerts.js';
 import { unbackedWork, unbackedWorkNoticeText } from '../src/lib/unbackedWork.js';
+
+const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+
+test('no renovar no le quita a Dirección ni a Administración la decisión de suspender por cartera', () => {
+  const panel = /function Suspension\(\{ client, onOpen \}\) \{([\s\S]*?)const monthLabel/.exec(source('src/components/modules/Clients/operations/ClientOperationPage.jsx'))[1];
+  assert.doesNotMatch(panel, /renewalDecision/);
+});
+
+test('un fallo al guardar la decisión deja el error real del servidor en la consola', () => {
+  assert.match(source('src/components/modules/Clients/operations/ContractContinuityDecision.jsx'), /catch \(error\) \{\s+console\.error\([^)]*error\.response\?\.data \|\| error\);\s+setFailure\(error\.message\);/);
+});
 
 const contract = { id: 'contract-a', status: 'ACTIVO', startDate: '2026-01-19', endDate: '2026-11-18', cutDay: 1, monthlyReport: true };
 const client = { id: 'client-a', name: 'Cliente ficticio', slug: 'cliente-ficticio', contracts: [contract] };
