@@ -18,7 +18,7 @@ const memoryDb = () => {
             { id: 'm2', status: 'DEBE', amount: 100, period: '2026-09-01', metadata: { collectionMode: 'MENSUAL' } },
             { id: 'p1', status: 'DEBE', amount: 100, period: '2026-09-01', metadata: { collectionMode: 'PUNTUAL' } }
         ] }, 'c-grit': { id: 'c-grit', name: 'Fundación Grit' } })[where.id] || null },
-        accountsReceivable: { findUnique: async ({ where }) => (where.id === 'g-1' ? { clientId: 'c-grit', client: { name: 'Fundación Grit' } } : ['m1', 'm2', 'p1'].includes(where.id) ? { clientId: 'c-nuva' } : null) },
+        accountsReceivable: { findUnique: async ({ where }) => (where.id === 'g-1' ? { id: 'g-1', clientId: 'c-grit', client: { name: 'Fundación Grit' }, kind: 'CLIENTE', status: 'DEBE', amount: 100, period: '2026-09-01', metadata: { collectionMode: 'PUNTUAL' }, payments: [] } : ['m1', 'm2', 'm3', 'p1'].includes(where.id) ? { clientId: 'c-nuva' } : null) },
         collectionActivity: {
             upsert: async ({ where, create }) => {
                 const previous = rows.find((row) => row.noticeId === where.noticeId);
@@ -111,7 +111,7 @@ test('«Ya le escribí» queda guardado en la cuenta del cliente, una sola vez',
     assert.deepEqual(other.rows.map((row) => [row.clientId, row.receivableId]), [['c-grit', 'g-1']]);
 });
 
-test('la gestión mensual conserva las obligaciones que se mostraron y no incluye una deuda posterior', async () => {
+test('una deuda posterior exige actualizar el aviso antes de registrar la gestión mensual completa', async () => {
     const notice = { id: 'aviso-alcance', userId: 'u-elisa', kind: 'CARTERA_MENSUAL', subjectId: 'c-nuva', createdAt: NOW, resolvedAt: null };
     const db = bandDb(notice);
     const shown = (await currentImportantNotice(db, 'u-elisa', NOW, { log: () => {} })).notice;
@@ -121,8 +121,13 @@ test('la gestión mensual conserva las obligaciones que se mostraron y no incluy
         const client = await findClient(args);
         return client ? { ...client, accountsReceivables: [...(client.accountsReceivables || []), { id: 'm3', status: 'DEBE', amount: 100, period: '2026-10-01', metadata: { collectionMode: 'MENSUAL' } }] } : null;
     };
-    await followUpNotice(db, notice.id, { channel: 'LLAMADA', receivableIds: shown.receivableIds }, elisa, { now: NOW, log: () => {} });
-    assert.deepEqual(db.rows.map((row) => row.receivableId), ['m1', 'm2']);
+    await assert.rejects(followUpNotice(db, notice.id, { channel: 'LLAMADA', receivableIds: shown.receivableIds }, elisa, { now: NOW, log: () => {} }), { statusCode: 409 });
+    assert.equal(db.rows.length, 0, 'no se acredita una gestión sobre un alcance que ya cambió');
+    assert.equal(notice.resolvedAt, null);
+    const refreshed = (await currentImportantNotice(db, 'u-elisa', NOW, { log: () => {} })).notice;
+    assert.deepEqual(refreshed.receivableIds, ['m1', 'm2', 'm3']);
+    await followUpNotice(db, notice.id, { channel: 'LLAMADA', receivableIds: refreshed.receivableIds }, elisa, { now: NOW, log: () => {} });
+    assert.deepEqual(db.rows.map((row) => row.receivableId), ['m1', 'm2', 'm3']);
 });
 
 test('un aviso mensual sin selección o con una obligación fuera del alcance exige releer, sin registrar nada', async () => {

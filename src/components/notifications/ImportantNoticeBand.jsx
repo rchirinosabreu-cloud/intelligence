@@ -236,7 +236,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
               <NoticeButton disabled={busy} onClick={() => setMode('base')}>Volver</NoticeButton>
               <NoticeButton primary disabled={busy || (needsReason && !reason.trim()) || !notice.sourceRevision}
                 onClick={() => decide('close', { outcome, confirmed: true, reason, expectedUpdatedAt: notice.sourceRevision }, 'Decisión registrada en el CRM')}>Confirmar decisión</NoticeButton>
-              {!notice.sourceRevision && <p role="alert" className="text-xs">Actualiza el aviso para confirmar sobre la oportunidad vigente.</p>}
+              {!notice.sourceRevision && <p role="alert" className="text-xs text-destructive">Actualiza el aviso para confirmar sobre la oportunidad vigente.</p>}
             </>}
             {mode === 'snooze' && SNOOZE_OPTIONS.map((option) => (
               <NoticeButton key={option.value} disabled={busy} data-notice-snooze={option.value}

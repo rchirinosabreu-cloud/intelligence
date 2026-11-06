@@ -84,7 +84,7 @@ export default function ContractContinuityDecision({ clientId, contract, clientN
           <textarea id={noteId} value={note} onChange={e => setNote(e.target.value)} maxLength={1000} required={correcting} disabled={busy}
             rows={2} className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm" />
         </div>
-        {failure && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{failure} Si cambió la ficha, vuelve a abrir esta confirmación.</p>}
+        {failure && <p role="alert" className="text-sm text-destructive">{failure} Si cambió la ficha, vuelve a abrir esta confirmación.</p>}
         <div className="flex flex-wrap justify-end gap-2">
           <button ref={cancel} type="button" disabled={busy} className={`${BUTTON} brain-notice-ghost`} onClick={() => changeOpen(false)}>Volver</button>
           <button type="submit" disabled={busy} className={`${BUTTON} brain-notice-primary`}>{busy ? 'Guardando…' : correcting ? 'Confirmar corrección' : 'Confirmar no renovación'}</button>
