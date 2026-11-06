@@ -9,6 +9,7 @@ import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
 import ClientProjects from './ClientProjects';
+import ClientAdBudgets from '@/components/modules/AdBudgets/ClientAdBudgets';
 import {
   useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useLiftSuspension, useRefreshExternalPlan, useReopenMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport, useSuspendClient,
   useUndoPiecePublished, useClientProjects, useSaveClientProject,
@@ -79,6 +80,7 @@ export default function ClientOperationRoute() {
     <>
       <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage
         currentUserId={currentUser?.id} isAdmin={String(currentUser?.role || '').toUpperCase() === 'ADMIN'}
+        adBudgetsSection={<ClientAdBudgets clientId={client.id} />}
         projectsSection={<ClientProjects key={`${client.id}:${viewerId}`} projects={projectQuery.data || []} team={team}
           loading={projectQuery.isLoading} error={projectQuery.error}
           onRetry={async () => {

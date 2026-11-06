@@ -6,6 +6,9 @@ const crm = () => policy('CRM', 'CrmLead / CrmActivity', ['open', 'follow-up', '
 const collection = (suspension = false) => policy('COLLECTION', 'AccountsReceivable / CollectionActivity / ClientSuspension', ['open', 'follow-up', 'snooze'], suspension ? 'Revisar suspensión' : 'Registrar pago', 'Registrar una gestión de cobro no registra un pago ni suspende al cliente.');
 const operation = (source, openLabel, explanation, actions = ['open', 'snooze']) => policy('OPERATION', source, actions, openLabel, explanation);
 export const NOTICE_RESPONSE_POLICIES = Object.freeze({
+  PAUTA_REVISION: policy('ADS', 'AdBudgetCycle / AdSpendReading / AdBudgetEvent', ['open', 'snooze'], 'Revisar pauta', 'La lectura de gasto y el cierre se registran en Pautas. Abrir el aviso no actualiza el gasto.'),
+  PAUTA_CAMPANA: policy('ADS', 'AdCampaign / AdBudgetEvent', ['open', 'snooze'], 'Revisar campaña', 'La revisión se resuelve al corregir la campaña en Pautas, conservando su historial.'),
+  PAUTA_RESUMEN: policy('ADS', 'AdBudgetCycle / AdSpendReading / AdCampaign', ['open', 'snooze'], 'Revisar pautas', 'Cada pendiente se atiende en Pautas. Este resumen no declara revisadas ni cerradas las campañas.'),
   CRM_FOLLOW_UP: crm(), CRM_REVIEW: crm(),
   CARTERA_MENSUAL: collection(), CARTERA_UNICO: collection(), CARTERA_SUSPENSION: collection(true),
   PARRILLA_SIN_PUBLICAR: policy('PLAN', 'ContentItem / SocialPublication', ['open', 'snooze'], 'Revisar publicaciones', 'Se retira cuando las piezas pendientes figuran publicadas en la parrilla.'),

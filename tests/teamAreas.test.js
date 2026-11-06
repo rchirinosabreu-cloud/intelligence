@@ -59,7 +59,7 @@ test('Equipo guarda y muestra las áreas', () => {
     assert.match(ui, /grid gap-4 md:grid-cols-2/);
     assert.match(ui, /grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4/);
     // Cada área que hoy trae avisos dice cuáles; las demás no prometen nada.
-    assert.deepEqual(TEAM_AREAS.filter((area) => area.receives).map((area) => area.key), ['DIRECCION', 'ADMINISTRATIVA', 'COMERCIAL']);
+    assert.deepEqual(TEAM_AREAS.filter((area) => area.receives).map((area) => area.key), ['DIRECCION', 'ADMINISTRATIVA', 'COMERCIAL', 'PAUTA']);
     assert.match(read('prisma/schema.prisma'), /areas\s+String\[\]\s+@default\(\[\]\)/);
     assert.match(read('package.json'), /ensure-team-areas-schema\.js/);
 });

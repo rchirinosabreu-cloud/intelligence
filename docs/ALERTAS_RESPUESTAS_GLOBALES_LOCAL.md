@@ -76,4 +76,8 @@ Resultados finales: **254 pruebas de servicio/contrato aprobadas, sin omisiones*
 
 La generación estándar de Prisma encontró su DLL ocupada por otro proceso local. Se generó el cliente actual en `output/global-alerts-prisma` y se actualizaron los artefactos generados sin sustituir la DLL en uso; las pruebas posteriores con PostgreSQL real pasaron. No se detuvieron procesos ajenos para liberar esa DLL.
 
-Capturas en `output/alertas-globales-local`. La muestra del puerto 3846 se reinició con esta versión y se comprobó su respuesta. La revisión local no acredita que los datos productivos de cada cliente sean correctos ni que un despliegue esté aplicado. No se ejecutaron mensajes, cobros, publicaciones ni decisiones contra servicios externos. Pendiente: revisión visual de Rodny y su autorización de fusión/despliegue.
+Capturas en `output/alertas-globales-local`. La muestra del puerto 3846 se reinició con esta versión y se comprobó su respuesta. La revisión local no acredita que los datos productivos de cada cliente sean correctos ni que un despliegue esté aplicado. No se ejecutaron mensajes, cobros, publicaciones ni decisiones contra servicios externos. Rodny aprobó la revisión visual y autorizó fusionar. El despliegue conserva su aprobación habitual.
+
+## Integración autorizada
+
+Rodny aprobó la muestra y autorizó la fusión. Al actualizar contra main se conservó el módulo de Pautas de #1275, incluidos esquema, arranque e historial. Sus tres avisos (PAUTA_REVISION, PAUTA_CAMPANA y PAUTA_RESUMEN) se incorporan al catálogo global, que ahora tiene 16 tipos: abren el registro nativo para actualizar gasto/campaña o permiten posponer; no ofrecen seguimiento comercial ni un cierre genérico. Conservan su revalidación y resolución nativas. El selector de la muestra conserva los 13 casos originales; la integración agrega comprobación de los tres tipos de pauta en navegador y regresiones de su servicio.

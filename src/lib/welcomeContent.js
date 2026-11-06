@@ -12,6 +12,7 @@ export const welcomeCatalog = [
   { id: 'parrillas', title: 'Parrillas', description: 'Planifica contenidos y sigue sus revisiones, aprobaciones y producción.', icon: 'LayoutGrid' },
   { id: 'minutas', title: 'Minutas', description: 'Retoma lo conversado en las reuniones y consulta sus acuerdos y pendientes.', icon: 'FileText' },
   { id: 'drive', title: 'Drive', description: 'Encuentra los documentos y archivos compartidos del trabajo.', icon: 'FolderOpen' },
+  { id: 'pautas', title: 'Pautas', description: 'Sigue el presupuesto de pauta de cada cliente contra su cierre y lo que lleva gastado.', icon: 'Megaphone' },
   { id: 'crm', title: 'CRM', description: 'Sigue las oportunidades comerciales, desde la solicitud hasta la propuesta.', icon: 'Target' },
   { id: 'cotizaciones', title: 'Cotizaciones', description: 'Consulta propuestas, servicios y condiciones comerciales en un mismo lugar.', icon: 'DollarSign' },
   { id: 'financiero', title: 'Financiero', description: 'Consulta ingresos, gastos y compromisos de pago según tus permisos.', icon: 'Wallet' },

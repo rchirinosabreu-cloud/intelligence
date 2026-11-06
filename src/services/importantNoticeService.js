@@ -18,6 +18,7 @@ import { collectionStillDue, collectionNoticeReceivableIds } from './collectionS
 import { hasCollectionActivitySince, recordCollectionActivity } from './collectionActivityService.js';
 import { NOTICE_ARCHIVE_OUTCOME, isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { isPlanNotice, parsePlanSubject, planNoticeText, isClosing } from '../lib/planCloseNotices.js';
+import { isAdNotice } from '../lib/adBudgetNotices.js';
 import { clientOperationPlanPath } from '../lib/clientOperationAlerts.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 import { readOperationalNotices, syncOperationalNotices } from './operationalNoticeService.js';
@@ -56,7 +57,7 @@ const isClientCollectionNotice = (notice) => CLIENT_COLLECTION_KINDS.has(notice.
 // De quién es el aviso, para nombrarlo en la traza: la oportunidad o el cliente.
 const readSubjectName = async (db, notice) => {
     try {
-        if (isOperationalNotice(notice)) return notice.label?.split(' · ').slice(1).join(' · ') || null;
+        if (isOperationalNotice(notice) || isAdNotice(notice)) return notice.label?.split(' · ').slice(1).join(' · ') || null;
         if (isClientCollectionNotice(notice)) return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
         if (isCollectionNotice(notice)) return (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { client: { select: { name: true } } } }))?.client?.name || null;
         return leadName(await db.crmLead.findUnique({ where: { id: notice.subjectId }, select: { company: true, contactName: true } }));
@@ -148,6 +149,7 @@ const planStillPending = async (db, notice, overduePlans, now, coveredCycles = n
 const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans, coveredCycles } = {}) => {
     if (isOperationalNotice(notice)) return null; // Revalidado por la proyección autorizada antes de seleccionar.
     if (isPlanNotice(notice)) return planStillPending(db, notice, overduePlans, now, coveredCycles);
+    if (isAdNotice(notice)) return (await import('./adBudgetNoticeService.js')).adNoticeStillNeeded(db, notice, now);
     if (isCollectionNotice(notice)) return collectionStillDue(db, notice, now);
     if (noticeResponsePolicy(notice)?.family !== 'CRM') return null;
     const lead = await db.crmLead.findUnique({

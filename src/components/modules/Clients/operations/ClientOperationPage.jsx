@@ -432,7 +432,7 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 }
 
 export default function ClientOperationPage({
-  client, evaluation, today, canManage, currentUserId, isAdmin, projectsSection,
+  client, evaluation, today, canManage, currentUserId, isAdmin, projectsSection, adBudgetsSection,
   onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onSuspend, onLiftSuspension, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
@@ -475,6 +475,7 @@ export default function ClientOperationPage({
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
+      {adBudgetsSection}
       <ClientObservations key={`observations-${client.id}`} observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
         onAdd={onAddObservation} onDelete={onDeleteObservation} />
       {reportFor && <ReportDialog month={reportFor} onClose={() => setReportFor(null)}

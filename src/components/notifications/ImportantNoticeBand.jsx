@@ -94,6 +94,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   // parrilla y se marcan las piezas una por una —que es mirarlas—, y el aviso se cae solo en cuanto están publicadas,
   // también el de la otra persona a cargo de la cuenta: por eso no hay «avisarle a la otra».
   const isPlan = policy?.family === 'PLAN';
+  const isAd = policy?.family === 'ADS';
   const isOperational = policy?.family === 'OPERATION';
   const selectOutcome = value => { setOutcome(value); setReason(''); openOptions('confirm', value === NOTICE_ARCHIVE_OUTCOME ? 'archive' : 'close'); };
   const needsReason = ['PERDIDO', 'DESCARTADO'].includes(outcome);
@@ -180,6 +181,10 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
                   </NoticeButton>
                 ) : isPlan ? (
                   <NoticeButton primary disabled={busy} data-notice-action="open-plan" onClick={() => navigate(notice.url || '/clientes')}>
+                    {policy.openLabel}
+                  </NoticeButton>
+                ) : isAd ? (
+                  <NoticeButton primary disabled={busy} data-notice-action="open-ad-budget" onClick={() => navigateFrom(notice.url || '/pautas')}>
                     {policy.openLabel}
                   </NoticeButton>
                 ) : noticeAllows(notice, 'follow-up') ? (

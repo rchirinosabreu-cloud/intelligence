@@ -27,6 +27,17 @@ test('los 13 avisos tienen respuestas propias; confirmar persiste en su origen s
       assert.equal(await card.getByRole('button',{name:'Ya le escribí',exact:true}).count(),kind.startsWith('CARTERA_')?1:0);
       await page.screenshot({path:`${out}/${scene}.png`,animations:'disabled'});
     }
+    // Pautas llegó a main durante la integración: conserva su acción nativa, nunca cae en CRM.
+    for(const [kind,label] of [['PAUTA_REVISION','Revisar pauta'],['PAUTA_CAMPANA','Revisar campaña'],['PAUTA_RESUMEN','Revisar pautas']]){
+      await page.route('**/api/important-notices/current',route=>route.fulfill({json:{notice:{id:kind,kind,level:'IMPORTANTE',label:'Pauta · muestra',message:'Revisa el gasto o la campaña en su registro.',url:'/pautas?pauta=local'},nextAt:null}}));
+      await page.route(`**/api/important-notices/${kind}/shown`,route=>route.fulfill({json:{ok:true}}));
+      await page.reload();await card.getByRole('button',{name:label,exact:true}).waitFor();
+      assert.equal(await card.locator('[data-notice-action="follow-up"]').count(),0);
+      assert.equal(await card.locator('[data-notice-action="close"]').count(),0);
+      await card.getByRole('button',{name:label,exact:true}).click();await page.waitForURL(/\/pautas\?pauta=local/);
+      assert.ok(await card.isVisible(),'abrir la pauta no resuelve el aviso');
+      await page.unroute('**/api/important-notices/current');
+    }
     await select('crm');
     await card.getByRole('button',{name:'Resolver oportunidad',exact:true}).click();
     await card.getByRole('button',{name:'Perdida',exact:true}).click();

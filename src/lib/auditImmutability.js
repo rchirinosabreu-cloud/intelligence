@@ -35,6 +35,7 @@ export const AUDIT_TABLES = Object.freeze([
     { schema: 'public', name: 'TaskDeliverableEvent', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'ContentItemDeliveryChange', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'ContentItemPeriodChange', retention: null, nullableRefs: [] },
+    { schema: 'public', name: 'AdBudgetEvent', retention: null, nullableRefs: [] },
     { schema: 'vault', name: 'reveal_events', retention: null, nullableRefs: [] },
     { schema: 'vault', name: 'credential_events', retention: null, nullableRefs: [] },
     { schema: 'bria_memory', name: 'agency_fact_events', retention: null, nullableRefs: [] },
