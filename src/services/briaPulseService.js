@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // El pulso de Bria en el servidor (Rodny, 10 de octubre de 2026: «quiero que viva en la plataforma desde ahora
 // mismo»). Cada 15 minutos en horario hábil: el código reúne los hechos de toda la plataforma una sola vez, y para
 // cada persona con Bria el modelo decide si dice algo, qué y cómo, dentro de los topes (una vez por hora y persona). Lo dicho queda en `pulse_messages`, que es lo
@@ -58,7 +59,7 @@ export const createBriaPulseService = ({
         }, []),
         safe('devueltas', async () => {
           const before = new Date(at.getTime() - RETURNED_AFTER_MS);
-          const rows = await db.task.findMany({ where: { status: 'DEVUELTA', returnedAt: { lte: before }, updatedAt: { lte: before } }, select: { id: true, title: true, returnedAt: true, assignee: { select: { id: true, name: true } }, client: { select: { name: true } } }, take: 100 });
+          const rows = await db.task.findMany({ where: { status: 'DEVUELTA', returnedAt: { lte: before }, updatedAt: { lte: before }, AND: [activeTaskSourceWhere] }, select: { id: true, title: true, returnedAt: true, assignee: { select: { id: true, name: true } }, client: { select: { name: true } } }, take: 100 });
           return rows.map((row) => ({ id: row.id, title: row.title, returnedDay: bogotaDate(row.returnedAt), personId: row.assignee?.id || null, assigneeName: row.assignee?.name || null, clientName: row.client?.name || null }));
         }, []),
         safe('correo', async () => { const service = mailbox(); return service ? service.readImportant({ at }) : []; }, [])
@@ -104,7 +105,7 @@ export const createBriaPulseService = ({
       if (!pending.length) return none;
       const { taskIds, itemIds } = followUpTargets(pending);
       const [tasks, items] = await Promise.all([
-        taskIds.length ? db.task.findMany({ where: { id: { in: taskIds } }, select: { id: true, title: true, status: true, updatedAt: true } }) : [],
+        taskIds.length ? db.task.findMany({ where: { id: { in: taskIds }, AND: [activeTaskSourceWhere] }, select: { id: true, title: true, status: true, updatedAt: true } }) : [],
         itemIds.length ? db.contentItem.findMany({ where: { id: { in: itemIds } }, select: { id: true, objective: true, status: true, revisionRequestedAt: true } }) : []
       ]);
       const context = { people, tasksById: new Map(tasks.map((row) => [row.id, row])), itemsById: new Map(items.map((row) => [row.id, row])), now: at };

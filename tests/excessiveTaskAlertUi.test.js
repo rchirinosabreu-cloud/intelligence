@@ -37,5 +37,5 @@ test('task alerts route remains protected by the gestion module permission', asy
   const routes = await read('src/routes/index.js');
   assert.match(routes, /router\.use\('\/tasks', requireModulePermission\('gestion'\)\)/);
   assert.match(routes, /router\.get\('\/tasks\/work-alerts', taskController\.getMyExcessiveTaskAlerts\)/);
-  assert.match(routes, /router\.post\('\/tasks\/:taskId\/work-confirmation', taskController\.confirmExcessiveTaskWork\)/);
+  assert.match(routes, /router\.post\('\/tasks\/:taskId\/work-confirmation', guardTask, taskController\.confirmExcessiveTaskWork\)/);
 });

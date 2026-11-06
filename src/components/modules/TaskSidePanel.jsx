@@ -3043,7 +3043,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     piece={{ id: formData.contentItemId, planId: linkedPlanId, title: formData.title,
                         format: taskData?.contentItem?.format || 'Pieza', status: taskData?.contentItem?.status,
                         date: taskData?.contentItem?.publishDate }}
-                    onClose={() => setShowPiece(false)} onOpenFull={openLinkedPlan} />
+                    onClose={() => setShowPiece(false)} onUnavailable={() => { setShowPiece(false); onSuccess?.(); onClose(); }} onOpenFull={openLinkedPlan} />
             </Suspense>}
 
             <FocusExtensionDialog

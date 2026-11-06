@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // El cierre del día en el servidor (Rodny, 14 de octubre de 2026): a las 5 de la tarde de cada día hábil (Bogotá),
 // para cada persona con Bria, un chat nuevo con su cierre y un aviso en la campana. Una vez por día y persona aunque
 // el servidor se reinicie (`daily_close_deliveries`). Lo escribe la plataforma; no pasa por el modelo. Cuenta además
@@ -37,7 +38,7 @@ export const createDailyCloseService = ({
       const [members, closed, open] = await Promise.all([
         db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, user: { select: { role: true } } } }),
         db.task.findMany({ where: { status: 'REALIZADA', completedAt: { gte: dayStart } }, select: TASK_SELECT, orderBy: { completedAt: 'asc' }, take: 500 }),
-        db.task.findMany({ where: { status: { in: OPEN } }, select: TASK_SELECT, orderBy: { dueDate: 'asc' }, take: 3000 })
+db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }, select: TASK_SELECT, orderBy: { dueDate: 'asc' }, take: 3000 })
       ]);
       return { today, nextDay, dayStart, members, closed, open };
     },

@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // Mapa de carga en el servidor (10 de octubre de 2026): tareas abiertas por persona y día hábil, con las horas que
 // suele tomar cada tipo de trabajo según Ritmo (90 días). Solo lee.
 
@@ -42,7 +43,7 @@ export const createTeamLoadService = ({ db = prisma, rhythm = teamRhythmService,
     const [members, tasks, rhythmData] = await Promise.all([
       db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, avatarUrl: true }, orderBy: { name: 'asc' } }),
       db.task.findMany({
-        where: { status: { in: OPEN_STATUSES }, assigneeId: { not: null } },
+        where: { status: { in: OPEN_STATUSES }, assigneeId: { not: null }, AND: [activeTaskSourceWhere] },
         select: { id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, isPrivate: true, assigneeId: true, aiCategory: true, aiComplexity: true, clientId: true,
           contentItem: { select: { format: true, publishDate: true, publishTime: true, status: true } }, client: { select: { name: true } }, collaborators: { select: { id: true } },
           workSessions: { where: { cycle: { closedAt: null }, isOverlapping: false, isCollaborator: false }, select: { workerId: true, startedAt: true, endedAt: true, durationMs: true, isOverlapping: true, isCollaborator: true, correctedAt: true } } },

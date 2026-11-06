@@ -41,5 +41,5 @@ test('returned reminder routes stay behind the existing task-management permissi
 
   assert.match(routes, /router\.use\('\/tasks', requireModulePermission\('gestion'\)\)/);
   assert.match(routes, /router\.get\('\/tasks\/returned-alerts', taskController\.getMyReturnedTaskAlerts\)/);
-  assert.match(routes, /router\.post\('\/tasks\/:taskId\/returned-reminder\/snooze', taskController\.snoozeReturnedTaskReminder\)/);
+  assert.match(routes, /router\.post\('\/tasks\/:taskId\/returned-reminder\/snooze', guardTask, taskController\.snoozeReturnedTaskReminder\)/);
 });

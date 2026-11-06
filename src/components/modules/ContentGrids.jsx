@@ -91,6 +91,7 @@ const ContentGrids = () => {
     onSuccess: () => {
       queryClient.invalidateQueries(['content-plans']);
       toast.success('Parrilla eliminada correctamente');
+      for (const key of ['content-plan', 'nativeTasks', 'dashboardMetrics', 'client-operations', 'drive']) queryClient.invalidateQueries({ queryKey: [key] });
     },
     onError: () => {
       toast.error('Error al eliminar la parrilla');

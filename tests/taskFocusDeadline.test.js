@@ -91,11 +91,11 @@ test('the server refuses changes to the locked tasks of the person with a 423 an
     }
   };
   await assert.rejects(assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'other' }), (error) => error.statusCode === 423 && /En cuanto termines «Caption Expo», deberás continuar con «Redactar parrilla»/.test(error.message) && error.focusTask.id === 'focus' && error.inProgressTask.id === 'working');
-  assert.deepEqual(calls[0][1].where, { focusDeadlineAt: { not: null }, OR: [
+  assert.deepEqual(calls[0][1].where, { focusDeadlineAt: { not: null }, AND: [activeTaskSourceWhere], OR: [
     { assigneeStatus: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } },
     { assigneeStatus: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }
   ], assignee: { userId: 'user-helen' } });
-  assert.deepEqual(calls[1][1].where, { OR: [{ assigneeStatus: { in: ['EN_CURSO'] } }, { assigneeStatus: null, status: { in: ['EN_CURSO'] } }], assignee: { userId: 'user-helen' }, id: { not: 'focus' } }, 'the notice names what is already in progress');
+  assert.deepEqual(calls[1][1].where, { AND: [activeTaskSourceWhere], OR: [{ assigneeStatus: { in: ['EN_CURSO'] } }, { assigneeStatus: null, status: { in: ['EN_CURSO'] } }], assignee: { userId: 'user-helen' }, id: { not: 'focus' } }, 'the notice names what is already in progress');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'working' }), null, 'what was already in progress can be finished (Rodny, 21 September 2026)');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus' }), null, 'the focus task itself can be worked and completed');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'foreign' }), null, 'tasks of other people are not hers to be locked');
@@ -275,7 +275,7 @@ test('the server tells the manager who set the hour (and the person) once per ho
   const now = new Date('2026-09-21T20:00:00.000Z');
 
   assert.equal(await notifyFocusOverdue({ db, now, notify }), 1);
-  assert.deepEqual(updates[0][1], { focusDeadlineAt: { not: null, lt: now }, focusOverdueNotifiedAt: null, OR: [
+  assert.deepEqual(updates[0][1], { focusDeadlineAt: { not: null, lt: now }, focusOverdueNotifiedAt: null, AND: [activeTaskSourceWhere], OR: [
     { assigneeStatus: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } },
     { assigneeStatus: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }
   ] }, 'only active owner commitments past the hour that were not notified yet');
@@ -324,7 +324,7 @@ test('schema, cron, route, notifications and screens carry the overdue notice an
   assert.match(service, /type: 'TASK_FOCUS_SET'/, 'the person is told when a manager sets, moves or clears the hour');
   assert.match(focusService, /export const initFocusOverdueCron/, 'the overdue check runs on a schedule');
   assert.match(server, /initFocusOverdueCron\(\);/, 'the server starts it');
-  assert.match(routes, /router\.post\('\/tasks\/:taskId\/focus-extension', taskController\.requestTaskFocusExtension\);/);
+  assert.match(routes, /router\.post\('\/tasks\/:taskId\/focus-extension', guardTask, taskController\.requestTaskFocusExtension\);/);
   assert.match(controller, /export const requestTaskFocusExtension = async \(req, res\)/);
   assert.match(layout, /notif\.type === 'TASK_FOCUS_SET' \|\| notif\.type === 'TASK_FOCUS_OVERDUE' \|\| notif\.type === 'TASK_FOCUS_EXTENSION'/, 'the notices open the task');
   assert.match(dialog, /fetch\(`\$\{getApiBaseUrl\(\)\}\/api\/tasks\/\$\{task\.id\}\/focus-extension`/, 'the dialog posts the request');
@@ -398,3 +398,4 @@ test('once the commitment expires the dialog is inescapable, and it sits above t
   assert.match(dialog, /\{sending && <Loader2 className="h-4 w-4 animate-spin" \/>\}[\s\S]{0,140}Confirmar/, 'the action is "Confirmar": nothing is sent for approval (Rodny, 21 September 2026)');
   assert.doesNotMatch(dialog, /Enviar petición|Añadir tiempo y avisar/);
 });
+import { activeTaskSourceWhere } from '../src/lib/taskRetirement.js';

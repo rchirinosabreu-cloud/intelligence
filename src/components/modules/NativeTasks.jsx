@@ -414,6 +414,10 @@ const NativeTasks = () => {
     });
 
     const taskCards = useMemo(() => projectTaskParticipations(tasks), [tasks]);
+    // Una eliminación confirmada en otra pantalla retira también el panel abierto.
+    useEffect(() => {
+        if (editingTask && !loadingTasks && !tasksError && !tasks.some(task => task.id === editingTask.id)) setEditingTask(null);
+    }, [tasks, editingTask, loadingTasks, tasksError]);
 
     const { data: clientsList = [] } = useQuery({
         queryKey: ['clientsDropdown'],
@@ -1542,7 +1546,6 @@ const NativeTasks = () => {
                                             )}
                                         </div>
                                     </div>
-                                    {col.id === 'realizado' && <p className="-mt-1 px-1 pb-3 text-xs text-zinc-500 dark:text-zinc-400">Más recientes primero</p>}
                                     <Droppable
                                         droppableId={col.id}
                                         renderClone={(provided, snapshot, rubric) => {

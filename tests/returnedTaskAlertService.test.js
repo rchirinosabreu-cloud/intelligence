@@ -99,9 +99,10 @@ test('snoozing is authorized against the authenticated creator and writes an aud
   const at = new Date('2026-09-02T18:00:00.000Z');
   const result = await service.snoozeReturnedTaskReminder('user-1', 'task-1', at, db);
 
-  assert.deepEqual(taskWhere, { id: 'task-1', status: 'DEVUELTA', creatorId: 'user-1' });
+  assert.deepEqual(taskWhere, { id: 'task-1', status: 'DEVUELTA', creatorId: 'user-1', AND: [activeTaskSourceWhere] });
   assert.equal(eventData.eventType, 'TASK_RETURNED_REMINDER_SNOOZED');
   assert.equal(eventData.subjectUserId, 'user-1');
   assert.equal(eventData.taskId, 'task-1');
   assert.equal(result.snoozedUntil.toISOString(), '2026-09-02T19:00:00.000Z');
 });
+import { activeTaskSourceWhere } from '../src/lib/taskRetirement.js';

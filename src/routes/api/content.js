@@ -263,11 +263,11 @@ router.delete('/plans/:id', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden: Only administrators can delete content plans' });
     }
 
-    await deleteContentPlan(req.params.id);
+    await deleteContentPlan(req.params.id, { actorId: req.user?.userId || req.user?.id });
     return res.json({ success: true });
   } catch (error) {
     console.error('[API] Error deleting content plan:', error);
-    return res.status(500).json({ error: 'Failed to delete content plan', details: error.message });
+    return res.status(error.status || error.statusCode || 500).json({ error: error.status || error.statusCode ? error.message : 'Failed to delete content plan', details: error.message });
   }
 });
 
@@ -474,11 +474,11 @@ router.delete('/items/:id/final-assets/:assetId', async (req, res) => {
 
 router.delete('/items/:id', async (req, res) => {
   try {
-    await deleteContentItem(req.params.id);
+    await deleteContentItem(req.params.id, { actorId: req.user?.userId || req.user?.id });
     return res.json({ success: true });
   } catch (error) {
     console.error('[API] Error deleting content item:', error);
-    return res.status(500).json({ error: 'Failed to delete content item', details: error.message });
+    return res.status(error.status || error.statusCode || 500).json({ error: error.status || error.statusCode ? error.message : 'Failed to delete content item', details: error.message });
   }
 });
 

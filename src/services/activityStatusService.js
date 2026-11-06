@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import { getOperationalEvents } from './operationalEventService.js';
 import { isVisibleOperationalEvent } from './operationalEventVisibility.js';
 import { taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
@@ -25,11 +26,11 @@ export async function getTeamActivityStatus({ db = prisma, readEvents = getOpera
       desktopY: true,
       statusMessage: true,
       nativeTasks: {
-        where: { OR: [{ assigneeStatus: 'EN_CURSO' }, { assigneeStatus: null, status: 'EN_CURSO' }] },
+where: { AND: [activeTaskSourceWhere], OR: [{ assigneeStatus: 'EN_CURSO' }, { assigneeStatus: null, status: 'EN_CURSO' }] },
         select: activityTaskSelect
       },
       collaboratingTasks: {
-        where: { OR: [{ status: 'EN_CURSO' }, { status: null, task: { status: { not: 'REALIZADA' } } }] },
+where: { task: activeTaskSourceWhere, OR: [{ status: 'EN_CURSO' }, { status: null, task: { status: { not: 'REALIZADA' } } }] },
         select: { task: { select: activityTaskSelect } }
       }
     }

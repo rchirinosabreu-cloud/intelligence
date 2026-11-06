@@ -1,3 +1,4 @@
+import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // Las herramientas de Bria (6 de octubre de 2026). Cada una aplica exactamente el permiso de la pantalla
 // que muestra ese dato: sin el módulo no hay herramienta; con el módulo, la persona ve lo mismo que vería
 // en la pantalla. Devuelven datos compactos para el modelo (nunca el guion, la descripción ni nada que la
@@ -175,7 +176,7 @@ const misTareas = {
   async run({ estado } = {}, { db, person, today, now }) {
     if (!person?.memberId) return { data: { tareas: [], mensaje: 'Tu cuenta no está vinculada a una persona del equipo, así que no hay tareas que mostrar.' } };
     const rows = await db.task.findMany({
-      where: { status: { in: statusesFor(estado) }, OR: [{ assigneeId: person.memberId }, { collaborators: { some: { memberId: person.memberId } } }] },
+where: { status: { in: statusesFor(estado) }, AND: [activeTaskSourceWhere], OR: [{ assigneeId: person.memberId }, { collaborators: { some: { memberId: person.memberId } } }] },
       select: { id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, priority: true, isPriority: true, isPrivate: true, client: { select: { name: true } }, assignee: { select: { name: true } } },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       take: 50

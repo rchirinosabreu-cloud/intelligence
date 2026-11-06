@@ -1322,9 +1322,13 @@ const ContentPlanDetail = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      for (const key of ['content-plan', 'nativeTasks', 'dashboardMetrics', 'client-operations', 'drive']) queryClient.invalidateQueries({ queryKey: [key] });
       toast.success('Pieza eliminada');
-    }
+    },
+    onError: error => {
+      console.error('[Parrilla] No se pudo eliminar la pieza:', error.response?.data || error.message);
+      toast.error(error.response?.data?.error || 'No pudimos eliminar la pieza.');
+    },
   });
 
   const sendToKanbanMutation = useMutation({

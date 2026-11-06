@@ -24,7 +24,23 @@ const OPEN_ACTION = 'inline-flex min-h-11 items-center gap-2 rounded-xl px-3 tex
 /** El período del espejo de MIO en la dirección: «octubre-2026». */
 export const sheetPeriod = (year, month) => `${MONTH_NAMES[month - 1].toLowerCase()}-${year}`;
 
-function NativePiece({ piece, plan, isLoading, error, allowDelivery, onBusyChange }) {
+async function loadNativePiecePlan(piece) {
+  const getPlan = async id => (await axios.get(`${getApiBaseUrl()}/api/content/plans/${encodeURIComponent(id)}`, { headers: authHeaders() })).data;
+  let plan;
+  try { plan = await getPlan(piece.planId); }
+  catch (error) { if (error.response?.status !== 404) throw error; }
+  if (plan?.items?.some(item => item.id === piece.id)) return plan;
+  // Una tarea abierta puede conservar el mes anterior. Resolver por identidad,
+  // nunca por título: un homónimo no reemplaza una pieza eliminada.
+  const { data: location } = await axios.get(`${getApiBaseUrl()}/api/content/items/${encodeURIComponent(piece.id)}/location`, { headers: authHeaders() });
+  if (location.planId !== plan?.id) plan = await getPlan(location.planId);
+  if (!plan?.items?.some(item => item.id === piece.id)) {
+    throw Object.assign(new Error('La pieza ya no está disponible.'), { response: { status: 404 } });
+  }
+  return plan;
+}
+
+function NativePiece({ piece, plan, isLoading, error, onRetry, allowDelivery, onBusyChange }) {
   const queryClient = useQueryClient();
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const item = plan?.items?.find((row) => row.id === piece.id);
@@ -59,7 +75,10 @@ function NativePiece({ piece, plan, isLoading, error, allowDelivery, onBusyChang
   useEffect(() => { onBusyChange?.(deliveryBusy || orderMutation.isPending); }, [deliveryBusy, orderMutation.isPending, onBusyChange]);
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   if (isLoading) return <p className="flex items-center gap-2 py-6 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" />Cargando la pieza…</p>;
-  if (error || !item) return <p role="alert" className="py-6 text-sm text-destructive">{error?.response?.status === 403 ? 'No tienes acceso a esta parrilla.' : 'No pudimos cargar esta pieza. Puedes cerrar y volver a intentarlo.'}</p>;
+  if (error || !item) return <div role="alert" className="space-y-2 py-6 text-sm">
+    <p className="text-destructive">{error?.response?.status === 403 ? 'No tienes acceso a esta parrilla.' : 'No pudimos cargar esta pieza. Inténtalo de nuevo.'}</p>
+    {error?.response?.status !== 403 && <button type="button" onClick={onRetry} className="min-h-11 rounded-lg border px-3">Reintentar consulta de pieza</button>}
+  </div>;
   const assets = allowDelivery ? validDelivery && !delivery.error ? delivery.data.files : [] : item.finalAssets || [];
   return (
     <div className="space-y-5" data-piece-peek-native>
@@ -138,24 +157,40 @@ function SheetPiece({ piece, clientSlug, period }) {
  * `piece` es la fila de Operación; `cycle` su mes. `onOpenFull` lleva a la parrilla (o al espejo de la hoja) anotando
  * de dónde se sale, para que allá se ofrezca volver.
  */
-export default function PiecePeekDialog({ piece, cycle, clientSlug, onClose, onOpenFull, nested = false, allowDelivery = false, returnFocusRef }) {
+export default function PiecePeekDialog({ piece, cycle, clientSlug, onClose, onOpenFull, onUnavailable, nested = false, allowDelivery = false, returnFocusRef }) {
   const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
   const fromSheet = Boolean(piece.external);
   const nativeQuery = useQuery({
-    queryKey: ['content-plan', piece.planId],
+    // La resolución puede devolver otro mes: no guardar ese destino bajo la
+    // clave de la parrilla anterior, que también usa el editor completo.
+    queryKey: ['content-plan', 'piece-peek', piece.id, piece.planId],
     enabled: !fromSheet && Boolean(piece.planId),
     staleTime: 30_000,
     refetchOnMount: 'always',
     retry: false,
-    queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/content/plans/${encodeURIComponent(piece.planId)}`, { headers: authHeaders() })).data,
+    queryFn: async () => {
+      try { return await loadNativePiecePlan(piece); }
+      catch (error) {
+        console.error('[Ver pieza] No se pudo consultar:', error.response?.data?.error || error.message, error.response?.status || error.code || 'UNKNOWN');
+        throw error;
+      }
+    },
   });
   const currentItem = !nativeQuery.error && nativeQuery.data?.items?.find(item => item.id === piece.id);
+  const unavailable = !fromSheet && nativeQuery.error?.response?.status === 404;
+  useEffect(() => {
+    if (!unavailable) return;
+    for (const key of ['nativeTasks', 'client-operations', 'content-plans']) queryClient.invalidateQueries({ queryKey: [key] });
+    (onUnavailable || onClose)();
+  }, [unavailable, queryClient, onUnavailable, onClose]);
   const currentPiece = fromSheet ? piece : currentItem ? {
     format: currentItem.format, title: currentItem.objective, status: currentItem.status, date: currentItem.publishDate,
   } : { format: piece.format, title: piece.title };
   const status = currentPiece.status ? PIECE_STATUS[currentPiece.status] || PIECE_STATUS.BORRADOR : null;
   const period = fromSheet ? sheetPeriod(cycle.year, cycle.month) : null;
-  const fullPath = fromSheet ? `/parrillas/hoja/${clientSlug}/${period}` : `/parrillas/${piece.planId}?item=${piece.id}`;
+  const fullPath = fromSheet ? `/parrillas/hoja/${clientSlug}/${period}` : `/parrillas/${encodeURIComponent(currentItem ? nativeQuery.data.id : piece.planId)}?item=${encodeURIComponent(piece.id)}`;
+  if (unavailable) return null;
   return (
     <Dialog open onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
       <DialogContent data-piece-peek closeLabel="Cerrar pieza" overlayClassName={nested ? 'z-[110]' : undefined}
@@ -168,7 +203,7 @@ export default function PiecePeekDialog({ piece, cycle, clientSlug, onClose, onO
           </DialogTitle>
           <DialogDescription>{currentPiece.date ? `Sale el ${shortDate(String(currentPiece.date).slice(0, 10))}` : !fromSheet && !currentItem ? 'Consulta de la pieza vinculada' : 'Sin fecha'}{fromSheet ? ' · de la hoja de MIO' : ''}</DialogDescription>
         </DialogHeader>
-        {fromSheet && piece.row ? <SheetPiece piece={piece} clientSlug={clientSlug} period={period} /> : piece.planId ? <NativePiece piece={piece} plan={nativeQuery.data} isLoading={nativeQuery.isLoading} error={nativeQuery.error} allowDelivery={allowDelivery} onBusyChange={setBusy} /> : null}
+        {fromSheet && piece.row ? <SheetPiece piece={piece} clientSlug={clientSlug} period={period} /> : piece.planId ? <NativePiece piece={piece} plan={nativeQuery.data} isLoading={nativeQuery.isLoading} error={nativeQuery.error} onRetry={() => nativeQuery.refetch()} allowDelivery={allowDelivery} onBusyChange={setBusy} /> : null}
         <div className="-mb-2 mt-2 flex justify-end border-t border-zinc-100 pt-2 dark:border-white/5">
           <button type="button" disabled={busy} onClick={() => onOpenFull(fullPath)} className={OPEN_ACTION} data-piece-peek-open>
             {fromSheet ? 'Abrir en Parrillas' : 'Abrir en la parrilla'}<ExternalLink className="h-4 w-4" />

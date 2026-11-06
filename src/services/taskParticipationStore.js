@@ -12,7 +12,7 @@ export const participationInclude = {
     select: { workerId: true, isCollaborator: true, startedAt: true, endedAt: true, isRework: true } },
   client: { select: { name: true, slug: true, logoUrl: true } },
   creator: { select: { id: true, name: true, avatarUrl: true } },
-  contentItem: { include: { plan: { select: { id: true, clientId: true, month: true, year: true, status: true, ownerId: true } },
+  contentItem: { include: { plan: { select: { id: true, clientId: true, month: true, year: true, status: true, ownerId: true, deletedAt: true } },
     publications: { select: { status: true } } } },
 };
 

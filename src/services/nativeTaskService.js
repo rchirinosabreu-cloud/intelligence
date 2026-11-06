@@ -1,5 +1,6 @@
 import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
+import { activeTaskSourceWhere, assertTaskSourceActive, taskSourceSelect } from '../lib/taskRetirement.js';
 import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { hasTaskParticipations } from '../lib/taskParticipation.js';
 import { hydrateTaskParticipations, hydrateArchivedTaskParticipations } from './taskParticipationStore.js';
@@ -134,7 +135,7 @@ export { getOrCreateSystemStreak, resetSystemStreak, processSystemStreakDailyInc
 
 export const getTasks = async (clientId, viewerUserId = null) => {
     try {
-        const clientFilter = clientId ? { clientId } : {};
+        const clientFilter = { ...(clientId ? { clientId } : {}), AND: [activeTaskSourceWhere] };
         // Ambas columnas deben describir el mismo instante: un cierre o una reapertura
         // entre lecturas no puede duplicar una tarea ni hacerla desaparecer del tablero.
         const snapshot = await prisma.$transaction(async (tx) => {
@@ -216,6 +217,11 @@ export const createTask = async ({
         let createdCollaborators = [];
         // Use a Prisma transaction to ensure atomicity
         const newTask = await recognitionTransaction(prisma, async (tx) => {
+            if (contentItemId) {
+                const source = await tx.contentItem.findUnique({ where: { id: contentItemId }, select: { deletedAt: true, plan: { select: { deletedAt: true } } } });
+                if (!source) throw Object.assign(new Error('La pieza ya no existe.'), { statusCode: 409 });
+                assertTaskSourceActive({ contentItem: source });
+            }
             if (requireActiveClient) {
                 const currentClient = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, isArchived: true } });
                 if (!currentClient || currentClient.isArchived) throw Object.assign(new Error('La cuenta cambió. Ajusta el pendiente antes de crearlo.'), { status: 409 });
@@ -562,6 +568,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 contentItem: {
                     select: {
                         id: true,
+                        deletedAt: true,
+                        plan: { select: { deletedAt: true } },
                         objective: true,
                         format: true,
                         publishDate: true,
@@ -580,6 +588,7 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
         });
 
+        assertTaskSourceActive(currentTask);
         if (!currentTask) {
             throw new Error(`Task with id ${id} not found`);
         }
@@ -1322,7 +1331,7 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
             // 1. Get task data for the log
             const task = await tx.task.findUnique({
                 where: { id },
-                select: { title: true, clientId: true, status: true }
+                select: { title: true, clientId: true, status: true, ...taskSourceSelect }
             });
 
             if (!task) {
@@ -1330,6 +1339,7 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
             }
 
             // 2. Create Audit Log
+            assertTaskSourceActive(task);
             await tx.deletedTaskLog.create({
                 data: {
                     originalTaskId: id,
@@ -1359,6 +1369,7 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
 export const deleteTask = async (id) => {
     try {
         await recognitionTransaction(prisma, async tx => {
+            assertTaskSourceActive(await tx.task.findUnique({ where: { id }, select: taskSourceSelect }));
             const recognitionBefore = await prepareTaskRecognition(tx, id);
             const deletedTask = await tx.task.delete({ where: { id } });
             await recordQualityStreakTransition(tx, deletedTask, null);
