@@ -725,6 +725,7 @@ model Client {
   integrations        Integration[]
   socialAccounts      ClientSocialAccount[]
   adAccounts          ClientAdAccount[]
+  adBudgets           AdBudget[]
   nativeTasks         Task[]
   agencyContexts      AgencyContext[]
   briaMemorySources   BriaMemorySource[]
@@ -1273,6 +1274,124 @@ model ClientAdAccount {
   @@unique([clientId, adAccountId])
 }
 
+/// Pautas (reunión del 6 de noviembre de 2026): el presupuesto global de un cliente, o de una de sus marcas, en una
+/// plataforma. El ciclo no se guarda aquí: sale del corte del contrato del cliente, el mismo de Operación. La regla vive
+/// en `src/lib/adBudgets.js`. Aditivas con `scripts/ensure-ad-budgets-schema.js`.
+model AdBudget {
+  id            String          @id @default(uuid())
+  clientId      String
+  brand         String?
+  platform      String          @default("META")
+  kind          String          @default("MENSUAL")
+  status        String          @default("ACTIVA")
+  currency      String          @default("COP")
+  amount        Decimal         @db.Decimal(14, 2)
+  objective     String?
+  payer         String          @default("POR_DEFINIR")
+  responsibleId String?
+  startDate     String?
+  endDate       String?
+  notes         String?
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  client        Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  responsible   TeamMember?     @relation("AdBudgetResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  cycles        AdBudgetCycle[]
+  campaigns     AdCampaign[]
+  alerts        AdBudgetAlert[]
+
+  @@index([clientId])
+  @@index([responsibleId])
+}
+
+/// Un ciclo con algo escrito: nace con la primera lectura de gasto. `amount` es el presupuesto de ese ciclo, para que
+/// cambiar el de la pauta no reescriba meses pasados. `carryOverManual` solo existe si alguien ajustó el saldo.
+model AdBudgetCycle {
+  id              String          @id @default(uuid())
+  budgetId        String
+  cycleKey        String
+  amount          Decimal         @db.Decimal(14, 2)
+  spent           Decimal?        @db.Decimal(14, 2)
+  spentAsOf       String?
+  carryOverManual Decimal?        @db.Decimal(14, 2)
+  carryOverReason String?
+  carryOverById   String?
+  closedAt        DateTime?       @db.Timestamptz(3)
+  closedById      String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  budget          AdBudget        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  readings        AdSpendReading[]
+
+  @@unique([budgetId, cycleKey])
+}
+
+/// Cada vez que alguien miró Meta y escribió cuánto se lleva gastado en el ciclo. El historial queda completo.
+model AdSpendReading {
+  id           String        @id @default(uuid())
+  cycleId      String
+  readOn       String
+  spent        Decimal       @db.Decimal(14, 2)
+  isFinal      Boolean       @default(false)
+  note         String?
+  recordedById String?
+  createdAt    DateTime      @default(now())
+  cycle        AdBudgetCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, createdAt])
+}
+
+/// Lo que corre dentro del presupuesto global. Un anuncio puede terminar antes: el gasto se cierra con el cliente.
+model AdCampaign {
+  id          String   @id @default(uuid())
+  budgetId    String
+  name        String
+  link        String?
+  objective   String?
+  status      String   @default("POR_ACTIVAR")
+  startDate   String?
+  endDate     String?
+  planned     Decimal? @db.Decimal(14, 2)
+  notes       String?
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  budget      AdBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId])
+}
+
+/// Cada corrección de una pauta: quién, qué decía y qué dice. Sin llave a la pauta para sobrevivir a su eliminación.
+/// Registro inmutable: está en el catálogo de `src/lib/auditImmutability.js`.
+model AdBudgetEvent {
+  id        String   @id @default(uuid())
+  budgetId  String
+  clientId  String?
+  action    String
+  summary   String
+  before    Json?
+  after     Json?
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  @@index([budgetId, createdAt])
+}
+
+/// Lo ya avisado por la campana al project manager: una fila por pauta, ciclo y paso, para que nada se repita.
+model AdBudgetAlert {
+  id       String   @id @default(uuid())
+  budgetId String
+  cycleKey String
+  step     String
+  sentAt   DateTime @default(now()) @db.Timestamptz(3)
+  budget   AdBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, cycleKey, step])
+}
+
 /// La cola de publicación: una fila por pieza y cuenta. El cron la reclama por compare-and-set (lease),
 /// publica y deja el enlace; un fallo guarda su motivo en español y reintenta con espera creciente.
 model SocialPublication {
@@ -1388,6 +1507,7 @@ model TeamMember {
   managedClients     Client[]      @relation("ClientProjectManager")
   managedProjects    ProjectOperation[]
   crmLeads           CrmLead[]     @relation("CrmLeadOwner")
+  adBudgets          AdBudget[]    @relation("AdBudgetResponsible")
 }
 
 model OperationalEvent {

@@ -43,7 +43,7 @@ test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» s
     assert.match(base, />\s*No sigue\s*</);
     assert.match(band, /¿Cómo la cerramos\?/);
     assert.match(band, /mode === 'close' && REVIEW_OUTCOMES\.map/);
-    assert.match(base, /\{!isReview && !isCollection && !isPlan && !isOperational && notice\.url && \(/);
+    assert.match(base, /\{!isReview && !isCollection && !isPlan && !isOperational && !isAd && notice\.url && \(/);
 
     // Un aviso de parrilla no tiene seguimiento que registrar: su botón principal abre la parrilla y las piezas se
     // marcan una por una, que es mirarlas (Rodny, 30 de octubre de 2026). «Recordarme» sigue al final.

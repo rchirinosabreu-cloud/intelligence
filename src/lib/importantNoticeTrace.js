@@ -43,7 +43,9 @@ const CLEARED_REASONS = {
     REASIGNADO: 'el seguimiento le corresponde al equipo comercial',
     AL_DIA: 'el cliente se puso al día con lo que tenía vencido',
     // Avisos de parrilla (30 de octubre de 2026): le llegan al CM y al PM, y basta con que una marque las piezas.
-    PUBLICADAS: 'las piezas ya quedaron publicadas'
+    PUBLICADAS: 'las piezas ya quedaron publicadas',
+    PAUTA_ATENDIDA: 'ya se actualizó el gasto o se revisó la campaña',
+    PAUTA_INACTIVA: 'la pauta ya no está activa'
 };
 
 const isCollectionNotice = (meta) => String(meta?.kind || '').startsWith('CARTERA_');

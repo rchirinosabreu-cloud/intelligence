@@ -73,6 +73,7 @@ import { createImportantNoticeRouter } from './api/importantNotices.js';
 import { createPlatformLeagueRouter } from './api/platformLeague.js';
 import { createServiceHealthRouter } from './api/serviceHealth.js';
 import { createClientProfitabilityRouter } from './api/clientProfitability.js';
+import { createAdBudgetRouter } from './api/adBudgets.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 import { handleFirefliesWebhook } from '../services/firefliesWebhookService.js';
@@ -357,6 +358,7 @@ router.use('/social', requireModulePermission('parrillas'), socialPublishingRout
 router.use('/db', dbRouter);
 router.use('/clients/:clientId', requireModulePermission('clientes'), clientFileRouter);
 router.use('/client-operations', requireModulePermission('clientes'), clientOperationsRouter);
+router.use('/ad-budgets', requireModulePermission('pautas'), createAdBudgetRouter());
 router.use('/talent-radar', talentRadarRouter);
 router.use('/activity', requireModulePermission('actividad'), activityRouter);
 router.use('/dashboard', dashboardRouter);

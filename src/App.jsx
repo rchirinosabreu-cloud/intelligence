@@ -45,6 +45,7 @@ const PublicQuotation = lazyWithRecovery(() => import('./components/public/Quota
 const MinutesLayout = lazyWithRecovery(() => import('./components/modules/Minutes/MinutesLayout'));
 const DriveLayout = lazyWithRecovery(() => import('./components/modules/Drive/DriveLayout'));
 const OperationalHealth = lazyWithRecovery(() => import('./components/modules/OperationalHealth'));
+const AdBudgets = lazyWithRecovery(() => import('./components/modules/AdBudgets/AdBudgets'));
 const CrmLayout = lazyWithRecovery(() => import('./components/modules/Crm/CrmLayout'));
 const CrmLeadDetail = lazyWithRecovery(() => import('./components/modules/Crm/CrmLeadDetail'));
 const CommercialRequestPage = lazyWithRecovery(() => import('./components/public/CommercialRequest/CommercialRequestPage'));
@@ -265,6 +266,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="drive">
                           <DriveLayout />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/pautas"
+                      element={
+                        <ModuleGuard module="pautas">
+                          <AdBudgets />
                         </ModuleGuard>
                       }
                     />
