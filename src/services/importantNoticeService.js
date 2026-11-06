@@ -13,12 +13,15 @@ import { recordOperationalTrace } from './operationalTraceService.js';
 import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
-import { userHasArea } from './teamAreaService.js';
+import { userHasArea, userCanReceiveFinancialNotices } from './teamAreaService.js';
 import { collectionStillDue, collectionNoticeReceivableIds } from './collectionState.js';
 import { hasCollectionActivitySince, recordCollectionActivity } from './collectionActivityService.js';
 import { NOTICE_ARCHIVE_OUTCOME, isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { isPlanNotice, parsePlanSubject } from '../lib/planCloseNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
+import { readOperationalNotices, syncOperationalNotices } from './operationalNoticeService.js';
+import { isOperationalNotice, operationalNoticeAcknowledges, operationalCycleSubject } from '../lib/clientOperationalNotices.js';
+export { readOperationalNotices };
 
 const CONTACT_TYPES = CRM_ACTIVITY_TYPES.filter((type) => type.contact).map((type) => type.value);
 const LOST_REASON = 'Sin respuesta del cliente.';
@@ -30,7 +33,8 @@ const httpError = (statusCode, message) => Object.assign(new Error(message), { s
 
 const serialize = (notice, receivableIds) => ({
     id: notice.id, kind: notice.kind, level: notice.level, label: notice.label, message: notice.message, url: notice.url || null,
-    ...(receivableIds ? { receivableIds } : {})
+    ...(receivableIds ? { receivableIds } : {}),
+    ...(isOperationalNotice(notice) ? { operational: true, acknowledge: operationalNoticeAcknowledges(notice), actionLabel: 'Revisar operación' } : {})
 });
 
 const leadName = (lead) => lead?.company || lead?.contactName || null;
@@ -42,6 +46,7 @@ const isClientCollectionNotice = (notice) => CLIENT_COLLECTION_KINDS.has(notice.
 // De quién es el aviso, para nombrarlo en la traza: la oportunidad o el cliente.
 const readSubjectName = async (db, notice) => {
     try {
+        if (isOperationalNotice(notice)) return notice.label?.split(' · ').slice(1).join(' · ') || null;
         if (isClientCollectionNotice(notice)) return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
         if (isCollectionNotice(notice)) return (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { client: { select: { name: true } } } }))?.client?.name || null;
         return leadName(await db.crmLead.findUnique({ where: { id: notice.subjectId }, select: { company: true, contactName: true } }));
@@ -130,6 +135,7 @@ const planStillPending = async (db, notice, overduePlans) => {
 // ¿La oportunidad sigue esperando al cliente y nadie registró una gestión desde que salió el aviso? Si no, por qué.
 // En cartera: ¿el cliente sigue con lo vencido? En parrillas: ¿quedan piezas sin publicar?
 const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans } = {}) => {
+    if (isOperationalNotice(notice)) return null; // Revalidado por la proyección autorizada antes de seleccionar.
     if (isPlanNotice(notice)) return planStillPending(db, notice, overduePlans);
     if (isCollectionNotice(notice)) return collectionStillDue(db, notice, now);
     const lead = await db.crmLead.findUnique({
@@ -151,17 +157,39 @@ const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans }
 // Los de cartera, del área Administrativa y contable (Rodny, 28 de octubre de 2026: «esas bandas y decisiones las toma Elisa»).
 const isCrmNotice = (notice) => String(notice.kind || '').startsWith('CRM_');
 const seesCrmNotices = (db, userId) => userHasArea(db, userId, 'COMERCIAL');
-const seesCollectionNotices = (db, userId) => userHasArea(db, userId, 'ADMINISTRATIVA');
+const seesCollectionNotices = async (db, userId) => await userHasArea(db, userId, 'ADMINISTRATIVA') && await userCanReceiveFinancialNotices(db, userId);
 
 /** El aviso que le toca ver a esa persona ahora y cuándo volver a preguntar. `who` nombra a la persona en la traza. */
-export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log, overduePlans = readOverduePlans } = {}) => {
+export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log, overduePlans = readOverduePlans, operationalSource = readOperationalNotices } = {}) => {
+    let operational = new Map();
+    if (db.user?.findUnique && db.client?.findMany && db.importantNotice?.findUnique) {
+        try { operational = await syncOperationalNotices(db, userId, now, operationalSource); }
+        catch (error) { console.error('[Avisos operativos] No se pudo actualizar la fuente:', error?.code || error?.name); }
+    }
     const [pending, lastDecision, commercial, administrative] = await Promise.all([
         db.importantNotice.findMany({ where: { userId, resolvedAt: null } }),
         db.importantNotice.findFirst({ where: { userId, decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, select: { decidedAt: true } }),
         seesCrmNotices(db, userId),
         seesCollectionNotices(db, userId)
     ]);
+    const coveredCycles = new Set([...operational.values()].map(operationalCycleSubject).filter(Boolean));
+    // La revisión de ciclo ya abre las mismas piezas. No pedir dos veces la revisión del mismo período.
+    if (coveredCycles.size && pending.some(n => n.kind === 'PARRILLA_RESUMEN')) {
+        try {
+            const rows = (await overduePlans()).filter(row => [row.projectManager, row.communityManager].some(person => person?.userId === userId));
+            const remaining = rows.filter(row => !coveredCycles.has(`${row.clientId}:${row.cycle.year}-${String(row.cycle.month).padStart(2, '0')}`));
+            for (const notice of pending.filter(n => n.kind === 'PARRILLA_RESUMEN')) {
+                if (!remaining.length) notice.coveredByOperation = true;
+                else {
+                    notice.label = 'Parrillas · Otros períodos pendientes';
+                    notice.message = `${remaining.length === 1 ? '1 período adicional tiene' : `${remaining.length} períodos adicionales tienen`} piezas que pasaron su fecha y siguen sin publicar.`;
+                }
+            }
+        } catch { /* No se infiere ausencia de pendientes de una lectura fallida. */ }
+    }
     let candidates = pending
+        .filter(notice => !notice.coveredByOperation && !(notice.kind === 'PARRILLA_SIN_PUBLICAR' && coveredCycles.has(notice.subjectId)))
+        .filter(notice => !isOperationalNotice(notice) || operational.has(notice.subjectId))
         .filter((notice) => commercial || !isCrmNotice(notice))
         .filter((notice) => administrative || !isCollectionNotice(notice));
     for (let discarded = 0; discarded <= MAX_STALE_PER_READ; discarded += 1) {
@@ -181,10 +209,15 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
     return { notice: null, nextAt: null };
 };
 
-const ownOpenNotice = async (db, id, actor) => {
+const ownOpenNotice = async (db, id, actor, now = new Date()) => {
     const userId = actor?.userId || actor?.id;
     const notice = await db.importantNotice.findFirst({ where: { id, userId } });
     if (!notice) throw httpError(404, 'Ese aviso ya no está.');
+    if (isCollectionNotice(notice) && !await seesCollectionNotices(db, userId)) throw httpError(403, 'Este aviso requiere acceso financiero y responsabilidad administrativa.');
+    if (isOperationalNotice(notice)) {
+        const wanted = await readOperationalNotices(db, userId, now);
+        if (!wanted.some(item => item.subjectId === notice.subjectId)) throw httpError(409, 'Este aviso cambió. Actualiza para revisar la operación actual.');
+    }
     if (notice.resolvedAt) throw httpError(409, 'Ese aviso ya se resolvió.');
     return notice;
 };
@@ -243,7 +276,7 @@ export const reassignCrmNotices = async (db = prisma, { commercialIds = [], now 
  * se mostró no prueba que se leyó; lo que la persona hizo queda aparte, con su decisión.
  */
 export const markNoticeShown = async (db = prisma, id, actor, { now = new Date(), log } = {}) => {
-    const notice = await ownOpenNotice(db, id, actor);
+    const notice = await ownOpenNotice(db, id, actor, now);
     const snoozed = notice.snoozedUntil ? new Date(notice.snoozedUntil) : null;
     if (snoozed && snoozed > now) throw httpError(409, 'Ese aviso está pospuesto.');
     const appearance = snoozed ? snoozed.toISOString() : 'inicial';
@@ -255,7 +288,8 @@ export const markNoticeShown = async (db = prisma, id, actor, { now = new Date()
 
 /** «Ya hice seguimiento»: la gestión queda en el CRM a nombre de quien la hizo, con la hora de ahora. */
 export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
-    const notice = await ownOpenNotice(db, id, actor);
+    const notice = await ownOpenNotice(db, id, actor, now);
+    if (isOperationalNotice(notice)) throw httpError(400, 'Revisa este aviso desde la operación del cliente.');
     if (!isFollowUpChannel(body.channel)) throw httpError(400, 'Elige cómo hiciste el seguimiento.');
     // En cartera queda como gestión de cobro del cliente (28 de octubre de 2026: «debe haber un registro»), que se ve en
     // Cuentas por cobrar; en el CRM, como gestión de la oportunidad. Las dos, además, en la trazabilidad.
@@ -294,9 +328,18 @@ export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = 
     return { ok: true };
 };
 
+/** Acuse de un cambio de estado, nunca declaración de cumplimiento ni autorización de trabajo. */
+export const acknowledgeOperationalNotice = async (db, id, actor, { now = new Date(), log } = {}) => {
+    const notice = await ownOpenNotice(db, id, actor, now);
+    if (!operationalNoticeAcknowledges(notice)) throw httpError(400, 'Este aviso se atiende en su registro de origen.');
+    await resolve(db, notice, 'RECIBIDO', now);
+    await traceNotice(db, NOTICE_TRACE_EVENTS.CLOSED, { notice, actor, subject: await readSubjectName(db, notice), extra: { outcome: 'RECIBIDO' }, now, log });
+    return { ok: true };
+};
+
 /** «Recordarme»: no se cierra, vuelve a la hora elegida. */
 export const snoozeNotice = async (db = prisma, id, body = {}, actor, { now = new Date(), log } = {}) => {
-    const notice = await ownOpenNotice(db, id, actor);
+    const notice = await ownOpenNotice(db, id, actor, now);
     const until = snoozeUntil(body.option, now);
     if (!until) throw httpError(400, 'Elige cuándo te lo recuerdo.');
     await db.importantNotice.update({ where: { id: notice.id }, data: { snoozedUntil: until, decidedAt: now } });
@@ -321,7 +364,7 @@ const CLOSE_STAGES = {
  * vale en cualquier aviso de una oportunidad, también en los recordatorios (4 de noviembre de 2026).
  */
 export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
-    const notice = await ownOpenNotice(db, id, actor);
+    const notice = await ownOpenNotice(db, id, actor, now);
     if (body.outcome === NOTICE_ARCHIVE_OUTCOME) {
         if (!isCrmNotice(notice)) throw httpError(409, 'Solo una oportunidad del CRM se archiva desde el aviso.');
     } else {

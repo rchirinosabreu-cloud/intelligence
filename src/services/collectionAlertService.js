@@ -65,8 +65,8 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
             accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS }
         }
     });
-    const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA');
-    const direction = (await activeAreaUserIds(db, 'DIRECCION')).filter((id) => !administrative.includes(id));
+    const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA', { module: 'financiero' });
+    const direction = (await activeAreaUserIds(db, 'DIRECCION', { module: 'financiero' })).filter((id) => !administrative.includes(id));
     if (!administrative.length) log('[Cartera] Nadie del equipo está en el área Administrativa y contable: los avisos de cartera de este pase no tienen a quién llegar en la banda.');
 
     // Lo que le toca a cada persona en este pase, por tipo de campana: se reparte al final para poder resumir.

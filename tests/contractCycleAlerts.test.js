@@ -72,7 +72,7 @@ const team = [
     { id: 'u-elisa', teamMember: { role: 'Coordinadora Administrativa y Contable', areas: ['ADMINISTRATIVA'], isActive: true } },
     { id: 'u-kamila', teamMember: { role: 'Project Manager', areas: ['PROJECT_MANAGEMENT'], isActive: true } },
     { id: 'u-rodny', teamMember: { role: 'Project Manager', areas: ['PROJECT_MANAGEMENT', 'DIRECCION'], isActive: true } }
-];
+].map(person => ({ ...person, role: 'EDITOR', isActive: true, modulePermissions: { financiero: ['u-elisa', 'u-francisco', 'u-rodny'].includes(person.id) }, teamMember: { ...person.teamMember, isActive: true } }));
 const clientOf = (id, over = {}) => ({ id, name: `Cliente ${id}`, slug: `cliente-${id}`, isArchived: false, projectManager: { userId: 'u-kamila', isActive: true }, ...over });
 const fakeDb = (contracts) => {
     const taken = new Set();
@@ -94,6 +94,20 @@ const run = async (db) => {
     const result = await runContractCycleAlerts(db, { now: NOW, notify: async (data) => { bells.push(data); return { id: bells.length }; }, log: () => {}, info: () => {} });
     return { result, bells };
 };
+
+test('los avisos usan el cierre, el informe y la renovación ya registrados', async () => {
+    const c=clientOf('c-1',{monthlyCloses:[{year:2026,month:10}],monthlyReports:[{year:2026,month:10,status:'ENVIADO'}]});
+    const db=fakeDb([contract({monthlyReport:true,endDate:'2026-11-10',client:c}),contract({id:'next',startDate:'2026-11-11',endDate:'2027-01-01',client:c})]);
+    const {bells}=await run(db);
+    assert.deepEqual(bells.map(b=>b.type),['FACTURACION_MENSUAL']);
+});
+
+test('informe enviado quita solo su aviso; no acredita el cierre completo', async () => {
+    const c=clientOf('c-1',{monthlyReports:[{year:2026,month:10,status:'ENVIADO'}]});
+    const {bells}=await run(fakeDb([contract({monthlyReport:true,client:c})]));
+    assert.ok(bells.some(b=>b.type==='CIERRE_MENSUAL'));
+    assert.ok(!bells.some(b=>/prepara el informe/.test(b.message)));
+});
 
 test('el project manager recibe lo suyo, Administrativa la facturación, y nada se repite', async () => {
     const db = fakeDb([

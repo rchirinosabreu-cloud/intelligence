@@ -6,6 +6,7 @@
 // Lógica pura: la usan el servidor, la banda y las pruebas.
 import { bogotaDateKey } from './crmRules.js';
 import { proposalReference } from './crmFollowUpAlerts.js';
+export { clientOperationalNotices } from './clientOperationalNotices.js';
 
 export const NOTICE_LEVELS = Object.freeze({
     IMPORTANTE: Object.freeze({ rank: 0, color: 'coral' }),

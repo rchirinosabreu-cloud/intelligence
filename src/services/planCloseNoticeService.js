@@ -44,13 +44,17 @@ export const runPlanCloseNotices = async (db = prisma, {
     }
 
     // Quien ya no tiene nada atrasado también entra, para que su aviso se cierre.
-    const openAll = (await db.importantNotice.findMany({ where: { resolvedAt: null } })).filter(isPlanNotice);
+    const allNotices = await db.importantNotice.findMany({ where: { resolvedAt: null } });
+    const openAll = allNotices.filter(isPlanNotice);
     for (const notice of openAll) if (!byPerson.has(notice.userId)) byPerson.set(notice.userId, []);
 
     let sent = 0;
     for (const [userId, rows] of byPerson) {
         const open = openAll.filter((notice) => notice.userId === userId);
-        const { create, close } = planNoticePlan({ pending: rows, open, today });
+        // La banda integra los períodos cubiertos al leer la fuente vigente. No cerrar una parrilla
+        // por la mera existencia de otro aviso: podría estar desactualizado o haber cambiado de PM.
+        const { create, close, update } = planNoticePlan({ pending: rows, open, today });
+        for (const { id, ...data } of update) await db.importantNotice.update({ where: { id }, data });
         for (const item of create) {
             try {
                 await queue(db, { userId, ...item }, now);

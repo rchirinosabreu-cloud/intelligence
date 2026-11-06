@@ -49,6 +49,7 @@ const AppLayout = ({ children }) => {
   }, []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hasImportantNotice, setHasImportantNotice] = useState(false);
+  const [importantNoticeHeight, setImportantNoticeHeight] = useState(0);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
   const { currentUser } = useAuth();
@@ -646,7 +647,7 @@ const AppLayout = ({ children }) => {
 
       {/* Main Content Area - z-0 (above background) */}
       {/* Con un aviso importante abajo, la página guarda espacio al final para que nada quede tapado. */}
-      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64', hasImportantNotice && 'pb-56 md:pb-48')} style={{ marginRight: Math.max(chatDockWidth, briaDockWidth) }}>
+      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64', hasImportantNotice && 'pb-56 md:pb-48')} style={{ marginRight: Math.max(chatDockWidth, briaDockWidth), paddingBottom: hasImportantNotice && importantNoticeHeight ? `calc(${importantNoticeHeight + 32}px + env(safe-area-inset-bottom))` : undefined }}>
         {/* A short entrance, not a 700ms wash: the page should look loaded, not fading in (Rodny, 21 September 2026). */}
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-200">
           {recognitionExperience?.controls}
@@ -662,7 +663,7 @@ const AppLayout = ({ children }) => {
         </div>
       </main>
       {/* Avisos importantes: abajo, de borde a borde, por encima del menú y por debajo de los diálogos (z 65). */}
-      {currentUser?.id && <ImportantNoticeBand key={`notice-${currentUser.id}`} enabled={!isOnboardingBlocking} onVisibleChange={setHasImportantNotice} />}
+      {currentUser?.id && <ImportantNoticeBand key={`notice-${currentUser.id}`} enabled={!isOnboardingBlocking} onVisibleChange={setHasImportantNotice} onHeightChange={setImportantNoticeHeight} />}
       {/* La copa de la liga (3 de noviembre de 2026): asomada al borde derecho en toda la plataforma, solo para quien tiene la casilla «Liga del mes» en Equipo; abre «La carrera del mes». */}
       {currentUser?.id && <LeagueInvitation key={`league-${currentUser.id}`} enabled={!isOnboardingBlocking} />}
       {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth} triggerContainer={chatTriggerContainer}

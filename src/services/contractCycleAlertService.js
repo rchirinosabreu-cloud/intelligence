@@ -6,7 +6,7 @@ import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
 import { activeAreaUserIds } from './teamAreaService.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
-import { contractCycleAlerts, cycleAlertText, cycleDigestText } from '../lib/contractCycleAlerts.js';
+import { contractCycleAlerts, cycleAlertText, cycleDigestText, addDays } from '../lib/contractCycleAlerts.js';
 
 export const CYCLE_CLOSE_TYPE = 'CIERRE_MENSUAL';
 export const BILLING_REVIEW_TYPE = 'FACTURACION_MENSUAL';
@@ -38,6 +38,8 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
             client: {
                 select: {
                     id: true, name: true, slug: true, isArchived: true,
+                    monthlyCloses: { where: { year: { gte: Number(today.slice(0, 4)) - 1 } }, select: { year: true, month: true } },
+                    monthlyReports: { where: { year: { gte: Number(today.slice(0, 4)) - 1 } }, select: { year: true, month: true, status: true } },
                     projectManager: { select: { userId: true, isActive: true } },
                     // El community manager de la cuenta (30 de octubre de 2026): cerrar el mes es de los dos.
                     responsible: { select: { userId: true, isActive: true } }
@@ -45,7 +47,7 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
             }
         }
     });
-    const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA');
+    const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA', { module: 'financiero' });
     let projectManagement = null;
     const pmOf = async (client) => {
         const pm = client?.projectManager;
@@ -66,6 +68,12 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
     for (const contract of currentContracts(contracts, today)) {
         if (contract.client?.isArchived) continue;
         for (const alert of contractCycleAlerts(contract, today)) {
+            const sameCycle = row => row.year === alert.cycle?.year && row.month === alert.cycle?.month;
+            if (alert.step !== 'FACTURACION' && alert.cycle && contract.client?.monthlyCloses?.some(sameCycle)) continue;
+            if (alert.step === 'INFORME' && contract.client?.monthlyReports?.some(row => sameCycle(row) && row.status === 'ENVIADO')) continue;
+            if (alert.step.startsWith('RENOVACION') && contracts.some(next => next.clientId === contract.clientId && next.id !== contract.id
+                && next.status === 'ACTIVO' && next.startDate > contract.startDate && next.startDate <= addDays(contract.endDate, 1)
+                && (!next.endDate || next.endDate > contract.endDate))) continue;
             try {
                 await db.contractCycleAlert.create({ data: { contractId: contract.id, cycleKey: alert.cycleKey, step: alert.step, sentAt: now } });
             } catch (error) {

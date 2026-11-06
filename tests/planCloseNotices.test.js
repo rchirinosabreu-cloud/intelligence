@@ -67,11 +67,13 @@ test('un aviso que ya está abierto y dice lo mismo no se vuelve a crear', () =>
     assert.deepEqual(close, []);
 });
 
-test('si cambia lo que dice —otra pieza atrasada o el mes cerrando— se vuelve a crear', () => {
+test('si cambia lo que dice, se actualiza el aviso sin perder su pausa', () => {
     const abierto = { id: 'n1', kind: PLAN_NOTICE_KIND, subjectId: 'c1:2026-10', level: 'SEGUIMIENTO', message: '2 piezas pasaron su fecha y siguen sin publicar' };
-    const { create } = planNoticePlan({ pending: [{ ...cuenta, overdue: 3 }], open: [abierto], today: '2026-10-20' });
-    assert.equal(create.length, 1);
-    assert.equal(create[0].message, '3 piezas pasaron su fecha y siguen sin publicar');
+    const { create, update, close } = planNoticePlan({ pending: [{ ...cuenta, overdue: 3 }], open: [abierto], today: '2026-10-20' });
+    assert.equal(create.length, 0);
+    assert.equal(close.length, 0);
+    assert.equal(update[0].id, 'n1');
+    assert.equal(update[0].message, '3 piezas pasaron su fecha y siguen sin publicar');
 });
 
 test('la cuenta que se puso al día cierra su aviso', () => {

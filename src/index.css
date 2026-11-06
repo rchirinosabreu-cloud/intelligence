@@ -185,53 +185,58 @@
       radial-gradient(56rem 36rem at 60% 100%, rgb(var(--brand-coral) / 0.07), transparent 62%),
       radial-gradient(48rem 34rem at 18% 96%, rgb(var(--brand-green) / 0.09), transparent 62%);
   }
-  /* Avisos importantes (Rodny, 26 Oct 2026): a dome of one brand hue rising from the bottom edge, no border, fading
-     out softly on every side. Green for follow-ups; coral only for what matters most. Above the sidebar, below dialogs. */
+  /* Avisos persistentes: tarjeta compacta, sobre navegación y bajo los diálogos. */
   .brain-notice-band {
-    --notice-hue: var(--brand-green);
-    --notice-base: 250 250 250;
-    --notice-deep: color-mix(in srgb, rgb(var(--notice-hue)) 75%, black);
-    --notice-ink: color-mix(in srgb, rgb(var(--notice-hue)) 70%, black);
-    position: fixed;
-    inset: auto 0 0 0;
-    z-index: 65;
-    height: 400px;
-    pointer-events: none;
-    animation: brain-notice-in 300ms ease-out;
+    --notice-hue: var(--brand-coral);
+    --notice-ink: color-mix(in srgb, rgb(var(--notice-hue)) 60%, black);
+    /* Variante coral de la paleta: contraste AA para texto blanco de botones pequeños. */
+    --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black);
+    --notice-surface: 255 255 255;
+    position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%;
+    transform: translateX(-50%); width: min(680px, calc(100vw - 32px)); z-index: 65;
+    color: rgb(39 39 42); pointer-events: none; animation: brain-notice-in 180ms ease-out;
   }
   .brain-notice-band[data-level="IMPORTANTE"] { --notice-hue: var(--brand-coral); }
-  .brain-notice-band[data-mode="choose"] { height: 430px; }
-  .dark .brain-notice-band { --notice-base: 9 9 11; }
-  .brain-notice-wash {
-    position: absolute;
-    inset: 0;
-    background-image:
-      radial-gradient(var(--notice-spread, 62%) 100% at 50% 100%,
-        color-mix(in srgb, var(--notice-deep) 78%, transparent) 0%, rgb(var(--notice-hue) / .7) 18%, rgb(var(--notice-hue) / .58) 34%,
-        rgb(var(--notice-hue) / .42) 48%, rgb(var(--notice-hue) / .26) 62%, rgb(var(--notice-hue) / .13) 75%, rgb(var(--notice-hue) / .05) 87%, transparent 97%),
-      radial-gradient(70% 90% at 50% 100%, rgb(var(--notice-base)) 0%, rgb(var(--notice-base)) 30%, transparent 80%);
-    backdrop-filter: blur(6px);
-    -webkit-mask-image: radial-gradient(var(--notice-mask, 75%) 100% at 50% 100%, #000 0%, #000 35%, rgb(0 0 0 / .85) 48%, rgb(0 0 0 / .6) 62%, rgb(0 0 0 / .32) 76%, rgb(0 0 0 / .1) 89%, transparent 100%);
-    mask-image: radial-gradient(var(--notice-mask, 75%) 100% at 50% 100%, #000 0%, #000 35%, rgb(0 0 0 / .85) 48%, rgb(0 0 0 / .6) 62%, rgb(0 0 0 / .32) 76%, rgb(0 0 0 / .1) 89%, transparent 100%);
-  }
+  .dark .brain-notice-band { --notice-surface: 24 24 27; color: rgb(244 244 245); }
   .brain-notice-content {
-    position: absolute;
-    inset: auto 0 0 0;
-    padding: 0 16px calc(26px + env(safe-area-inset-bottom));
-    text-align: center;
-    color: white;
+    position: relative; padding: 24px 32px; border-radius: 20px; pointer-events: auto;
+    background: rgb(var(--notice-surface)); border: 1px solid rgb(var(--notice-hue));
+    box-shadow: 0 12px 40px rgb(24 24 27 / .12), 0 2px 6px rgb(24 24 27 / .05);
+    max-height: calc(100dvh - 48px); overflow-y: auto; text-align: left;
   }
-  .brain-notice-content > * { pointer-events: auto; }
-  .brain-notice-title { text-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 2px 14px rgb(0 0 0 / .22); }
-  .brain-notice-primary { background: white; color: var(--notice-ink); }
-  .brain-notice-ghost { background: rgb(255 255 255 / .16); color: white; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55); }
-  .brain-notice-ghost:hover { background: rgb(255 255 255 / .26); }
+  .dark .brain-notice-content { box-shadow: 0 12px 40px rgb(0 0 0 / .35); }
+  .brain-notice-label { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.5; font-weight: 600; margin-bottom: 10px; }
+  .brain-notice-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--notice-hue)); }
+  .brain-notice-title { max-width: 68ch; font-size: 16px; font-weight: 500; line-height: 1.5; margin-bottom: 16px; white-space: pre-line; text-wrap: pretty; overflow-wrap: anywhere; }
+  .brain-notice-primary { background: var(--notice-action); color: white; }
+  .brain-notice-primary:hover { background: color-mix(in srgb, var(--notice-action) 92%, black); }
+  .brain-notice-primary:active { background: color-mix(in srgb, var(--notice-action) 84%, black); }
+  .brain-notice-ghost { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px rgb(212 212 216); }
+  .brain-notice-ghost:hover { background: rgb(113 113 122 / .08); }
+  .dark .brain-notice-ghost { box-shadow: inset 0 0 0 1px rgb(82 82 91); }
+  .brain-notice-content :is(button, a):focus-visible { outline: 2px solid rgb(39 39 42); outline-offset: 3px; }
+  .dark .brain-notice-content :is(button, a):focus-visible { outline-color: rgb(244 244 245); }
+  .brain-notice-content button:disabled { cursor: wait; }
+  .brain-notice-wash { display: none; }
+  .brain-notice-band[data-appearance="accent"] .brain-notice-label {
+    margin: -24px -32px 16px; padding: 13px 32px; color: white;
+    background: linear-gradient(115deg, var(--notice-ink), color-mix(in srgb, rgb(var(--notice-hue)) 80%, black));
+  }
+  .brain-notice-band[data-appearance="accent"] .brain-notice-dot { background: white; }
+  .brain-notice-band[data-appearance="halo"] .brain-notice-wash {
+    display: block; position: absolute; inset: -64px; border-radius: 84px; pointer-events: none;
+    backdrop-filter: blur(10px);
+    background: radial-gradient(ellipse, rgb(var(--notice-hue) / .18) 15%, rgb(var(--notice-surface) / .35) 50%, transparent 76%);
+    mask-image: radial-gradient(ellipse, black 45%, transparent 78%);
+  }
+  .brain-notice-band[data-appearance="halo"] .brain-notice-content { border-color: rgb(var(--notice-hue) / .8); }
   @media (max-width: 639px) {
-    /* On a phone the dome widens so the whole title sits on color. */
-    .brain-notice-band { height: 470px; --notice-spread: 125%; --notice-mask: 140%; }
-    .brain-notice-band[data-mode="choose"] { height: 520px; }
+    .brain-notice-band { bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
+    .brain-notice-content { padding: 20px; border-radius: 16px; }
+    .brain-notice-band[data-appearance="halo"] .brain-notice-wash { inset: -36px; border-radius: 52px; }
+    .brain-notice-band[data-appearance="accent"] .brain-notice-label { margin: -20px -20px 14px; padding: 12px 20px; }
   }
-  @keyframes brain-notice-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes brain-notice-in { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
   @media (prefers-reduced-motion: reduce) { .brain-notice-band { animation: none; } }
 
   .brain-popover-surface {

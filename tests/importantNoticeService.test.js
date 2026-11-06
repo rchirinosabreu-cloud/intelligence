@@ -127,7 +127,7 @@ test('«No sigue» solo existe en la revisión y cierra la oportunidad como perd
     assert.deepEqual(archived, ['l1', 'l1']);
     assert.equal(reminder.rows[0].resolution, 'ARCHIVADA');
     // Un aviso de cartera o de parrilla no es una oportunidad: no hay nada que archivar.
-    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice({ kind: 'CARTERA_MENSUAL' })] }), 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW }), { statusCode: 409 });
+    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice({ kind: 'CARTERA_MENSUAL' })] }), 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW }), { statusCode: 403 });
     await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice()] }), 'n1', { outcome: 'ARCHIVAR' }, { userId: 'u-francys', role: 'EDITOR', modulePermissions: {} }, { crm, now: NOW }), { statusCode: 403 });
     calls.length = 0;
     // Perdida: el cliente no la tomó, con el motivo que el CRM exige para Perdido.

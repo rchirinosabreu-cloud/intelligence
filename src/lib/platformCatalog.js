@@ -36,6 +36,7 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/(drive\/upload|tasks\/upload-temp|drive\/managed-files)/, reason: 'subir o descargar archivos' },
   { match: /^\w+ \/tasks\/:taskId\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/, reason: 'señales de la pantalla' },
   { match: /^POST \/important-notices\/:id\/shown$/, reason: 'señales de la pantalla' },
+  { match: /^POST \/important-notices\/:id\/acknowledge$/, reason: 'acuse personal de recepción del aviso operativo: la persona lo confirma en la banda, no acredita cumplimiento ni lo confirma Bria por ella' },
   { match: /^GET \/tasks\/:taskId\/(attachments|comments)\/[^/]+\/(file|download)$/, reason: 'descarga de archivos' },
   { match: /^GET \/tasks\/:id\/deliverables\/:fileId\/(file|download)$/, reason: 'lectura binaria de entregables internos; se abre desde la tarea autorizada' },
   { match: /^POST \/tasks\/:id\/deliverables\/(direct-upload|confirm)$/, reason: 'subida directa del navegador, ligada a persona, tarea y revisión' },

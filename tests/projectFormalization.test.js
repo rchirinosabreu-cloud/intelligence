@@ -19,7 +19,7 @@ const team = [
     { id: 'u-francisco', name: 'Francisco Villa', teamMember: { role: 'Director general', areas: ['DIRECCION'], isActive: true } },
     { id: 'u-kamila', name: 'Kamila del Toro', teamMember: { role: 'Project Manager', areas: ['PROJECT_MANAGEMENT'], isActive: true } },
     { id: 'u-francys', name: 'Francys Caballero', teamMember: { role: 'Comercial', areas: ['COMERCIAL'], isActive: true } }
-];
+].map(person => ({ ...person, role: 'EDITOR', isActive: true, modulePermissions: { financiero: ['u-elisa', 'u-francisco', 'u-rodny'].includes(person.id) }, teamMember: { ...person.teamMember, isActive: true } }));
 
 const plan = (installments) => ({ version: 1, paymentPlans: [{ scenarioId: null, mode: 'PERCENTAGE', installments }] });
 const quotationFixture = (over = {}) => ({
