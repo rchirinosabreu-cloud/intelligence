@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { fileContentProblem, sniffMediaType } from '../src/lib/fileSignature.js';
 import { humanizeMetaError } from '../src/lib/socialPublishing.js';
 import { createImageDerivativeService } from '../src/services/socialImageDerivativeService.js';
@@ -86,5 +87,12 @@ test('the upload refuses a file whose content contradicts its name, before stori
   // A 400 with its reason: production strips the message of a 5xx and the person would see a code.
   assert.match(upload, /status: 400/);
   const routes = readFileSync('src/routes/api/content.js', 'utf8');
-  assert.match(routes, /error\.status === 400 \? 400 : 500/);
+  const handler = routes.slice(routes.indexOf("router.post('/items/:id/final-assets',"), routes.indexOf("router.post('/items/:id/final-assets/drive',"));
+  assert.match(handler, /return deliveryError\(res, error\)/);
+  const errorSource = routes.slice(routes.indexOf('const deliveryError ='), routes.indexOf("router.get('/items/:id/delivery',"));
+  const deliveryError = runInNewContext(`${errorSource}\ndeliveryError`, { console: { error() {} }, process: { env: { NODE_ENV: 'production' } } });
+  const response = { status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } };
+  deliveryError(response, { status: 400, message: '«02.png» contiene un video.' });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.body.error, '«02.png» contiene un video.');
 });
