@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import {
     SPECIFIC_CYCLE_KEY, adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adCycleFor, adSpendProblem,
-    carryOverFor, clientCutDay, cycleFromKey, evaluateAdCycle, formatAdMoney, previousCycleKey, shortDay, toCents
+    budgetCutDay, carryOverFor, cycleFromKey, evaluateAdCycle, formatAdMoney, previousCycleKey, shortDay, toCents
 } from '../lib/adBudgets.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -37,7 +37,7 @@ const publicCampaign = (campaign) => ({
 
 /** Una pauta tal como la lee todo el mundo: con su ciclo y cómo va. El servidor calcula y la pantalla solo muestra. */
 export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
-    const { cutDay, fromContract } = clientCutDay(budget.client?.contracts || [], today);
+    const { cutDay, source } = budgetCutDay(budget, today);
     const specific = budget.kind === 'ESPECIFICA';
     const cycle = cycleKey && !specific ? cycleFromKey(cycleKey, cutDay) : adCycleFor(budget, { cutDay, today });
     const rows = budget.cycles || [];
@@ -61,7 +61,7 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
         client: budget.client ? { id: budget.client.id, name: budget.client.name, slug: budget.client.slug } : null,
         responsible: budget.responsible ? { id: budget.responsible.id, name: budget.responsible.name, avatarUrl: budget.responsible.avatarUrl || null } : null,
         projectManager: budget.client?.projectManager?.isActive === false ? null : (budget.client?.projectManager ? { id: budget.client.projectManager.id, name: budget.client.projectManager.name } : null),
-        cutDay, cutFromContract: fromContract, cycle, evaluation, campaigns, pendingClose,
+        cutDay, cutSource: source, ownCutDay: budget.cutDay || null, cycle, evaluation, campaigns, pendingClose,
         carryOverReason: row?.carryOverReason || null
     };
 };
@@ -86,6 +86,7 @@ const assertClient = async (db, clientId) => {
 const budgetData = (input) => ({
     brand: text(input.brand), platform: input.platform, kind: input.kind, currency: input.currency, amount: Number(input.amount),
     objective: text(input.objective), payer: input.payer || 'POR_DEFINIR', responsibleId: input.responsibleId || null,
+    cutDay: input.kind === 'MENSUAL' && input.cutDay ? Number(input.cutDay) : null,
     startDate: input.kind === 'ESPECIFICA' ? input.startDate : null, endDate: input.kind === 'ESPECIFICA' ? input.endDate : null,
     notes: text(input.notes)
 });
@@ -114,7 +115,7 @@ const logEvent = (tx, budget, action, summary, actor, { before = null, after = n
 
 const CHANGE_LABELS = Object.freeze({
     clientId: 'el cliente', brand: 'la marca', platform: 'la plataforma', kind: 'el tipo', status: 'el estado', currency: 'la moneda', amount: 'el presupuesto',
-    objective: 'el objetivo', payer: 'quién paga', responsibleId: 'quién la lleva', startDate: 'las fechas', endDate: 'las fechas', notes: 'la nota'
+    cutDay: 'el día de corte', objective: 'el objetivo', payer: 'quién paga', responsibleId: 'quién la lleva', startDate: 'las fechas', endDate: 'las fechas', notes: 'la nota'
 });
 
 /** Qué cambió, en palabras y con el valor anterior: es lo que permite deshacer una corrección a mano. */
@@ -222,7 +223,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const current = await readBudget(db, id);
             const merged = {
                 clientId: current.clientId, brand: current.brand, platform: current.platform, kind: current.kind, currency: current.currency,
-                amount: Number(current.amount), objective: current.objective, payer: current.payer, responsibleId: current.responsibleId,
+                amount: Number(current.amount), cutDay: current.cutDay, objective: current.objective, payer: current.payer, responsibleId: current.responsibleId,
                 startDate: current.startDate, endDate: current.endDate, notes: current.notes, status: current.status, ...input
             };
             const problem = adBudgetProblem(merged);
@@ -230,7 +231,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             if (merged.clientId !== current.clientId) await assertClient(db, merged.clientId);
             await assertResponsible(db, merged.responsibleId);
             const day = today();
-            const { cutDay } = clientCutDay(current.client?.contracts || [], day);
+            const { cutDay } = budgetCutDay({ ...current, cutDay: merged.cutDay }, day);
             const cycle = adCycleFor(merged, { cutDay, today: day });
             const next = { ...budgetData(merged), clientId: merged.clientId, status: merged.status };
             const changes = budgetChanges(current, next);
@@ -270,7 +271,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const now = clock();
             const day = bogotaToday(now);
             if (input.readOn > day) throw httpError(422, 'La fecha de la lectura no puede ser futura.');
-            const { cutDay } = clientCutDay(budget.client?.contracts || [], day);
+            const { cutDay } = budgetCutDay(budget, day);
             const cycle = input.cycleKey && budget.kind !== 'ESPECIFICA' ? cycleFromKey(input.cycleKey, cutDay) : adCycleFor(budget, { cutDay, today: day });
             await db.$transaction(async (tx) => {
                 const row = await ensureCycle(tx, budget, cycle);
@@ -352,7 +353,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const budget = await readBudget(db, id);
             if (budget.kind === 'ESPECIFICA') throw httpError(422, 'Una pauta específica no recibe saldo de otro ciclo.');
             const day = today();
-            const { cutDay } = clientCutDay(budget.client?.contracts || [], day);
+            const { cutDay } = budgetCutDay(budget, day);
             const cycle = input.cycleKey ? cycleFromKey(input.cycleKey, cutDay) : adCycleFor(budget, { cutDay, today: day });
             await db.$transaction(async (tx) => {
                 await ensureCycle(tx, budget, cycle, { carryOverManual: Number(input.carryOver), carryOverReason: text(input.reason), carryOverById: actorId(actor) });
@@ -365,7 +366,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
         async clearCarryOver(id, { cycleKey = null } = {}, actor) {
             const budget = await readBudget(db, id);
             const day = today();
-            const { cutDay } = clientCutDay(budget.client?.contracts || [], day);
+            const { cutDay } = budgetCutDay(budget, day);
             const key = cycleKey || adCycleFor(budget, { cutDay, today: day }).key;
             const row = await readCycleRow(db, id, key);
             await db.$transaction(async (tx) => {

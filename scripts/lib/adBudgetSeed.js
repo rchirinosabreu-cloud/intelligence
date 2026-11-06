@@ -1,6 +1,6 @@
 // Lo que se dijo en la reunión de pautas del 6 de noviembre de 2026, para arrancar sin digitar. Son cifras de viva voz: la
 // nota de cada pauta dice lo que queda por confirmar y quien la lleva corrige lo que haga falta desde la pantalla.
-// `closesOn` es el último día del ciclo que se dijo en la reunión: si el contrato del cliente da otro, el informe lo avisa.
+// `cutDay` es el corte propio de la pauta: en producción todos los contratos tienen corte 1, y moverlo cambiaría Operación.
 export const MEETING_DAY = '2026-11-06';
 
 export const MEETING_BUDGETS = Object.freeze([
@@ -8,11 +8,11 @@ export const MEETING_BUDGETS = Object.freeze([
     { client: 'Foobespain', brand: 'Wine Summit', currency: 'USD', amount: 100, objective: 'Seguidores', closesOn: '2026-11-30', notes: 'Son 300 dólares al mes entre las tres cuentas. Saldo de octubre por repartir: ver Wine & Wonder.' },
     { client: 'Foobespain', brand: 'FoobeSpain', currency: 'USD', amount: 100, objective: 'Seguidores', closesOn: '2026-11-30', notes: 'Son 300 dólares al mes entre las tres cuentas. Saldo de octubre por repartir: ver Wine & Wonder.' },
     // Sin lectura a propósito: los 768.000 de la reunión se midieron desde el 10 de octubre, y este ciclo empieza el 19.
-    { client: 'Bonsai', currency: 'COP', amount: 1000000, objective: 'Mensajes de WhatsApp', closesOn: '2026-11-18', notes: 'Rodny confirmó cierre el 18: el día de corte del contrato debe ser el 19. Los 768.000 de la reunión se midieron desde el 10 de octubre: hay que leer en Meta el gasto desde el 19 de octubre.' },
-    { client: 'Promo Group', brand: 'Endova', currency: 'COP', amount: 300000, objective: 'Interacción', closesOn: '2026-11-14', spent: 91000, notes: 'Pauta de las convocatorias vigentes. El cliente pidió pautar solo en Endova.' },
+    { client: 'Bonsai', currency: 'COP', amount: 1000000, objective: 'Mensajes de WhatsApp', cutDay: 19, closesOn: '2026-11-18', notes: 'Rodny confirmó cierre el 18. Los 768.000 de la reunión se midieron desde el 10 de octubre: hay que leer en Meta el gasto desde el 19 de octubre.' },
+    { client: 'Promo Group', brand: 'Endova', currency: 'COP', amount: 300000, objective: 'Interacción', cutDay: 15, closesOn: '2026-11-14', spent: 91000, notes: 'Pauta de las convocatorias vigentes. El cliente pidió pautar solo en Endova.' },
     { client: 'New Pueblito', currency: 'COP', amount: 300000, objective: 'Mensajes de WhatsApp', closesOn: '2026-11-30', notes: 'En octubre se gastó como 60 mil: el saldo se suma a noviembre. Falta la cifra exacta para «Ajustar saldo anterior». Pendiente que el cliente ponga su tarjeta.' },
     { client: 'Pablo Hoff', currency: 'COP', amount: 200000, closesOn: '2026-11-30', notes: 'Pendiente que el cliente ponga su tarjeta.' },
-    { client: 'Multi-K', currency: 'COP', amount: 350000, objective: 'Mensajes de WhatsApp', closesOn: '2026-11-18', notes: 'Rodny confirmó 350.000 con cierre el 18. El cierre sale del contrato: su día de corte debe ser el 19.' }
+    { client: 'Multi-K', currency: 'COP', amount: 350000, objective: 'Mensajes de WhatsApp', cutDay: 19, closesOn: '2026-11-18', notes: 'Rodny confirmó 350.000 con cierre el 18.' }
 ].map((row) => Object.freeze(row)));
 
 const plain = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -40,6 +40,6 @@ export const planSeed = ({ rows = MEETING_BUDGETS, clients, existing, closeOf })
     if (!client) return { row, action: 'SIN_CLIENTE' };
     const repeated = existing.some((budget) => budget.clientId === client.id && plain(budget.brand) === plain(row.brand) && budget.platform === 'META');
     if (repeated) return { row, client, action: 'YA_EXISTE' };
-    const end = closeOf(client);
+    const end = closeOf(client, row);
     return { row, client, action: 'CREAR', end, differs: Boolean(row.closesOn) && end !== row.closesOn };
 });

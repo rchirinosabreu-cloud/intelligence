@@ -9,7 +9,7 @@ Se seguía anuncio por anuncio, con fechas distintas en cada uno, y nadie veía 
 ## Cómo funciona
 
 - **Una pauta** es el presupuesto global de un cliente, o de una de sus marcas, en una plataforma. Puede ser mensual o específica, en pesos o dólares, y dice quién la lleva y quién paga.
-- **El ciclo es el del cliente**: sale del día de corte de su contrato en Operación. No se escribe en Pautas. Sin contrato se usa el mes calendario y la pantalla lo dice.
+- **El ciclo es el del cliente**: sale del día de corte propio de la pauta y, si no lo tiene, del contrato en Operación. Es propio porque en producción todos los contratos tienen corte 1, y moverlo cambiaría el semáforo y los avisos de Operación. Sin ninguno de los dos se usa el mes calendario y la pantalla lo dice.
 - **El gasto se escribe mirando Meta**: una lectura es el acumulado del ciclo hasta un día. La versión actual no se conecta a Meta, como se decidió en la reunión.
 - **Se gasta hasta dos días antes del cierre**, para hacer el informe con la cifra completa.
 - **El ritmo se mide en el día de la lectura**: una cifra vieja no se llama «atrasada», se pide actualizarla.
@@ -37,7 +37,7 @@ Lo eliminado no tiene botón de deshacer: se pide confirmación antes y sus dato
 
 ## Carga inicial
 
-No hay importación de los Excel. `scripts/load-ad-budgets.js` crea las pautas dichas en la reunión (`scripts/lib/adBudgetSeed.js`). Simula por defecto, escribe con `--confirmar CARGAR`, se puede repetir sin duplicar y avisa si el contrato da otro cierre. Lo incierto queda en la nota de cada pauta. Titanes y Martínez y Nájera no se cargan: en la reunión no se dijo su presupuesto.
+No hay importación de los Excel. `scripts/load-ad-budgets.js` crea las pautas dichas en la reunión (`scripts/lib/adBudgetSeed.js`). Simula por defecto, escribe con `--confirmar CARGAR`, se puede repetir sin duplicar y fija el corte propio de Endova (15), Bonsai y Multi-K (19). Lo incierto queda en la nota de cada pauta. Titanes y Martínez y Nájera no se cargan: en la reunión no se dijo su presupuesto.
 
 ## Avisos
 

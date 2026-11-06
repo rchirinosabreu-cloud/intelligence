@@ -14,7 +14,7 @@ const [clients, team, existing] = await Promise.all([
     prisma.adBudget.findMany({ select: { clientId: true, brand: true, platform: true } })
 ]);
 const today = bogotaToday();
-const closeOf = (client) => adCycleFor({ kind: 'MENSUAL' }, { cutDay: clientCutDay(client.contracts, today).cutDay, today }).end;
+const closeOf = (client, row) => adCycleFor({ kind: 'MENSUAL' }, { cutDay: row.cutDay || clientCutDay(client.contracts, today).cutDay, today }).end;
 const responsible = matchResponsible(team, (member) => memberHasArea(member, 'PAUTA'));
 const plan = planSeed({ clients, existing, closeOf });
 
@@ -23,7 +23,7 @@ for (const item of plan) {
     const name = [item.row.client, item.row.brand].filter(Boolean).join(' · ');
     if (item.action === 'SIN_CLIENTE') console.log(`  SIN FICHA   ${name}: no hay un solo cliente con ese nombre`);
     else if (item.action === 'YA_EXISTE') console.log(`  YA EXISTE   ${name}`);
-    else console.log(`  CREAR       ${name}: ${item.row.currency} ${item.row.amount}, cierra ${item.end}${item.differs ? ` (en la reunión se dijo ${item.row.closesOn}: revisa el día de corte del contrato)` : ''}`);
+    else console.log(`  CREAR       ${name}: ${item.row.currency} ${item.row.amount}, cierra ${item.end}${item.differs ? ` (en la reunión se dijo ${item.row.closesOn})` : ''}`);
 }
 
 if (!confirmed) {
@@ -34,7 +34,7 @@ if (!confirmed) {
     for (const { row, client, action } of plan) {
         if (action !== 'CREAR') continue;
         const saved = await service.create({
-            clientId: client.id, brand: row.brand || '', platform: 'META', kind: 'MENSUAL', currency: row.currency, amount: row.amount,
+            clientId: client.id, brand: row.brand || '', platform: 'META', kind: 'MENSUAL', currency: row.currency, amount: row.amount, cutDay: row.cutDay || null,
             objective: row.objective || '', payer: 'POR_DEFINIR', responsibleId: responsible?.id || null, notes: row.notes
         }, null);
         if (row.spent !== undefined) await service.recordSpend(saved.id, { spent: row.spent, readOn: MEETING_DAY, note: 'Dicho en la reunión de pautas' }, null);

@@ -1275,7 +1275,7 @@ model ClientAdAccount {
 }
 
 /// Pautas (reunión del 6 de noviembre de 2026): el presupuesto global de un cliente, o de una de sus marcas, en una
-/// plataforma. El ciclo no se guarda aquí: sale del corte del contrato del cliente, el mismo de Operación. La regla vive
+/// plataforma. El ciclo sale de `cutDay` si la pauta lo tiene y, si no, del corte del contrato. La regla vive
 /// en `src/lib/adBudgets.js`. Aditivas con `scripts/ensure-ad-budgets-schema.js`.
 model AdBudget {
   id            String          @id @default(uuid())
@@ -1286,6 +1286,7 @@ model AdBudget {
   status        String          @default("ACTIVA")
   currency      String          @default("COP")
   amount        Decimal         @db.Decimal(14, 2)
+  cutDay        Int?
   objective     String?
   payer         String          @default("POR_DEFINIR")
   responsibleId String?

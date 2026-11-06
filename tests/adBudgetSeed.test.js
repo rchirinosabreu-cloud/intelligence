@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { MEETING_BUDGETS, matchClient, matchResponsible, planSeed } from '../scripts/lib/adBudgetSeed.js';
 import { adBudgetProblem } from '../src/lib/adBudgets.js';
 
-const clients = [{ id: '1', name: 'Foobespain' }, { id: '2', name: 'Bonsai' }, { id: '3', name: 'Multik' }, { id: '4', name: 'New Pueblito' }, { id: '5', name: 'Promo Group' }, { id: '6', name: 'Pablo Hoff' }];
+// Los nombres como están en producción: la carga tiene que encontrarlos.
+const clients = [{ id: '1', name: 'FoobeSpain' }, { id: '2', name: 'Bonsai' }, { id: '7', name: 'Restaurante Bonsai CTG' }, { id: '3', name: 'Multik' }, { id: '4', name: 'New Pueblito' }, { id: '5', name: 'Promo Group / Endova' }, { id: '6', name: 'Pablo Hoff' }];
 
 test('todo lo de la reunión es una pauta válida y lo incierto lo dice su nota', () => {
     for (const row of MEETING_BUDGETS) {
@@ -15,6 +16,7 @@ test('todo lo de la reunión es una pauta válida y lo incierto lo dice su nota'
     const bonsai = MEETING_BUDGETS.find((row) => row.client === 'Bonsai');
     assert.equal(bonsai.closesOn, '2026-11-18', 'lo que confirmó Rodny');
     assert.equal(bonsai.spent, undefined, 'los 768.000 se midieron con otras fechas: no valen para este ciclo');
+    assert.deepEqual([bonsai.cutDay, multik.cutDay, MEETING_BUDGETS.find((row) => row.brand === 'Endova').cutDay], [19, 19, 15], 'en producción todos los contratos tienen corte 1');
 });
 
 test('el cliente se encuentra sin importar mayúsculas ni guiones, y nunca se adivina entre dos', () => {

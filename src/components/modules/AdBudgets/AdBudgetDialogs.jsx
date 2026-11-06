@@ -49,14 +49,17 @@ function Form({ open, title, description, onClose, onSubmit, saving, error, subm
   );
 }
 
+const CUT_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
+const cycleLabel = (day) => (day === 1 ? 'Mes calendario (del 1 al último día)' : `Del ${day} al ${day - 1} del mes siguiente`);
+
 const blankBudget = (clientId) => ({
-  clientId: clientId || '', brand: '', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: '', objective: '', payer: 'POR_DEFINIR',
+  clientId: clientId || '', brand: '', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: '', cutDay: '', objective: '', payer: 'POR_DEFINIR',
   responsibleId: '', startDate: '', endDate: '', notes: '', status: 'ACTIVA'
 });
 
 const fromBudget = (budget) => ({
   clientId: budget.clientId, brand: budget.brand || '', platform: budget.platform, kind: budget.kind, currency: budget.currency,
-  amount: String(budget.amount ?? ''), objective: budget.objective || '', payer: budget.payer, responsibleId: budget.responsible?.id || '',
+  amount: String(budget.amount ?? ''), cutDay: budget.ownCutDay ? String(budget.ownCutDay) : '', objective: budget.objective || '', payer: budget.payer, responsibleId: budget.responsible?.id || '',
   startDate: budget.startDate || '', endDate: budget.endDate || '', notes: budget.notes || '', status: budget.status
 });
 
@@ -129,6 +132,14 @@ export function AdBudgetDialog({ budget, defaultClientId, onClose }) {
           </Select>
         </Label>
       </div>
+      {!specific && (
+        <Label text="Ciclo">
+          <Select className={field} value={form.cutDay} onChange={(event) => set({ cutDay: event.target.value })} aria-label="Día de corte">
+            <option value="">El del contrato del cliente</option>
+            {CUT_DAYS.map((day) => <option key={day} value={String(day)}>{cycleLabel(day)}</option>)}
+          </Select>
+        </Label>
+      )}
       {specific && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Label text="Inicio"><BrainDatePicker required className={field} value={form.startDate} onChange={(startDate) => set({ startDate })} ariaLabel="Fecha de inicio" /></Label>

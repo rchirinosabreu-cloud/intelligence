@@ -17,6 +17,7 @@ try {
       status TEXT NOT NULL DEFAULT 'ACTIVA',
       currency TEXT NOT NULL DEFAULT 'COP',
       amount DECIMAL(14,2) NOT NULL,
+      "cutDay" INTEGER,
       objective TEXT,
       payer TEXT NOT NULL DEFAULT 'POR_DEFINIR',
       "responsibleId" TEXT REFERENCES "TeamMember"(id) ON DELETE SET NULL ON UPDATE CASCADE,

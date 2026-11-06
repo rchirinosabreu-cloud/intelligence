@@ -223,7 +223,7 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
           <div className="min-w-0 space-y-4">
             <History budget={budget} onOpen={onOpen} />
             {budget.notes && <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{budget.notes}</p>}
-            {!budget.cutFromContract && <p className="text-xs text-status-attention-fg">Este cliente no tiene contrato cargado: se usa el mes calendario hasta que se registre su día de corte en Operación.</p>}
+            {budget.cutSource === 'CALENDARIO' && <p className="text-xs text-status-attention-fg">Este cliente no tiene contrato cargado: se usa el mes calendario. Puedes fijar el ciclo en «Editar pauta».</p>}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" className="min-h-11" data-ad-edit onClick={() => onOpen('edit', budget)}>Editar pauta</Button>
               {budget.kind === 'MENSUAL' && <Button size="sm" variant="outline" className="min-h-11" data-ad-carry-open onClick={() => onOpen('carry', budget)}>Ajustar saldo anterior</Button>}

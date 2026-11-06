@@ -28,9 +28,21 @@ test('crear una pauta toma el ciclo del contrato del cliente', async () => {
     const saved = await service(db).create({ ...baseInput, clientId: 'c-endova', brand: 'Endova' }, actor);
     assert.equal(saved.cycle.start, '2026-10-15');
     assert.equal(saved.cycle.end, '2026-11-14');
-    assert.equal(saved.cutFromContract, true);
+    assert.equal(saved.cutSource, 'CONTRATO');
     assert.equal(saved.evaluation.availableCents, 30_000_000);
     assert.equal(saved.responsible.name, 'Keila');
+});
+
+test('el corte propio de la pauta manda sobre el contrato, y quitarlo vuelve al contrato sin tocarlo', async () => {
+    const db = newDb();
+    const saved = await service(db).create({ ...baseInput, clientId: 'c-endova', cutDay: '19' }, actor);
+    assert.equal(saved.cycle.end, '2026-11-18', 'el contrato dice 15; la pauta, 19');
+    assert.equal(saved.cutSource, 'PAUTA');
+    const back = await service(db).update(saved.id, { cutDay: '' }, actor);
+    assert.equal(back.cycle.end, '2026-11-14');
+    assert.equal(back.cutSource, 'CONTRATO');
+    assert.equal(clients[0].contracts[0].cutDay, 15, 'Operación no se entera');
+    await assert.rejects(service(db).update(saved.id, { cutDay: '31' }, actor), /1 al 28/);
 });
 
 test('no se crea una pauta incompleta ni de un cliente archivado, y el motivo llega en palabras', async () => {

@@ -131,6 +131,16 @@ export const clientCutDay = (contracts = [], today) => {
 };
 
 /**
+ * El corte de una pauta: el suyo si lo tiene y, si no, el del contrato. Existe porque el cierre de la pauta se ajusta desde
+ * Pautas sin mover el contrato, que también manda en el semáforo y los avisos de Operación.
+ */
+export const budgetCutDay = (budget, today) => {
+    if (budget.cutDay) return { cutDay: Number(budget.cutDay), source: 'PAUTA' };
+    const { cutDay, fromContract } = clientCutDay(budget.client?.contracts || [], today);
+    return { cutDay, source: fromContract ? 'CONTRATO' : 'CALENDARIO' };
+};
+
+/**
  * Lo que trae un ciclo del anterior: lo que sobró, o lo gastado de más en negativo. Sin gasto registrado en el ciclo
  * anterior no se sabe y no se inventa: cero, y lo dice `known`. Un ajuste escrito a mano manda sobre la cuenta.
  */
@@ -278,6 +288,7 @@ export const adBudgetProblem = (input = {}) => {
     if (!(Number(input.amount) > 0)) return 'Escribe el presupuesto.';
     if (input.payer && !inList(AD_PAYERS, input.payer)) return 'Elige quién paga.';
     if (input.status && !inList(AD_BUDGET_STATUSES, input.status)) return 'Ese estado no existe.';
+    if (input.cutDay && !(Number.isInteger(Number(input.cutDay)) && Number(input.cutDay) >= 1 && Number(input.cutDay) <= 28)) return 'El día de corte va del 1 al 28.';
     if (clean(input.brand).length > 120) return 'El nombre de la marca es muy largo.';
     if (clean(input.notes).length > 1000) return 'La nota no puede pasar de 1000 caracteres.';
     if (input.kind === 'ESPECIFICA') {
