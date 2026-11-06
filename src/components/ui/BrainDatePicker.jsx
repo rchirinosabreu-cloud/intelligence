@@ -34,7 +34,7 @@ const brainPopperProps = {
   popperProps: { strategy: 'fixed' }
 };
 
-export function BrainDatePicker({ id, value, onChange, className, placeholder = 'DD/MM/AAAA', min, max, disabled, isClearable = false, ariaLabel, required, name }) {
+export function BrainDatePicker({ id, value, onChange, className, placeholder = 'DD/MM/AAAA', min, max, disabled, isClearable = false, ariaLabel, required, name, showYearDropdown = false }) {
   return (
     <DatePicker
       id={id}
@@ -45,6 +45,9 @@ export function BrainDatePicker({ id, value, onChange, className, placeholder = 
       minDate={dateKeyToPickerDate(min) || undefined}
       maxDate={dateKeyToPickerDate(max) || undefined}
       dateFormat="dd/MM/yyyy"
+      showYearDropdown={showYearDropdown}
+      scrollableYearDropdown={showYearDropdown}
+      yearDropdownItemNumber={15}
       placeholderText={placeholder}
       disabled={disabled}
       required={required}

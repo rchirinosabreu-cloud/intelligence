@@ -48,10 +48,10 @@ export const NO_PLAN_RED_FROM_DAY = 5;
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 /** «2026-10-20» → «20 oct». Se lee el texto, nunca un Date: el día no se corre con la zona horaria. */
-export function shortDate(dateKey) {
-  const [, month, day] = String(dateKey || '').split('-').map(Number);
+export function shortDate(dateKey, { year = false } = {}) {
+  const [yyyy, month, day] = String(dateKey || '').split('-').map(Number);
   if (!month || !day) return '';
-  return `${day} ${MONTHS[month - 1]}`;
+  return `${day} ${MONTHS[month - 1]}${year ? ` ${yyyy}` : ''}`;
 }
 
 export function daysBetween(fromKey, toKey) {

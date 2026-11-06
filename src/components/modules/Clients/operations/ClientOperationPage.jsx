@@ -6,7 +6,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import {
-  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, OPERATION_STAGES, SERVICE_TYPES,
+  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES,
   canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
@@ -263,7 +263,7 @@ function Suspension({ client, onOpen }) {
       className={cn('mb-4 rounded-xl border p-3 text-sm', suspension
         ? 'border-destructive/40 bg-destructive/10 text-zinc-800 dark:text-zinc-100'
         : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
-      <p className="font-semibold">{suspension ? 'Suspendido por cartera' : 'Cumple la condición para suspenderlo'}</p>
+      <p className="font-semibold">{suspension ? 'Suspensión confirmada' : 'Riesgo administrativo · Sin suspensión aplicada'}</p>
       {suspension ? (
         <>
           <p className="mt-1">
@@ -273,7 +273,7 @@ function Suspension({ client, onOpen }) {
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Se levanta sola en cuanto se ponga al día.</p>
         </>
       ) : (
-        <p className="mt-1">Lleva {candidate.days} días vencido. El mes en curso se termina; desde el siguiente no se haría parrilla ni producción.</p>
+        <p className="mt-1">No hay una suspensión registrada. Administración debe revisar la continuidad del próximo período; este aviso no cambia la vigencia del contrato ni detiene el trabajo actual.</p>
       )}
       {canSuspend && onOpen && (
         <button type="button" onClick={onOpen} data-client-suspension-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
@@ -380,7 +380,7 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
       {contract ? (
         <div className="mt-3 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Vigencia">{shortDate(contract.startDate)} – {contract.endDate ? shortDate(contract.endDate) : 'sin cierre'}</Field>
+            <Field label="Vigencia">{shortDate(contract.startDate, { year: true })} – {contract.endDate ? shortDate(contract.endDate, { year: true }) : 'sin cierre'}</Field>
             <Field label="Ciclo">{contract.cutDay > 1 ? `Del ${contract.cutDay} al ${contract.cutDay - 1}` : 'Mes calendario'}</Field>
           </div>
           {quota > 0 && (

@@ -13,8 +13,9 @@ test('la suspensión la ve todo el equipo; las cifras y el botón, solo quien pu
     const block = page.slice(page.indexOf('function Suspension('), page.indexOf('function UnbackedWork('));
     // Sin suspensión y sin poder decidirla no se dibuja nada; con suspensión se dibuja para cualquiera.
     assert.match(block, /if \(!suspension && !\(canSuspend && candidate\)\) return null;/);
-    // Los días vencidos solo salen en la rama de la propuesta, que ya exige `canSuspend`.
-    assert.match(block, /candidate\.days/);
+    // La ficha distingue riesgo y suspensión; el detalle financiero se conserva en el diálogo autorizado.
+    assert.match(block, /No hay una suspensión registrada/);
+    assert.match(block, /no cambia la vigencia del contrato/);
     assert.doesNotMatch(block, /balanceCents/, 'el dinero no va en la ficha: la ve también el project manager');
     assert.match(block, /canSuspend && onOpen/);
     assert.match(block, /Se levanta sola en cuanto se ponga al día/);

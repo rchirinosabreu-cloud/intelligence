@@ -51,6 +51,7 @@ try {
     assert.match(await profile.innerText(), /2 jornadas por contrato/);
     assert.match(await profile.innerText(), /Hasta 4 horas por jornada/);
     assert.match(await profile.innerText(), /Hasta 6 contenidos entre Reel y Video/);
+    assert.match(await profile.innerText(), /1 oct 2026.*31 mar 2027/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'La ficha no desborda horizontalmente.');
     await page.screenshot({ path: path.join(output, `ficha-completa-${suffix}.png`), fullPage: true });
     await profile.evaluate(node => window.scrollTo(0, node.getBoundingClientRect().top + window.scrollY - 24));
@@ -59,6 +60,11 @@ try {
     await page.getByRole('button', { name: 'Editar', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.waitFor();
+    const endDate = dialog.getByRole('textbox', { name: 'Fin del contrato', exact: true });
+    await endDate.click();
+    await page.locator('.react-datepicker__year-read-view').waitFor({ state: 'visible' });
+    await endDate.fill('31/07/2027');
+    await endDate.press('Tab');
     assert.equal(await dialog.getByRole('combobox', { name: 'Project manager', exact: true }).textContent(), 'Ángela Muestra');
     await dialog.getByLabel('Cantidad de historias', { exact: true }).fill('9');
     await dialog.getByLabel('Cantidad del límite 1', { exact: true }).fill('7');
@@ -75,14 +81,17 @@ try {
     assert.match(await profile.innerText(), /Hasta 7 Reel/);
     assert.match(await profile.innerText(), /Hasta 8 contenidos entre Reel, Video y Carrusel/);
     assert.match(await profile.innerText(), /4 en total/);
+    assert.match(await profile.innerText(), /31 jul 2027/);
     const saved = await page.evaluate(() => window.__scopeSaved);
     assert.equal(saved.contract.storiesPerWeek, 3);
+    assert.equal(saved.contract.endDate, '2027-07-31');
     assert.equal(saved.contract.productionDays, 1);
     assert.deepEqual(saved.contract.deliverables, [{ format: 'Reel', quantity: 4 }]);
     assert.equal(saved.projectManagerId, 'fiction-pm');
     assert.equal(saved.communityManagerId, 'fiction-cm');
     assert.deepEqual(saved.contract.scopeDetails.contentGroups, [{ formats: ['Reel', 'Video', 'Carrusel'], quantity: 8, rule: 'MAXIMO' }]);
     await page.getByRole('button', { name: 'Editar', exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'Fin del contrato', exact: true }).inputValue(), '31/07/2027');
     assert.equal(await page.getByLabel('Cantidad de historias', { exact: true }).inputValue(), '9');
     assert.equal(await page.getByLabel('Cantidad del límite 1', { exact: true }).inputValue(), '7');
     assert.equal(await page.getByLabel('Horas por jornada', { exact: true }).inputValue(), '4');

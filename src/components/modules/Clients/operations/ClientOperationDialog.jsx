@@ -151,11 +151,11 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
               </div>
               <div className="space-y-1.5">
                 <span className={LABEL}>Inicio</span>
-                <BrainDatePicker id={`${id}-start`} ariaLabel="Inicio del contrato" value={contract.startDate} onChange={(value) => setC({ startDate: value })} className={FIELD} required />
+                <BrainDatePicker id={`${id}-start`} ariaLabel="Inicio del contrato" value={contract.startDate} onChange={(value) => setC({ startDate: value })} className={FIELD} showYearDropdown required />
               </div>
               <div className="space-y-1.5">
                 <span className={LABEL}>Fin</span>
-                <BrainDatePicker id={`${id}-end`} ariaLabel="Fin del contrato" value={contract.endDate || ''} onChange={(value) => setC({ endDate: value })} className={FIELD} isClearable placeholder="Sin fecha de cierre" />
+                <BrainDatePicker id={`${id}-end`} ariaLabel="Fin del contrato" value={contract.endDate || ''} onChange={(value) => setC({ endDate: value })} className={FIELD} showYearDropdown isClearable placeholder="Sin fecha de cierre" />
               </div>
               {contract.status === 'STAND_BY' && (
                 <div className="space-y-1.5">

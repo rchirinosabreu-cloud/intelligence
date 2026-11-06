@@ -41,8 +41,8 @@ export function clientOperationalNotices(client, today, { isPm = false, projects
         }
         if (isPm && contract?.status === 'ACTIVO' && contract.startDate <= today && riskOn && riskOn <= operationalDayAfter(today, 15)) {
             add('CONTINUIDAD', contract?.id || 'cuenta', 'Continuidad por confirmar', riskOn > today
-                ? `Desde el ${dayLabel(riskOn)} podría requerirse una decisión sobre la continuidad. Confirma con Administración antes de preparar el siguiente período.`
-                : 'La continuidad requiere confirmación con Administración antes de preparar el siguiente período. La suspensión todavía no está decidida.', true);
+                ? `Un riesgo administrativo podría afectar el próximo período desde el ${dayLabel(riskOn)}. La operación no está suspendida; este aviso no cambia la vigencia del contrato. Confirma la continuidad con Administración.`
+                : 'Hay un riesgo administrativo para el próximo período. La operación no está suspendida; este aviso no cambia la vigencia del contrato. Confirma la continuidad con Administración.', true);
         }
     }
     if (!contract || contract.status !== 'ACTIVO') return rows;
@@ -51,8 +51,8 @@ export function clientOperationalNotices(client, today, { isPm = false, projects
             && c.startDate > contract.startDate && c.startDate <= operationalDayAfter(contract.endDate, 1)
             && (!c.endDate || c.endDate > contract.endDate));
         if (!covered) add('RENOVACION', contract.id, 'Renovación del servicio', contract.endDate < today
-            ? `El contrato terminó el ${dayLabel(contract.endDate)}. Confirma el alcance o la autorización antes de continuar.`
-            : `El contrato termina el ${dayLabel(contract.endDate)}. Revisa qué necesita el cliente y prepara con Comercial y Administración la propuesta de continuidad.`, days(today, contract.endDate) <= 15);
+            ? `El contrato terminó el ${dayLabel(contract.endDate)} de ${contract.endDate.slice(0, 4)}. Confirma el alcance o la autorización antes de continuar.`
+            : `El contrato termina el ${dayLabel(contract.endDate)} de ${contract.endDate.slice(0, 4)}. Revisa qué necesita el cliente y prepara con Comercial y Administración la propuesta de continuidad.`, days(today, contract.endDate) <= 15);
     }
     const current = cycleForDate(today, contract.cutDay || 1);
     for (const cycle of [previousCycle(current, contract.cutDay || 1), current]) {
