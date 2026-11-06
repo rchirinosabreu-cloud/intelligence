@@ -783,6 +783,13 @@ const NativeTasks = () => {
 
     const savingTaskOrder = useRef(false);
     const [savingTaskId, setSavingTaskId] = useState(null);
+    const [savingIndicatorTaskId, setSavingIndicatorTaskId] = useState(null);
+    useEffect(() => {
+        setSavingIndicatorTaskId(null);
+        if (!savingTaskId) return;
+        const timer = setTimeout(() => setSavingIndicatorTaskId(savingTaskId), 500);
+        return () => clearTimeout(timer);
+    }, [savingTaskId]);
     const dragVisibleTasks = useRef(null);
     const onDragEnd = async (result) => {
         const visibleAtDrag = dragVisibleTasks.current || filteredTasks;
@@ -1489,6 +1496,7 @@ const NativeTasks = () => {
                                                     task={task}
                                                     index={index}
                                                     saving={savingTaskId === taskCardKey(task)}
+                                                    showSaving={savingIndicatorTaskId === taskCardKey(task)}
                                                     movePending={Boolean(savingTaskId)}
                                                     highlightedTaskId={highlightedTaskId}
                                                     onClick={(t) => openTaskFromBoard(t)}
@@ -1583,6 +1591,7 @@ const NativeTasks = () => {
                                                         task={task}
                                                         index={index}
                                                         saving={savingTaskId === taskCardKey(task)}
+                                                        showSaving={savingIndicatorTaskId === taskCardKey(task)}
                                                         movePending={Boolean(savingTaskId)}
                                                         highlightedTaskId={highlightedTaskId}
                                                         onClick={(t) => openTaskFromBoard(t)}
@@ -1626,7 +1635,7 @@ const TaskCard = ({ task, index, lock = null, movePending = false, ...surfacePro
 // `renderClone` draws through a portal on <body>. The glass columns (backdrop-blur) each create a
 // stacking context, so a card dragged from inside its column would paint behind the neighbouring
 // column no matter its z-index; the portal takes the moving card out of the columns altogether.
-const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd, saving = false }) => {
+const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd, saving = false, showSaving = false }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
     const isFocusTask = isActiveFocusTask(task);
     const focusTime = isFocusTask ? bogotaTimeOf(task.focusDeadlineAt) : '';
@@ -1734,7 +1743,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                         isReturned && !isHighlighted && "border-destructive/50"
                     )}>
                         <div className="flex flex-col gap-4 p-5">
-                            {saving && (
+                            {saving && showSaving && (
                                 <span role="status" className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Guardando…
                                 </span>

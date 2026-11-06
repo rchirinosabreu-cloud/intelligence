@@ -213,6 +213,49 @@ async function selectFilter(page, label, option) {
   await page.getByRole('option', { name: option, exact: true }).click();
 }
 
+for (const slow of [false, true]) test(`saving indicator: ${slow ? 'appears after half a second' : 'never flashes for a fast response'}`, { timeout: 30000 }, async () => {
+  const initial = makeTask();
+  const saved = { ...initial, status: 'EN_CURSO', startedAt: new Date().toISOString() };
+  const release = deferred();
+  const board = await openBoard({ initial, dark: slow,
+    patch: async route => {
+      if (slow) await release.promise;
+      else await new Promise(resolve => setTimeout(resolve, 100));
+      return route.fulfill({ json: saved });
+    },
+    read: route => route.fulfill({ json: [saved] }),
+  });
+  try {
+    await board.page.evaluate(() => {
+      window.__savingTimes = { started: null, shown: null };
+      new MutationObserver(() => {
+        const card = document.querySelector('[data-rfd-draggable-id="move-test"]');
+        if (card?.getAttribute('aria-busy') === 'true') window.__savingTimes.started ??= performance.now();
+        if (card?.textContent.includes('Guardando…')) window.__savingTimes.shown ??= performance.now();
+      }).observe(document.getElementById('root'), { attributes: true, childList: true, subtree: true });
+    });
+    await drag(board, 'PENDIENTE', 'EN_CURSO');
+    await board.card('EN_CURSO').waitFor();
+    if (slow) {
+      assert.equal(await board.card('EN_CURSO').getAttribute('aria-busy'), 'true');
+      await board.card('EN_CURSO').getByRole('status').filter({ hasText: 'Guardando' }).waitFor();
+      const times = await board.page.evaluate(() => window.__savingTimes);
+      assert.ok(times.shown - times.started >= 450, `indicator appeared after ${times.shown - times.started}ms`);
+      await board.page.screenshot({ path: 'output/task-move-synchronization/delayed-saving-dark.png', animations: 'disabled' });
+      release.resolve();
+    }
+    await board.page.waitForFunction(() => document.querySelector('[data-rfd-draggable-id="move-test"]')?.getAttribute('aria-busy') !== 'true');
+    await board.page.waitForTimeout(650);
+    assert.equal(await board.card('EN_CURSO').getByText('Guardando…', { exact: true }).count(), 0, 'no timer can show the indicator after confirmation');
+    if (!slow) {
+      assert.equal((await board.page.evaluate(() => window.__savingTimes)).shown, null);
+      await board.page.screenshot({ path: 'output/task-move-synchronization/fast-save-no-indicator.png', animations: 'disabled' });
+    }
+    assert.equal(board.events.writes, 1);
+    assert.deepEqual(board.events.errors, []);
+  } finally { release.resolve(); await board.page.close(); }
+});
+
 test('global search labels suspended filters, finds outside them and restores their saved values', { timeout: 30000 }, async () => {
   const outside = { ...makeTask(), id: 'outside-filter', title: 'Buscable sin fecha', dueDate: null,
     client: { name: 'Otra cuenta' }, assigneeId: 'other-member', assignee: { id: 'other-member', name: 'Otra persona', userId: 'other-user' } };
