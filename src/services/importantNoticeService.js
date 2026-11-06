@@ -31,9 +31,10 @@ const MAX_STALE_PER_READ = 25;
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
-const serialize = (notice, receivableIds) => ({
+const serialize = (notice, receivableIds, operation) => ({
     id: notice.id, kind: notice.kind, level: notice.level, label: notice.label, message: notice.message, url: notice.url || null,
     ...(receivableIds ? { receivableIds } : {}),
+    ...(operation?.continuity ? { continuity: { ...operation.continuity, clientId: operation.clientId } } : {}),
     ...(isOperationalNotice(notice) ? { operational: true, acknowledge: operationalNoticeAcknowledges(notice), actionLabel: 'Revisar operación' } : {})
 });
 
@@ -196,7 +197,7 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
         const { notice, nextAt } = pickCurrentNotice(candidates, lastDecision?.decidedAt || null, now);
         if (!notice) return { notice: null, nextAt };
         const cleared = await whyNotNeeded(db, notice, now, { overduePlans });
-        if (!cleared) return { notice: serialize(notice), nextAt };
+        if (!cleared) return { notice: serialize(notice, undefined, operational.get(notice.subjectId)), nextAt };
         if (cleared.refresh) {
             const refreshed = await db.importantNotice.update({ where: { id: notice.id }, data: cleared.refresh });
             return { notice: serialize(refreshed, cleared.receivableIds), nextAt };

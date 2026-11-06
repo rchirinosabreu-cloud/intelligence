@@ -20,6 +20,7 @@ import { userHasArea } from './teamAreaService.js';
 import { openSuspension } from './clientSuspensionGate.js';
 import { clientSuspensionService, createClientSuspensionService } from './clientSuspensionService.js';
 import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
+import { canDecideContractContinuity, continuityActorSelect, setContractContinuity } from './contractContinuityService.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -97,6 +98,9 @@ function publicContract(row) {
     standBySince: row.standBySince ?? null, cutDay: row.cutDay ?? 1, deliverables: Array.isArray(row.deliverables) ? row.deliverables : [],
     storiesPerWeek: row.storiesPerWeek ?? 0, productionDays: row.productionDays ?? 0, monthlyReport: Boolean(row.monthlyReport), notes: row.notes ?? null,
     scopeDetails: row.scopeDetails ?? null,
+    updatedAt: row.updatedAt ?? null,
+    renewalDecision: row.renewalDecision || 'PENDIENTE', renewalDecisionAt: row.renewalDecisionAt ?? null,
+    renewalDecisionByName: row.renewalDecisionByName ?? null, renewalDecisionNote: row.renewalDecisionNote ?? null,
   };
 }
 
@@ -315,6 +319,8 @@ export const createClientOperationsService = ({
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
     const reporters = await reporterNames([client]);
     const operation = buildOperation(client, { today, reporters, detail: true });
+    operation.canDecideContinuity = viewerUserId ? canDecideContractContinuity(
+      await db.user.findUnique({ where: { id: viewerUserId }, select: continuityActorSelect }), client) : false;
     if (viewerUserId) operation.canAuthorizeWork = await canAuthorizeWork(viewerUserId);
     // La suspensión por cartera la ve todo el equipo que entra aquí: necesita saber que ese mes está congelado. Las
     // cifras de la deuda, no: solo quien puede decidirla (28 de octubre de 2026, «sin revelar los valores económicos»).
@@ -363,7 +369,7 @@ export const createClientOperationsService = ({
     const profile = check.value;
 
     const today = todayKey();
-    const contractSelection = { orderBy: CONTRACT_ORDER, select: { id: true, startDate: true, createdAt: true } };
+    const contractSelection = { orderBy: CONTRACT_ORDER, select: { id: true, startDate: true, endDate: true, createdAt: true, renewalDecision: true } };
     const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, projectManagerId: true, responsibleId: true, contracts: contractSelection } });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
 
@@ -388,6 +394,9 @@ export const createClientOperationsService = ({
         const selected = selectedContract(orderedContracts(fresh?.contracts), today);
         if (current?.id !== selected?.id) throw httpError(409, 'El contrato del cliente cambió. Vuelve a abrir la ficha antes de guardar.', { code: 'CLIENT_CONTRACT_CHANGED' });
         current = selected;
+        if (current?.renewalDecision === 'NO_RENOVAR' && (profile.contract.endDate !== current.endDate || profile.contract.startDate !== current.startDate)) {
+          throw httpError(409, 'Este contrato tiene una decisión de no renovar. Corrige primero esa decisión antes de cambiar su vigencia.');
+        }
       }
       await tx.client.update({
         where: { id: client.id },
@@ -405,6 +414,9 @@ export const createClientOperationsService = ({
         if (current && input.renew !== true) await tx.clientContract.update({ where: { id: current.id }, data });
         else await tx.clientContract.create({ data: { ...data, clientId: client.id, createdById: actorUserId || null } });
       }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(error => {
+      if (error.code === 'P2034') throw httpError(409, 'El contrato cambió mientras guardabas. Actualiza la ficha antes de confirmar.');
+      throw error;
     });
     // Con la hoja de MIO recién puesta, se lee en el acto; si Google falla, la ficha ya quedó guardada.
     if (Object.hasOwn(input, 'externalPlanUrl') && profile.externalPlanUrl) {
@@ -572,7 +584,8 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, listOverduePlans, getOperation, authorizeWork, suspendClient, liftSuspension, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  const decideContinuity = ({ clientId, input, actorUserId }) => setContractContinuity(db, clientId, input, actorUserId, { now: now() });
+  return { decideContinuity, listOperations, listOverduePlans, getOperation, authorizeWork, suspendClient, liftSuspension, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

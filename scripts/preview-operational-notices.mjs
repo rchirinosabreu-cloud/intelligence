@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import config from '../tailwind.config.js';
 import { operationalNoticeMemory } from '../tests/helpers/operationalNoticeMemory.js';
 import { createImportantNoticeRouter } from '../src/routes/api/importantNotices.js';
+import { setContractContinuity } from '../src/services/contractContinuityService.js';
 
 export async function createOperationalNoticePreview({port=3846}={}) {
   const root=path.resolve(import.meta.dirname,'..');const out=path.join(root,'output/avisos-operativos-local');await mkdir(out,{recursive:true});
@@ -26,6 +27,8 @@ export async function createOperationalNoticePreview({port=3846}={}) {
     if(name==='suspension'){client.monthlyCloses=[{year:2026,month:10}];client.suspensions=[{id:'s-local',fromCycle:'2026-12',liftedAt:null}];}
     if(name==='reactivacion'){client.monthlyCloses=[{year:2026,month:10}];client.suspensions=[{id:'s-local',fromCycle:'2026-11',liftedAt:new Date('2026-11-11T15:00:00Z')}];}
     if(name==='continuidad'){data.collectionSetting.push({id:'global',enabled:true,paymentTermDays:15,monthlyAlertCount:2,oneOffFirstAlertDays:15,repeatDays:7});client.monthlyCloses=[{year:2026,month:10}];client.accountsReceivables=[{id:'r-local',kind:'CLIENTE',status:'PENDIENTE',amount:100,period:'2026-09-01',dueDate:'2026-09-05',payments:[]}];}
+    Object.assign(client.contracts[0], { updatedAt: new Date('2026-11-06T15:00:00Z'), renewalDecision: 'PENDIENTE' });
+    data.clientContract.splice(0,data.clientContract.length,...client.contracts);
     data.client.splice(0,data.client.length,client);
     data.importantNotice.push({id:'cartera-invisible',userId:actor.id,kind:'CARTERA_UNICO',subjectId:'r',label:'Cartera privada de prueba',message:'Este texto financiero NO debe mostrarse a Kamila',resolvedAt:null,createdAt:new Date('2026-01-01'),level:'IMPORTANTE'});
   };scene();
@@ -36,6 +39,10 @@ export async function createOperationalNoticePreview({port=3846}={}) {
   api.post('/api/preview/close',(_req,res)=>{data.client[0].monthlyCloses.push({year:2026,month:10});res.json({ok:true});});
   api.post('/api/preview/review',(_req,res)=>{data.projectFormalization.forEach(p=>p.operation.reviewStatus='REVISADO');res.json({ok:true});});
   api.use('/api/important-notices',createImportantNoticeRouter({db,clock:()=>now}));
+  api.post('/api/client-operations/:id/continuity',async(req,res)=>{
+    try { res.json(await setContractContinuity(db,req.params.id,req.body,actor.id,{now})); }
+    catch(error){res.status(error.status||500).json({error:error.message});}
+  });
   api.use('/api',(_req,res)=>res.status(404).json({error:'Solo operaciones de prueba local.'}));
   api.use(express.static(out));api.get('*',(_req,res)=>res.type('html').send('<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Avisos operativos · Local</title><link rel="stylesheet" href="/preview.css"><body><div id="root"></div><script type="module" src="/preview.js"></script></body></html>'));
   const server=await new Promise(resolve=>{const s=api.listen(port,'127.0.0.1',()=>resolve(s));});

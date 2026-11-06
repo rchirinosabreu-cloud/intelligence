@@ -118,7 +118,7 @@ try {
     assert.equal(await dialog.getByLabel('Historias por ocasión', { exact: true }).inputValue(), '');
     assert.equal(await dialog.getByRole('combobox', { name: 'Unidad de historias', exact: true }).textContent(), 'Veces por semana');
     await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
-    for (const scenario of ['shared', 'flexible', 'partial']) {
+    for (const scenario of ['shared', 'flexible', 'partial', 'no-renewal']) {
       await page.goto(`http://127.0.0.1:3830/tests/fixtures/client-contract-scope.html?theme=${theme}&scenario=${scenario}`, { waitUntil: 'networkidle' });
       const text = await profile.innerText();
       if (scenario === 'shared') {
@@ -131,6 +131,11 @@ try {
         assert.match(text, /Hasta 10 Post/);
         assert.match(text, /20 en total/);
         assert.doesNotMatch(text, /Sin clasificar/);
+      } else if (scenario === 'no-renewal') {
+        assert.match(text, /No renovará/);
+        assert.match(text, /Finalizado sin renovación/);
+        assert.match(text, /pendientes por revisar/);
+        assert.doesNotMatch(text, /Renueva el contrato|Autorizar seguir|revisar la continuidad del próximo/);
       } else {
         assert.match(text, /2 Sin clasificar/);
         assert.match(text, /12 en total/);

@@ -209,6 +209,7 @@
   .brain-notice-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--notice-hue)); }
   .brain-notice-title { max-width: 68ch; font-size: 16px; font-weight: 500; line-height: 1.5; margin-bottom: 16px; white-space: pre-line; text-wrap: pretty; overflow-wrap: anywhere; }
   .brain-notice-primary { background: var(--notice-action); color: white; }
+  .contract-continuity-dialog { --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black); }
   .brain-notice-primary:hover { background: color-mix(in srgb, var(--notice-action) 92%, black); }
   .brain-notice-primary:active { background: color-mix(in srgb, var(--notice-action) 84%, black); }
   .brain-notice-ghost { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px rgb(212 212 216); }

@@ -51,6 +51,8 @@ export const readDecisionContext = async (context, clients) => {
 
 export const decisionContract = contract => contract ? {
   estado: contract.status, inicio: contract.startDate, fin: contract.endDate ?? null,
+  continuidad: { decision: contract.renewalDecision || 'PENDIENTE', registradaEl: contract.renewalDecisionAt ?? null,
+    registradaPor: contract.renewalDecisionByName ?? null, nota: contract.renewalDecisionNote ?? null },
   notas: contract.notes ?? null,
   alcance: 'Registro operativo; su estado no demuestra firma ni renovación para otro periodo.'
 } : null;

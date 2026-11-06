@@ -4,7 +4,7 @@ export function operationalNoticeMemory() {
         modulePermissions: { clientes: true, financiero: false }, teamMember: { isActive: true, areas: ['ADMINISTRATIVA','PROJECT_MANAGEMENT','DIRECCION'] } };
     const data = {
         user:[actor], teamMember:[{userId:actor.id,...actor.teamMember}], notification:[],
-        importantNotice:[], client:[], projectFormalization:[], collectionSetting:[], accountsReceivable:[],
+        importantNotice:[], client:[], clientContract:[], clientContractDecision:[], projectFormalization:[], collectionSetting:[], accountsReceivable:[],
     };
     const match = (row, where={}) => Object.entries(where).every(([key,value]) => {
         if (key==='OR') return value.some(w=>match(row,w));
@@ -16,9 +16,10 @@ export function operationalNoticeMemory() {
             if ('startsWith' in value) return String(row[key]||'').startsWith(value.startsWith);
             if ('is' in value) return match(row[key]||{},value.is);
             if ('gte' in value) return row[key]>=value.gte;
+            if ('lte' in value) return row[key]<=value.lte;
             return match(row[key]||{},value);
         }
-        return value===null ? row[key]==null : row[key]===value;
+        return value===null ? row[key]==null : value instanceof Date ? new Date(row[key]).getTime()===value.getTime() : row[key]===value;
     });
     const db={}; let sequence=0;
     for (const model of Object.keys(data)) {
@@ -30,7 +31,7 @@ export function operationalNoticeMemory() {
         db[model]={findMany, findUnique:async args=>(await findMany(args))[0]||null, findFirst:async args=>(await findMany(args))[0]||null,
             create:async({data:record})=>{const row={id:`memory-${++sequence}`,resolvedAt:null,snoozedUntil:null,decidedAt:null,...record};if(data[model].some(r=>r.id===row.id))throw Object.assign(new Error('unique'),{code:'P2002'});data[model].push(row);return row;},
             update:async({where,data:changes})=>{const row=(await findMany({where}))[0];if(!row)throw new Error(`missing ${model}`);Object.assign(row,changes);return row;},
-            updateMany:async({where,data:changes})=>{const rows=await findMany({where});rows.forEach(r=>Object.assign(r,changes));return{count:rows.length};}
+            updateMany:async({where,data:changes})=>{const rows=await findMany({where});rows.forEach(r=>Object.assign(r,changes,model==='clientContract'?{updatedAt:new Date()}:{}));return{count:rows.length};}
         };
     }
     db.$transaction=async work=>work(db);

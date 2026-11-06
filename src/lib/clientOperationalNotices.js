@@ -19,6 +19,10 @@ export function clientOperationalNotices(client, today, { isPm = false, projects
     const rows = [];
     const contracts = orderedContracts(client.contracts || []);
     const contract = selectedContract(contracts, today);
+    const noRenewal = contract?.renewalDecision === 'NO_RENOVAR';
+    const continuity = contract?.endDate && contract?.updatedAt ? {
+        contractId: contract.id, endDate: contract.endDate, expectedUpdatedAt: new Date(contract.updatedAt).toISOString(),
+    } : null;
     const url = `/clientes/operacion/${encodeURIComponent(client.slug)}`;
     const add = (kind, key, label, message, important = false, extra = {}) => rows.push({
         kind: `OPERACION_${kind}`, subjectId: `OP:${client.id}:${kind}:${key}`,
@@ -39,20 +43,20 @@ export function clientOperationalNotices(client, today, { isPm = false, projects
         if (liftedDays !== null && liftedDays >= 0 && liftedDays <= 7) {
             add('REACTIVACION', suspension.id, 'Operación reactivada', 'La suspensión se levantó. Revisa la planificación vigente antes de retomar el trabajo.', false, { acknowledge: true });
         }
-        if (isPm && contract?.status === 'ACTIVO' && contract.startDate <= today && riskOn && riskOn <= operationalDayAfter(today, 15)) {
+        if (!noRenewal && isPm && contract?.status === 'ACTIVO' && contract.startDate <= today && riskOn && riskOn <= operationalDayAfter(today, 15)) {
             add('CONTINUIDAD', contract?.id || 'cuenta', 'Continuidad por confirmar', riskOn > today
                 ? `Un riesgo administrativo podría afectar el próximo período desde el ${dayLabel(riskOn)}. La operación no está suspendida; este aviso no cambia la vigencia del contrato. Confirma la continuidad con Administración.`
-                : 'Hay un riesgo administrativo para el próximo período. La operación no está suspendida; este aviso no cambia la vigencia del contrato. Confirma la continuidad con Administración.', true);
+                : 'Hay un riesgo administrativo para el próximo período. La operación no está suspendida; este aviso no cambia la vigencia del contrato. Confirma la continuidad con Administración.', true, { continuity });
         }
     }
     if (!contract || contract.status !== 'ACTIVO') return rows;
-    if (isPm && contract.endDate && days(today, contract.endDate) <= 30) {
+    if (!noRenewal && isPm && contract.endDate && days(today, contract.endDate) <= 30) {
         const covered = contracts.some(c => c.id !== contract.id && c.status === 'ACTIVO'
             && c.startDate > contract.startDate && c.startDate <= operationalDayAfter(contract.endDate, 1)
             && (!c.endDate || c.endDate > contract.endDate));
         if (!covered) add('RENOVACION', contract.id, 'Renovación del servicio', contract.endDate < today
             ? `El contrato terminó el ${dayLabel(contract.endDate)} de ${contract.endDate.slice(0, 4)}. Confirma el alcance o la autorización antes de continuar.`
-            : `El contrato termina el ${dayLabel(contract.endDate)} de ${contract.endDate.slice(0, 4)}. Revisa qué necesita el cliente y prepara con Comercial y Administración la propuesta de continuidad.`, days(today, contract.endDate) <= 15);
+            : `El contrato termina el ${dayLabel(contract.endDate)} de ${contract.endDate.slice(0, 4)}. Revisa qué necesita el cliente y prepara con Comercial y Administración la propuesta de continuidad.`, days(today, contract.endDate) <= 15, { continuity });
     }
     const current = cycleForDate(today, contract.cutDay || 1);
     for (const cycle of [previousCycle(current, contract.cutDay || 1), current]) {

@@ -17,7 +17,7 @@ export async function readOperationalNotices(db, userId, now) {
         select: {
             id: true, name: true, slug: true, isArchived: true,
             projectManager: { select: { userId: true, isActive: true } },
-            contracts: { select: { id: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true, createdAt: true } },
+            contracts: { select: { id: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true, createdAt: true, updatedAt: true, renewalDecision: true } },
             monthlyReports: { where: { year: { gte: Number(today.slice(0, 4)) - 1 } }, select: { year: true, month: true, status: true } },
             monthlyCloses: { where: { year: { gte: Number(today.slice(0, 4)) - 1 } }, select: { year: true, month: true } },
             suspensions: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, fromCycle: true, liftedAt: true } },

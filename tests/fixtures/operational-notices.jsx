@@ -1,14 +1,16 @@
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {BrowserRouter,useLocation} from 'react-router-dom';
-import {QueryClient,QueryClientProvider,useQueryClient} from '@tanstack/react-query';
+import {QueryClient,QueryClientProvider,useQueryClient,useQuery} from '@tanstack/react-query';
 import {Toaster} from 'react-hot-toast';
 import ImportantNoticeBand from '@/components/notifications/ImportantNoticeBand';
+import {ContractContinuitySummary} from '@/components/modules/Clients/operations/ContractContinuityDecision';
 import {Bell,ChevronRight,Plus,LayoutDashboard,Users,Calendar,CheckCircle,FileText} from '@/components/ui/icons';
 
 const query=new QueryClient({defaultOptions:{queries:{retry:false}}});
 function Preview(){
  const qc=useQueryClient();const location=useLocation();
+ const {data:state}=useQuery({queryKey:['client-operations','preview'],queryFn:async()=>(await fetch('/api/preview/state')).json()});
  const [design,setDesign]=useState(new URLSearchParams(window.location.search).get('design')||'halo');
  const [dark,setDark]=useState(new URLSearchParams(window.location.search).has('dark'));
  const [noticeHeight,setNoticeHeight]=useState(0);
@@ -35,6 +37,7 @@ function Preview(){
     {['Parrilla del período','Informe mensual','Jornada de producción'].map((label,i)=><div key={label} className="flex items-center justify-between border-t border-zinc-100 py-4 text-sm dark:border-zinc-800"><span>{label}</span><span className="text-zinc-500 dark:text-zinc-400">{['10 publicaciones','En revisión','Consultar planificación'][i]}</span></div>)}
     {location.pathname.includes('/clientes/operacion/')&&<div className="mt-4 flex flex-wrap gap-2"><button className="rounded-xl bg-primary px-4 py-3 text-sm text-white" onClick={()=>act('close')}>Simular cierre en su registro</button><button className="rounded-xl border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-700" onClick={()=>act('review')}>Simular revisión de proyecto</button></div>}
    </section><div className="space-y-6"><section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><h2 className="mb-4 font-semibold">Ficha operativa</h2><p className="text-sm">PM · Kamila</p><p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Community · Equipo de ejemplo</p><div className="my-4 border-t border-zinc-100 dark:border-zinc-800"/><p className="text-xs text-zinc-500 dark:text-zinc-400">Piezas al mes</p><p className="mt-2 text-sm">4 videos · 4 carruseles · 4 posts</p></section><section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><h2 className="mb-4 font-semibold">Tareas abiertas</h2><p className="text-sm">Publicar contenidos de cierre</p><p className="mt-3 text-sm">Revisar informe mensual</p></section></div></div>
+   {state?.client?.contracts?.[0]?.renewalDecision==='NO_RENOVAR'&&<div className="mt-6 max-w-xl rounded-2xl bg-white p-5 dark:bg-zinc-900"><h2 className="mb-3 font-semibold">Contrato · Decisión registrada</h2><ContractContinuitySummary client={{...state.client,contract:state.client.contracts[0],canDecideContinuity:true}}/></div>}
    <p className="mt-6 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400"><Bell className="h-4 w-4"/>La tarjeta permanece al navegar. El ejemplo financiero está excluido del perfil de Kamila.</p>
   </main><ImportantNoticeBand appearance={design} onHeightChange={setNoticeHeight}/><Toaster position="top-right"/>
  </div>;

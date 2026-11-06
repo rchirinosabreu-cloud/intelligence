@@ -132,7 +132,7 @@ export function evaluateClientOperation(client, { today }) {
 
   const reasons = [];
   if (unbacked && !unbacked.authorized) reasons.push(unbackedReason);
-  if (contract.endDate) {
+  if (contract.endDate && contract.renewalDecision !== 'NO_RENOVAR') {
     const left = daysBetween(today, contract.endDate);
     // Vencido y con trabajo lo dice el motivo de arriba; con autorización vigente, no se insiste.
     if (left < 0 && !unbacked) reasons.push(reason('CONTRACT_EXPIRED', 'contract', 'yellow', `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.`, 'profile'));

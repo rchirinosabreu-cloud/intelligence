@@ -82,6 +82,12 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
     } catch (error) { return reply(res, error, logger); }
   });
 
+  router.post('/:clientId/continuity', async (req, res) => {
+    try {
+      return res.json(await service.decideContinuity({ clientId: req.params.clientId, input: req.body || {}, actorUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
   // El informe del mes: su estado (pendiente, en elaboración, en revisión, enviado), el enlace y una nota. `delivered`
   // sigue valiendo para quien lo marcaba como entregado.
   router.put('/:clientId/reports/:year/:month', async (req, res) => {

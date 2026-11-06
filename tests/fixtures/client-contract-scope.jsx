@@ -30,6 +30,12 @@ const initial = {
 };
 const dark = new URLSearchParams(window.location.search).get('theme') === 'dark';
 const scenario = new URLSearchParams(window.location.search).get('scenario');
+if (scenario === 'no-renewal') {
+  Object.assign(initial.contract, { endDate: '2026-10-31', renewalDecision: 'NO_RENOVAR', renewalDecisionAt: '2026-10-20T15:00:00Z', renewalDecisionByName: 'Ángela Muestra' });
+  initial.canAuthorizeWork = true;
+  initial.canSuspend = true;
+  initial.suspensionCandidate = { fromCycle: '2026-12' };
+}
 if (scenario === 'shared') {
   initial.contract.deliverables = [{ format: 'Sin clasificar', quantity: 6 }];
   initial.contract.scopeDetails.contentLimits = [];

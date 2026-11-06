@@ -64,7 +64,7 @@ export const contractCycleAlerts = (contract, today) => {
             alerts.push({ step, cycleKey: cycle.start, audience: rule.audience, close, cycle });
         }
     }
-    if (isKey(contract.endDate) && contract.endDate >= today) {
+    if (contract.renewalDecision !== 'NO_RENOVAR' && isKey(contract.endDate) && contract.endDate >= today) {
         const left = daysBetween(today, contract.endDate);
         const step = left <= RENEWAL_STEPS.RENOVACION_15.days ? 'RENOVACION_15' : left <= RENEWAL_STEPS.RENOVACION_30.days ? 'RENOVACION_30' : null;
         if (step) alerts.push({ step, cycleKey: `R:${contract.endDate}`, audience: RENEWAL_STEPS[step].audience, endDate: contract.endDate });

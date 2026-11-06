@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { FOLLOW_UP_CHANNELS, NOTICE_ARCHIVE_OUTCOME, REVIEW_OUTCOMES, SNOOZE_OPTIONS, noticeTitleHref } from '@/lib/importantNotices';
+import ContractContinuityDecision from '@/components/modules/Clients/operations/ContractContinuityDecision';
 
 // Avisos importantes: tarjeta inferior con halo suave, por encima del menú. Un aviso
 // a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
@@ -196,6 +197,9 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
                   </NoticeButton>
                 )}
                 {isOperational && notice.acknowledge && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, 'Aviso recibido')}>Entendido</NoticeButton>}
+                {isOperational && notice.continuity && <ContractContinuityDecision clientId={notice.continuity.clientId}
+                  clientName={notice.label.split(' · ').slice(1).join(' · ')} onDecided={onDecided}
+                  contract={{ id: notice.continuity.contractId, endDate: notice.continuity.endDate, updatedAt: notice.continuity.expectedUpdatedAt }} />}
                 <NoticeButton disabled={busy} data-notice-action="snooze" onClick={() => openOptions('snooze', 'snooze')}>
                   Recordarme <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </NoticeButton>

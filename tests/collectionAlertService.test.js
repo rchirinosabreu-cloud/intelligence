@@ -28,6 +28,15 @@ const clients = () => [
 ];
 
 const ON = { enabled: true, paymentTermDays: 15, monthlyAlertCount: 2, oneOffFirstAlertDays: 15, repeatDays: 7 };
+
+test('no renovar retira el riesgo de continuidad al PM pero conserva cobros a Administración', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => clients().map(c => ({ ...c, contracts: c.contracts.map(contract => ({ ...contract, renewalDecision: 'NO_RENOVAR' })) }));
+    const bells = [];
+    await runCollectionAlerts(db, { now: NOW, notify: async data => { bells.push(data); return { id: 'notice' }; }, log: () => {}, info: () => {} });
+    assert.ok(bells.some(b => b.userId === 'u-elisa'));
+    assert.equal(bells.some(b => b.type === 'CARTERA_RIESGO'), false);
+});
 const fakeDb = ({ people = team, settings = ON } = {}) => {
     const taken = new Set();
     const db = {
