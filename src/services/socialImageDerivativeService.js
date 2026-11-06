@@ -8,7 +8,7 @@
  * blanco, nunca recorta— en una **copia** junto al original (`derived/`), una por red, y el diseñador
  * no cambia nada. El original de la parrilla no se toca.
  */
-import { getS3ObjectBuffer, headS3Object, putS3Object } from './s3Service.js';
+import { getPlatformStorage } from './platformStorageService.js';
 import { FACEBOOK_PHOTO_MAX_BYTES, META_IMAGE_MAX_BYTES, facebookImagePlan, instagramImagePlan } from '../lib/socialPublishing.js';
 import { COVER_MAX_BYTES, coverImagePlan } from '../lib/videoCover.js';
 import { fileContentProblem } from '../lib/fileSignature.js';
@@ -73,9 +73,10 @@ export const sharpTransform = async (buffer, plan, { maxBytes = 0 } = {}) => {
 };
 
 export const createImageDerivativeService = ({
-  readObject = getS3ObjectBuffer,
-  writeObject = putS3Object,
-  headObject = headS3Object,
+  readObject,
+  writeObject,
+  headObject,
+  storageFor = getPlatformStorage,
   probe = sharpProbe,
   transform = sharpTransform,
   logger = console
@@ -84,7 +85,11 @@ export const createImageDerivativeService = ({
     const originalKey = originalKeyOf(asset);
     if (!isImage(asset)) return { key: originalKey, derived: false };
     const key = derivedKeyFor(asset, platform);
-    if (await headObject(key)) return { key, derived: true, cached: true };
+    const storage = storageFor(asset.storageArea || 'LEGACY');
+    const read = readObject || storage.getS3ObjectBuffer;
+    const write = writeObject || storage.putS3Object;
+    const head = headObject || storage.headS3Object;
+    if (await head(key)) return { key, derived: true, cached: true };
 
     let plan;
     let buffer = null;
@@ -102,16 +107,16 @@ export const createImageDerivativeService = ({
       // Facebook no tiene regla de proporción: se decide solo con el tipo y el peso, sin leer el archivo.
       plan = facebookImagePlan({ mimeType: asset.mimeType, size: asset.size });
     } else {
-      buffer = await readObject(originalKey);
+      buffer = await read(originalKey);
       const { width, height } = await readingImage(() => probe(buffer));
       plan = instagramImagePlan({ mimeType: asset.mimeType, width, height, kind, size: asset.size });
     }
     if (!plan.convert) return { key: originalKey, derived: false };
 
     const maxBytes = platform === 'FACEBOOK' ? FACEBOOK_PHOTO_MAX_BYTES : META_IMAGE_MAX_BYTES;
-    buffer = buffer || await readObject(originalKey);
+    buffer = buffer || await read(originalKey);
     const jpeg = await readingImage(() => transform(buffer, plan, { maxBytes }));
-    await writeObject({ key, body: jpeg, contentType: 'image/jpeg' });
+    await write({ key, body: jpeg, contentType: 'image/jpeg' });
     logger.info?.(`[SocialPublishing] Copia para ${platform === 'FACEBOOK' ? 'Facebook' : 'Instagram'} de «${asset.name || asset.id}»: ${plan.reasons.join(', ')}${plan.canvas ? ` → ${plan.canvas.width}×${plan.canvas.height}` : ''}`);
     return { key, derived: true, cached: false, plan };
   };
@@ -129,11 +134,16 @@ export const createImageDerivativeService = ({
    */
   const prepareCover = async (item) => {
     if (!item?.coverKey) return null;
+    // Covers are outside the final-delivery set and retain their original storage binding.
+    const storage = storageFor('LEGACY');
+    const read = readObject || storage.getS3ObjectBuffer;
+    const write = writeObject || storage.putS3Object;
+    const head = headObject || storage.headS3Object;
     const cover = { id: `${item.id}-cover`, name: item.coverName, mimeType: item.coverMimeType, size: item.coverSize, storageKey: item.coverKey };
     const key = derivedKeyFor(cover, 'cover');
-    if (await headObject(key)) return { key, derived: true, cached: true };
+    if (await head(key)) return { key, derived: true, cached: true };
 
-    const buffer = await readObject(item.coverKey);
+    const buffer = await read(item.coverKey);
     let plan;
     try {
       const { width, height } = await probe(buffer);
@@ -145,7 +155,7 @@ export const createImageDerivativeService = ({
     if (!plan.convert) return { key: item.coverKey, derived: false };
 
     const jpeg = await transform(buffer, plan, { maxBytes: COVER_MAX_BYTES });
-    await writeObject({ key, body: jpeg, contentType: 'image/jpeg' });
+    await write({ key, body: jpeg, contentType: 'image/jpeg' });
     logger.info?.(`[SocialPublishing] Portada preparada para «${item.objective || item.id}»: ${plan.reasons.join(', ')}${plan.canvas ? ` → ${plan.canvas.width}×${plan.canvas.height}` : ''}`);
     return { key, derived: true, cached: false, plan };
   };

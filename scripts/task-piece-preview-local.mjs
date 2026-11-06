@@ -5,6 +5,10 @@ import { createTaskPieceFixture, finalPiecePng, seedTaskPieceExternalPeriods, ta
 
 const fixture = await createTaskPieceFixture({ port: Number(process.env.TASK_PIECE_PORT || 8092) });
 const externalPeriods = await seedTaskPieceExternalPeriods(fixture);
+const standalone = (await fixture.request('manager', '/tasks', { method: 'POST', expected: 201, body: {
+  title: 'Entregables internos · Propuesta Faro', clientId: fixture.client.id,
+  assigneeId: fixture.actors.ana.memberId, collaboratorIds: [fixture.actors.bea.memberId], isPrivate: true,
+} })).data;
 await mkdir(taskPieceOutput, { recursive: true });
 await writeFile(path.join(taskPieceOutput, 'pieza-final-ejemplo.png'), finalPiecePng);
 const information = {
@@ -13,6 +17,7 @@ const information = {
   users: Object.fromEntries(Object.entries(fixture.actors).map(([key, actor]) => [key, { name: actor.name, email: actor.email, password: actor.password }])),
   plans: fixture.plans.map(plan => ({ id: plan.id, month: plan.month, year: plan.year })),
   pieces: fixture.pieces,
+  standaloneTask: { id: standalone.id, title: standalone.title },
   externalPeriods,
   sampleFile: path.join(taskPieceOutput, 'pieza-final-ejemplo.png'),
   note: 'Login, API, persistencia y subidas reales; almacenamiento HTTP ficticio local (máximo 16 MB por archivo). Carlos tiene tarea compartida y no tiene permiso de Parrillas. Ningún servicio externo ni publicación real. La memoria del almacenamiento dura mientras viva este proceso.'

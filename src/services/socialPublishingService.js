@@ -15,6 +15,7 @@ import { decrypt } from '../utils/encryption.js';
 import { createNotification } from './notificationService.js';
 import { createMetaGraphClient } from './metaGraphService.js';
 import { createSignedDownload, getS3ObjectBuffer } from './s3Service.js';
+import { getPlatformStorage } from './platformStorageService.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
 import { hasCover, kindAcceptsCover } from '../lib/videoCover.js';
 import { updateTask } from './nativeTaskService.js';
@@ -79,11 +80,11 @@ export const publicSocialAccount = (account) => account && ({
  * La URL que se le da a Meta. Para una imagen se prepara primero la copia que esa red acepta: JPEG
  * dentro de la proporción del feed en Instagram, JPEG de hasta 4 MB en Facebook. Los videos van tal cual.
  */
-const defaultMediaUrlFor = async (asset, { platform, kind } = {}) => {
+export const finalAssetPublicationUrl = async (asset, { platform, kind, storageFor = getPlatformStorage, derivatives = imageDerivativeService } = {}) => {
   let key = asset.storageKey;
-  if (platform === 'INSTAGRAM') key = (await imageDerivativeService.prepareForInstagram(asset, { kind })).key;
-  else if (platform === 'FACEBOOK') key = (await imageDerivativeService.prepareForFacebook(asset)).key;
-  const { url } = await createSignedDownload({ key, expiresIn: MEDIA_URL_TTL_SECONDS });
+  if (platform === 'INSTAGRAM') key = (await derivatives.prepareForInstagram(asset, { kind })).key;
+  else if (platform === 'FACEBOOK') key = (await derivatives.prepareForFacebook(asset)).key;
+  const { url } = await storageFor(asset.storageArea || 'LEGACY').createSignedDownload({ key, expiresIn: MEDIA_URL_TTL_SECONDS });
   return url;
 };
 
@@ -91,7 +92,7 @@ export const createSocialPublishingService = ({
   db = prisma,
   meta = createMetaGraphClient(),
   decrypt: decryptToken = decrypt,
-  mediaUrlFor = defaultMediaUrlFor,
+  mediaUrlFor = finalAssetPublicationUrl,
   now = () => new Date(),
   notify = createNotification,
   randomId = randomUUID,

@@ -52,7 +52,7 @@ export const fileTooLargeMessage = (file, limitBytes = FINAL_ASSET_MAX_BYTES) =>
   return `«${fileName(file)}» pesa ${formatFileSize(bytes)} y el máximo por archivo es ${formatFileSize(limitBytes)}.`;
 };
 
-export const tooManyFilesMessage = () => `Puedes subir hasta ${FINAL_ASSET_MAX_FILES} archivos a la vez.`;
+export const tooManyFilesMessage = (maxFiles = FINAL_ASSET_MAX_FILES) => `Puedes subir hasta ${maxFiles} archivos a la vez.`;
 
 export const tooMuchAtOnceMessage = (totalBytes) => (
   `Estás subiendo ${formatFileSize(totalBytes)} de una vez y el máximo por envío es ${formatFileSize(FINAL_ASSET_MAX_TOTAL_BYTES)}. Divídelo en varias cargas.`
@@ -67,10 +67,10 @@ export const tooMuchAtOnceMessage = (totalBytes) => (
  *   servidor que ya está. Solo para lo que no cabe en el otro, para que un fallo del camino nuevo
  *   nunca rompa lo que hoy funciona.
  */
-export const planFinalAssetUpload = (files = []) => {
+export const planFinalAssetUpload = (files = [], { maxFiles = FINAL_ASSET_MAX_FILES } = {}) => {
   const list = Array.from(files || []);
   if (list.length === 0) return { problem: 'Selecciona al menos un archivo.', mode: null };
-  if (list.length > FINAL_ASSET_MAX_FILES) return { problem: tooManyFilesMessage(), mode: null };
+  if (list.length > maxFiles) return { problem: tooManyFilesMessage(maxFiles), mode: null };
 
   const tooLarge = list.find((file) => fileBytes(file) > FINAL_ASSET_DIRECT_MAX_BYTES);
   if (tooLarge) return { problem: fileTooLargeMessage(tooLarge, FINAL_ASSET_DIRECT_MAX_BYTES), mode: null };

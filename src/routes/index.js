@@ -1,5 +1,6 @@
 import express from 'express';
 import { receivesFiles } from '../lib/uploadMarker.js';
+import { createTaskDeliverableRouter } from './api/taskDeliverables.js';
 import * as authController from '../controllers/authController.js';
 import * as taskController from '../controllers/taskController.js';
 import { changeParticipation, getParticipationDetail } from '../controllers/taskParticipationController.js';
@@ -275,6 +276,7 @@ router.post('/tasks/:taskId/focus-extension', taskController.requestTaskFocusExt
 router.post('/tasks/:taskId/declared-time', guardTask, taskController.declareTaskTimeHandler);
 router.patch('/tasks/:taskId', guardTask, taskController.updateExistingTask);
 router.get('/tasks/:taskId', guardTask, getParticipationDetail);
+router.use('/tasks/:taskId/deliverables', guardTask, createTaskDeliverableRouter());
 router.patch('/tasks/:taskId/participants/:memberId', guardTask, changeParticipation);
 router.delete('/tasks/:taskId', guardTask, taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);

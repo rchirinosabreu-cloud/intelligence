@@ -65,3 +65,86 @@ node scripts/preview-task-piece-web.mjs
 Después ejecutar `node --test tests/browser/taskPieceReal.mjs` para el recorrido completo. Esa prueba entrega un archivo ficticio nuevo. `tests/taskPieceApi.integration.mjs` utiliza el puerto 8092 y debe ejecutarse cuando ese preview esté detenido; la aceptación de MIO usa el 8094. Ninguno prepara ni borra el esquema. Los scripts verifican la base aislada y no necesitan el `.env` de producción.
 
 El barrido transversal fue lectura de código de todas las familias de rutas, no una prueba visual completa de cada módulo. Quedan documentados, entre otros, los filtros de cartera operativa, fecha de calendario, carpeta/archivo en Drive, borradores de informes, perfiles y Radar. No se declara resuelta toda la navegación de la plataforma.
+
+## Incremento de entregas y sustituciones · 5 de noviembre de 2026
+
+Trabajo local posterior al merge de PR #1265 (`d2dd034`), en `codex/entregables-tareas-local`. Rodny autorizó posteriormente crear/configurar el bucket de plataforma y fusionar este incremento el 5 de noviembre de 2026. La verificación de provisión y despliegue se registra al cierre.
+
+### Comportamiento
+
+- **Entregar pieza** abre directamente el selector múltiple del sistema. También admite arrastrar los archivos sobre su zona. Con una entrega existente, el botón pasa a **Actualizar entrega**.
+- Cada selección entrega un conjunto completo de hasta **20 archivos**. Actualizar sustituye todos los anteriores, independientemente de sus nombres; seleccionar una sola lámina sustituye el carrusel entero por esa lámina. La pantalla explica este efecto antes de seleccionar.
+- La nueva selección se recibe y verifica completa antes de cambiar la entrega vigente. Fallos, cargas parciales y revisiones antiguas conservan la anterior. Dos cambios simultáneos producen un guardado y un conflicto; la interfaz consulta el estado vigente sin reenviar automáticamente. Reintentar una respuesta perdida conserva el identificador de la solicitud.
+- Las miniaturas se ordenan arrastrándolas o usando las flechas desde su número. Se muestra éxito después de la respuesta del servidor y se conserva ese orden en la parrilla.
+- El historial muestra autor, fecha en Bogotá, acción, archivos nuevos y conjunto anterior. Guarda metadatos, no copias descargables de las versiones retiradas. Ambas tablas de historial pertenecen al catálogo de auditoría inmutable y sobreviven a la eliminación del recurso.
+- Los objetos reemplazados dejan de estar accesibles por las rutas de archivos actuales. Se eliminan del almacenamiento mediante una cola persistente con reintentos. En piezas se intenta tras el commit; en tareas lo procesa la limpieza periódica. Un fallo de eliminación no deshace una entrega guardada. Los enlaces a Drive retirados no borran los originales de Google.
+- **Tareas independientes:** sección **Entregables de la tarea**, interna, compartida por sus participantes, con varios archivos, orden, descarga y sustitución completa. Usa `TaskDeliverable`, separado de comentarios e insumos: no hereda la purga de adjuntos del chat. Se admiten los tipos seguros de la plataforma (por ejemplo imagen, vídeo y PDF); no se añadió revisión de cliente.
+- Una tarea ligada a pieza conserva un único destino: los finales de esa pieza. No crea una segunda entrega interna. Entregar u ordenar no completa partes ni cambia estados, relojes o ciclos. El historial interno registra el ciclo vigente cuando existe, sin crear uno.
+- Una pieza aprobada conserva la señal nativa de material nuevo por revisar; una publicada conserva su estado y sus registros de publicación. La entrega no publica ni sustituye por sí sola un post ya publicado en redes.
+- El acceso privado se comprueba también al descargar, ordenar y confirmar. La retirada de un colaborador revoca su acceso; ser administrador no salta la privacidad de una tarea.
+
+### Almacenamiento comprobado
+
+Consulta de configuración de Railway en solo lectura: servicio Intelligence, proyecto Brainstudio Lab, entorno production. Recurso `chat-evidence`, bucket S3 **`chat-evidence-cjupwwro9k`**, endpoint `https://t3.storageapi.dev`. No se leyó ni modificó ningún objeto productivo.
+
+Los finales anteriores usan `content-plans/{slug}/{YYYY-MM}/{itemId}/final-assets`; las nuevas sustituciones usan claves finales únicas `content-deliveries/{itemId}/…` y temporales `content-delivery-staging/{itemId}/…`, en el nuevo almacenamiento de plataforma. Los entregables internos usan `task-deliverables/{taskId}/files/…`, con temporales bajo `staging/`. Las claves finales de carga directa se crean mediante copia verificada: un permiso temporal de subida usado tarde no sobrescribe el archivo ya confirmado.
+
+Límites: piezas por servidor 100 MiB/archivo y 200 MiB/conjunto; tareas por servidor 200 MiB/archivo y conjunto. Por encima se usa carga directa: piezas hasta 2.147.483.647 bytes por el campo Int existente; tareas hasta 2 GiB, guardados como BIGINT. No se transfirió un archivo de 2 GiB durante la aceptación. El almacén ficticio local conserva su límite de 16 MiB y sus bytes duran mientras viva el proceso.
+
+### Aceptación y reproducción del incremento
+
+`tests/deliverablesApi.integration.mjs` usa API 8095 y PostgreSQL aislado 55451: sustitución completa con nombres iguales, historial, retiro físico, orden, confirmación parcial y reintentos, copia sellada, publicación conservada, entrega interna y destino único de tareas vinculadas. `tests/taskDeliverablesApi.integration.mjs` usa 8094: firma manipulada, otro actor/recurso, selección incompleta, concurrencia, administrador sin acceso privado, colaborador retirado y borrado en cascada con limpieza. `tests/taskDeliverableSchema.integration.mjs` instala las guardas reales únicamente sobre tablas propias de un esquema temporal, prueba inmutabilidad, conservación del historial y BIGINT, y elimina ese esquema al terminar.
+
+`tests/browser/deliverablesReal.mjs` recorre la aplicación completa contra API 8092 y PostgreSQL: selector múltiple, dos láminas, orden persistido, sustitución por una, misma entrega en parrilla, imagen/PDF internos, descarga, orden y reemplazo, estados personales intactos y vista móvil oscura. Evidencia en `output/task-piece-delivery/walkthrough/verification.json` y sus capturas. Los casos de componentes en `taskPieceDelivery.mjs`, `taskPieceOrdering.mjs` y `taskDeliverables.mjs` cubren además errores, reintentos, permisos y arrastres; sus respuestas son ficticias.
+
+Verificación anterior a la separación de almacenamiento y Drive: **165 aprobados, 0 fallidos, 1 omitido** en 26 archivos de contratos y aceptación HTTP/PostgreSQL (`output/task-piece-delivery/final-regression.log`). El omitido es la integración histórica general de auditoría que exige otro clúster, 55448; la nueva prueba real de inmutabilidad de ambas historias sí se ejecutó en un esquema temporal de 55451. Los componentes aprobaron **19/19** casos (`output/task-deliverables/browser-final.log`). La compilación final y ESLint aprobaron (`build-final.log`, `eslint-final.log`); también `npm run audit:dead-code` y `git diff --check`. La compilación conserva avisos de paquetes grandes. No se ejecutó toda la suite de la plataforma ni un despliegue productivo; los conteos se solapan y no se suman como casos únicos.
+
+Para iniciar la prueba sobre la base local ya preparada, sin cargar `.env`:
+
+```powershell
+$env:NODE_ENV='test'
+$env:DATABASE_URL='postgresql://shared_tasks_test@127.0.0.1:55451/shared_tasks_demo'
+node scripts/task-piece-preview-local.mjs
+# En otra terminal:
+node scripts/preview-task-piece-web.mjs
+```
+
+Antes de iniciar, aplicar los ensures aditivos de participación, `ensure-task-deliverable-schema.js`, `ensure-content-delivery-schema.js` y `ensure-drive-schema.js` exclusivamente sobre esa base verificada y generar el cliente con `generateSharedTaskClient`. No resetear el esquema. `preview-access.json` identifica la cuenta ficticia nueva y `standaloneTask`. La prueba no utiliza credenciales, archivos ni base productivos; no acredita el comportamiento de Google, Meta o S3 de producción.
+
+### Archivos de plataforma, memoria y Drive
+
+Rodny amplió el destino nuevo para incluir **entregables y cargas manuales de Drive**. `agency-memory` queda reservado para memoria, minutas y conocimiento de la agencia. Tras validar el incremento en local, autorizó crear el bucket productivo y fusionar los cambios.
+
+Auditoría en solo lectura del 5 de noviembre: `GetBucketLifecycleConfiguration` del bucket `chat-evidence-cjupwwro9k` devolvió HTTP 200 con `Rules: []`. La configuración productiva sí activa `TASK_ATTACHMENT_RETENTION_ENABLED=true`, sin días personalizados (30 por defecto), y `TEMP_UPLOAD_SWEEP_ENABLED=true`, sin días personalizados (7 por defecto). La purga de adjuntos exige comentario y tarea realizada con cierre vencido; no es una caducidad general de todos los objetos del bucket. Drive/minutas ya usan `BRIA_STORAGE_BUCKET=agency-memory-snvcqfokuqk`; eso tampoco convierte automáticamente un archivo S3 en un archivo del catálogo Drive.
+
+`PLATFORM_STORAGE_ENDPOINT`, `PLATFORM_STORAGE_BUCKET`, `PLATFORM_STORAGE_ACCESS_KEY_ID` y `PLATFORM_STORAGE_SECRET_ACCESS_KEY` configuran el destino nuevo. Debe ser distinto de chat y de memoria. Sin esa configuración las nuevas cargas responden 503 y no se desvían a otro bucket. Cada archivo conserva `storageArea`: `PLATFORM` para cargas nuevas y `LEGACY` para anteriores. El origen legado depende del dominio: S3 de chat para finales anteriores, `documentStorage`/agency-memory para archivos manuales anteriores. La misma clave puede existir en dos áreas; lecturas y limpieza comprueban ambas. Las colas de retiro también conservan el área. El control de servicios comprueba el nuevo bucket por separado.
+
+Drive mantiene carpetas manuales y su papelera/restauración existentes; crear una carpeta no escribe objetos ni crea buckets. Subir un archivo general crea un `DriveFile` en `PLATFORM`. Minutas y otros documentos de conocimiento siguen usando su almacenamiento propio. Este incremento no mueve documentos antiguos ni cambia los almacenes especializados de chat, evidencias financieras o portadas. Las portadas existentes conservan su lector; los derivados de finales usan el área de su original.
+
+La raíz automática **Entregables** proyecta los mismos registros vigentes de pieza/tarea, sin copiar bytes ni crear un segundo dueño en `DriveFile`. Jerarquía **cliente → año → mes → Parrillas/Tareas → pieza/encargo**. El período de parrilla manda; para tareas independientes se usa el primer evento histórico de entrega, estable al corregir. Un archivo legado sin evento declara que el período procede de su fecha actual; una fecha desconocida no se inventa. Los nombres de presentación y descarga se forman como `Cliente_YYYY-MM_Titulo_01.ext`; el original se conserva y las claves no se renombran. Sustituir muestra solo la selección vigente en tarea, parrilla y Drive; el historial conserva los metadatos retirados.
+
+Los entregables se consultan desde Drive y se modifican desde su origen, con enlaces de regreso que conservan carpeta y búsqueda. No se descargan binarios al listar una carpeta. Las vistas previas se solicitan al abrir el archivo; los archivos demasiado grandes o sin representación mantienen la descarga. El árbol automático impide también en el servidor crear, renombrar, mover o borrar sus carpetas y archivos.
+
+Drive filtra nombres, carpetas, búsquedas y descargas por permisos de origen (`canOpenTask`, Gestión/Parrillas); su permiso global no concede acceso a tareas privadas. Las descargas revalidan el acceso. Los enlaces externos de Google conservan su tratamiento y no se copian ni borran automáticamente. Los permisos temporales de subida emitidos antes del cambio deben prepararse otra vez; los recibos de solicitudes ya confirmadas siguen siendo idempotentes.
+
+El 5 de noviembre de 2026 se aprovisionó `platform-files` en Brainstudio Lab / production: ID `4fe0c755-50a5-40c1-b215-cfdd3760e3d8`, nombre S3 `platform-files-3l19m5swba`, región `sjc`, endpoint `https://t3.storageapi.dev`. Las cuatro variables `PLATFORM_STORAGE_*` de Intelligence referencian ese recurso y `PLATFORM_STORAGE_FORCE_PATH_STYLE=false`; las variables anteriores permanecen intactas. Se configuraron sin iniciar un despliegue anticipado; el PR #1266 debe aprobar CI antes de fusionar y activar el código.
+
+Verificación del recurso real: CORS `GET/HEAD/PUT` con los orígenes nativos y `ETag` expuesto; lifecycle `Rules: []`; objeto de diagnóstico propio escrito, leído y comprobado por HEAD, acceso anónimo 403 y retirada confirmada con HEAD 404. No se leyeron ni modificaron archivos de usuarios. Evidencia local sin secretos en `output/task-piece-delivery/railway-platform-verification.json`. El resultado del despliegue se consulta en Railway y en el PR #1266; la provisión por sí sola no acredita despliegue.
+
+Migrar los archivos antiguos sería un trabajo separado: inventario, copia verificada y cambio de referencia, conservando el origen hasta comprobar el destino. Este incremento no lo ejecuta. La aceptación local utiliza tres buckets ficticios en el mismo servidor HTTP y ninguna credencial productiva.
+
+El adaptador nuevo usa direcciones virtual-hosted por defecto; el servidor de prueba activa `PLATFORM_STORAGE_FORCE_PATH_STYLE=true`. No cambia el formato del almacenamiento antiguo. Referencias contrastadas: [direcciones de buckets Railway](https://docs.railway.com/storage-buckets#url-style) y [métodos CORS admitidos por S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CORSRule.html). La lista de orígenes permitidos de la plataforma se conserva.
+
+La revisión cruzada reprodujo una carrera entre confirmar y expirar una carga. La transición `VERIFYING → COMMITTED` ahora exige una sesión vigente y sucede dentro de la misma transacción que sustituye archivos, antes de modificar las filas; retiene el bloqueo de sesión hasta commit. Si la limpieza ganó, se conserva el conjunto anterior. La reproducción controlada cubre ambas precedencias, expiración durante verificación y rollback de revisión/historia/archivos. Esa prueba de intercalado es unitaria; la aceptación HTTP/PostgreSQL verifica los recorridos completos, sin simular un despliegue real.
+
+Verificación de esta ampliación:
+
+| Comprobación | Resultado |
+|---|---|
+| Entregas, almacenamiento y Drive, HTTP/PostgreSQL real | **15/15**, `output/task-piece-delivery/platform-http-final.log`. Incluye tres buckets ficticios, legado, sustitución, copias selladas, concurrencia, privacidad, Drive automático y carga/papelera/restauración manual. |
+| Contratos afectados y auditoría PostgreSQL aislada | **129 aprobados, uno omitido**, `platform-regression.log`; después del último ajuste de expiración y direcciones, **57/57** en `platform-core-final.log`. El omitido sigue siendo el clúster histórico 55448, no la nueva aceptación de inmutabilidad. |
+| Drive en navegador con respuestas ficticias | **6/6**, `output/drive-deliverables/browser-final.log`: permisos, regreso, nombres largos/móvil, temas y ausencia de descargas automáticas de archivos grandes. |
+| Aplicación completa | **1/1**, `output/drive-deliverables/real-final.log`: entrega, PDF, reemplazo, árbol, descarga nombrada, regreso, carpeta manual y subida. `walkthrough/verification.json` registra el conjunto ficticio y `drivePath`. |
+| Construcción y calidad | `platform-build-final.log`, `platform-eslint-final.log`, `platform-dead-code.log` y `git diff --check`, sin errores. La construcción conserva avisos de tamaño de paquetes. |
+
+Las suites HTTP que siembran tareas deben ejecutarse con `--test-concurrency=1`: el primer arranque simultáneo de varios conjuntos chocó en el orden global de tareas durante la preparación; la ejecución secuencial aprobó. Los casos intencionales de confirmaciones concurrentes sí permanecen paralelos dentro de su prueba. Los conteos anteriores se solapan; no representan toda la suite de la plataforma ni certifican almacenamiento remoto.

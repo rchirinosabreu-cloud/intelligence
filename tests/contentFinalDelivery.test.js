@@ -36,3 +36,43 @@ test('la entrega rechaza selección inválida antes de solicitar una subida', as
   assert.equal(typeof delivery.uploadFinalPiece, 'function');
   await assert.rejects(delivery.uploadFinalPiece('piece', [], { client: { post() { assert.fail('No debe llamar'); } } }), /Selecciona/);
 });
+
+test('actualizar permite un carrusel completo de 20 y envía la revisión sin comparar nombres', async () => {
+  const calls = [];
+  const client = { post: async (...args) => { calls.push(args); return { data: { revision: 8, files: [{ id: 'new' }] } }; } };
+  const files = Array.from({ length: 20 }, () => new File(['new'], 'igual.png', { type: 'image/png' }));
+  const result = await delivery.uploadFinalPiece('piece', files, { client, apiBase: '', token: 'local', replace: true, expectedRevision: 7, requestId: '89c1fa66-4122-4aa5-81b5-593b7ae84bd7' });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], '/api/content/items/piece/delivery/replace');
+  assert.equal(calls[0][1].getAll('files').length, 20);
+  assert.equal(calls[0][1].get('expectedRevision'), '7');
+  assert.equal(calls[0][1].get('requestId'), '89c1fa66-4122-4aa5-81b5-593b7ae84bd7');
+  assert.deepEqual(result, { revision: 8, files: [{ id: 'new' }] });
+});
+
+test('actualización directa confirma el manifiesto completo y no publica una carga parcial', async () => {
+  const calls = [];
+  const files = [{ name: 'mismo.mp4', type: 'video/mp4', size: 105 * 1024 * 1024 }, { name: 'mismo.mp4', type: 'video/mp4', size: 120 * 1024 * 1024 }];
+  const client = {
+    post: async (url, body) => {
+      calls.push([url, body]);
+      return { data: url.endsWith('direct-upload') ? { uploadId: 'delivery-session', revision: 2, tickets: files.map((f, i) => ({ key: `key-${i}`, name: f.name, mimeType: f.type, url: `https://storage.example/new-${i}` })) } : { revision: 3, files: [{ id: 'new-a' }, { id: 'new-b' }] } };
+    },
+    put: async url => { calls.push([url]); },
+  };
+  const options = { client, apiBase: '', token: 'local', replace: true, expectedRevision: 2, requestId: '4c0b860a-715e-44fb-a71a-636c1430c535' };
+  assert.equal((await delivery.uploadFinalPiece('piece', files, options)).revision, 3);
+  assert.deepEqual(calls.map(([url]) => url), ['/api/content/items/piece/delivery/direct-upload', 'https://storage.example/new-0', 'https://storage.example/new-1', '/api/content/items/piece/delivery/confirm']);
+  assert.deepEqual(calls.at(-1)[1], { uploadId: 'delivery-session', expectedRevision: 2, requestId: options.requestId });
+  calls.length = 0;
+  client.put = async () => { throw new Error('Carga interrumpida'); };
+  await assert.rejects(delivery.uploadFinalPiece('piece', files, options), /Carga interrumpida/);
+  assert.equal(calls.some(([url]) => url.endsWith('/confirm')), false);
+});
+
+test('actualizar sin revisión conocida se rechaza antes de subir o borrar archivos', async () => {
+  const file = new File(['new'], 'foto.png', { type: 'image/png' });
+  for (const expectedRevision of [undefined, null, -1, 0.5]) {
+    await assert.rejects(delivery.uploadFinalPiece('piece', [file], { replace: true, expectedRevision, token: 'local', client: { post: () => assert.fail('No llama sin revisión') } }), /revisión/i);
+  }
+});

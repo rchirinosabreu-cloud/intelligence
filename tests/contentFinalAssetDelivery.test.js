@@ -47,7 +47,8 @@ test('la base guarda las dos mitades como opcionales, con un script aditivo', as
   const schema = await read('prisma/schema.prisma');
   const block = schema.match(/model ContentItemFinalAsset \{[\s\S]*?\n\}/)[0];
 
-  assert.match(block, /storageKey\s+String\?\s+@unique/, 'una fila de enlace no tiene clave de almacenamiento');
+  assert.match(block, /storageKey\s+String\?/, 'una fila de enlace no tiene clave de almacenamiento');
+  assert.match(block, /@@unique\(\[storageArea, storageKey\]\)/, 'la identidad del objeto incluye su bucket');
   assert.match(block, /mimeType\s+String\?/);
   assert.match(block, /size\s+Int\?/);
   assert.match(block, /externalUrl\s+String\?/);
@@ -77,7 +78,7 @@ test('el navegador sube directo, pero el servidor decide la clave y comprueba lo
     /if \(!key\.startsWith\(`\$\{basePath\}\/`\)\) throw new Error\('Ese archivo no pertenece a esta pieza\.'\)/,
     'la clave la elige el servidor: aceptar cualquiera dejaría colgar el archivo de otro cliente'
   );
-  assert.match(service, /const object = await headS3Object\(key\);/, 'el peso real se lee del almacenamiento');
+  assert.match(service, /const object = await finalStorage\.headS3Object\(key\);/, 'el peso real se lee del almacenamiento dedicado');
   assert.match(service, /object\.size > FINAL_ASSET_DIRECT_MAX_BYTES/);
   assert.match(service, /if \(object\.size <= 0\)/, 'un objeto vacío no se confirma como pieza');
   assert.match(service, /!\/\^image\\\/\|\^video\\\/\/\.test\(object\.mimeType/, 'el tipo también sale del almacenamiento');

@@ -2,6 +2,8 @@ import prisma from '../lib/prisma.js';
 import { randomUUID } from 'node:crypto';
 import { documentStorage } from './documentStorageService.js';
 import { validateUploadFile } from '../config/security.js';
+import { isDeliveryFolder, isDeliveryVirtualId, listDriveDeliverables } from './driveDeliverableService.js';
+import { getPlatformStorage, assertPlatformStorageConfigured } from './platformStorageService.js';
 
 const FILE_KINDS = {
   'summary-pdf': {
@@ -37,6 +39,9 @@ const FILE_KINDS = {
 };
 
 const createDriveError = (code, message) => Object.assign(new Error(message), { code });
+const requireMutableTarget = (...ids) => {
+  if (ids.some(isDeliveryVirtualId)) throw createDriveError('DRIVE_SYSTEM_FOLDER_READ_ONLY', 'Los entregables se actualizan desde su tarea o pieza de origen.');
+};
 
 const cleanName = (value, label = 'Nombre') => {
   const name = String(value || '').trim().replace(/[\u0000-\u001f]/g, '').slice(0, 180);
@@ -159,7 +164,11 @@ export const readDriveFile = async ({ meetingId, kind, db = prisma, storage = do
   };
 };
 
-export const listDriveContents = async ({ db = prisma, folderId = null, query = '', includeTrash = false } = {}) => {
+export const listDriveContents = async ({ db = prisma, actor, folderId = null, query = '', includeTrash = false } = {}) => {
+  if (isDeliveryFolder(folderId)) {
+    if (includeTrash) return { currentFolder: null, breadcrumbs: [], folders: [], files: [] };
+    return listDriveDeliverables({ db, actor, folderId, query });
+  }
   if (folderId === BRIA_MINUTES_FOLDER.id) {
     const files = await listDriveFiles({ db, query });
     return { currentFolder: BRIA_MINUTES_FOLDER, breadcrumbs: [BRIA_MINUTES_FOLDER], folders: [], files };
@@ -185,11 +194,12 @@ export const listDriveContents = async ({ db = prisma, folderId = null, query = 
     includeTrash ? listDriveFiles({ db, query, includeTrash: true }) : Promise.resolve([])
   ]);
 
+  const deliveries = !folderId && !includeTrash && actor ? await listDriveDeliverables({ db, actor, query }) : null;
   return {
     currentFolder: folderId ? folders.find(folder => folder.id === folderId) || { id: folderId } : null,
     breadcrumbs: [],
-    folders: folderId || includeTrash ? folders : [BRIA_MINUTES_FOLDER, ...folders],
-    files: [...briaTrashFiles, ...files.map(publicManagedFile)]
+    folders: folderId || includeTrash ? folders : [BRIA_MINUTES_FOLDER, ...(deliveries ? [deliveries.breadcrumbs[0]] : []), ...folders],
+    files: [...briaTrashFiles, ...files.map(publicManagedFile), ...(query ? deliveries?.files || [] : [])]
   };
 };
 
@@ -201,6 +211,7 @@ const cleanSubtitle = (value) => {
 };
 
 export const createDriveFolder = async ({ name, subtitle = null, parentId = null, actorId, db = prisma }) => {
+  requireMutableTarget(parentId);
   if (parentId === BRIA_MINUTES_FOLDER.id) {
     throw createDriveError('DRIVE_SYSTEM_FOLDER_READ_ONLY', 'La carpeta automática de Bria es de solo lectura.');
   }
@@ -215,14 +226,17 @@ export const createDriveFolder = async ({ name, subtitle = null, parentId = null
   });
 };
 
-export const uploadDriveFile = async ({ file, folderId = null, subtitle = null, actorId, db = prisma, storage = documentStorage }) => {
+export const uploadDriveFile = async ({ file, folderId = null, subtitle = null, actorId, db = prisma, storage, platformStorage, assertStorageConfigured = assertPlatformStorageConfigured }) => {
+  requireMutableTarget(folderId);
   validateUploadFile(file, { maxBytes: 25 * 1024 * 1024 });
   if (folderId === BRIA_MINUTES_FOLDER.id) {
     throw createDriveError('DRIVE_SYSTEM_FOLDER_READ_ONLY', 'La carpeta automática de Bria es de solo lectura.');
   }
   const now = new Date();
   const key = `drive/uploads/${now.getUTCFullYear()}/${randomUUID()}-${sanitizeStorageName(file.originalname)}`;
-  const artifact = await storage.uploadBuffer({ key, body: file.buffer, mimeType: file.mimetype });
+  if (!storage) assertStorageConfigured();
+  const artifact = storage ? await storage.uploadBuffer({ key, body: file.buffer, mimeType: file.mimetype })
+    : await (platformStorage || getPlatformStorage('PLATFORM')).putS3Object({ key, body: file.buffer, contentType: file.mimetype });
   return db.driveFile.create({
     data: {
       name: cleanName(file.originalname, 'Nombre de archivo'),
@@ -230,6 +244,7 @@ export const uploadDriveFile = async ({ file, folderId = null, subtitle = null, 
       mimeType: file.mimetype || artifact.mimeType,
       sizeBytes: Number(file.size || artifact.size || file.buffer.length),
       storageProvider: 'RAILWAY',
+      storageArea: 'PLATFORM',
       storageKey: artifact.key,
       source: 'UPLOAD',
       category: 'GENERAL',
@@ -244,6 +259,7 @@ export const uploadDriveFile = async ({ file, folderId = null, subtitle = null, 
 };
 
 export const updateDriveFile = async ({ id, name, folderId, subtitle, db = prisma }) => {
+  requireMutableTarget(id, folderId);
   const data = {};
   if (name !== undefined) data.name = cleanName(name, 'Nombre de archivo');
   if (folderId !== undefined) data.folderId = folderId || null;
@@ -252,6 +268,7 @@ export const updateDriveFile = async ({ id, name, folderId, subtitle, db = prism
 };
 
 export const updateDriveFolder = async ({ id, name, subtitle, parentId, db = prisma }) => {
+  requireMutableTarget(id, parentId);
   const data = {};
   if (name !== undefined) data.name = cleanName(name, 'Nombre de carpeta');
   // Mandar la descripción vacía la borra; no mandarla la deja como estaba.
@@ -263,29 +280,36 @@ export const updateDriveFolder = async ({ id, name, subtitle, parentId, db = pri
   return db.driveFolder.update({ where: { id }, data });
 };
 
-export const trashDriveFile = async ({ id, db = prisma }) => db.driveFile.update({
+export const trashDriveFile = async ({ id, db = prisma }) => { requireMutableTarget(id); return db.driveFile.update({
   where: { id },
   data: { deletedAt: new Date() }
-});
+}); };
 
-export const trashDriveFolder = async ({ id, db = prisma }) => db.driveFolder.update({
+export const trashDriveFolder = async ({ id, db = prisma }) => { requireMutableTarget(id); return db.driveFolder.update({
   where: { id },
   data: { deletedAt: new Date() }
-});
+}); };
 
-export const restoreDriveFile = async ({ id, db = prisma }) => db.driveFile.update({
+export const restoreDriveFile = async ({ id, db = prisma }) => { requireMutableTarget(id); return db.driveFile.update({
   where: { id },
   data: { deletedAt: null }
-});
+}); };
 
-export const restoreDriveFolder = async ({ id, db = prisma }) => db.driveFolder.update({
+export const restoreDriveFolder = async ({ id, db = prisma }) => { requireMutableTarget(id); return db.driveFolder.update({
   where: { id },
   data: { deletedAt: null }
-});
+}); };
 
-export const readManagedDriveFile = async ({ id, db = prisma, storage = documentStorage }) => {
+export const readManagedDriveFile = async ({ id, db = prisma, storage, legacyStorage = documentStorage, platformStorage }) => {
   const file = await db.driveFile.findFirst({ where: { id, deletedAt: null } });
   if (!file) throw createDriveError('DRIVE_FILE_NOT_FOUND', 'El archivo solicitado no existe.');
-  const artifact = await storage.downloadBuffer({ key: file.storageKey });
+  const area = file.storageArea ?? 'LEGACY';
+  if (!['LEGACY', 'PLATFORM'].includes(area)) throw Object.assign(createDriveError('PLATFORM_STORAGE_AREA_INVALID', 'El almacenamiento de este archivo no está disponible.'), { status: 503 });
+  let artifact;
+  if (storage || area === 'LEGACY') artifact = await (storage || legacyStorage).downloadBuffer({ key: file.storageKey });
+  else {
+    const body = await (platformStorage || getPlatformStorage('PLATFORM')).getS3ObjectBuffer(file.storageKey);
+    artifact = { body, size: body.length, mimeType: file.mimeType };
+  }
   return { file: publicManagedFile(file), ...artifact };
 };

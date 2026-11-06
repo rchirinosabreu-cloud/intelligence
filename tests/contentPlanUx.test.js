@@ -100,7 +100,8 @@ test('content pieces support persistent multi-file carousel assets internally', 
   assert.match(s3Service, /DeleteObjectCommand/);
   assert.match(service, /deleteContentItemFinalAssetById/);
   assert.match(service, /uploadContentItemFinalAssets/);
-  assert.match(service, /prisma\.contentItemFinalAsset\.create/);
+  // La creación comparte la transacción que guarda revisión e historial de la entrega.
+  assert.match(service, /mutateContentDelivery\([\s\S]*?async \(tx, _item, current\) =>[\s\S]*?tx\.contentItemFinalAsset\.create/);
 });
 
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {

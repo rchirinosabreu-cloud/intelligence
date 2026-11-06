@@ -62,12 +62,14 @@ export const detail = async (req, res) => {
 export const contents = async (req, res) => {
   try {
     const result = await listDriveContents({
+      actor: req.user,
       folderId: req.query.folderId || null,
       query: req.query.query,
       includeTrash: req.query.trash === 'true'
     });
     return res.json(result);
   } catch (error) {
+    if (error.code === 'DRIVE_DELIVERABLE_UNAVAILABLE') return res.status(error.status || 404).json({ error: error.code, message: error.message });
     console.error('[DriveController] Error cargando contenido:', error.response?.data || error.message || error);
     return res.status(500).json({ error: 'DRIVE_CONTENTS_FAILED', message: 'No fue posible cargar Drive.' });
   }
@@ -101,7 +103,7 @@ export const upload = async (req, res) => {
     return res.status(201).json({ file });
   } catch (error) {
     console.error('[DriveController] Error subiendo archivo:', error.response?.data || error.message || error);
-    const status = error.code === 'FILE_TOO_LARGE' ? 413 : ['UNSAFE_FILE_TYPE', 'INVALID_FILE'].includes(error.code) ? 415 : error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? 400 : 500;
+    const status = error.status === 503 ? 503 : error.code === 'FILE_TOO_LARGE' ? 413 : ['UNSAFE_FILE_TYPE', 'INVALID_FILE'].includes(error.code) ? 415 : error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? 400 : 500;
     return res.status(status).json({ error: error.code || 'DRIVE_UPLOAD_FAILED', message: status === 500 ? 'No fue posible subir el archivo.' : error.message });
   }
 };
@@ -112,7 +114,7 @@ export const updateFile = async (req, res) => {
     return res.json({ file });
   } catch (error) {
     console.error('[DriveController] Error actualizando archivo:', error.response?.data || error.message || error);
-    return res.status(error.code === 'DRIVE_NAME_REQUIRED' ? 400 : 500).json({ error: error.code || 'DRIVE_FILE_UPDATE_FAILED', message: error.message || 'No fue posible actualizar el archivo.' });
+    return res.status(['DRIVE_NAME_REQUIRED', 'DRIVE_SYSTEM_FOLDER_READ_ONLY'].includes(error.code) ? 400 : 500).json({ error: error.code || 'DRIVE_FILE_UPDATE_FAILED', message: error.message || 'No fue posible actualizar el archivo.' });
   }
 };
 
@@ -122,7 +124,7 @@ export const updateFolder = async (req, res) => {
     return res.json({ folder });
   } catch (error) {
     console.error('[DriveController] Error actualizando carpeta:', error.response?.data || error.message || error);
-    return res.status(['DRIVE_NAME_REQUIRED', 'DRIVE_FOLDER_CYCLE'].includes(error.code) ? 400 : 500).json({ error: error.code || 'DRIVE_FOLDER_UPDATE_FAILED', message: error.message || 'No fue posible actualizar la carpeta.' });
+    return res.status(['DRIVE_NAME_REQUIRED', 'DRIVE_FOLDER_CYCLE', 'DRIVE_SYSTEM_FOLDER_READ_ONLY'].includes(error.code) ? 400 : 500).json({ error: error.code || 'DRIVE_FOLDER_UPDATE_FAILED', message: error.message || 'No fue posible actualizar la carpeta.' });
   }
 };
 
@@ -132,7 +134,7 @@ export const removeFile = async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     console.error('[DriveController] Error enviando archivo a papelera:', error.response?.data || error.message || error);
-    return res.status(500).json({ error: 'DRIVE_FILE_TRASH_FAILED', message: 'No fue posible enviar el archivo a la papelera.' });
+    return res.status(error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? 400 : 500).json({ error: error.code || 'DRIVE_FILE_TRASH_FAILED', message: error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? error.message : 'No fue posible enviar el archivo a la papelera.' });
   }
 };
 
@@ -142,7 +144,7 @@ export const removeFolder = async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     console.error('[DriveController] Error enviando carpeta a papelera:', error.response?.data || error.message || error);
-    return res.status(500).json({ error: 'DRIVE_FOLDER_TRASH_FAILED', message: 'No fue posible enviar la carpeta a la papelera.' });
+    return res.status(error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? 400 : 500).json({ error: error.code || 'DRIVE_FOLDER_TRASH_FAILED', message: error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? error.message : 'No fue posible enviar la carpeta a la papelera.' });
   }
 };
 
@@ -152,7 +154,7 @@ export const restoreFile = async (req, res) => {
     return res.json({ file });
   } catch (error) {
     console.error('[DriveController] Error restaurando archivo:', error.response?.data || error.message || error);
-    return res.status(500).json({ error: 'DRIVE_FILE_RESTORE_FAILED', message: 'No fue posible restaurar el archivo.' });
+    return res.status(error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? 400 : 500).json({ error: error.code || 'DRIVE_FILE_RESTORE_FAILED', message: error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? error.message : 'No fue posible restaurar el archivo.' });
   }
 };
 
@@ -162,7 +164,7 @@ export const restoreFolder = async (req, res) => {
     return res.json({ folder });
   } catch (error) {
     console.error('[DriveController] Error restaurando carpeta:', error.response?.data || error.message || error);
-    return res.status(500).json({ error: 'DRIVE_FOLDER_RESTORE_FAILED', message: 'No fue posible restaurar la carpeta.' });
+    return res.status(error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? 400 : 500).json({ error: error.code || 'DRIVE_FOLDER_RESTORE_FAILED', message: error.code === 'DRIVE_SYSTEM_FOLDER_READ_ONLY' ? error.message : 'No fue posible restaurar la carpeta.' });
   }
 };
 
@@ -178,6 +180,6 @@ export const managedFile = async (req, res) => {
     return res.send(result.body);
   } catch (error) {
     console.error('[DriveController] Error descargando archivo:', error.response?.data || error.message || error);
-    return res.status(error.code === 'DRIVE_FILE_NOT_FOUND' ? 404 : 500).json({ error: error.code || 'DRIVE_FILE_READ_FAILED', message: error.message || 'No fue posible abrir el archivo.' });
+    return res.status(error.status === 503 ? 503 : error.code === 'DRIVE_FILE_NOT_FOUND' ? 404 : 500).json({ error: error.code || 'DRIVE_FILE_READ_FAILED', message: error.message || 'No fue posible abrir el archivo.' });
   }
 };

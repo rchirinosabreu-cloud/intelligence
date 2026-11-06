@@ -78,7 +78,7 @@ export const createServiceHealthProbes = ({
   createS3Client = (config) => new S3Client({
     endpoint: config.endpoint,
     region: config.region || 'us-east-1',
-    forcePathStyle: true,
+    forcePathStyle: config.forcePathStyle ?? true,
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey }
   }),
   createGcsClient = ({ projectId, credentials }) => new Storage({ projectId, credentials }),
@@ -121,9 +121,9 @@ export const createServiceHealthProbes = ({
     ? result('WARN', `Responde, pero lento (${(latencyMs / 1000).toFixed(1)} s).`, { latencyMs })
     : result('OK', okMessage, { latencyMs }));
 
-  const s3Probe = async ({ endpoint, accessKeyId, secretAccessKey, bucket, region }) => {
+  const s3Probe = async ({ endpoint, accessKeyId, secretAccessKey, bucket, region, forcePathStyle }) => {
     if (!accessKeyId || !secretAccessKey || !bucket) return null;
-    const client = createS3Client({ endpoint, accessKeyId, secretAccessKey, ...(region ? { region } : {}) });
+    const client = createS3Client({ endpoint, accessKeyId, secretAccessKey, ...(region ? { region } : {}), ...(forcePathStyle === undefined ? {} : { forcePathStyle }) });
     try {
       const { latencyMs } = await timed(() => withTimeout(client.send(new HeadBucketCommand({ Bucket: bucket }))));
       return slowOrOk(latencyMs, SLOW.http, `El bucket «${bucket}» responde.`);
@@ -303,6 +303,24 @@ export const createServiceHealthProbes = ({
     async 'storage-bria'() {
       const outcome = await s3Probe({ endpoint: env.BRIA_CHAT_STORAGE_ENDPOINT, bucket: env.BRIA_CHAT_STORAGE_BUCKET, accessKeyId: env.BRIA_CHAT_STORAGE_ACCESS_KEY_ID, secretAccessKey: env.BRIA_CHAT_STORAGE_SECRET_ACCESS_KEY, region: env.BRIA_CHAT_STORAGE_REGION || 'auto' });
       return outcome || notConfigured('Faltan las credenciales de los archivos de Bria.');
+    },
+
+    async 'storage-platform'() {
+      const endpoint = String(env.PLATFORM_STORAGE_ENDPOINT || '').trim().replace(/\/+$/, '');
+      const bucket = env.PLATFORM_STORAGE_BUCKET;
+      if (!endpoint || !bucket || !env.PLATFORM_STORAGE_ACCESS_KEY_ID || !env.PLATFORM_STORAGE_SECRET_ACCESS_KEY) {
+        return notConfigured('Falta configurar el almacenamiento de archivos de la plataforma.');
+      }
+      const sharedEndpoint = String(env.AWS_ENDPOINT_URL || 'https://t3.storageapi.dev').replace(/\/+$/, '');
+      if (endpoint === sharedEndpoint && bucket === (env.AWS_S3_BUCKET_NAME || 'chat-evidence')) {
+        return fail({ critical: true, errorCode: 'SHARED_BUCKET', message: 'Los archivos de plataforma deben usar un bucket distinto al del chat.' });
+      }
+      const memoryEndpoint = String(env.BRIA_STORAGE_ENDPOINT || env.AWS_ENDPOINT_URL || 'https://t3.storageapi.dev').trim().replace(/\/+$/, '');
+      if (env.BRIA_STORAGE_BUCKET && endpoint === memoryEndpoint && bucket === env.BRIA_STORAGE_BUCKET) {
+        return fail({ critical: true, errorCode: 'SHARED_BUCKET', message: 'La memoria de la agencia debe tener su propio bucket, separado de los archivos generales.' });
+      }
+      return await s3Probe({ endpoint, bucket, accessKeyId: env.PLATFORM_STORAGE_ACCESS_KEY_ID,
+        secretAccessKey: env.PLATFORM_STORAGE_SECRET_ACCESS_KEY, forcePathStyle: env.PLATFORM_STORAGE_FORCE_PATH_STYLE === 'true' }) || notConfigured('Falta configurar el almacenamiento de archivos de la plataforma.');
     },
 
     async 'storage-memory'() {

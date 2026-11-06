@@ -8,6 +8,7 @@ import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
 import { initFocusOverdueCron } from './src/services/taskFocusService.js';
 import { startTaskAttachmentRetention } from './src/services/taskAttachmentRetentionService.js';
+import { startDeliveryCleanup } from './src/services/deliveryCleanupService.js';
 import { startTempUploadSweep } from './src/services/tempUploadRetentionService.js';
 import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSyncScheduler.js';
 import { initAutomatedMinutesScheduler } from './src/services/automatedMinutesScheduler.js';
@@ -34,6 +35,7 @@ import { initUnbackedWorkAlertScheduler } from './src/services/unbackedWorkAlert
 import { initExternalPlanScheduler } from './src/services/externalPlanService.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { configureS3Cors } from './src/services/s3Service.js';
+import { configurePlatformStorageCors } from './src/services/platformStorageService.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
 import apiRouter from './src/routes/index.js';
@@ -250,6 +252,7 @@ async function bootstrap() {
         initUnbackedWorkAlertScheduler();
         initExternalPlanScheduler();
         startTaskAttachmentRetention();
+        startDeliveryCleanup();
         startTempUploadSweep();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
@@ -260,6 +263,7 @@ async function bootstrap() {
     // Va aquí y no en la cadena de `npm start`: un almacenamiento caído no puede impedir que el
     // servidor levante. `configureS3Cors` registra su propio fallo y no lanza.
     configureS3Cors();
+    configurePlatformStorageCors();
     // Resume durable file deletion even when nobody opens Bria after a restart.
     const { getApplicationConversationService } = await import('./src/services/briaConversationApplication.js');
     getApplicationConversationService();

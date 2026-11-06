@@ -26,7 +26,23 @@ export async function startTaskPieceStorage({ port = 0 } = {}) {
     }
     if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
     const key = new URL(request.url, 'http://127.0.0.1').pathname;
+    if (request.method === 'DELETE') {
+      objects.delete(key);
+      response.writeHead(204); response.end(); return;
+    }
     if (request.method === 'PUT') {
+      if (request.headers['x-amz-copy-source']) {
+        const sourceKey = '/' + decodeURIComponent(request.headers['x-amz-copy-source']).replace(/^\/+/, '');
+        const source = objects.get(sourceKey);
+        if (!source) { response.writeHead(404); response.end(); return; }
+        if (request.headers['x-amz-copy-source-if-match'] && request.headers['x-amz-copy-source-if-match'] !== source.etag) {
+          response.writeHead(412); response.end(); return;
+        }
+        objects.set(key, { ...source, body: Buffer.from(source.body) });
+        response.writeHead(200, { 'Content-Type': 'application/xml' });
+        response.end(`<CopyObjectResult><LastModified>${new Date().toISOString()}</LastModified><ETag>${source.etag}</ETag></CopyObjectResult>`);
+        return;
+      }
       const chunks = []; let size = 0;
       for await (const chunk of request) {
         size += chunk.length;
@@ -48,13 +64,14 @@ export async function startTaskPieceStorage({ port = 0 } = {}) {
   return { origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }) };
 }
 
-export async function startTaskPieceApi({ port = 8092 } = {}) {
+export async function startTaskPieceApi({ port = 8092, deliveryStorage = true } = {}) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535 || [8091, 3181, 3182, 55451].includes(port)) throw new Error('El puerto debe ser local y distinto al preview anterior.');
   await mkdir(taskPieceOutput, { recursive: true });
   const disabledEnvironment = path.join(taskPieceOutput, 'environment-disabled');
   await writeFile(disabledEnvironment, '');
   const env = { ...sharedTaskEnvironment(), PORT: String(port), DOTENV_CONFIG_PATH: disabledEnvironment,
-    AWS_ACCESS_KEY_ID: 'local-task-piece', AWS_SECRET_ACCESS_KEY: 'fictitious-local-task-piece-secret', AWS_S3_BUCKET_NAME: 'task-piece-test' };
+    AWS_ACCESS_KEY_ID: 'local-task-piece', AWS_SECRET_ACCESS_KEY: 'fictitious-local-task-piece-secret', AWS_S3_BUCKET_NAME: 'task-piece-test',
+    TEST_PLATFORM_STORAGE_DISABLED: deliveryStorage ? 'false' : 'true' };
   const child = spawn(process.execPath, [path.join(sharedTaskRoot, 'scripts/task-piece-api-local.mjs')], {
     cwd: taskPieceOutput, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -70,7 +87,7 @@ export async function startTaskPieceApi({ port = 8092 } = {}) {
   return { origin: `http://127.0.0.1:${port}`, logs: () => output, close: () => new Promise(resolve => { if (child.exitCode !== null) return resolve(); child.once('exit', resolve); child.kill(); }) };
 }
 
-export async function createTaskPieceFixture({ port = 8092 } = {}) {
+export async function createTaskPieceFixture({ port = 8092, deliveryStorage = true } = {}) {
   assertSharedTaskDatabase(process.env.DATABASE_URL);
   if (process.env.NODE_ENV !== 'test') throw new Error('Esta fixture exige NODE_ENV=test.');
   const db = new PrismaClient({ datasources: { db: { url: SHARED_TEST_DATABASE_URL } } });
@@ -78,9 +95,10 @@ export async function createTaskPieceFixture({ port = 8092 } = {}) {
   try {
     const [identity] = await db.$queryRaw`SELECT current_database() AS database, current_user AS username, inet_server_port() AS port`;
     assert.deepEqual(identity, { database: 'shared_tasks_demo', username: 'shared_tasks_test', port: 55451 });
-    api = await startTaskPieceApi({ port });
+    api = await startTaskPieceApi({ port, deliveryStorage });
     const seed = await seedSharedTaskActors();
     const client = await db.client.update({ where: { id: seed.client.id }, data: { name: `Cuenta Faro · Tarea y pieza ${seed.runId.slice(0, 8)}` } });
+    await db.user.update({ where: { id: seed.actors.ana.id }, data: { modulePermissions: { dashboard: true, gestion: true, parrillas: true, clientes: true, drive: true } } });
     await db.user.update({ where: { id: seed.actors.carlos.id }, data: { modulePermissions: { dashboard: true, gestion: true, parrillas: false, clientes: true } } });
     const tokens = {}, sessions = {};
     const raw = (actor, route, options = {}) => fetch(`${api.origin}/api${route}`, { ...options,

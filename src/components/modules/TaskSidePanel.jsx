@@ -64,6 +64,7 @@ import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
 const PiecePeekDialog = lazyWithRecovery(() => import('./Clients/operations/PiecePeekDialog'));
+const TaskDeliverables = lazyWithRecovery(() => import('@/components/tasks/TaskDeliverables'));
 
 // Hours a manager can commit a task to (Bogotá wall clock, quarter hours of the working day).
 const FOCUS_HOURS = QUARTER_HOURS.filter((hour) => hour >= '06:00' && hour <= '21:45');
@@ -337,6 +338,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [newCommentText, setNewCommentText] = useState("");
     const [editingCommentText, setEditingCommentText] = useState("");
     const [isSendingComment, setIsSendingComment] = useState(false);
+    const [deliverableBusy, setDeliverableBusy] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
     const [isTogglingFollow, setIsTogglingFollow] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState([]);
@@ -1898,6 +1900,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleClosePanel = () => {
+        if (deliverableBusy) return;
         setPreviewImage(null);
         setShowToolbar(false);
         setShowEditToolbar(false);
@@ -2711,6 +2714,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
                         )}
 
+                        {isEdition && formData.id && !formData.contentItemId && <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando entregables…</p>}>
+                            <TaskDeliverables key={formData.id} taskId={formData.id} onBusyChange={setDeliverableBusy} />
+                        </Suspense>}
+
                         {/* Footer Creation Actions */}
                         {!isEdition && (
                             <div className="mt-auto pt-6 border-t border-zinc-200/70 dark:border-zinc-800/70 flex gap-3">
@@ -2737,6 +2744,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <button
                                     type="button"
                                     onClick={handleClosePanel}
+                                    disabled={deliverableBusy}
                                     className="min-h-12 flex-1 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 sm:min-h-0 sm:flex-none sm:px-6 sm:text-xs"
                                 >
                                     Cerrar
@@ -2744,7 +2752,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <button
                                     type="button"
                                     onClick={() => handleSave()}
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || deliverableBusy}
                                     className="flex min-h-12 flex-[2] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 sm:min-h-0 sm:flex-none sm:px-6 sm:text-xs"
                                 >
                                     {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}

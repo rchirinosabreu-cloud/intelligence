@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command, CopyObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { validateUploadFile } from '../config/security.js';
 import { randomUUID } from 'node:crypto';
@@ -37,8 +37,8 @@ const DEFAULT_STORAGE_ORIGINS = [
 ];
 
 /** `STORAGE_CORS_ORIGINS` añade orígenes separados por coma sin tocar el código (despliegues nuevos). */
-const storageCorsOrigins = () => {
-    const extra = String(process.env.STORAGE_CORS_ORIGINS || '')
+export const storageCorsOrigins = (env = process.env) => {
+    const extra = String(env.STORAGE_CORS_ORIGINS || '')
         .split(',')
         .map(origin => origin.trim())
         .filter(Boolean);
@@ -134,6 +134,40 @@ export const putS3Object = async ({ key, body, contentType }) => {
  * Es la única forma de saber el peso real de lo que subió el navegador: lo que el cliente declara
  * antes de subir es una promesa, no un hecho.
  */
+export const copyS3Object = async (sourceKey, targetKey, { etag } = {}) => {
+    const client = getS3Client();
+    const bucket = process.env.AWS_S3_BUCKET_NAME || 'chat-evidence';
+    if (!client) throw new Error('S3 client not initialized');
+    if (!sourceKey || !targetKey || sourceKey === targetKey) throw new Error('A copy needs distinct source and destination keys');
+    return client.send(new CopyObjectCommand({
+        Bucket: bucket, Key: targetKey,
+        CopySource: `${encodeURIComponent(bucket)}/${sourceKey.split('/').map(encodeURIComponent).join('/')}`,
+        ...(etag ? { CopySourceIfMatch: etag } : {})
+    }));
+};
+
+/** Inspect only a bounded signature, tied to the same object version that will be copied. */
+export const readS3ObjectPrefix = async (key, maxBytes = 512, { etag } = {}) => {
+    const client = getS3Client();
+    if (!client) throw new Error('S3 client not initialized');
+    const length = Math.min(4096, Math.max(1, Number(maxBytes) || 512));
+    const response = await client.send(new GetObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET_NAME || 'chat-evidence', Key: key,
+        Range: `bytes=0-${length - 1}`, ...(etag ? { IfMatch: etag } : {})
+    }));
+    const chunks = [];
+    let received = 0;
+    try {
+        for await (const chunk of response.Body) {
+            const bytes = Buffer.from(chunk).subarray(0, length - received);
+            chunks.push(bytes);
+            received += bytes.length;
+            if (received >= length) break;
+        }
+    } finally { response.Body?.destroy?.(); }
+    return Buffer.concat(chunks);
+};
+
 export const headS3Object = async (key) => {
     const s3Client = getS3Client();
     const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
@@ -144,7 +178,8 @@ export const headS3Object = async (key) => {
         return {
             key,
             size: Number(object.ContentLength || 0),
-            mimeType: String(object.ContentType || '').split(';', 1)[0].trim()
+            mimeType: String(object.ContentType || '').split(';', 1)[0].trim(),
+            etag: object.ETag || null
         };
     } catch (error) {
         if (error?.$metadata?.httpStatusCode === 404 || error?.name === 'NotFound') return null;
@@ -162,7 +197,7 @@ export const headS3Object = async (key) => {
  * Streams an object from S3.
  * @param {string} key - S3 object key.
  */
-export const getFromS3Stream = async (key) => {
+export const getFromS3Stream = async (key, { range } = {}) => {
     const s3Client = getS3Client();
     const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
 
@@ -171,6 +206,7 @@ export const getFromS3Stream = async (key) => {
     const command = new GetObjectCommand({
         Bucket: bucketName,
         Key: key,
+        ...(range ? { Range: range } : {}),
     });
 
     const response = await s3Client.send(command);

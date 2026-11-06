@@ -1,5 +1,5 @@
 import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAssetById } from '../services/contentService.js';
-import { getFromS3Stream } from '../services/s3Service.js';
+import { getPlatformStorage } from '../services/platformStorageService.js';
 import { driveAssetUrls, isDriveAsset } from '../lib/finalAssetShape.js';
 import { clientCommentProblem, normalizeClientComment } from '../lib/clientComment.js';
 
@@ -129,7 +129,7 @@ export const getPublicFinalAssetById = async (req, res) => {
     // Un enlace de Drive lo sirve Google, no nosotros: el portal lo muestra con `embedUrl`.
     if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
 
-    const object = await getFromS3Stream(asset.storageKey);
+    const object = await getPlatformStorage(asset.storageArea).getFromS3Stream(asset.storageKey);
     res.setHeader('Content-Type', asset.mimeType || object.ContentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || 'pieza-final')}"`);
     res.setHeader('Cache-Control', 'private, max-age=300');

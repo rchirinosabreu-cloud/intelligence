@@ -80,15 +80,22 @@ export const SERVICE_CATALOG = Object.freeze([
   {
     id: 'storage-chat',
     label: 'Archivos de tareas y chat',
-    purpose: 'Adjuntos de tareas, comentarios, chat del equipo y piezas finales de las parrillas.',
-    impact: 'Si cae, no se pueden subir ni descargar adjuntos ni piezas finales.',
+    purpose: 'Adjuntos de tareas, comentarios, chat del equipo y archivos anteriores a la separación de entregables.',
+    impact: 'Si cae, no se pueden subir ni descargar esos adjuntos y archivos anteriores.',
+    intervalMs: 5 * MIN
+  },
+  {
+    id: 'storage-platform',
+    label: 'Archivos de la plataforma',
+    purpose: 'Entregables de tareas y parrillas, y archivos que el equipo sube a Drive.',
+    impact: 'Si cae, no se pueden subir ni abrir los archivos guardados aquí; las entregas anteriores se conservan.',
     intervalMs: 5 * MIN
   },
   {
     id: 'storage-memory',
     label: 'Memoria de la agencia',
-    purpose: 'Minutas automáticas y archivos del Drive interno.',
-    impact: 'Si cae, las minutas nuevas no se guardan y el Drive no abre sus archivos.',
+    purpose: 'Minutas y conocimiento de la agencia; conserva también archivos anteriores a la separación de Drive.',
+    impact: 'Si cae, las minutas nuevas no se guardan y esos documentos anteriores no se abren.',
     intervalMs: 5 * MIN
   },
   {

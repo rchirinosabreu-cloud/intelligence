@@ -26,6 +26,7 @@ try {
       "sizeBytes" INTEGER NOT NULL,
       "storageProvider" TEXT NOT NULL DEFAULT 'RAILWAY',
       "storageKey" TEXT NOT NULL,
+      "storageArea" TEXT NOT NULL DEFAULT 'LEGACY',
       "source" TEXT NOT NULL DEFAULT 'UPLOAD',
       "category" TEXT NOT NULL DEFAULT 'GENERAL',
       "metadata" JSONB,
@@ -36,8 +37,10 @@ try {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS "DriveFile_storageKey_key"
-      ON "DriveFile"("storageKey");
+    ALTER TABLE "DriveFile" ADD COLUMN IF NOT EXISTS "storageArea" TEXT NOT NULL DEFAULT 'LEGACY';
+    CREATE UNIQUE INDEX IF NOT EXISTS "DriveFile_storageArea_storageKey_key"
+      ON "DriveFile"("storageArea", "storageKey");
+    DROP INDEX IF EXISTS "DriveFile_storageKey_key";
 
     -- Descripción de una carpeta (14 de octubre de 2026). Columna aditiva: las carpetas
     -- que ya existen quedan sin descripción y la tarjeta sigue mostrando su relleno.

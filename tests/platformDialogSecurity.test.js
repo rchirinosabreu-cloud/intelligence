@@ -2,6 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { Linter } from 'eslint';
+
+const linter = new Linter();
+const nativeConfirmProblems = (source) => linter.verify(source, {
+  parserOptions: { ecmaVersion: 'latest', sourceType: 'module', ecmaFeatures: { jsx: true } },
+  rules: {
+    'no-restricted-globals': ['error', 'confirm'],
+    'no-restricted-properties': ['error', { object: 'window', property: 'confirm' }]
+  }
+}, { allowInlineConfig: false });
+
+test('dialog guard distinguishes browser confirmation from a locally bound service method', () => {
+  assert.equal(nativeConfirmProblems('confirm("Eliminar?");').length, 1);
+  assert.equal(nativeConfirmProblems('window.confirm("Eliminar?");').length, 1);
+  assert.deepEqual(nativeConfirmProblems('async function confirm(id) { return id; } confirm("upload-id");'), []);
+  assert.deepEqual(nativeConfirmProblems('const confirm = useConfirmDialog(); confirm({ title: "Eliminar?" });'), []);
+});
 
 const collectSourceFiles = (directory) => readdirSync(directory)
   .flatMap((entry) => {
@@ -14,10 +31,7 @@ test('destructive confirmations use the platform dialog instead of browser dialo
   const sourceFiles = collectSourceFiles(join(process.cwd(), 'src'));
   const nativeConfirmCalls = sourceFiles.flatMap((filePath) => {
     const source = readFileSync(filePath, 'utf8');
-    const callsWindowConfirm = /window\.confirm\s*\(/.test(source);
-    const callsUnscopedConfirm = /(^|[^.\w])confirm\s*\(/m.test(source)
-      && !source.includes('useConfirmDialog');
-    return callsWindowConfirm || callsUnscopedConfirm ? [filePath] : [];
+    return nativeConfirmProblems(source).map(problem => `${filePath}:${problem.line}: ${problem.message}`);
   });
 
   assert.deepEqual(nativeConfirmCalls, []);

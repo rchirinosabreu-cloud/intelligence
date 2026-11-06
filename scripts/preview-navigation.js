@@ -39,6 +39,7 @@ export async function createNavigationPreview({ port = 3711 } = {}) {
     import ClientTasksWidget from '@/components/modules/ClientTasksWidget';
     import CompletedTasksHistoryModal from '@/components/modules/CompletedTasksHistoryModal';
     import Dashboard from '@/components/modules/Dashboard';
+    import DriveLayout from '@/components/modules/Drive/DriveLayout';
     import BackToOrigin,{useNavigateFrom,useScrollMemory,usePageLabel} from '@/components/layout/BackToOrigin';
     import BrainToaster from '@/components/ui/BrainToaster';
     import {AuthProvider,useAuth} from '@/context/AuthContext';
@@ -66,6 +67,7 @@ export async function createNavigationPreview({ port = 3711 } = {}) {
         <Route path="/muestra-pendientes" element={<ClientTasksWidget clientId="navigation-client"/>}/>
         <Route path="/muestra-logros" element={<CompletedTasksHistoryModal isOpen onClose={()=>{}}/>}/>
         <Route path="/muestra-dashboard" element={<PreviewDashboard/>}/>
+        <Route path="/drive" element={<DriveLayout/>}/>
       </Routes></main>}
     createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><ConfirmDialogProvider><BrowserRouter><Shell/><BrainToaster/></BrowserRouter></ConfirmDialogProvider></AuthProvider></QueryClientProvider>);
   `;
@@ -94,6 +96,8 @@ export async function createNavigationPreview({ port = 3711 } = {}) {
       '/api/tasks/navigation-task': task, '/api/tasks/returned-alerts': { tasks: [] }, '/api/tasks/work-alerts': { tasks: [] },
       '/api/metrics/quality-streak': { currentStreak: 0, maxStreak: 0, currentStreakDays: 0, currentReturnedTasksCount: 0 },
       '/api/content/plans': [plan], '/api/content/plans/navigation-plan': plan,
+      '/api/content/items/uno/delivery': { revision: 0, files: [], history: [] },
+      '/api/content/items/dos/delivery': { revision: 0, files: [], history: [] },
       '/api/content/plans/cliente-de-prueba/11-2026': plan, '/api/content/external-plans': [],
     };
     res.writeHead(req.method === 'GET' && Object.hasOwn(data, pathname) ? 200 : 404, { 'Content-Type': 'application/json' });
