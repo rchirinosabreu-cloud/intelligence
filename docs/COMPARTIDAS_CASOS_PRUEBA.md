@@ -104,6 +104,12 @@ Rodny autorizó la fusión después del recorrido real con Ana, Bea y Carlos. La
 
 Validación adicional: 31/31 contratos de sesión, 73/73 de métricas/dashboard y 3/3 pruebas PostgreSQL del archivo en esquemas temporales aislados de 55451. Prisma validó el esquema y Vite compiló; `npm run build` local no pudo reemplazar la DLL de Prisma que mantiene abierta la API de la demostración. La compilación completa se comprueba en CI antes de fusionar. Seguridad, licencias y código sin uso pasaron sus puertas; el lint del código pasó excluyendo copias de trabajo y compilaciones locales ignoradas por Git.
 
+## Corrección de comentarios automáticos (6 de noviembre de 2026, fusión autorizada)
+
+Se reprodujo por HTTP y PostgreSQL local que iniciar la participación de Bea añadía un `system_participation` y que crear/cambiar el equipo también escribía uno. Los cambios ordinarios de estado y de integrantes dejan de publicar estos comentarios. Se conservan los comentarios humanos y los eventos `system_return`, `system_reintegrate` y `system_reopen`, con sus motivos; los estados, relojes, logros y registros de auditoría conservan su recorrido. No se eliminan comentarios históricos.
+
+Tres regresiones fallaron antes de la corrección y pasaron después. La validación conjunta de `sharedTaskApi.integration.mjs`, `taskParticipationService`, `taskCollaboratorService`, `sharedTaskAlerts`, `sharedTaskDeclaredTime` y `sharedTaskMetrics` pasó **69/69 pruebas**. Incluye inicio, pausa, cierre personal/global, edición de datos/equipo, comentario humano, devolución, reintegro, reapertura, sesiones y auditoría. Base dedicada `127.0.0.1:55451`; no acredita una prueba de navegador ni un despliegue. Rodny autorizó la fusión el 6 de noviembre de 2026.
+
 ## Vista local reproducible
 
 Arranque: `node scripts/preview-shared-tasks-local.mjs`. Prepara únicamente 55451, crea cuentas/clientes/tareas ficticios y mantiene API 8091 + Gestión 3181. El acceso, contraseñas de prueba y los dos Task ID quedan en `output/shared-tasks-local/preview-access.json`, sin JWT. No ejecutar las suites de API/navegador mientras el preview ocupe esos puertos.

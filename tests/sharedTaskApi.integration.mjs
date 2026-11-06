@@ -19,6 +19,40 @@ after(async () => { if (f) {
 const part = (task, key) => f.participation(task, key);
 const move = async (...args) => (await f.move(...args)).data;
 
+test('los cambios cotidianos de participación no publican comentarios y conservan la auditoría', async () => {
+  let task = await f.createTask('Aceptación · conversación sin mensajes de estado');
+  const initialComments = await f.db.taskComment.count({ where: { taskId: task.id } });
+  for (const [key, status] of [['bea', 'EN_CURSO'], ['bea', 'PENDIENTE'], ['bea', 'EN_CURSO'],
+    ['bea', 'REALIZADA'], ['ana', 'REALIZADA'], ['carlos', 'REALIZADA']]) {
+    task = await move(task, key, status);
+    assert.equal(await f.db.taskComment.count({ where: { taskId: task.id } }), initialComments,
+      `${key}: ${status} no debe escribir en la conversación`);
+  }
+  assert.equal(task.status, 'REALIZADA');
+  assert.equal(await f.db.operationalTraceEvent.count({ where: { taskId: task.id, eventType: 'TASK_PARTICIPATION_CHANGED' } }), 6);
+  assert.equal(await f.db.taskWorkSession.count({ where: { taskId: task.id, endedAt: null } }), 0);
+  assert.equal(await f.db.taskWorkSession.count({ where: { taskId: task.id, workerId: f.actors.bea.memberId } }), 2);
+});
+
+test('editar datos o integrantes no publica comentarios y permite los comentarios humanos', async () => {
+  let task = await f.createTask('Aceptación · edición sin comentarios automáticos');
+  assert.equal(await f.db.taskComment.count({ where: { taskId: task.id } }), 0);
+  task = (await f.request('manager', `/tasks/${task.id}`, { method: 'PATCH', body: {
+    collaboratorIds: [f.actors.bea.memberId], expectedRosterVersion: task.rosterVersion,
+  } })).data;
+  task = (await f.request('manager', `/tasks/${task.id}`, { method: 'PATCH', body: {
+    collaboratorIds: [f.actors.bea.memberId, f.actors.carlos.memberId], expectedRosterVersion: task.rosterVersion,
+    title: 'Aceptación · título corregido', comments: 'Descripción corregida',
+  } })).data;
+  assert.equal(await f.db.taskComment.count({ where: { taskId: task.id } }), 0);
+  await f.request('bea', `/tasks/${task.id}/comments`, { method: 'POST', expected: 201,
+    body: { content: 'Comentario escrito por Bea.' } });
+  const comments = await f.db.taskComment.findMany({ where: { taskId: task.id } });
+  assert.equal(comments.length, 1);
+  assert.equal(comments[0].type, 'human');
+  assert.equal(comments[0].content, 'Comentario escrito por Bea.');
+});
+
 test('una Task real conserva tres estados, relojes y cierres personales al recargar', async () => {
   let task = await f.createTask('Aceptación · tres personas y una tarea');
   assert.equal(task.sharedProgress, true);
@@ -98,6 +132,11 @@ test('devolver, reintegrar y reabrir conserva las otras partes y aplica permisos
   assert.equal(part(task, 'ana').completedAt, null); assert.equal(part(task, 'bea').status, 'EN_CURSO');
   assert.equal(await f.db.taskWorkSession.count({ where: { taskId: task.id, workerId: f.actors.bea.memberId, endedAt: null } }), 1);
   await f.move(task, 'ana', 'EN_CURSO', {}, 'outside', 403);
+  const comments = await f.db.taskComment.findMany({ where: { taskId: task.id }, orderBy: { createdAt: 'asc' } });
+  assert.deepEqual(comments.map(row => row.type), ['system_return', 'system_reintegrate', 'system_reopen']);
+  assert.match(comments[0].content, /Falta una revisión ficticia/);
+  assert.match(comments[1].content, /Se completó el insumo ficticio/);
+  assert.match(comments[2].content, /Corrección ficticia solicitada/);
 });
 
 test('la ruta real protege una tarea privada incluso frente a quien ve su cabecera', async () => {
