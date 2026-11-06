@@ -68,7 +68,6 @@ const PdfDocumentPreview = ({ data, name }) => {
   useEffect(() => {
     let active = true;
     let loadingTask = null;
-    let loadedDocument = null;
 
     const load = async () => {
       try {
@@ -80,9 +79,12 @@ const PdfDocumentPreview = ({ data, name }) => {
           throw Object.assign(new Error('El archivo llegó vacío al visor (0 bytes).'), { name: 'EmptyBufferError' });
         }
         const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = await workerUrl();
+        if (!active) return;
+        const source = await workerUrl();
+        if (!active) return;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = source;
         loadingTask = pdfjsLib.getDocument({ data: bytes });
-        loadedDocument = await loadingTask.promise;
+        const loadedDocument = await loadingTask.promise;
         if (active) setDocument(loadedDocument);
       } catch (loadError) {
         if (active && loadError?.name !== 'AbortException') {
@@ -101,8 +103,12 @@ const PdfDocumentPreview = ({ data, name }) => {
 
     return () => {
       active = false;
-      if (loadedDocument) loadedDocument.destroy();
-      else loadingTask?.destroy();
+      // PDF.js 6 libera documento y worker desde la tarea de carga, incluso si
+      // terminó. El documento ya no ofrece destroy(). Capturar también el rechazo
+      // asíncrono evita que un problema de limpieza derribe la pantalla de Drive.
+      Promise.resolve().then(() => loadingTask?.destroy()).catch((cleanupError) => {
+        console.error('[Drive] Error liberando PDF:', cleanupError);
+      });
     };
   }, [data]);
 
