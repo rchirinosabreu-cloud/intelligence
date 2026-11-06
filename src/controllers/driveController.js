@@ -63,6 +63,7 @@ export const contents = async (req, res) => {
   try {
     const result = await listDriveContents({
       actor: req.user,
+      db: req.driveDb,
       folderId: req.query.folderId || null,
       query: req.query.query,
       includeTrash: req.query.trash === 'true'
@@ -81,7 +82,8 @@ export const createFolder = async (req, res) => {
       name: req.body.name,
       subtitle: req.body.subtitle,
       parentId: req.body.parentId,
-      actorId: req.user.userId
+      actorId: req.user.userId,
+      db: req.driveDb
     });
     return res.status(201).json({ folder });
   } catch (error) {
@@ -98,7 +100,8 @@ export const upload = async (req, res) => {
       file: req.file,
       folderId: req.body.folderId,
       subtitle: req.body.subtitle,
-      actorId: req.user.userId
+      actorId: req.user.userId,
+      db: req.driveDb
     });
     return res.status(201).json({ file });
   } catch (error) {
@@ -110,7 +113,7 @@ export const upload = async (req, res) => {
 
 export const updateFile = async (req, res) => {
   try {
-    const file = await updateDriveFile({ id: req.params.id, ...req.body });
+    const file = await updateDriveFile({ name: req.body.name, subtitle: req.body.subtitle, folderId: req.body.folderId, id: req.params.id, db: req.driveDb });
     return res.json({ file });
   } catch (error) {
     console.error('[DriveController] Error actualizando archivo:', error.response?.data || error.message || error);
@@ -120,7 +123,7 @@ export const updateFile = async (req, res) => {
 
 export const updateFolder = async (req, res) => {
   try {
-    const folder = await updateDriveFolder({ id: req.params.id, ...req.body });
+    const folder = await updateDriveFolder({ name: req.body.name, subtitle: req.body.subtitle, parentId: req.body.parentId, id: req.params.id, db: req.driveDb });
     return res.json({ folder });
   } catch (error) {
     console.error('[DriveController] Error actualizando carpeta:', error.response?.data || error.message || error);
@@ -130,7 +133,7 @@ export const updateFolder = async (req, res) => {
 
 export const removeFile = async (req, res) => {
   try {
-    await trashDriveFile({ id: req.params.id });
+    await trashDriveFile({ id: req.params.id, db: req.driveDb });
     return res.json({ success: true });
   } catch (error) {
     console.error('[DriveController] Error enviando archivo a papelera:', error.response?.data || error.message || error);
@@ -140,7 +143,7 @@ export const removeFile = async (req, res) => {
 
 export const removeFolder = async (req, res) => {
   try {
-    await trashDriveFolder({ id: req.params.id });
+    await trashDriveFolder({ id: req.params.id, db: req.driveDb });
     return res.json({ success: true });
   } catch (error) {
     console.error('[DriveController] Error enviando carpeta a papelera:', error.response?.data || error.message || error);
@@ -150,7 +153,7 @@ export const removeFolder = async (req, res) => {
 
 export const restoreFile = async (req, res) => {
   try {
-    const file = await restoreDriveFile({ id: req.params.id });
+    const file = await restoreDriveFile({ id: req.params.id, db: req.driveDb });
     return res.json({ file });
   } catch (error) {
     console.error('[DriveController] Error restaurando archivo:', error.response?.data || error.message || error);
@@ -160,7 +163,7 @@ export const restoreFile = async (req, res) => {
 
 export const restoreFolder = async (req, res) => {
   try {
-    const folder = await restoreDriveFolder({ id: req.params.id });
+    const folder = await restoreDriveFolder({ id: req.params.id, db: req.driveDb });
     return res.json({ folder });
   } catch (error) {
     console.error('[DriveController] Error restaurando carpeta:', error.response?.data || error.message || error);
@@ -170,7 +173,7 @@ export const restoreFolder = async (req, res) => {
 
 export const managedFile = async (req, res) => {
   try {
-    const result = await readManagedDriveFile({ id: req.params.id });
+    const result = await readManagedDriveFile({ id: req.params.id, db: req.driveDb });
     const encodedName = encodeURIComponent(result.file.name);
     res.setHeader('Content-Type', result.mimeType || result.file.mimeType);
     res.setHeader('Content-Length', String(result.size));
