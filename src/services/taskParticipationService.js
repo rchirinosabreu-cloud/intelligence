@@ -118,12 +118,15 @@ export async function changeTaskParticipation({ db = prisma, transaction, taskId
     if (owner) changedPart.baselineWorkMs = task.assigneeBaselineWorkMs || 0;
     if (!owner) await tx.taskCollaborator.update({ where: { taskId_memberId: { taskId, memberId } }, data: participantData(changedPart) });
     if (next === 'DEVUELTA') await resetSystemStreak(tx);
-    const note = next === 'DEVUELTA' ? `[${payload.returnReason}]\n${own.member?.name}: ${payload.returnNote.trim()}`
-      : reopening ? `[${payload.reopenReason || 'OTHER'}]\n${own.member?.name}: ${payload.reopenNote?.trim() || payload.returnNote?.trim()}`
-        : own.status === 'DEVUELTA' ? `${own.member?.name}: ${payload.reintegrateReason.trim()}`
-          : `${own.member?.name || 'Participante'}: ${own.status} → ${next}${next === 'REALIZADA' ? '. Terminó su parte de la tarea.' : ''}`;
-    await tx.taskComment.create({ data: { taskId, authorId: actorId, content: note,
-      type: next === 'DEVUELTA' ? 'system_return' : reopening ? 'system_reopen' : own.status === 'DEVUELTA' ? 'system_reintegrate' : 'system_participation' } });
+    // Los cambios cotidianos quedan en la auditoría; solo las incidencias van a la conversación.
+    const commentType = next === 'DEVUELTA' ? 'system_return' : reopening ? 'system_reopen'
+      : own.status === 'DEVUELTA' ? 'system_reintegrate' : null;
+    if (commentType) {
+      const note = next === 'DEVUELTA' ? `[${payload.returnReason}]\n${own.member?.name}: ${payload.returnNote.trim()}`
+        : reopening ? `[${payload.reopenReason || 'OTHER'}]\n${own.member?.name}: ${payload.reopenNote?.trim() || payload.returnNote?.trim()}`
+          : `${own.member?.name}: ${payload.reintegrateReason.trim()}`;
+      await tx.taskComment.create({ data: { taskId, authorId: actorId, content: note, type: commentType } });
+    }
     const personalSessions = await tx.taskWorkSession.findMany({ where: { taskId, workerId: memberId } });
     const archived = await tx.taskParticipationArchive.aggregate({ where: { taskId, memberId }, _sum: { baselineWorkMs: true } });
     const personalMs = personalSessions.reduce((sum, s) => sum + Number(s.durationMs || 0), 0) + (changedPart.baselineWorkMs || 0) + Number(archived._sum.baselineWorkMs || 0);

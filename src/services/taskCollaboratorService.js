@@ -98,8 +98,6 @@ export const replaceTaskCollaborators = async (tx, { taskId, assigneeId, collabo
       startedAt: ownSessions.find(s => !s.endedAt)?.startedAt || null,
       accumulatedWorkMs: ownSessions.reduce((sum, s) => sum + Number(s.durationMs || 0), 0) + (owner.baselineWorkMs || 0) + Number(archive._sum.baselineWorkMs || 0),
     } }, current);
-    await tx.taskComment.create({ data: { taskId, authorId: actorUserId, type: 'system_participation',
-      content: `Se actualizó el equipo. Incorporados: ${parts.filter(p => !previousParts.some(old => old.memberId === p.memberId)).length}. Retirados: ${leaving.length}. El avance y el tiempo de cada persona se conservan.` } });
     return { ids, added, removed, shared: true, changed: true };
   }
   if (removed.length) {
