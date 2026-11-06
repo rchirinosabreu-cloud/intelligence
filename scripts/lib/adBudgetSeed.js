@@ -11,7 +11,7 @@ export const MEETING_BUDGETS = Object.freeze([
     { client: 'Promo Group', brand: 'Endova', currency: 'COP', amount: 300000, objective: 'Interacción', closesOn: '2026-11-14', spent: 91000, notes: 'Pauta de las convocatorias vigentes. El cliente pidió pautar solo en Endova.' },
     { client: 'New Pueblito', currency: 'COP', amount: 300000, objective: 'Mensajes de WhatsApp', closesOn: '2026-11-30', notes: 'En octubre se gastó como 60 mil: el saldo se suma a noviembre. Falta la cifra exacta para «Ajustar saldo anterior». Pendiente que el cliente ponga su tarjeta.' },
     { client: 'Pablo Hoff', currency: 'COP', amount: 200000, closesOn: '2026-11-30', notes: 'Pendiente que el cliente ponga su tarjeta.' },
-    { client: 'Multi-K', currency: 'COP', amount: 350000, objective: 'Mensajes de WhatsApp', notes: 'Por confirmar: en la reunión se dijeron 350.000 y 500.000, y el cierre quedó entre el 18 y el 26.' }
+    { client: 'Multi-K', currency: 'COP', amount: 350000, objective: 'Mensajes de WhatsApp', closesOn: '2026-11-18', notes: 'Rodny confirmó 350.000 con cierre el 18. El cierre sale del contrato: su día de corte debe ser el 19.' }
 ].map((row) => Object.freeze(row)));
 
 const plain = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');

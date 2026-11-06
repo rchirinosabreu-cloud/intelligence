@@ -10,7 +10,9 @@ test('todo lo de la reunión es una pauta válida y lo incierto lo dice su nota'
     for (const row of MEETING_BUDGETS) {
         assert.equal(adBudgetProblem({ clientId: 'x', platform: 'META', kind: 'MENSUAL', currency: row.currency, amount: row.amount }), null, row.client);
     }
-    assert.match(MEETING_BUDGETS.find((row) => row.client === 'Multi-K').notes, /Por confirmar/);
+    const multik = MEETING_BUDGETS.find((row) => row.client === 'Multi-K');
+    assert.deepEqual([multik.amount, multik.closesOn], [350000, '2026-11-18'], 'lo que confirmó Rodny');
+    assert.match(MEETING_BUDGETS.find((row) => row.client === 'Bonsai').notes, /Confirmar contra el contrato/);
 });
 
 test('el cliente se encuentra sin importar mayúsculas ni guiones, y nunca se adivina entre dos', () => {

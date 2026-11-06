@@ -34,7 +34,7 @@ export const budgets = [
     budget('b-endova', 'promo-group', 300000, { brand: 'Endova', objective: 'Interacción', payer: 'TARJETA_BRAIN' }),
     budget('b-pueblito', 'new-pueblito', 300000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN', notes: 'Pendiente: que el cliente ponga su tarjeta.' }),
     budget('b-hoff', 'pablo-hoff', 200000, { payer: 'TARJETA_BRAIN', notes: 'Pendiente: que el cliente ponga su tarjeta.' }),
-    budget('b-multik', 'multik', 350000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN', notes: 'Por confirmar: en la reunión se dijeron 350.000 y 500.000.' }),
+    budget('b-multik', 'multik', 350000, { objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN', notes: 'Cierre el 18.' }),
     budget('b-titanes', 'titanes', 400000, { responsibleId: null, payer: 'POR_DEFINIR' })
 ];
 
