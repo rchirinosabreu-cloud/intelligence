@@ -5,6 +5,7 @@ import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { clientOperationalNotices, operationalDayAfter } from '../lib/clientOperationalNotices.js';
 import { suspensionCandidate } from '../lib/clientSuspension.js';
 import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
+import { assertNoticeResponsePolicy } from '../lib/alertResponsePolicy.js';
 
 export async function readOperationalNotices(db, userId, now) {
     const actor = await db.user.findUnique({ where: { id: userId }, select: {
@@ -56,6 +57,7 @@ export async function syncOperationalNotices(db, userId, now, read = readOperati
         const wanted = await read(tx, userId, now);
         const activeIds = [];
         for (const item of wanted) {
+            assertNoticeResponsePolicy(item);
             const id = `op-${createHash('sha256').update(`${userId}:${item.subjectId}`).digest('hex')}`;
             activeIds.push(id);
             const old = await tx.importantNotice.findUnique({ where: { id } });

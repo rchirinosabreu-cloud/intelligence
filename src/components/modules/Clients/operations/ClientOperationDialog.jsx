@@ -19,9 +19,9 @@ const SECTION = 'space-y-4 border-t border-zinc-100 pt-5 dark:border-white/5';
 
 const emptyContract = () => ({ serviceType: 'PARRILLA', status: 'ACTIVO', startDate: '', endDate: '', cutDay: 1, deliverables: [{ format: 'Reel', quantity: 2 }, { format: 'Carrusel', quantity: 2 }, { format: 'Post', quantity: 8 }], storiesPerWeek: 0, productionDays: 0, monthlyReport: true, notes: '' });
 
-export default function ClientOperationDialog({ client, team = [], onClose, onSave }) {
+export default function ClientOperationDialog({ client, team = [], onClose, onSave, initialRenew = false }) {
   const base = client.contract || emptyContract();
-  const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, deliverables: (base.deliverables || []).map((row) => ({ ...row })) }));
+  const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, ...(initialRenew ? { startDate: '', endDate: '', status: 'ACTIVO' } : {}), deliverables: (base.deliverables || []).map((row) => ({ ...row })) }));
   const [scope, setScope] = useState(() => base.scopeDetails ? structuredClone(base.scopeDetails) : null);
   const [scopeChanged, setScopeChanged] = useState(false);
   const [profile, setProfile] = useState({ description: client.description || '', instagramUrl: client.instagramUrl || '', agency: client.agency || 'BRAIN', complexity: client.complexity || '', pmId: client.projectManager?.id || client.projectManagerId || '', cmId: client.communityManager?.id || client.responsibleId || '', externalPlanUrl: client.externalPlanUrl || '' });
@@ -32,7 +32,7 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
   ]).values()];
   const retainedOptions = (selected, label) => members.some(member => member.id === selected) || !selected ? members : [...members, { id: selected, name: label }];
   const [customCycle, setCustomCycle] = useState((base.cutDay || 1) !== 1);
-  const [renew, setRenew] = useState(false);
+  const [renew, setRenew] = useState(initialRenew);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');

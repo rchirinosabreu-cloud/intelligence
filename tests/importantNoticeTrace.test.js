@@ -89,7 +89,7 @@ const fakeDb = ({ notices = [], leads = {} } = {}) => {
     };
     return db;
 };
-const lead = (patch = {}) => ({ company: 'Café Altura', contactName: 'Laura', stage: 'PROPUESTA_ENVIADA', archivedAt: null, activities: [], ...patch });
+const lead = (patch = {}) => ({ updatedAt: NOW, company: 'Café Altura', contactName: 'Laura', stage: 'PROPUESTA_ENVIADA', archivedAt: null, activities: [], ...patch });
 const notice = (patch = {}) => ({
     id: 'n1', userId: 'u-francys', kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', subjectId: 'l1', label: 'Seguimiento comercial',
     message: 'Café Altura lleva 10 días sin responder la COT-0042', url: '/crm/oportunidades/l1', createdAt: at('2026-10-27T14:00:00Z'), ...patch
@@ -132,7 +132,7 @@ test('las tres decisiones quedan en la traza a nombre de quien decidió', async 
         [[NOTICE_TRACE_EVENTS.SNOOZED, '1h', '2026-10-27T16:00:00.000Z']]);
 
     const close = fakeDb({ notices: [notice({ kind: 'CRM_REVIEW', level: 'IMPORTANTE' })], leads: { l1: lead({ company: 'Centro Andino' }) } });
-    await closeReviewNotice(close, 'n1', { outcome: 'DESCARTADO' }, francys, { crm, now: NOW, log });
+    await closeReviewNotice(close, 'n1', { outcome: 'DESCARTADO', confirmed:true, expectedUpdatedAt:NOW.toISOString(), reason:'Fuera de nuestro alcance' }, francys, { crm, now: NOW, log });
     assert.deepEqual(close.traces.map((row) => [row.eventType, row.metadata.outcome, row.metadata.subject, row.metadata.kind]),
         [[NOTICE_TRACE_EVENTS.CLOSED, 'DESCARTADO', 'Centro Andino', 'CRM_REVIEW']]);
 });

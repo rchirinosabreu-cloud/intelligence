@@ -20,6 +20,8 @@ export class CrmValidationError extends Error {
 }
 
 const notFound = () => Object.assign(new Error('Oportunidad no encontrada.'), { statusCode: 404 });
+// Permite que una decisión desde un aviso use la misma transacción que su registro de origen.
+const crmTransaction = (db, work) => typeof db.$transaction === 'function' ? db.$transaction(work) : work(db);
 
 // ---- normalization helpers ----------------------------------------------------------------------
 
@@ -321,7 +323,7 @@ export const changeStage = async (db, id, payload = {}, actor = {}, now = new Da
   if (!isValidStage(stage)) throw new CrmValidationError('La etapa no está en el catálogo.');
   const lostReason = text(payload.lostReason);
   if (stage === 'PERDIDO' && !lostReason) throw new CrmValidationError('Registra el motivo de pérdida antes de cerrar la oportunidad.');
-  return db.$transaction(async tx => {
+  return crmTransaction(db, async tx => {
     const lead = await loadLead(tx, id);
     if (lead.stage === stage) return serializeLead(lead, now);
     const nextFollowUpAt = parseDateOnly(payload.nextFollowUpAt, 'próximo seguimiento');
@@ -366,7 +368,7 @@ export const addActivity = async (db, id, payload = {}, actor = {}, now = new Da
   const nextFollowUpAt = parseDateOnly(payload.nextFollowUpAt, 'próximo seguimiento');
   const authorId = actor.userId || actor.id || null;
   const requestId = text(payload.requestId);
-  return db.$transaction(async tx => {
+  return crmTransaction(db, async tx => {
     const lead = await loadLead(tx, id);
     if (requestId && authorId) {
       const existing = await tx.crmActivity.findUnique({ where: { authorId_requestId: { authorId, requestId } } });
@@ -437,7 +439,7 @@ export const setTrafficLight = async (db, id, payload = {}, actor = {}, now = ne
 // eso no toca `lastActivityAt`.
 const archiveNote = (leadId, note, actor, now) => ({ leadId, type: 'NOTA', occurredAt: now, note, authorId: actor.userId || actor.id || null });
 
-export const archiveLead = async (db, id, actor = {}, now = new Date()) => db.$transaction(async tx => {
+export const archiveLead = async (db, id, actor = {}, now = new Date()) => crmTransaction(db, async tx => {
   await loadLead(tx, id);
   await tx.crmActivity.create({ data: archiveNote(id, 'Oportunidad archivada.', actor, now) });
   const updated = await tx.crmLead.update({ where: { id }, data: { archivedAt: now, updatedAt: now }, include: leadInclude });

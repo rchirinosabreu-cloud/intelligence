@@ -21,6 +21,7 @@ import { openSuspension } from './clientSuspensionGate.js';
 import { clientSuspensionService, createClientSuspensionService } from './clientSuspensionService.js';
 import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
 import { canDecideContractContinuity, continuityActorSelect, setContractContinuity } from './contractContinuityService.js';
+import { clientOperationPlanPath } from '../lib/clientOperationAlerts.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -292,6 +293,7 @@ export const createClientOperationsService = ({
       rows.push({
         clientId: client.id, clientName: client.name, slug: client.slug, cycle,
         overdue: summary.overdueItems,
+        planUrl: clientOperationPlanPath(client, { ...cycle, ...summary }),
         communityManager: member(client.responsible),
         projectManager: member(client.projectManager),
       });

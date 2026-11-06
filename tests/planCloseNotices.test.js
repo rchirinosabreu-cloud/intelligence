@@ -90,7 +90,7 @@ test('más de tres cuentas se dicen en un solo aviso, no en una fila de avisos',
     assert.equal(create[0].kind, PLAN_DIGEST_KIND);
     assert.equal(create[0].subjectId, digestSubjectId('2026-10-20'));
     assert.match(create[0].message, /5 cuentas/);
-    assert.equal(create[0].url, '/clientes?tab=operacion');
+    assert.equal(create[0].url, '/parrillas');
 });
 
 test('el resumen y los avisos de cuenta no conviven: al pasar el umbral se reemplazan', () => {
@@ -113,7 +113,7 @@ test('el resumen y los avisos de cuenta no conviven: al pasar el umbral se reemp
 
 test('el aviso abre la parrilla de esa cuenta', () => {
     const { create } = planNoticePlan({ pending: [cuenta], open: [], today: '2026-10-20' });
-    assert.equal(create[0].url, '/clientes/operacion/finas-asesores');
+    assert.equal(create[0].url, '/parrillas/finas-asesores/octubre-2026');
     assert.equal(create[0].kind, PLAN_NOTICE_KIND);
     assert.equal(create[0].subjectId, 'c1:2026-10');
 });

@@ -44,7 +44,7 @@ test('el ciclo reúne la parrilla cubierta sin cerrar ni ocultar pendientes de o
   assert.equal(result.notice.kind,'OPERACION_CICLO');
   assert.equal(data.importantNotice.find(n=>n.id==='plan').resolvedAt,null);
   data.client[0].monthlyCloses=[{year:2026,month:10}];
-  const plan=await currentImportantNotice(db,actor.id,now,{overduePlans:async()=>[{clientId:'c',cycle:{year:2026,month:10}}]});
+  const plan=await currentImportantNotice(db,actor.id,now,{overduePlans:async()=>[{clientId:'c',projectManager:{userId:actor.id},cycle:{year:2026,month:10}}]});
   assert.equal(plan.notice.id,'plan','el cierre no convierte automáticamente piezas pendientes en publicadas');
 });
 test('el resumen de parrillas conserva otras cuentas con un rótulo actualizado',async()=>{
@@ -54,5 +54,5 @@ test('el resumen de parrillas conserva otras cuentas con un rótulo actualizado'
   const result=await currentImportantNotice(db,actor.id,now,{overduePlans:async()=>[row('c'),row('otro')]});
   assert.equal(result.notice.id,'digest');
   assert.doesNotMatch(result.notice.label,/4 cuentas/);
-  assert.match(result.notice.message,/1 período adicional tiene/);
+  assert.match(result.notice.message,/1 período tiene/);
 });

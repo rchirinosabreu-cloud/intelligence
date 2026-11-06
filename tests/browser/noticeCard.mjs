@@ -31,7 +31,7 @@ test('el aviso es compacto, permanece tras Esc y clic exterior y conserva la dec
     await page.screenshot({path:'output/avisos-operativos-local/halo-ancho-oscuro.png',animations:'disabled'});
     assert.equal(await card.locator('.brain-notice-title a').evaluate(e=>getComputedStyle(e).color),'rgb(244, 244, 245)');
     await page.getByRole('button',{name:'Tema claro',exact:true}).click();
-    await card.getByRole('button',{name:'Revisar operación',exact:true}).click();
+    await card.getByRole('button',{name:'Revisar cierre y avance',exact:true}).click();
     await page.waitForURL(/clientes\/operacion\/faro/);
     assert.ok(await card.isVisible(),'abrir no resuelve');
     await page.reload();await card.waitFor();
@@ -50,7 +50,7 @@ test('el aviso es compacto, permanece tras Esc y clic exterior y conserva la dec
     assert.ok(mobile.height<400);
     await page.screenshot({path:'output/avisos-operativos-local/halo-ancho-movil.png',animations:'disabled'});
     for(const button of await card.getByRole('button').all())assert.ok((await button.boundingBox()).height>=44);
-    await card.getByRole('button',{name:'Entendido',exact:true}).click();await card.waitFor({state:'detached'});
+    await card.getByRole('button',{name:'Recibido',exact:true}).click();await card.waitFor({state:'detached'});
     await page.setViewportSize({width:1440,height:1000});
     for(const [scene,kind] of [['inicio','INICIO'],['mitad','CICLO'],['renovacion','RENOVACION'],['continuidad','CONTINUIDAD'],['reactivacion','REACTIVACION']]) {
       await page.getByLabel('Caso',{exact:true}).selectOption(scene);await card.waitFor();

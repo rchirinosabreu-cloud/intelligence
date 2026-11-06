@@ -246,7 +246,7 @@ const noticeDb = ({ receivables = clients()[0].accountsReceivables, role = 'Coor
     const notice = { id: 'aviso-1', userId: 'u-x', kind: 'CARTERA_MENSUAL', level: 'IMPORTANTE', subjectId: 'c-nuva', label: 'Cartera vencida',
         message: 'Muebles Nuva tiene 2 mensualidades vencidas desde agosto: $3.200.000 pendientes', url: '/financiero?tab=cartera', createdAt: NOW, resolvedAt: null };
     const updates = [];
-    return {
+    const db = {
         updates,
         user: { findUnique: async () => ({ role: 'EDITOR', modulePermissions: { financiero: true }, isActive: true, teamMember: { isActive: true } }) },
         importantNotice: {
@@ -257,8 +257,13 @@ const noticeDb = ({ receivables = clients()[0].accountsReceivables, role = 'Coor
         notification: { updateMany: async () => ({ count: 0 }) },
         teamMember: { findFirst: async () => ({ role, areas: [] }) },
         collectionSetting: { findUnique: async () => null },
-        client: { findUnique: async () => ({ name: 'Muebles Nuva', contracts: clients()[0].contracts, accountsReceivables: receivables }) }
+        client: { findUnique: async () => ({ id:'c-nuva', name: 'Muebles Nuva', contracts: clients()[0].contracts, accountsReceivables: receivables }) }
     };
+    db.$transaction=async work=>work(db);
+    db.accountsReceivable={findUnique:async({where})=>({...receivables.find(r=>r.id===where.id),clientId:'c-nuva'})};
+    db.activities=[];
+    db.collectionActivity={findFirst:async()=>null,upsert:async({create})=>{db.activities.push(create);return create;}};
+    return db;
 };
 
 test('la banda de cartera solo se le muestra a Administrativa y contable', async () => {
@@ -302,8 +307,10 @@ test('«Ya le escribí» pide Financiero, no toca el CRM y cierra el aviso', asy
     const crm = { addActivity: async () => { throw new Error('no debería tocar el CRM'); } };
     await assert.rejects(followUpNotice(noticeDb(), 'aviso-1', { channel: 'WHATSAPP' }, { userId: 'u-x', role: 'EDITOR', modulePermissions: {} }, { crm, now: NOW }), { statusCode: 403 });
     const db = noticeDb();
-    await followUpNotice(db, 'aviso-1', { channel: 'WHATSAPP' }, { userId: 'u-x', role: 'ADMIN', name: 'Elisa Mestra' }, { crm, now: NOW, log: () => {} });
+    const current=(await currentImportantNotice(db,'u-x',NOW)).notice;
+    await followUpNotice(db, 'aviso-1', { channel: 'WHATSAPP', receivableIds:current.receivableIds }, { userId: 'u-x', role: 'ADMIN', name: 'Elisa Mestra' }, { crm, now: NOW, log: () => {} });
     assert.equal(db.updates.at(-1).resolution, 'SEGUIMIENTO');
+    assert.equal(db.activities.length,current.receivableIds.length);
 });
 
 test('la trazabilidad lo dice en palabras de cobro y enlaza a Cuentas por cobrar', () => {

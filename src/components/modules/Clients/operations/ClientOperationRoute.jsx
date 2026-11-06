@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from '@/components/ui/icons';
@@ -25,6 +25,7 @@ const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 export default function ClientOperationRoute() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   // Lo que se abre desde aquí ofrece volver a esta misma página (30 de octubre de 2026).
   const navigateFrom = useNavigateFrom();
   const { currentUser } = useAuth();
@@ -56,6 +57,8 @@ export default function ClientOperationRoute() {
   const addObservation = useAddObservation();
   const deleteObservation = useDeleteObservation();
   const [editing, setEditing] = useState(false);
+  const renewing = searchParams.get('action') === 'renew-contract';
+  const closeEditing = () => { setEditing(false); if (renewing) { const next = new URLSearchParams(searchParams); next.delete('action'); setSearchParams(next, { replace: true }); } };
   const [creatingTask, setCreatingTask] = useState(false);
   // El día se fija una vez por visita, nunca un `new Date()` en cada render (incidente del 18 de septiembre).
   const [today] = useState(() => bogotaDate());
@@ -172,11 +175,11 @@ export default function ClientOperationRoute() {
           }
         }} />
 
-      {editing && (
-        <ClientOperationDialog client={client} team={team} onClose={() => setEditing(false)}
+      {(editing || renewing) && (
+        <ClientOperationDialog client={client} team={team} initialRenew={renewing} onClose={closeEditing}
           onSave={async (input) => {
             await saveProfile.mutateAsync({ clientId: client.id, input });
-            setEditing(false);
+            closeEditing();
             toast.success('Ficha operativa guardada.');
           }} />
       )}
