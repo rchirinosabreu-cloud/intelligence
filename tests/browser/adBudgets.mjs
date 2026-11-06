@@ -232,15 +232,65 @@ test('la banda lleva a la pauta y un error del servidor se dice sin cerrar el fo
   await page.close();
 });
 
-test('la pauta se ve en la página del cliente', async () => {
+test('desde la ficha se edita la misma pauta del módulo', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.goto(`${BASE}/cliente`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   const block = page.locator('[data-client-ad-budgets]');
   await block.waitFor({ timeout: 60000 });
-  assert.match(await block.innerText(), /Wine & Wonder/);
+  await block.locator('[data-client-ad-budget="b-foobe"]').waitFor();
   assert.match(await block.innerText(), /cierra el 30 nov/);
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/10-cliente.png` });
+
+  await block.locator('[data-client-ad-budget="b-foobe"] [data-client-ad-edit]').click();
+  const dialog = page.locator('[data-ad-budget-dialog]');
+  await dialog.waitFor();
+  const amount = dialog.getByLabel('Presupuesto', { exact: true });
+  await amount.fill('');
+  await amount.pressSequentially('150');
+  await dialog.locator('button[type=submit]').click();
+  await dialog.waitFor({ state: 'detached' });
+  await page.waitForFunction(() => document.querySelector('[data-client-ad-budget="b-foobe"]').innerText.includes('USD 246,47'));
+
+  await page.goto(`${BASE}/pautas`, { waitUntil: 'domcontentloaded' });
+  await row(page, 'b-foobe').waitFor({ timeout: 60000 });
+  assert.match(await row(page, 'b-foobe').innerText(), /USD 246,47/, 'el módulo dice lo mismo que la ficha');
+  await page.close();
+});
+
+test('la pauta va en la ficha operativa, junto al alcance del contrato', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+  await page.goto(`${BASE}/operacion`, { timeout: 90000, waitUntil: 'domcontentloaded' });
+  const block = page.locator('#client-operation-profile [data-client-ad-budgets]');
+  await block.waitFor({ timeout: 60000 });
+  await block.locator('[data-client-ad-budget="b-foobe"]').waitFor();
+  const overflow = await block.evaluate((node) => node.scrollWidth - node.clientWidth);
+  assert.ok(overflow <= 0, 'cabe en la columna de la ficha');
+  await block.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/12-alcance.png` });
+  await page.close();
+});
+
+test('dentro de la ficha operativa se añade una pauta sin enviar la ficha', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  await page.goto(`${BASE}/ficha`, { timeout: 90000, waitUntil: 'domcontentloaded' });
+  const block = page.locator('[data-client-ad-budgets]');
+  await block.waitFor({ timeout: 60000 });
+  await block.scrollIntoViewIfNeeded();
+  assert.equal(await block.getByRole('link', { name: 'Abrir Pautas' }).count(), 0, 'dentro de la ficha no se navega fuera');
+  await block.locator('[data-client-ad-new]').click();
+  const dialog = page.locator('[data-ad-budget-dialog]');
+  await dialog.waitFor();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${OUT}/11-pauta-en-ficha.png` });
+  assert.match(await dialog.getByRole('combobox', { name: 'Cliente' }).innerText(), /Martínez/, 'el cliente ya viene elegido');
+  await dialog.getByPlaceholder('Ej.: Wine Summit').fill('Desde la ficha');
+  await dialog.getByLabel('Presupuesto', { exact: true }).pressSequentially('250000');
+  await dialog.locator('button[type=submit]').click();
+  await dialog.waitFor({ state: 'detached' });
+  await block.getByText('Desde la ficha').waitFor();
+  assert.equal(await page.evaluate(() => window.__fichaGuardada || 0), 0, 'guardar la pauta no guarda la ficha');
   await page.close();
 });
 

@@ -47,12 +47,26 @@ test('la pantalla usa los controles compartidos y respeta el servidor', () => {
 });
 
 test('Operación muestra la pauta del cliente y la banda abre la pauta sin decidir nada', () => {
-    assert.match(source('src/components/modules/Clients/operations/ClientOperationRoute.jsx'), /adBudgetsSection=\{<ClientAdBudgets clientId=\{client\.id\} \/>\}/);
+    const route = source('src/components/modules/Clients/operations/ClientOperationRoute.jsx');
+    assert.match(route, /<ClientOperationPage[\s\S]*adBudgetsSection=\{<ClientAdBudgets clientId=\{client\.id\}/);
+    assert.match(route, /<ClientOperationDialog[\s\S]*adBudgetsSection=\{<ClientAdBudgets clientId=\{client\.id\} inDialog/);
+    assert.match(source('src/components/modules/Clients/operations/ClientOperationDialog.jsx'), /\{adBudgetsSection\}/);
     assert.match(source('src/components/modules/Clients/operations/ClientOperationPage.jsx'), /\{adBudgetsSection\}/);
     const band = source('src/components/notifications/ImportantNoticeBand.jsx');
     assert.match(band, /data-notice-action="open-ad-budget"/);
     assert.match(source('src/services/importantNoticeService.js'), /isAdNotice\(notice\)\) return \(await import\('\.\/adBudgetNoticeService\.js'\)\)/);
     assert.match(source('server.js'), /initAdBudgetAlertScheduler\(\)/);
+});
+
+test('la ficha escribe las mismas pautas del módulo, sin un segundo formulario ni otra copia del dato', () => {
+    const card = source('src/components/modules/AdBudgets/ClientAdBudgets.jsx');
+    assert.match(card, /import \{ AdBudgetDialog, AdSpendDialog \} from '\.\/AdBudgetDialogs'/);
+    assert.match(card, /useAdBudgets\(\{ clientId/);
+    assert.doesNotMatch(source('prisma/schema.prisma').match(/^model ClientContract \{[\s\S]*?^\}/m)[0], /adBudget|pauta/i, 'el contrato no guarda otra copia');
+});
+
+test('un formulario de pauta dentro de la ficha no envía la ficha', () => {
+    assert.match(source('src/components/modules/AdBudgets/AdBudgetDialogs.jsx'), /event\.stopPropagation\(\); onSubmit\(event\);/);
 });
 
 test('la campana del project manager no lleva cifras: llega al celular', () => {

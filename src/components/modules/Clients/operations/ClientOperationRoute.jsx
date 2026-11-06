@@ -80,7 +80,7 @@ export default function ClientOperationRoute() {
     <>
       <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage
         currentUserId={currentUser?.id} isAdmin={String(currentUser?.role || '').toUpperCase() === 'ADMIN'}
-        adBudgetsSection={<ClientAdBudgets clientId={client.id} />}
+        adBudgetsSection={<ClientAdBudgets clientId={client.id} className="mt-4 border-t border-zinc-100 dark:border-white/5 pt-3" />}
         projectsSection={<ClientProjects key={`${client.id}:${viewerId}`} projects={projectQuery.data || []} team={team}
           loading={projectQuery.isLoading} error={projectQuery.error}
           onRetry={async () => {
@@ -179,6 +179,7 @@ export default function ClientOperationRoute() {
 
       {(editing || renewing) && (
         <ClientOperationDialog client={client} team={team} initialRenew={renewing} onClose={closeEditing}
+          adBudgetsSection={<ClientAdBudgets clientId={client.id} inDialog className="border-t border-zinc-100 dark:border-white/5 pt-4" />}
           onSave={async (input) => {
             await saveProfile.mutateAsync({ clientId: client.id, input });
             closeEditing();
