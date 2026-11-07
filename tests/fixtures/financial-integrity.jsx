@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import axios from 'axios';
-import { AuthProvider } from '../../src/context/AuthContext';
+import { AuthProvider, useAuth } from '../../src/context/AuthContext';
 import FinancialDashboard from '../../src/components/modules/FinancialDashboard';
 import { buildClientProfitability } from '../../src/lib/clientProfitability.js';
 import { DEFAULT_COLLECTION_SETTINGS, normalizeCollectionSettings } from '../../src/lib/receivableCollections.js';
@@ -608,4 +608,9 @@ axios.defaults.adapter = async config => {
   return { data, status: 200, statusText: 'OK', headers: {}, config };
 };
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><MemoryRouter initialEntries={[`/financiero${location.search}`]}><div className="bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-8"><div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-4 text-sm dark:border-zinc-700"><p>Muestra local · datos ficticios en memoria · nada se guarda en producción</p><button className="min-h-11 rounded-lg border border-zinc-300 px-4 dark:border-zinc-700" onClick={() => document.documentElement.classList.toggle('dark')}>Cambiar tema</button></div><FinancialDashboard /><Toaster position="top-right" /></div></MemoryRouter></AuthProvider></QueryClientProvider>);
+// Like the real authenticated layout: do not mount the route guard before auth is ready.
+function ReadyFinancialDashboard() {
+  const { isLoading } = useAuth();
+  return isLoading ? null : <FinancialDashboard />;
+}
+createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><MemoryRouter initialEntries={[`/financiero${location.search}`]}><div className="bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-8"><div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-4 text-sm dark:border-zinc-700"><p>Muestra local · datos ficticios en memoria · nada se guarda en producción</p><button className="min-h-11 rounded-lg border border-zinc-300 px-4 dark:border-zinc-700" onClick={() => document.documentElement.classList.toggle('dark')}>Cambiar tema</button></div><ReadyFinancialDashboard /><Toaster position="top-right" /></div></MemoryRouter></AuthProvider></QueryClientProvider>);

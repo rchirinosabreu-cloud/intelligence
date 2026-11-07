@@ -3,17 +3,13 @@ import {
   parseFinancialDateInput
 } from './financialRecordService.js';
 import { partyDocumentType } from '../lib/partyIdentity.js';
+import { accountBalanceBreakdown } from './financialAccountStatementService.js';
 
 const ACCOUNT_TYPES = new Set(['BANK', 'CASH', 'OTHER']);
 const HOLDER_TYPES = new Set(['COMPANY', 'PERSON']);
 // Son los cuatro últimos dígitos con que se reconoce una cuenta en un extracto.
 // Menos de cuatro no identifica nada, así que es cuatro o está vacío.
 const LAST_FOUR = /^\d{4}$/;
-
-const toNumber = (value) => {
-  if (value && typeof value.toNumber === 'function') return value.toNumber();
-  return Number(value) || 0;
-};
 
 const actorIdFrom = (actor) => actor?.id || actor?.userId || null;
 
@@ -171,7 +167,8 @@ export const listFinancialAccounts = async (prismaClient, { includeInactive = fa
       records: {
         where: {
           status: 'POSTED',
-          scenario: 'ACTUAL'
+          scenario: 'ACTUAL',
+          isProjection: false
         },
         select: { type: true, amount: true, date: true }
       }
@@ -181,17 +178,11 @@ export const listFinancialAccounts = async (prismaClient, { includeInactive = fa
   return accounts.map(({ records, ...account }) => {
     // These are accounting dates, not event timestamps: legacy imports use UTC
     // midnight and manual entries use noon. Both belong to the same ledger day.
-    const openingDate = new Date(account.openingBalanceDate);
-    const openingDayStart = Date.UTC(openingDate.getUTCFullYear(), openingDate.getUTCMonth(), openingDate.getUTCDate());
-    const movementBalance = records.reduce((sum, record) => {
-      if (new Date(record.date).getTime() < openingDayStart) return sum;
-      const signedAmount = record.type === 'INCOME' ? toNumber(record.amount) : -toNumber(record.amount);
-      return sum + signedAmount;
-    }, 0);
-
+    const balanceDetail = accountBalanceBreakdown(account, records.map(record => ({ ...record, status: 'POSTED', scenario: 'ACTUAL' })));
     return {
       ...account,
-      balance: toNumber(account.openingBalance) + movementBalance
+      balance: balanceDetail.balance,
+      balanceDetail
     };
   });
 };

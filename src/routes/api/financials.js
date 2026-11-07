@@ -1,4 +1,5 @@
 import express from 'express';
+import { accountStatementHandler, paymentCorrectionContextHandler, paymentCorrectionHandler } from '../../controllers/financialCorrectionController.js';
 import multer from 'multer';
 import { receivesFiles } from '../../lib/uploadMarker.js';
 import { getClientFinancialStatementHandler, streamClientStatementPdfHandler } from '../../controllers/financialClientStatementController.js';
@@ -103,6 +104,9 @@ const receiveFinancialDocument = receivesFiles((req, res, next) => documentUploa
 
 router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/accounts', requireFinancialAccess, listFinancialAccountsHandler);
+router.get('/accounts/:accountId/statement', requireFinancialAccess, accountStatementHandler);
+router.get('/payment-corrections/:kind/:paymentId', requireFinancialAccess, paymentCorrectionContextHandler);
+router.post('/payment-corrections/:kind/:paymentId', requireFinancialWrite, paymentCorrectionHandler);
 router.post('/accounts', requireFinancialApproval, createFinancialAccountHandler);
 router.patch('/accounts/:accountId', requireFinancialApproval, updateFinancialAccountHandler);
 router.get('/records', requireFinancialAccess, listFinancialRecordsHandler);

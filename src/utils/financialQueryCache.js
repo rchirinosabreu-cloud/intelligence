@@ -1,6 +1,6 @@
 // All financial tabs are projections of the same operations.
 export const invalidateFinancialQueries = (queryClient) => Promise.all([
-  'financial-records', 'financial-accounts', 'financials-dashboard-data',
+  'financial-records', 'financial-accounts', 'financials-dashboard-data', 'financials-account-statement',
   'financials-receivables-ledger', 'financials-client-reconciliation',
   'financials-payroll-ledger', 'financial-periods',
   'financial-payment-candidates', 'financial-client-statement',

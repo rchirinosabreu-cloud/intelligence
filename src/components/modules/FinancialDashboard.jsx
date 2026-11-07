@@ -143,7 +143,9 @@ const FinancialDashboard = () => {
     const queryClient = useQueryClient();
 
     // 1. React Hook Declarations (Inconditional - at the absolute top)
-    const { selectedYear, setSelectedYear, filters, setFilters, activeTab, setActiveTab, linkedMonth } = useFinancialNavigation();
+    const { selectedYear, setSelectedYear, filters, setFilters, activeTab, setActiveTab, linkedMonth, openRecords } = useFinancialNavigation();
+    const [indicatorRequest, setIndicatorRequest] = useState(0);
+    const showIndicator = type => { openRecords(type); setIndicatorRequest(value => value + 1); };
     const [search, setSearch] = useState(filters.q);
     usePageLabel(`Financiero · ${visibleFinancialTabs({ isAdmin: true, canFormalize: true }).flatMap(group => group.views).find(view => view.key === activeTab)?.label || 'Movimientos'}`);
     useEffect(() => { setSearch(filters.q); }, [filters.q]);
@@ -1168,9 +1170,6 @@ await invalidateFinancialQueries(queryClient);
     return (
         <div className="min-h-screen bg-zinc-50/50 dark:bg-zinc-950/20 space-y-8 animate-in fade-in duration-500">
             <PageHeader title="Consola de Inteligencia Financiera" subtitle="Flujo de caja, cuentas por cobrar y costos operativos." />
-            <FinancialFilters year={selectedYear} onYearChange={setSelectedYear} filters={filters}
-                onChange={patch => setFilters(current => ({ ...current, ...patch }))}
-                search={search} onSearchChange={setSearch} busy={indicatorsPending} />
             {error && <div role="alert" className="brain-alert-surface flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-sm">
                 <p>No fue posible cargar los indicadores financieros. Conservamos tus filtros.</p>
                 <button type="button" onClick={() => refetch()} className="min-h-11 px-3 font-semibold underline">Reintentar indicadores</button>
@@ -1190,13 +1189,13 @@ await invalidateFinancialQueries(queryClient);
             )}
 
             {/* --- SECTION 1: 4 HIGH-DENSITY KPI CARDS --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div data-financial-kpis className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {/* KPI Card 1: Ingresos del Mes */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ingresos registrados</span>
-                        <div className="p-2 bg-emerald-500/10 rounded-xl">
-                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                        <div className="p-2 bg-brand-green/10 rounded-xl">
+                            <TrendingUp className="w-4 h-4 text-brand-green-deep dark:text-brand-green" />
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
@@ -1206,42 +1205,45 @@ await invalidateFinancialQueries(queryClient);
                     {data?.sourceSummary?.totals?.loanRepayments > 0
                         ? <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
                         : <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
+                    <button type="button" disabled={indicatorsPending || !!error || (filters.type && filters.type !== 'INCOME')} onClick={() => showIndicator('INCOME')} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan underline disabled:opacity-40">Ver ingresos</button>
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Egresos registrados</span>
-                        <div className="p-2 bg-red-500/10 rounded-xl">
-                            <TrendingDown className="w-4 h-4 text-red-500" />
+                        <div className="p-2 bg-destructive/10 rounded-xl">
+                            <TrendingDown className="w-4 h-4 text-destructive" />
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalExpense)}
                     </p>
                     <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
+                    <button type="button" disabled={indicatorsPending || !!error || (filters.type && filters.type !== 'EXPENSE')} onClick={() => showIndicator('EXPENSE')} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan underline disabled:opacity-40">Ver egresos</button>
                 </Card>
 
                 {/* KPI Card 3: Flujo Neto (Highest Visual Prominence) */}
-                <Card className="p-6 bg-gradient-to-br from-violet-600/10 to-indigo-600/5 dark:from-violet-950/30 dark:to-indigo-950/20 border-violet-500/20 dark:border-violet-500/10 rounded-2xl shadow-md relative overflow-hidden group ring-1 ring-violet-500/10">
+                <Card className="p-6 bg-brand-cyan-soft dark:bg-brand-cyan/10 border-brand-cyan/20 rounded-2xl shadow-md relative overflow-hidden group ring-1 ring-brand-cyan/10">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-violet-500 dark:text-violet-400 uppercase tracking-widest">Resultado neto registrado</span>
-                        <div className="p-2 bg-violet-500/20 rounded-xl">
-                            <Wallet className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                        <span className="text-[10px] font-black text-brand-cyan-deep dark:text-brand-cyan uppercase tracking-widest">Resultado neto registrado</span>
+                        <div className="p-2 bg-brand-cyan/20 rounded-xl">
+                            <Wallet className="w-4 h-4 text-brand-cyan-deep dark:text-brand-cyan" />
                         </div>
                     </div>
-                    <p className="text-2xl font-black tracking-tight text-violet-900 dark:text-violet-200">
+                    <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.netFlow)}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
                         <span className={cn(
                             "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                            kpis.netFlow >= 0 ? "text-emerald-600 bg-emerald-500/10" : "text-red-500 bg-red-500/10"
+                            kpis.netFlow >= 0 ? "text-brand-green-deep dark:text-brand-green bg-brand-green/10" : "text-destructive bg-destructive/10"
                         )}>
                             {indicatorsPending || error ? '—' : kpis.netFlow >= 0 ? 'EXCEDENTE' : 'DÉFICIT'}
                         </span>
-                        <span className="text-[10px] text-violet-600/80 dark:text-violet-400/80">Ingresos menos egresos del periodo</span>
+                        <span className="text-[10px] text-zinc-600 dark:text-zinc-300">Ingresos menos egresos del periodo</span>
                     </div>
+                    <button type="button" disabled={indicatorsPending || !!error} onClick={() => showIndicator()} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan underline disabled:opacity-40">Ver movimientos del resultado</button>
                 </Card>
 
                 {/* KPI Card 4: Cartera Pendiente (Alert) */}
@@ -1256,14 +1258,18 @@ await invalidateFinancialQueries(queryClient);
                         {formatIndicator(kpis.totalReceivable)}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
-                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-bold text-brand-yellow-deep bg-brand-yellow/10 px-1.5 py-0.5 rounded">
                             {indicatorsPending || error ? '—' : data?.accountsReceivable?.length || 0} deudores
                         </span>
                         <span className="text-[10px] text-zinc-400">pendiente por cobrar</span>
                     </div>
+                    <button type="button" disabled={indicatorsPending || !!error} onClick={() => { setReceivableKind(null); setReceivableBucket(null); setActiveTab('receivables'); }} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep underline disabled:opacity-40 dark:text-brand-cyan">Ver cuentas por cobrar</button>
                 </Card>
             </div>
 
+            <FinancialFilters year={selectedYear} onYearChange={setSelectedYear} filters={filters}
+                onChange={patch => setFilters(current => ({ ...current, ...patch }))}
+                search={search} onSearchChange={setSearch} busy={indicatorsPending} />
             {/* --- SECTION 2: TABS --- */}
             {/* Cuatro pestañas (Elisa, 23 de octubre de 2026): Movimientos, Cuentas por cobrar, Cuentas por
                 pagar y Análisis. Cada una abre sus vistas debajo, en el mismo sitio. */}
@@ -1287,7 +1293,7 @@ await invalidateFinancialQueries(queryClient);
             {/* --- SECTION 3: TAB SCENARIO VIEWS --- */}
             <div className="space-y-6">
                 {activeTab === 'records' && (
-                    <FinancialLedger selectedYear={selectedYear} filters={filters} searchPending={searchPending} formatCurrency={formatCurrency} />
+                    <FinancialLedger resetAccountKey={indicatorRequest} selectedYear={selectedYear} filters={filters} searchPending={searchPending} formatCurrency={formatCurrency} />
                 )}
                 {/* PESTAÑA 1: ANALISIS DE FLUJO */}
                 {activeTab === 'flow' && (
