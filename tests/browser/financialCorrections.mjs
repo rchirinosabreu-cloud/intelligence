@@ -17,17 +17,6 @@ try {
   assert.match(await kpis.innerText(), /1\.800\.000/);
   assert.match(await kpis.innerText(), /SEPTIEMBRE/i, 'the original period survives authentication');
   await page.screenshot({ path: 'output/financial-blocks-dashboard.png', animations: 'disabled' });
-  await page.getByRole('button', { name: 'Ver cuentas por cobrar', exact: true }).click();
-  await page.getByText('No hay cuentas por cobrar con estos filtros', { exact: true }).waitFor();
-  assert.match(await kpis.innerText(), /SEPTIEMBRE/i);
-  await page.getByRole('tab', { name: 'Movimientos', exact: true }).click();
-  // A prior account selection must not narrow the indicator's drill-down.
-  await page.getByRole('button', { name: 'Filtrar los movimientos por Otra cuenta de muestra', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver ingresos', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByText('Servicio cobrado · cliente ficticio', { exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: /Dejar de filtrar por/ }).count(), 0);
-  assert.match(await kpis.innerText(), /SEPTIEMBRE/i, 'drill-down preserves the period');
   await page.locator('[data-account-breakdown="demo-account"]').click();
   await page.locator('[data-account-statement]').waitFor(); await settle();
   // Account balance ignores year/type filters and still includes expense movements.

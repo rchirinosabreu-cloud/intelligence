@@ -13,6 +13,5 @@ export function useFinancialNavigation() {
   const setActiveTab = useCallback(activeTab => update({ activeTab }), [update]);
   const setSelectedYear = useCallback(selectedYear => update({ selectedYear }), [update]);
   const setFilters = useCallback(value => update(current => ({ filters: typeof value === 'function' ? value(current.filters) : value })), [update]);
-  const openRecords = useCallback(type => update(current => ({ activeTab: 'records', filters: { ...current.filters, type: type ?? current.filters.type } })), [update]);
-  return { ...navigation, setActiveTab, setSelectedYear, setFilters, openRecords };
+  return { ...navigation, setActiveTab, setSelectedYear, setFilters };
 }

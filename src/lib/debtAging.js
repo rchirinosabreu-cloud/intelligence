@@ -33,7 +33,7 @@ export const payableAgeStart = (item) => item?.receivedAt || null;
 /** Lo que de verdad se debe: saldo positivo, sin verificar pendiente y sin estar cerrada. */
 export const isOpenDebt = (item) => !!item
     && !item.balanceReviewRequired
-    && !['PAGADO', 'SALDADO', 'PAGADA', 'ANULADA'].includes(item.status)
+    && !['PAGADO', 'SALDADO', 'PAGADA', 'SALDADA', 'ANULADA'].includes(item.status)
     && Number(item.outstanding) > 0.005;
 
 export const debtAgeDays = (item, today = bogotaToday(), startOf = receivableAgeStart) => {

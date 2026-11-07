@@ -166,6 +166,7 @@ export const deleteReceivable = async (prismaClient, receivableId, reason, actor
                 }
             });
             if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+            if (existing.payments?.some(payment => payment.detail?.offsetPayableId)) throw new FinancialDomainError('OFFSET_HISTORY_PROTECTED', 'Esta cuenta conserva un cruce vinculado, incluso si fue revertido. No se elimina para conservar el historial de ambas obligaciones.', 409);
 
             const activePayments = (existing.payments || []).filter((payment) => !payment.reversedAt);
             if (activePayments.length) {

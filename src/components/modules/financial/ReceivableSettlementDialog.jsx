@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RETENTION_KIND, RETENTION_TYPES, SETTLEMENT_KINDS, SETTLEMENT_REASON_MAX, settlementProblem } from '@/lib/receivableSettlement';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import DraftNotice from '@/components/ui/DraftNotice';
+import FinancialOffsetDialog from './FinancialOffsetDialog';
 
 // Saldar una deuda sin que entre (todo) el dinero (Rodny, 20 de octubre de 2026): acuerdo por
 // menor valor, canje, compensación o condonación. Se conserva el valor original y no se crea
@@ -32,6 +33,7 @@ export default function ReceivableSettlementDialog({ debt, saving, error, onClos
     onSubmit({ ...form, amount: Number(form.amount) }, draft.clear);
   };
   const shown = problem || error;
+  if (form.kind === 'COMPENSACION') return <FinancialOffsetDialog receivableId={debt.id} onClose={onClose} onBack={() => set({ kind: 'ACUERDO' })} />;
   return <Dialog open={!!debt} onOpenChange={open => !open && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900" onOpenAutoFocus={event => { event.preventDefault(); event.currentTarget.focus(); }}>
     <DialogHeader><DialogTitle>Saldar de otra forma</DialogTitle><DialogDescription>{debt?.clientName} · saldo pendiente {money(debt?.outstanding)}. No se registra ningún ingreso: lo que entró en dinero sigue siendo lo único que cuenta como ingreso.</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4">
@@ -53,7 +55,6 @@ export default function ReceivableSettlementDialog({ debt, saving, error, onClos
         <label className="block space-y-1.5 text-sm"><span className="block">Qué se recibió</span><textarea required className={field} rows={2} value={form.goods} onChange={event => set({ goods: event.target.value })} placeholder="Ej.: muebles de oficina: 2 escritorios y 4 sillas" maxLength={500} /></label>
         <label className="block space-y-1.5 text-sm"><span className="block">A dónde fue <span className="text-zinc-400">(opcional)</span></span><input className={field} value={form.destination} onChange={event => set({ destination: event.target.value })} placeholder="Ej.: uso personal de un socio; pendiente definir si es anticipo" maxLength={500} /></label>
       </>}
-      {form.kind === 'COMPENSACION' && <label className="block space-y-1.5 text-sm"><span className="block">Contra qué se compensa</span><input required className={field} value={form.offsetAgainst} onChange={event => set({ offsetAgainst: event.target.value })} placeholder="Ej.: lo que le debíamos por el alquiler del local" maxLength={500} /></label>}
       <label className="block space-y-1.5 text-sm"><span className="block">{retention ? <>Nota <span className="text-zinc-400">(opcional)</span></> : 'Motivo'}</span><textarea required={!retention} className={field} rows={3} maxLength={SETTLEMENT_REASON_MAX} value={form.reason} onChange={event => set({ reason: event.target.value })} placeholder={retention ? 'Ej.: retención en la fuente del 4 % sobre la cuenta de septiembre.' : 'Ej.: el negocio cerró; por mutuo acuerdo se cierra con 2.000.000 para recuperar al menos una parte.'} /><span className="block text-right text-[11px] text-zinc-400">{form.reason.length}/{SETTLEMENT_REASON_MAX}</span></label>
       {shown && <p role="alert" className="text-sm text-destructive brain-destructive-text">{shown}</p>}
       </fieldset>
