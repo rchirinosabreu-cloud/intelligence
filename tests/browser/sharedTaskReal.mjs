@@ -115,7 +115,7 @@ test('tres personas mueven la misma tarea real, conservan sus relojes y cierran 
     assert.equal(f.participation(afterReopen, 'ana').status, 'REALIZADA');
     assert.equal(f.participation(afterReopen, 'bea').status, 'REALIZADA');
     assert.equal(afterReopen.completedAt, null);
-    await progress.getByRole('button', { name: 'Empezar mi parte', exact: true }).waitFor();
+    await progress.locator(`[data-participant-row="${f.actors.carlos.memberId}"]`).getByText('Pendiente', { exact: true }).waitFor();
     await pages.carlos.screenshot({ path: path.join(output, 'reabrir-solo-mi-parte.png'), fullPage: true, animations: 'disabled' });
     await writeFile(path.join(output, 'acceptance.json'), JSON.stringify({ runId: f.runId, taskId: task.id,
       memberIds: ['ana', 'bea', 'carlos'].map(key => f.actors[key].memberId), status: current.status,
@@ -128,12 +128,56 @@ test('tres personas mueven la misma tarea real, conservan sus relojes y cierran 
   }
 });
 
+test('retirar y volver a añadir colaboradores cambia la presentación y conserva relojes e historial reales', { timeout: 90_000 }, async () => {
+  let task = await f.createTask('Equipo vigente · retiro y reingreso');
+  task = (await f.move(task, 'ana', 'EN_CURSO')).data;
+  task = (await f.move(task, 'bea', 'EN_CURSO')).data;
+  const startedAt = f.participation(task, 'ana').startedAt;
+  const replace = async ids => {
+    task = (await f.request('manager', `/tasks/${task.id}`, { method: 'PATCH', body: {
+      collaboratorIds: ids, expectedRosterVersion: task.rosterVersion,
+    } })).data;
+  };
+  await replace([]);
+  assert.equal(f.participation(task, 'ana').startedAt, startedAt);
+  assert.equal(await f.db.taskParticipationArchive.count({ where: { taskId: task.id } }), 2);
+  assert.equal(await f.db.taskWorkSession.count({ where: { taskId: task.id, endedAt: null } }), 1);
+  const page = await openPerson('ana');
+  const mine = card(page, task.id, 'ana');
+  assert.equal(await mine.getByText(/completadas|Parte de/).count(), 0);
+  await mine.click();
+  await page.getByRole('combobox', { name: 'Estado actual', exact: true }).waitFor();
+  assert.equal(await page.locator('[data-task-participations]').count(), 0);
+  await page.screenshot({ path: path.join(output, 'individual-tras-retirada.png'), animations: 'disabled' });
+  await replace([f.actors.bea.memberId]);
+  await page.goto(`http://127.0.0.1:3181/gestion?taskId=${task.id}`);
+  await page.locator('[data-task-participations]').waitFor();
+  assert.equal(await page.locator('[data-participant-row]').count(), 2);
+  assert.equal(f.participation(task, 'bea').status, 'PENDIENTE');
+  assert.equal(f.participation(task, 'ana').startedAt, startedAt);
+  await replace([]);
+  await page.goto(`http://127.0.0.1:3181/gestion?taskId=${task.id}`);
+  await page.getByRole('combobox', { name: 'Estado actual', exact: true }).click();
+  const saved = page.waitForResponse(r => r.url().includes(`/tasks/${task.id}/participants/`) && r.request().method() === 'PATCH');
+  await page.getByRole('option', { name: 'Realizada', exact: true }).click();
+  assert.equal((await saved).status(), 200);
+  task = await f.loadTask(task.id);
+  assert.equal(task.status, 'REALIZADA');
+  assert.equal(await f.db.taskWorkSession.count({ where: { taskId: task.id, endedAt: null } }), 0);
+  assert.equal(await f.db.taskParticipationArchive.count({ where: { taskId: task.id } }), 3);
+  assert.equal(await f.db.task.count({ where: { id: task.id } }), 1);
+  await page.close();
+});
+
 test('un guardado demorado pierde frente a otra sesión real y muestra 409 sin reenviar ni duplicar reloj', { timeout: 90_000 }, async () => {
-  const task = await f.createTask('Dos dispositivos · revisión anterior real');
+  let task = await f.createTask('Dos dispositivos · revisión anterior real');
+  task = (await f.move(task, 'bea', 'REALIZADA')).data;
   const page = await openPerson('bea');
   await card(page, task.id, 'bea').click();
   const section = page.locator('[data-task-participations]');
-  await section.getByRole('button', { name: 'Empezar mi parte', exact: true }).waitFor();
+  await section.getByRole('button', { name: 'Reabrir mi parte', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Reabrir participación', exact: true });
+  await dialog.getByLabel('Nota', { exact: true }).fill('Reabrir desde esta sesión');
   let release, arrive; let writes = 0;
   const held = new Promise(resolve => { release = resolve; });
   const arriving = new Promise(resolve => { arrive = resolve; });
@@ -141,14 +185,15 @@ test('un guardado demorado pierde frente a otra sesión real y muestra 409 sin r
   await page.route(endpoint, async route => { writes += 1; arrive(); await held; await route.continue(); });
   try {
     const response = page.waitForResponse(res => res.url().includes(`/tasks/${task.id}/participants/`) && res.request().method() === 'PATCH');
-    await section.getByRole('button', { name: 'Empezar mi parte', exact: true }).click(); await arriving;
-    await section.getByRole('status').filter({ hasText: 'Guardando' }).waitFor();
+    await dialog.getByRole('button', { name: 'Reabrir participación', exact: true }).click(); await arriving;
+    assert.equal(await dialog.getByRole('button', { name: 'Reabrir participación', exact: true }).isDisabled(), true);
     assert.equal(await f.db.taskWorkSession.count({ where: { taskId: task.id } }), 0);
     assert.equal(await page.locator('body > canvas').count(), 0);
+    task = (await f.move(task, 'bea', 'PENDIENTE', { reopenReason: 'INTERNAL_ERROR', reopenNote: 'Reapertura en otra sesión' })).data;
     const otherDevice = (await f.move(task, 'bea', 'EN_CURSO')).data;
     release(); assert.equal((await response).status(), 409);
     await section.getByRole('alert').waitFor();
-    await section.getByRole('button', { name: 'Pausar mi parte', exact: true }).waitFor();
+    await section.locator(`[data-participant-row="${f.actors.bea.memberId}"][data-participation-running="true"]`).waitFor();
     assert.equal(writes, 1);
     const current = await f.loadTask(task.id);
     assert.equal(f.participation(current, 'bea').revision, f.participation(otherDevice, 'bea').revision);

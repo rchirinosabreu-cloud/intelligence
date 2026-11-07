@@ -31,6 +31,7 @@ import TaskShareControl from '@/components/tasks/TaskShareControl';
 import TaskCollaboratorsPicker from '@/components/tasks/TaskCollaboratorsPicker';
 import TaskTeamTime from '@/components/tasks/TaskTeamTime';
 import TaskParticipationProgress from '@/components/tasks/TaskParticipationProgress';
+import { hasActiveTaskTeam } from '@/lib/taskParticipationBoard';
 import { normalizeCollaboratorIds } from '@/lib/taskCollaborators';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
@@ -898,6 +899,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         assignee: { userId: taskData?.assignee?.userId || taskData?.assigneeUserId }
     });
     const canEditClient = !isEdition || (!formData.contentItemId && canEditTask);
+    const hasActiveTeam = hasActiveTaskTeam(formData);
+    const participationProgress = <TaskParticipationProgress task={formData} currentUserId={currentUser?.id || currentUser?.userId}
+        selectedMemberId={viewedParticipantMemberId} onSelectMember={setViewedParticipantMemberId}
+        onConfirmed={(saved) => {
+            if (saved.rosterVersion !== formData.rosterVersion) setRosterStale(true);
+            setFormData(prev => ({ ...prev, status: saved.status, originalStatus: saved.status, participants: saved.participants, rosterVersion: saved.rosterVersion }));
+            onSuccess();
+        }} />;
     // Crear un pendiente privado es cosa de quien dirige; cambiar la privacidad de uno
     // que ya existe, solo de quien lo creó. Si el control no se puede usar, no se pinta:
     // el servidor lo rechazaría igual y enseñarlo sería prometer algo que no se cumple.
@@ -2328,7 +2337,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             {/* Estado Actual */}
                             <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Estado actual</label>
-                                {formData.sharedProgress ? <p className={`${taskComposerFieldClass} flex min-h-11 items-center text-sm`}>{({ PENDIENTE: 'Pendiente', EN_CURSO: 'En proceso', REALIZADA: 'Realizada', DEVUELTA: 'Devuelta' })[formData.status]} · estado de la tarea completa</p> : <Select
+                                {formData.sharedProgress && !hasActiveTeam ? participationProgress : formData.sharedProgress ? <p className={`${taskComposerFieldClass} flex min-h-11 items-center text-sm`}>{({ PENDIENTE: 'Pendiente', EN_CURSO: 'En proceso', REALIZADA: 'Realizada', DEVUELTA: 'Devuelta' })[formData.status]} · estado de la tarea completa</p> : <Select
                                     value={formData.status}
                                     onChange={(event) => {
                                         const nextStatus = event.target.value;
@@ -2434,15 +2443,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
 
                         {/* Equipo de la tarea (5 de octubre de 2026): solo si tiene colaboradores. */}
-                        {isEdition && formData.sharedProgress ? (
-                            <TaskParticipationProgress task={formData} currentUserId={currentUser?.id || currentUser?.userId}
-                                selectedMemberId={viewedParticipantMemberId} onSelectMember={setViewedParticipantMemberId}
-                                onConfirmed={(saved) => {
-                                    if (saved.rosterVersion !== formData.rosterVersion) setRosterStale(true);
-                                    setFormData(prev => ({ ...prev, status: saved.status, originalStatus: saved.status, participants: saved.participants, rosterVersion: saved.rosterVersion }));
-                                    onSuccess();
-                                }} />
-                        ) : isEdition && (
+                        {isEdition && formData.sharedProgress ? (hasActiveTeam ? participationProgress : null) : isEdition && (
                             <TaskTeamTime
                                 taskId={formData.id}
                                 currentUserId={currentUser?.id || currentUser?.userId}

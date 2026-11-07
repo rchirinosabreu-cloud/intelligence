@@ -1,4 +1,5 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
+import { hasActiveTaskTeam } from '@/lib/taskParticipationBoard';
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
@@ -229,7 +230,7 @@ const ClientTasksWidget = ({ clientId }) => {
                             >
                                 <button
                                     type="button"
-                                    aria-label={task.sharedProgress || task.collaborators?.length ? `Revisar participaciones de ${task.title}` : `${isDone ? 'Reabrir' : 'Completar'} ${task.title}`}
+                                    aria-label={hasActiveTaskTeam(task) ? `Revisar participaciones de ${task.title}` : task.sharedProgress ? `Abrir tarea ${task.title}` : `${isDone ? 'Reabrir' : 'Completar'} ${task.title}`}
                                     className={cn(
                                         "transition-colors mt-0.5 cursor-pointer",
                                         isDone ? "text-blue-500" : "text-zinc-300 hover:text-blue-400"

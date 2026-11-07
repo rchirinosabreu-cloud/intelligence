@@ -30,6 +30,44 @@ const allPeople = async page => {
   await page.getByRole('option', { name: 'Todos los responsables', exact: true }).click();
 };
 
+for (const solo of [false, true]) test(`presentación vigente: ${solo ? 'individual tras retirar colaboradores' : 'equipo sin botones redundantes'}`, async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(8000);
+  let task = fixture(); const writes = [];
+  if (solo) task = { ...task, collaborators: [], participants: [task.participants[0]], workSessions: [task.workSessions[0]] };
+  await page.route('**/api/tasks**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/tasks') return route.fulfill({ json: [task] });
+    if (path === '/api/tasks/shared-task') return route.fulfill({ json: task });
+    if (path.includes('/participants/')) {
+      const change = route.request().postDataJSON(); writes.push(change);
+      task = { ...task, status: change.status, participants: task.participants.map(row => ({ ...row, status: change.status, startedAt: null, revision: row.revision + 1 })) };
+      return route.fulfill({ json: task });
+    }
+    return route.continue();
+  });
+  try {
+    await page.goto(`${preview.origin}/gestion?taskId=shared-task`);
+    await page.locator('[data-task-title-input]').waitFor();
+    if (solo) {
+      const status = page.getByRole('combobox', { name: 'Estado actual', exact: true });
+      await status.waitFor();
+      assert.equal(await page.locator('[data-task-participations]').count(), 0);
+      const saved = page.waitForResponse(r => r.url().includes('/participants/') && r.request().method() === 'PATCH');
+      await status.click();
+      await page.getByRole('option', { name: 'Pendiente', exact: true }).click();
+      await saved;
+      assert.deepEqual(writes, [{ status: 'PENDIENTE', expectedRevision: 7, expectedRosterVersion: 3 }]);
+      await page.screenshot({ path: 'output/task-participation/individual-sin-colaboradores.png', animations: 'disabled' });
+    } else {
+      await page.locator('[data-task-participations]').waitFor();
+      assert.equal(await page.getByRole('button', { name: /^(Empezar|Pausar|Terminar|Devolver) mi parte$/ }).count(), 0);
+      assert.equal(await page.locator('[data-participant-row]').count(), 2);
+      await page.screenshot({ path: 'output/task-participation/equipo-sin-botones.png', animations: 'disabled' });
+    }
+  } finally { await page.close(); }
+});
+
 test('cada persona tiene su tarjeta y terminar una parte conserva el reloj de la otra', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(8000);
@@ -81,6 +119,7 @@ test('el panel muestra participación personal y un conflicto refresca sin reenv
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   page.setDefaultTimeout(8000);
   let task = fixture(), writes = 0;
+  task.participants[0] = { ...task.participants[0], status: 'REALIZADA', startedAt: null };
   await page.route('**/api/tasks**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/api/tasks') return route.fulfill({ json: [task] });
@@ -95,7 +134,10 @@ test('el panel muestra participación personal y un conflicto refresca sin reenv
     await page.goto(`${preview.origin}/gestion?taskId=shared-task&participantId=navigation-member&dark`);
     const section = page.locator('[data-task-participations]');
     await section.waitFor();
-    await section.getByRole('button', { name: 'Terminar mi parte', exact: true }).click();
+    await section.getByRole('button', { name: 'Reabrir mi parte', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Reabrir participación', exact: true });
+    await dialog.getByRole('textbox', { name: 'Nota', exact: true }).fill('Revisar mi parte');
+    await dialog.getByRole('button', { name: 'Reabrir participación', exact: true }).click();
     await section.getByRole('alert').filter({ hasText: 'cambió' }).waitFor();
     assert.equal(writes, 1);
     assert.equal(await section.locator('[data-participant-row="partner"]').getAttribute('data-participation-running'), 'true');
@@ -105,10 +147,11 @@ test('el panel muestra participación personal y un conflicto refresca sin reenv
   } finally { await page.close(); }
 });
 
-test('devolver y reabrir una participación nombran a la persona y guardar datos comunes no modifica estados', async () => {
+test('reintegrar una participación nombra a la persona y guardar datos comunes no modifica estados', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(8000);
   let task = fixture(), metadata;
+  task.participants[0] = { ...task.participants[0], status: 'DEVUELTA', startedAt: null };
   const changes = [];
   await page.route('**/api/tasks**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -129,32 +172,22 @@ test('devolver y reabrir una participación nombran a la persona y guardar datos
   try {
     await page.goto(`${preview.origin}/gestion?taskId=shared-task`);
     const section = page.locator('[data-task-participations]');
-    await section.getByRole('button', { name: 'Devolver mi parte', exact: true }).click();
-    const returnDialog = page.getByRole('dialog', { name: 'Devolver participación', exact: true });
-    await returnDialog.getByText(/Parte de Lucía Faro/).waitFor();
-    await returnDialog.getByRole('textbox', { name: 'Nota', exact: true }).fill('Falta mi revisión de copy');
-    await returnDialog.getByRole('button', { name: 'Devolver participación', exact: true }).click();
-    await section.getByRole('button', { name: 'Reintegrar mi parte', exact: true }).waitFor();
-    assert.equal(changes[0].expectedRevision, 7);
-    assert.equal(changes[0].returnNote, 'Falta mi revisión de copy');
-    assert.equal(task.participants[1].status, 'EN_CURSO');
     await section.getByRole('button', { name: 'Reintegrar mi parte', exact: true }).click();
     const reintegrate = page.getByRole('dialog', { name: 'Reintegrar participación', exact: true });
+    await reintegrate.getByText(/Parte de Lucía Faro/).waitFor();
     await reintegrate.getByRole('textbox', { name: 'Nota', exact: true }).fill('Ya tengo la información');
+    const saved = page.waitForResponse(r => r.url().includes('/participants/') && r.request().method() === 'PATCH');
     await reintegrate.getByRole('button', { name: 'Reintegrar participación', exact: true }).click();
-    await section.getByRole('button', { name: 'Terminar mi parte', exact: true }).click();
-    await section.getByRole('button', { name: 'Reabrir mi parte', exact: true }).click();
-    const reopen = page.getByRole('dialog', { name: 'Reabrir participación', exact: true });
-    await reopen.getByRole('textbox', { name: 'Nota', exact: true }).fill('Ajustar mi versión');
-    await reopen.getByRole('button', { name: 'Reabrir participación', exact: true }).click();
-    await section.getByRole('button', { name: 'Empezar mi parte', exact: true }).waitFor();
-    assert.equal(changes[3].status, 'PENDIENTE'); assert.equal(changes[3].expectedRevision, 10);
+    await saved;
+    assert.equal(changes[0].expectedRevision, 7);
+    assert.equal(changes[0].reintegrateReason, 'Ya tengo la información');
+    assert.equal(task.participants[1].status, 'EN_CURSO');
     await page.locator('[data-task-title-input]').fill('Campaña con título corregido');
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
     await page.locator('[data-task-participations]').waitFor({ state: 'hidden' });
     assert.equal(metadata.title, 'Campaña con título corregido');
     for (const field of ['status', 'assigneeId', 'collaboratorIds']) assert.equal(Object.hasOwn(metadata, field), false, `guardar título no envía ${field}`);
-    assert.equal(changes.length, 4);
+    assert.equal(changes.length, 1);
   } finally { await page.close(); }
 });
 
@@ -199,9 +232,9 @@ test('el acceso rápido del cliente abre las partes de una tarea compartida sin 
   } finally { await page.close(); }
 });
 
-test('un rechazo al devolver conserva el formulario y muestra el motivo dentro del diálogo', async () => {
+test('un rechazo al devolver la tarea individual conserva el formulario y muestra el motivo dentro del diálogo', async () => {
   const page = await browser.newPage(); page.setDefaultTimeout(8000);
-  const task = fixture();
+  const task = fixture(); task.collaborators = []; task.participants = [task.participants[0]];
   await page.route('**/api/tasks**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/api/tasks') return route.fulfill({ json: [task] });
@@ -211,10 +244,11 @@ test('un rechazo al devolver conserva el formulario y muestra el motivo dentro d
   });
   try {
     await page.goto(`${preview.origin}/gestion?taskId=shared-task`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Devolver mi parte', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Devolver participación', exact: true });
+    await page.getByRole('combobox', { name: 'Estado actual', exact: true }).click();
+    await page.getByRole('option', { name: 'Devuelta', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Devolver tarea', exact: true });
     await dialog.getByRole('textbox', { name: 'Nota', exact: true }).fill('Mi revisión');
-    await dialog.getByRole('button', { name: 'Devolver participación', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Devolver tarea', exact: true }).click();
     await dialog.getByRole('alert').filter({ hasText: 'El motivo necesita más detalle.' }).waitFor();
     assert.equal(await dialog.getByRole('textbox', { name: 'Nota', exact: true }).inputValue(), 'Mi revisión');
     await page.screenshot({ path: 'output/task-participation/devolucion-error-claro.png', animations: 'disabled' });
