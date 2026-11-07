@@ -142,6 +142,6 @@ test('account balances exclude earlier accounting days but include all movements
   const accounts = await listFinancialAccounts(client);
   assert.equal(accounts[0].balance, 1125);
   assert.equal(accounts[1].balance, 300);
-  assert.deepEqual(query.include.records.where, { status: 'POSTED', scenario: 'ACTUAL' });
+  assert.deepEqual(query.include.records.where, { status: 'POSTED', scenario: 'ACTUAL', isProjection: false });
   assert.equal(query.include.records.select.date, true);
 });

@@ -56,7 +56,7 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
     assert.match(ledgerSource, /Anular movimiento/);
     assert.match(ledgerSource, /\/api\/financials\/accounts/);
     assert.match(ledgerSource, /accountId/);
-    assert.match(ledgerSource, /Saldo total de la cuenta/);
+    assert.match(ledgerSource, /Saldo registrado de la cuenta/);
     assert.doesNotMatch(ledgerSource, /setFilters/);
     assert.match(ledgerSource, /Nueva cuenta/);
     assert.match(ledgerSource, /\/api\/financials\/periods/);

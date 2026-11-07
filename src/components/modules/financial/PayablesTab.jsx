@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import PaymentCorrectionDialog from './PaymentCorrectionDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -191,7 +192,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                                         <span className="truncate text-zinc-500">{payment.accountName || 'Sin cuenta'}</span>
                                         <span className="min-w-[6rem] flex-1 truncate text-zinc-600 dark:text-zinc-300">{payment.reference || <span className="text-zinc-400">Sin referencia</span>}</span>
                                         {payment.reversedAt ? <span className="text-destructive">Revertido: {payment.reversalReason}</span>
-                                          : canWrite && <button type="button" onClick={() => setDialog({ kind: 'reverse', payment })} className="text-destructive brain-destructive-text hover:underline">Revertir</button>}
+                                          : canWrite && <><button type="button" data-payable-correct onClick={() => setDialog({ kind: 'correct', payment })} className="min-h-11 font-medium text-primary underline">Corregir pago</button><button type="button" onClick={() => setDialog({ kind: 'reverse', payment })} className="text-destructive brain-destructive-text hover:underline">Revertir</button></>}
                                       </div>
                                       {!payment.reversedAt && <RecordDocumentsInline className="mt-1" recordId={payment.financialRecordId} documents={payment.documents} canWrite={canWrite} onChanged={documentsChanged} onError={(message) => toast.error(message)} />}
                                     </li>
@@ -216,6 +217,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
       {dialog?.kind === 'payable' && <PayableDialog key={dialog.payable?.id || dialog.defaultThirdPartyId || 'new'} open payable={dialog.payable || null} thirdParties={thirdParties} defaultThirdPartyId={dialog.defaultThirdPartyId || ''} saving={saving} error={error} onClose={close} onSubmit={savePayable}
         onNewThirdParty={() => setDialog({ kind: 'third-party', thirdParty: null, returnTo: 'payable' })} />}
       {dialog?.kind === 'pay' && <PayablePaymentDialog payable={dialog.payable} accounts={accounts} saving={saving} error={error} onClose={close} onSubmit={pay} />}
+      {dialog?.kind === 'correct' && <PaymentCorrectionDialog kind="payable" paymentId={dialog.payment.id} accounts={accounts} onClose={close} onSaved={async message => { close(); await invalidateFinancialQueries(queryClient); toast.success(message); }} />}
       {dialog?.kind === 'void' && <ReasonDialog open title="Anular cuenta por pagar" description={`${dialog.payable.concept} · ${formatCurrency(dialog.payable.amount)}. La cuenta queda anulada con su motivo; no se borra.`} confirmLabel="Anular" saving={saving} onClose={close} onConfirm={voidPayable} />}
       {dialog?.kind === 'reverse' && <ReasonDialog open title="Revertir pago" description={`${formatCurrency(dialog.payment.amount)} del ${day(dialog.payment.paidAt)}. El pago queda como evidencia y su egreso en Movimientos se anula.`} confirmLabel="Revertir" saving={saving} onClose={close} onConfirm={reversePayment} />}
     </div>

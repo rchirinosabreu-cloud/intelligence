@@ -310,6 +310,9 @@ export const PLATFORM_OPERATIONS = {
   // Financiero
   'GET /financials/dashboard': { que: 'Indicadores y gráficas del financiero.', campos: 'year, month, category (consulta)' },
   'GET /financials/accounts': { que: 'Las cuentas bancarias y de caja.' },
+  'GET /financials/accounts/:accountId/statement': { que: 'Composición del saldo registrado desde apertura: saldo inicial, ingresos, egresos y movimientos paginados con saldo acumulado. Todos los años, no solo el periodo de pantalla; no acredita saldo bancario conciliado.', campos: 'page' },
+  'GET /financials/payment-corrections/:kind/:paymentId': { que: 'Lee el pago original de nómina (payroll) o proveedor (payable), su revisión y saldo antes de preparar una corrección. Solo administradores reciben el historial de auditoría.' },
+  'POST /financials/payment-corrections/:kind/:paymentId': { que: 'Corrige pago y movimiento juntos, con revisión vigente, motivo e historial. No realiza transferencias ni crea pagos. Nómina exige aprobación financiera; proveedores, escritura. No modifica egresos preexistentes aplicados.', campos: 'expectedRevision, requestId, amount, paidAt, accountId, reference, notes, reason' },
   'POST /financials/accounts': { que: 'Crea una cuenta de banco o caja. Siempre en pesos.', campos: 'name, type (BANK|CASH|OTHER), institution, holderName, holderType (COMPANY|PERSON), identificationType, identificationNumber, lastFour, isThirdPartyHeld, openingBalance, openingBalanceDate' },
   'PATCH /financials/accounts/:accountId': { que: 'Corrige los datos de una cuenta de banco o caja.', campos: 'name, type, institution, holderName, holderType, identificationType, identificationNumber, lastFour, isThirdPartyHeld, openingBalance, openingBalanceDate' },
   'GET /financials/records': { que: 'El libro de movimientos.', campos: 'year, month, type, category, accountId (consulta)' },

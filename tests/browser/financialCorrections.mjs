@@ -1,0 +1,107 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+import { chooseOption } from './selectHelpers.mjs';
+
+const base = process.env.FINANCIAL_CORRECTIONS_URL || 'http://127.0.0.1:3847/tests/fixtures/financial-corrections.html?year=2026&month=9';
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+const errors = [];
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+  page.setDefaultTimeout(12000);
+  page.on('pageerror', error => errors.push(error.message));
+  const settle = async () => { await page.waitForTimeout(450); await page.evaluate(() => document.fonts.ready); };
+  await page.goto(base);
+  await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor(); await settle();
+  const kpis = page.locator('[data-financial-kpis]');
+  await kpis.getByText(/1\.800\.000/).first().waitFor();
+  assert.match(await kpis.innerText(), /1\.800\.000/);
+  assert.match(await kpis.innerText(), /SEPTIEMBRE/i, 'the original period survives authentication');
+  await page.screenshot({ path: 'output/financial-blocks-dashboard.png', animations: 'disabled' });
+  await page.getByRole('button', { name: 'Ver cuentas por cobrar', exact: true }).click();
+  await page.getByText('No hay cuentas por cobrar con estos filtros', { exact: true }).waitFor();
+  assert.match(await kpis.innerText(), /SEPTIEMBRE/i);
+  await page.getByRole('tab', { name: 'Movimientos', exact: true }).click();
+  // A prior account selection must not narrow the indicator's drill-down.
+  await page.getByRole('button', { name: 'Filtrar los movimientos por Otra cuenta de muestra', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver ingresos', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
+  await page.getByText('Servicio cobrado · cliente ficticio', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: /Dejar de filtrar por/ }).count(), 0);
+  assert.match(await kpis.innerText(), /SEPTIEMBRE/i, 'drill-down preserves the period');
+  await page.locator('[data-account-breakdown="demo-account"]').click();
+  await page.locator('[data-account-statement]').waitFor(); await settle();
+  // Account balance ignores year/type filters and still includes expense movements.
+  assert.match(await page.getByRole('dialog').innerText(), /Pago de nómina/);
+  assert.match(await page.getByRole('dialog').innerText(), /Saldo inicial/);
+  await page.screenshot({ path: 'output/financial-blocks-balance.png', animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  await page.goto(base); await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
+  const payroll = page.getByRole('row').filter({ hasText: 'Pago de nómina · persona ficticia' });
+  await payroll.getByRole('button', { name: /pago de nómina/i }).first().click();
+  await page.locator('[data-payroll-correct]').click();
+  const dialog = page.locator('[data-payment-correction]');
+  await dialog.getByLabel('Motivo de la corrección').waitFor();
+  await dialog.getByLabel('Valor pagado', { exact: true }).fill('500000');
+  await dialog.getByLabel('Fecha del pago').fill('16/09/2026');
+  await dialog.getByLabel('Fecha del pago').press('Tab');
+  await chooseOption(dialog.getByRole('combobox', { name: 'Cuenta de salida' }), 'demo-account-2');
+  await dialog.getByLabel('Motivo de la corrección').fill('El comprobante confirma otra cuenta y un pago de $500.000.');
+  await settle(); await page.screenshot({ path: 'output/financial-blocks-correction-form.png', animations: 'disabled' });
+  await dialog.getByRole('button', { name: 'Revisar cambios', exact: true }).click();
+  await page.locator('[data-payment-correction-review]').waitFor(); await settle();
+  assert.match(await dialog.innerText(), /600\.000/); assert.match(await dialog.innerText(), /500\.000/);
+  await page.screenshot({ path: 'output/financial-blocks-correction-review.png', animations: 'disabled' });
+  await dialog.getByRole('button', { name: 'Confirmar corrección', exact: true }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.getByRole('row').filter({ hasText: 'Pago de nómina · persona ficticia' }).getByText('Otra cuenta de muestra').waitFor();
+  assert.match(await page.locator('[data-account-card="demo-account-2"]').innerText(), /1\.500\.000/);
+  // Reopen the same native payment: the server retained its author/reason and original document.
+  await payroll.getByRole('button', { name: /pago de nómina/i }).first().click();
+  await page.locator('[data-payroll-correct]').click();
+  await page.getByText('Historial de correcciones · hasta 20 registros recientes').click();
+  assert.match(await page.getByRole('dialog').last().innerText(), /El comprobante confirma otra cuenta/);
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Corregir pago', exact: true }).waitFor({state:'hidden'});
+  await page.getByRole('dialog').getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('dialog').waitFor({state:'hidden'});
+  await page.getByRole('button', { name: 'Cambiar tema' }).click();
+  await page.locator('[data-account-breakdown="demo-account-2"]').click();
+  await page.locator('[data-account-statement]').waitFor(); await settle();
+  await page.screenshot({ path: 'output/financial-blocks-balance-dark.png', animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 }); await settle();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'no horizontal viewport overflow');
+  assert.equal(await page.locator('[data-account-statement]').evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, 'the dialog content must fit; only its table may scroll horizontally');
+  await page.screenshot({ path: 'output/financial-blocks-balance-mobile.png', animations: 'disabled' });
+  // Same native experience for accounts payable. Simulate a response lost AFTER commit:
+  // the retry must return the existing result, without another payment or audit event.
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.goto(`${base}&tab=por-pagar`);
+  await page.getByRole('button', { name: /Proveedor ficticio/ }).click();
+  await page.locator('[data-payable-payments-toggle]').click();
+  await page.locator('[data-payable-correct]').click();
+  await dialog.getByLabel('Motivo de la corrección').waitFor();
+  await dialog.getByLabel('Valor pagado', { exact: true }).fill('450000');
+  await dialog.getByLabel('Motivo de la corrección').fill('Ajuste de valor según comprobante del proveedor.');
+  await dialog.getByRole('button', { name: 'Revisar cambios', exact: true }).click();
+  await page.route('**/preview-api/payment-corrections/payable/*', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const committed = await route.fetch(); assert.equal(committed.status(), 200);
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Respuesta interrumpida después del guardado. Reintenta para comprobarlo.' }) });
+  }, { times: 1 });
+  await dialog.getByRole('button', { name: 'Confirmar corrección', exact: true }).click();
+  await dialog.getByRole('alert').filter({ hasText: 'Respuesta interrumpida' }).waitFor();
+  assert.equal(await dialog.isVisible(), true, 'failed response must not dismiss the draft');
+  await dialog.getByRole('button', { name: 'Confirmar corrección', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  const stored = await (await page.request.get(new URL('/preview-api/payment-corrections/payable/payment-payable', base).href)).json();
+  assert.equal(stored.payment.amount, 450000); assert.equal(stored.outstanding, 550000); assert.equal(stored.history.length, 1);
+  await page.locator('[data-payable-correct]').click();
+  await dialog.getByLabel('Motivo de la corrección').waitFor();
+  await dialog.getByText('Historial de correcciones · hasta 20 registros recientes').click();
+  await settle(); await page.screenshot({ path: 'output/financial-blocks-correction-history.png', animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 }); await settle();
+  assert.equal(await dialog.locator('form').evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, 'the correction form fits on mobile');
+  await page.screenshot({ path: 'output/financial-blocks-correction-mobile.png', animations: 'disabled' });
+  assert.deepEqual(errors, []);
+  console.log('PASS: indicador → movimientos con periodo, saldo completo, correcciones de nómina y proveedores, respuesta perdida/reintento, historial, oscuro y móvil.');
+} finally { await browser.close(); }

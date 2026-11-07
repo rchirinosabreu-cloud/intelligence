@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import PaymentCorrectionDialog from './PaymentCorrectionDialog';
 import axios from 'axios';
 import Select from '@/components/ui/Select';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -411,7 +412,8 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
                         {inlineActions && (canWrite || canApprove) && (
                             <div className="flex flex-wrap gap-2 pt-2" data-payroll-inline-actions>
                                 {canApprove && payment.canSplit && <button type="button" onClick={() => setDialog({ kind: 'split', payment })} className="inline-flex min-h-10 items-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Desglosar pago</button>}
-                                {canWrite && <button type="button" onClick={() => setDialog({ kind: 'edit', payment })} className="inline-flex min-h-10 items-center rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Editar referencia</button>}
+                                {canApprove && <button type="button" data-payroll-correct onClick={() => setDialog({ kind: 'correct', payment })} className="min-h-11 rounded-lg border border-zinc-200 px-3 text-sm font-medium dark:border-white/10">Corregir pago</button>}
+                                {canWrite && !canApprove && <button type="button" onClick={() => setDialog({ kind: 'edit', payment })} className="inline-flex min-h-10 items-center rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Editar referencia</button>}
                                 {canApprove && <button type="button" onClick={() => setDialog({ kind: 'reverse', payment })} className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-medium text-destructive brain-destructive-text hover:bg-destructive/10">Revertir</button>}
                             </div>
                         )}
@@ -422,7 +424,8 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
                                     <button type="button" aria-label={`Acciones del pago de ${formatCurrency(payment.amount)}`} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"><MoreHorizontal className="h-4 w-4" /></button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    {canWrite && <DropdownMenuItem onSelect={() => setDialog({ kind: 'edit', payment })}>Editar referencia</DropdownMenuItem>}
+                                    {canApprove && <DropdownMenuItem onSelect={() => setDialog({ kind: 'correct', payment })}>Corregir pago</DropdownMenuItem>}
+                                    {canWrite && !canApprove && <DropdownMenuItem onSelect={() => setDialog({ kind: 'edit', payment })}>Editar referencia</DropdownMenuItem>}
                                     {canApprove && payment.canSplit && <DropdownMenuItem onSelect={() => setDialog({ kind: 'split', payment })}>Desglosar pago</DropdownMenuItem>}
                                     {canApprove && <DropdownMenuItem onSelect={() => setDialog({ kind: 'reverse', payment })} className="text-destructive brain-destructive-text focus:text-destructive">Revertir</DropdownMenuItem>}
                                 </DropdownMenuContent>
@@ -452,6 +455,7 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
             {dialog?.kind === 'split' && <DesgloseDialog payment={dialog.payment} accounts={accounts} formatCurrency={formatCurrency} onClose={() => setDialog(null)} onSaved={saved} />}
             {dialog?.kind === 'reverse' && <ReverseDialog payment={dialog.payment} formatCurrency={formatCurrency} onClose={() => setDialog(null)} onSaved={saved} />}
             {dialog?.kind === 'edit' && <EditDialog payment={dialog.payment} onClose={() => setDialog(null)} onSaved={saved} />}
+            {dialog?.kind === 'correct' && <PaymentCorrectionDialog kind="payroll" paymentId={dialog.payment.id} accounts={accounts} onClose={() => setDialog(null)} onSaved={saved} />}
         </div>
     );
 }
@@ -468,7 +472,7 @@ export function PayrollPaymentPanel({ payment, accounts = [], formatCurrency, ca
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
                 <DialogHeader>
                     <DialogTitle>Pago de nómina</DialogTitle>
-                    <DialogDescription>Lo generó la nómina, así que su valor no se edita a mano. Aquí lo desglosas en los pagos que de verdad se hicieron, le subes los comprobantes, cambias la referencia o lo reviertes.</DialogDescription>
+                    <DialogDescription>Este movimiento pertenece a un pago de nómina. Aquí puedes corregir el pago con su historial, desglosarlo, adjuntar comprobantes o revertirlo.</DialogDescription>
                 </DialogHeader>
                 <PayrollPaymentList transaction={{ payments: [payment] }} accounts={accounts} formatCurrency={formatCurrency}
                     canApprove={canApprove} canWrite={canWrite} inlineActions
