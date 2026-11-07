@@ -1,3 +1,4 @@
+import FinancialBarterDialog from './FinancialBarterDialog';
 import React, { useState } from 'react';
 import Select from '@/components/ui/Select';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -33,13 +34,14 @@ export default function ReceivableSettlementDialog({ debt, saving, error, onClos
     onSubmit({ ...form, amount: Number(form.amount) }, draft.clear);
   };
   const shown = problem || error;
+  if (form.kind === 'CANJE') return <FinancialBarterDialog receivableId={debt.id} onClose={onClose} onBack={() => set({ kind: 'ACUERDO' })} />;
   if (form.kind === 'COMPENSACION') return <FinancialOffsetDialog receivableId={debt.id} onClose={onClose} onBack={() => set({ kind: 'ACUERDO' })} />;
   return <Dialog open={!!debt} onOpenChange={open => !open && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900" onOpenAutoFocus={event => { event.preventDefault(); event.currentTarget.focus(); }}>
     <DialogHeader><DialogTitle>Saldar de otra forma</DialogTitle><DialogDescription>{debt?.clientName} · saldo pendiente {money(debt?.outstanding)}. No se registra ningún ingreso: lo que entró en dinero sigue siendo lo único que cuenta como ingreso.</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4">
       <DraftNotice draft={draft} disabled={saving} />
       <fieldset disabled={saving || draft.conflict} inert={saving || draft.conflict ? '' : undefined} className="space-y-4">
-      <label className="block space-y-1.5 text-sm"><span className="block">Forma de saldar</span><Select required disabled={saving || draft.conflict} className={field} value={form.kind} onChange={event => set({ kind: event.target.value })}>{SETTLEMENT_KINDS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
+      <label className="block space-y-1.5 text-sm"><span className="block">Forma de saldar</span><Select required disabled={saving || draft.conflict} className={field} value={form.kind} onChange={event => set({ kind: event.target.value })}>{SETTLEMENT_KINDS.filter(item => debt?.kind !== 'BENEFICIARIO' || !['CANJE', 'RETENCION'].includes(item.value)).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
       {kind && <p data-settlement-help className="rounded-lg bg-zinc-50 px-3 py-2 text-xs leading-5 text-zinc-600 dark:bg-white/5 dark:text-zinc-300">{kind.help}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block space-y-1.5 text-sm"><span className="block">Valor que se da por saldado</span><MoneyInput required className={field} min="0.01" max={debt?.outstanding} value={form.amount} onChange={amount => set({ amount })} /></label>

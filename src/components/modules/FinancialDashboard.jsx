@@ -1,3 +1,4 @@
+import FinancialBarterDialog from './financial/FinancialBarterDialog';
 import Select from '@/components/ui/Select';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -188,6 +189,7 @@ const FinancialDashboard = () => {
     const [paymentDebt, setPaymentDebt] = useState(null);
     // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo, canje, compensación, condonación.
     const [settlementDebt, setSettlementDebt] = useState(null);
+    const [barterPaymentId, setBarterPaymentId] = useState(null);
     const [offsetPaymentId, setOffsetPaymentId] = useState(null);
     const [isSavingSettlement, setIsSavingSettlement] = useState(false);
     // Préstamos a terceros en Cartera (Rodny, 20 de octubre de 2026).
@@ -1137,11 +1139,12 @@ await invalidateFinancialQueries(queryClient);
     }, [data?.categoriesDistribution]);
 
     const receivablesByClient = useMemo(() => groupFinancialReceivables((receivablesLedger?.items || []).filter((item) => (
-        (!receivableKind || (receivableKind === 'PRESTAMO') === (item.kind === 'PRESTAMO'))
+        (!receivableKind || receivableKind === (item.kind || 'CLIENTE'))
         && (!receivableBucket || agingBucketOf(item) === receivableBucket)
     ))), [receivablesLedger?.items, receivableKind, receivableBucket]);
     const receivableSections = useMemo(() => [
-        { key: 'CLIENTE', title: 'Clientes', groups: receivablesByClient.filter((group) => group.kind !== 'PRESTAMO') },
+        { key: 'CLIENTE', title: 'Clientes', groups: receivablesByClient.filter((group) => group.kind === 'CLIENTE') },
+        { key: 'BENEFICIARIO', title: 'Beneficiarios de canjes', groups: receivablesByClient.filter(group => group.kind === 'BENEFICIARIO') },
         { key: 'PRESTAMO', title: 'Préstamos a terceros', groups: receivablesByClient.filter((group) => group.kind === 'PRESTAMO') }
     ].filter((section) => section.groups.length > 0), [receivablesByClient]);
     const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser, canFormalize }), [isAdminUser, canFormalize]);
@@ -1420,16 +1423,16 @@ await invalidateFinancialQueries(queryClient);
                             {/* A quién se le cobra (Elisa, 23 de octubre de 2026): clientes o terceros a quienes se les prestó. */}
                             <FinancialSubTabs label="Clase de cuenta por cobrar" active={receivableKind || 'ALL'}
                                 onChange={(key) => setReceivableKind(key === 'ALL' ? null : key)}
-                                views={[{ key: 'ALL', label: 'Todas' }, { key: 'CLIENTE', label: 'Clientes' }, { key: 'PRESTAMO', label: 'Préstamos a terceros' }]} />
+                                views={[{ key: 'ALL', label: 'Todas' }, { key: 'CLIENTE', label: 'Clientes' }, { key: 'PRESTAMO', label: 'Préstamos a terceros' }, { key: 'BENEFICIARIO', label: 'Beneficiarios de canjes' }]} />
                             <DebtAgingSummary data-receivable-summary totalLabel="Total por cobrar" formatCurrency={formatCurrency}
-                                items={(receivablesLedger?.items || []).filter((item) => !receivableKind || (receivableKind === 'PRESTAMO') === (item.kind === 'PRESTAMO'))}
-                                partyOf={(item) => `${item.kind === 'PRESTAMO' ? 'loan:' : ''}${item.clientId || item.clientName || item.id}`}
+                                items={(receivablesLedger?.items || []).filter((item) => !receivableKind || receivableKind === (item.kind || 'CLIENTE'))}
+                                partyOf={(item) => item.kind === 'BENEFICIARIO' ? `beneficiary:${item.beneficiaryThirdPartyId || item.id}` : `${item.kind === 'PRESTAMO' ? 'loan:' : ''}${item.clientId || item.clientName || item.id}`}
                                 bucket={receivableBucket} onBucketChange={setReceivableBucket} />
                         </>}
 
                         {/* Ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): lo saldado sin dinero
                             y la diferencia en cambio, que no son movimientos y solo se veían cliente por cliente. */}
-                        <ReceivableAdjustmentsSummary filterQuery={filterQuery} enabled={!!(currentUser && canAccessFinancials)} />
+                        <ReceivableAdjustmentsSummary onOpenBarter={setBarterPaymentId} filterQuery={filterQuery} enabled={!!(currentUser && canAccessFinancials)} />
 
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">Obligaciones del periodo seleccionado de {selectedYear}{filters.q ? ` · Búsqueda: ${filters.q}` : ''}{receivableBucket ? ` · ${agingBucketLabel(receivableBucket)}` : ''} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
                         {!!receivablesLedger?.totals?.reviewCount && <p role="alert" className="text-sm text-destructive">Hay registros históricos marcados como pagados sin abonos suficientes vinculados. Su saldo está por verificar y no se suma como deuda confirmada.</p>}
@@ -1504,7 +1507,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
                                                                 </div>
-                                                                {!isLoanReceivable(debt) && (
+                                                                {!isLoanReceivable(debt) && debt.kind !== 'BENEFICIARIO' && (
                                                                     <div data-receivable-mode>
                                                                         {canWriteFinancials && !debt.collectionModeLocked ? (
                                                                             <label className="block max-w-sm space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
@@ -1536,7 +1539,7 @@ await invalidateFinancialQueries(queryClient);
                                                                                     va impreso: el lápiz abre la corrección, que rehace el PDF. En una en
                                                                                     dólares el PDF dice dólares y el lápiz ajusta su valor en pesos al que
                                                                                     de verdad entró (Rodny, 30 de septiembre de 2026). */}
-                                                                                {canWriteFinancials && !debt.balanceReviewRequired && (debt.formattedNumber && debt.currency !== 'USD'
+                                                                                {canWriteFinancials && !debt.barterPaymentId && !debt.balanceReviewRequired && (debt.formattedNumber && debt.currency !== 'USD'
                                                                                     ? <button type="button" title={`Corregir la cuenta de cobro ${debt.formattedNumber}`} aria-label={`Corregir el valor de la cuenta de cobro ${debt.formattedNumber}`} onClick={() => openCorrectDialog(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>
                                                                                     : <button type="button" title={debt.currency === 'USD' ? 'Ajustar el valor en pesos al que entró' : 'Editar valor'} aria-label={debt.currency === 'USD' ? `Editar el valor en pesos de la cuenta de cobro ${debt.formattedNumber || ''}` : `Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
                                                                             </p>
@@ -1557,7 +1560,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     {/* Lo saldado sin dinero se dice aparte: no es plata que entró (20 de octubre de 2026). */}
                                                                     {/* Lo que retuvo el cliente también va aparte: lo pagó a la DIAN, no es un descuento (22 de octubre de 2026). */}
                                                                     {debt.retainedAmount > 0.005 && <div data-receivable-retained><span className="text-xs text-zinc-500 dark:text-zinc-400">Retenido por el cliente</span><p className="mt-1 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan">{formatCurrency(debt.retainedAmount)}</p></div>}
-                                                                    {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-xs text-zinc-500 dark:text-zinc-400">Saldado sin dinero</span><p className="mt-1 text-sm font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
+                                                                    {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-xs text-zinc-500 dark:text-zinc-400">{debt.payments?.some(p => p.kind === 'REVERSO_CANJE' && !p.reversedAt) ? 'Anulado por reversión del canje' : 'Saldado sin dinero'}</span><p className="mt-1 text-sm font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
                                                                     <div><span className="text-xs text-zinc-500 dark:text-zinc-400">Saldo pendiente</span><p className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-400">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
                                                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
@@ -1572,7 +1575,7 @@ await invalidateFinancialQueries(queryClient);
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
                                                                             {(debt.status === 'PAGADO' || (debt.outstanding <= 0.005 && !(debt.settledAmount > 0.005))) && <option value="PAGADO">Pagado</option>}
-                                                                            {debt.status === 'SALDADO' && <option value="SALDADO">Saldada sin dinero</option>}
+                                                                            {debt.status === 'SALDADO' && <option value="SALDADO">{debt.payments?.some(p => p.kind === 'REVERSO_CANJE' && !p.reversedAt) ? 'Anulada por reversión del canje' : 'Saldada sin dinero'}</option>}
                                                                         </Select>
                                                                     </label>
                                                                     {canWriteFinancials && !isReceivableClosed(debt.status) && debt.outstanding > 0.005 && (
@@ -1583,7 +1586,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     )}
                                                                 </div>
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
-                                                                {!isLoanReceivable(debt) && debt.clientId && (
+                                                                {!isLoanReceivable(debt) && debt.kind !== 'BENEFICIARIO' && debt.clientId && (
                                                                     <CollectionActivityPanel clientId={debt.clientId} receivableId={debt.id}
                                                                         items={collectionActivities.byClient.get(debt.clientId)} history={collectionActivities} canWrite={canWriteFinancials} />
                                                                 )}
@@ -1606,18 +1609,19 @@ await invalidateFinancialQueries(queryClient);
                                                                             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
                                                                             <Edit className="h-3.5 w-3.5" />Corregir
                                                                         </button>}
-                                                                    </>) : canWriteFinancials && !isLoanReceivable(debt) && (
+                                                                    </>) : canWriteFinancials && !isLoanReceivable(debt) && debt.kind !== 'BENEFICIARIO' && (
                                                                         <button type="button" onClick={() => openIssueDialog(debt)}
                                                                             className="min-h-11 rounded-lg border border-primary/40 px-3 text-xs font-semibold text-primary transition hover:bg-primary/5">
                                                                             Emitir cuenta de cobro
                                                                         </button>
                                                                     )}
-                                                                    {canWriteFinancials && <button type="button"
+                                                                    {canWriteFinancials && !debt.barterPaymentId && !debt.payments?.some(p => p.kind === 'CANJE') && <button type="button"
                                                                         onClick={() => { setDeleteReason(''); setNoticeError(''); setDebtToDelete(debt); }}
                                                                         className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-500 transition hover:bg-destructive/10 hover:text-destructive">
                                                                         <Trash2 className="h-3.5 w-3.5" />Eliminar
                                                                     </button>}
                                                                 </div>
+                                                                {debt.barterPaymentId && <button type="button" className="min-h-11 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan" onClick={() => setBarterPaymentId(debt.barterPaymentId)}>Ver canje de origen</button>}
                                                                 {debt.payments?.length > 0 && (() => {
                                                                     // La vista diaria muestra lo vigente. Lo revertido es historia: sigue
                                                                     // disponible, pero no ensucia la cartera de un cliente real.
@@ -1665,8 +1669,9 @@ await invalidateFinancialQueries(queryClient);
                                                                                                 onError={(message) => { setNoticeSuccess(''); setNoticeError(message); }} />
                                                                                         )}
                                                                                     </div>
+                                                                                    {['CANJE', 'REVERSO_CANJE'].includes(payment.kind) && <button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-brand-cyan-deep dark:border-white/10 dark:text-brand-cyan" onClick={() => setBarterPaymentId(payment.kind === 'CANJE' ? payment.id : payment.detail.barterPaymentId)}>Ver canje</button>}
                                                                                     {payment.detail?.payrollTransactionId && <button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-brand-cyan-deep dark:border-white/10 dark:text-brand-cyan" onClick={() => setPayrollDeductions({ id: payment.detail.payrollTransactionId, collaboratorName: payment.detail.offsetAgainst || 'Préstamo de colaborador' })}>Ver descuento en Nómina</button>}
-                                                                                    {canWriteFinancials && !payment.reversedAt && !payment.detail?.payrollTransactionId && (
+                                                                                    {canWriteFinancials && !payment.reversedAt && !payment.detail?.payrollTransactionId && !['CANJE', 'REVERSO_CANJE'].includes(payment.kind) && (
                                                                                         <div className="flex items-center gap-2">
                                                                                             {/* Corregir sin revertir (Rodny, 20 de octubre de 2026). */}
                                                                                             <button type="button" data-receivable-payment-edit onClick={() => { setNoticeError(''); setPaymentToEdit({ debt, payment }); }}
@@ -2018,6 +2023,7 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={noticeError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            {barterPaymentId && <FinancialBarterDialog paymentId={barterPaymentId} onClose={() => setBarterPaymentId(null)} />}
             {offsetPaymentId && <FinancialOffsetDialog paymentId={offsetPaymentId} onClose={() => setOffsetPaymentId(null)} />}
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={noticeError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={noticeError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}

@@ -196,6 +196,7 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     client: { select: { id: true, name: true, legalName: true, documentType: true, documentNumber: true } }
                 }
             });
+            if (receivable?.barterPaymentId) throw new FinancialDomainError('BARTER_DOCUMENT_UNAVAILABLE', 'La obligación del beneficiario procede del canje; no se emite ni corrige como una venta al cliente.', 409);
             if (!receivable) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }
@@ -381,6 +382,7 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
                     client: { select: { id: true, name: true, legalName: true, documentType: true, documentNumber: true } }
                 }
             });
+            if (receivable?.barterPaymentId) throw new FinancialDomainError('BARTER_DOCUMENT_UNAVAILABLE', 'La obligación del beneficiario procede del canje; no se emite ni corrige como una venta al cliente.', 409);
             if (!receivable) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }

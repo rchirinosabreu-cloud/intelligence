@@ -22,7 +22,7 @@ const collectionModeInput = (value, existing = null) => {
     if (isFormalizationInstallment(existing) && value !== 'CUOTA') {
         throw new FinancialDomainError('RECEIVABLE_COLLECTION_MODE_LOCKED', 'Esta cuota proviene del plan de pagos aprobado y conserva esa modalidad.', 409);
     }
-    if (existing?.kind === 'PRESTAMO' && value) {
+    if (['PRESTAMO', 'BENEFICIARIO'].includes(existing?.kind) && value) {
         throw new FinancialDomainError('RECEIVABLE_COLLECTION_MODE_INVALID', 'Un préstamo conserva su propia clase; no es una mensualidad, un servicio ni una cuota comercial.');
     }
     return value || null;
@@ -166,6 +166,7 @@ export const deleteReceivable = async (prismaClient, receivableId, reason, actor
                 }
             });
             if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+            if (existing.barterPaymentId || existing.payments?.some(payment => payment.kind === 'CANJE')) throw new FinancialDomainError('BARTER_HISTORY_PROTECTED', 'Esta cuenta conserva un canje histórico. No se elimina; usa la reversión del canje.', 409);
             if (existing.payments?.some(payment => payment.detail?.payrollTransactionId)) throw new FinancialDomainError('PAYROLL_DEDUCTION_HISTORY', 'Este préstamo conserva descuentos de Nómina, incluso revertidos. Conserva su historial; no se puede eliminar.', 409);
             if (existing.payments?.some(payment => payment.detail?.offsetPayableId)) throw new FinancialDomainError('OFFSET_HISTORY_PROTECTED', 'Esta cuenta conserva un cruce vinculado, incluso si fue revertido. No se elimina para conservar el historial de ambas obligaciones.', 409);
 
@@ -239,6 +240,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
             if (!existing) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }
+            if (existing.barterPaymentId && input.amount !== undefined) throw new FinancialDomainError('BARTER_SOURCE_PROTECTED', 'El importe del beneficiario procede del canje. Corrígelo desde su origen, conservando el historial.', 409);
             const collectionMode = collectionModeInput(input.collectionMode, existing);
             const periodDate = new Date(existing.period);
             await assertOpenFinancialPeriod(tx, existing.year || periodDate.getUTCFullYear(), existing.month || periodDate.getUTCMonth() + 1);

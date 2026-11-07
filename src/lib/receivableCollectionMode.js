@@ -11,7 +11,7 @@ export const isFormalizationInstallment = (receivable) => receivable?.metadata?.
 export const isReceivableCollectionMode = (value) => RECEIVABLE_COLLECTION_MODES.some((mode) => mode.value === value);
 
 export const receivableCollectionMode = (receivable) => {
-    if (receivable?.kind === 'PRESTAMO') return null;
+    if (['PRESTAMO', 'BENEFICIARIO'].includes(receivable?.kind)) return null;
     if (isFormalizationInstallment(receivable)) return 'CUOTA';
     const value = receivable?.metadata?.collectionMode;
     return isReceivableCollectionMode(value) ? value : null;

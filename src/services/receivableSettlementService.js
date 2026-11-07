@@ -6,6 +6,8 @@ import { RETENTION_KIND, SETTLEMENT_KINDS, isReceivableClosed, paymentKindLabel,
 import { adjustmentsRange, summarizeAdjustments } from '../lib/receivableAdjustments.js';
 import { loanCounterpartyLabel } from '../lib/receivableLoans.js';
 import { createOffset } from './financialOffsetService.js';
+import { createBarter } from './financialBarterService.js';
+import { hasFinancialPermission } from '../utils/financialPermissions.js';
 
 const toNumber = (value) => (value === null || value === undefined ? 0 : (typeof value.toNumber === 'function' ? value.toNumber() : Number(value)) || 0);
 
@@ -91,6 +93,7 @@ const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
  * Revertirlo es el mismo «Revertir» de los abonos.
  */
 export const settleReceivable = async (prismaClient, receivableId, input = {}, actor) => {
+    if (input.kind === 'CANJE') return createBarter(prismaClient, receivableId, input, actor);
     if (input.kind === 'COMPENSACION') return createOffset(prismaClient, receivableId, input, actor);
     const problem = settlementProblem({ ...input, outstanding: undefined });
     if (problem) throw new FinancialDomainError('RECEIVABLE_SETTLEMENT_INVALID', problem);
@@ -112,6 +115,13 @@ export const settleReceivable = async (prismaClient, receivableId, input = {}, a
                 include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true, reversedAt: true } } }
             });
             if (!receivable) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+            if (receivable.kind === 'BENEFICIARIO') {
+                const user = await tx.user.findUnique({ where: { id: actorId || '' } });
+                if (!hasFinancialPermission(user, 'write')) throw new FinancialDomainError('FINANCIAL_ACCESS_DENIED', 'Tu acceso actual no permite ajustar esta obligación.', 403);
+                if (!['ACUERDO', 'CONDONACION'].includes(kind)) throw new FinancialDomainError('BARTER_ADJUSTMENT_INVALID', 'Esta obligación admite cobro, acuerdo, condonación autorizada o compensación con la misma persona; no es una venta del cliente.', 409);
+                const sourcePeriod = parseFinancialDateInput(new Date(receivable.period).toISOString().slice(0, 10));
+                await assertOpenFinancialPeriod(tx, receivable.year || sourcePeriod.year, receivable.month || sourcePeriod.month);
+            }
             if (isReceivableClosed(receivable.status)) {
                 throw new FinancialDomainError('RECEIVABLE_ALREADY_CLOSED', 'Esta cuenta por cobrar ya está cerrada. Revisa su historial; si hace falta reabrirla, revierte el abono o el ajuste que la cerró.', 409);
             }

@@ -9,6 +9,15 @@ import {
 import { RETENTION_KIND, isReceivableClosed, normalizeRetentions, receivableStatusAfter, retentionsProblem } from '../lib/receivableSettlement.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
+import { hasFinancialPermission } from '../utils/financialPermissions.js';
+
+async function assertBeneficiaryAccess(tx, receivable, actorId) {
+    if (receivable?.kind !== 'BENEFICIARIO') return;
+    const user = await tx.user.findUnique({ where: { id: actorId || '' } });
+    if (!hasFinancialPermission(user, 'write')) throw new FinancialDomainError('FINANCIAL_ACCESS_DENIED', 'Tu acceso actual no permite modificar el cobro del beneficiario.', 403);
+    const period = parseFinancialDateInput(new Date(receivable.period).toISOString().slice(0, 10));
+    await assertOpenFinancialPeriod(tx, receivable.year || period.year, receivable.month || period.month);
+}
 
 const PAYMENT_CATEGORIES = new Set(['MEMBRESIA', 'SERVICIO', 'PAUTA']);
 export const REVERSAL_REASON_MAX = 300;
@@ -91,6 +100,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                     include: { financialRecord: true, receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true, reversedAt: true } } } } }
                 });
                 if (previousPayment) {
+                    await assertBeneficiaryAccess(tx, previousPayment.receivable, actorId);
                     const previousAudit = await tx.financialAuditEvent.findUnique({ where: { id: auditId } });
                     if (previousAudit?.after?.requestFingerprint !== requestFingerprint || previousPayment.receivableId !== receivableId) {
                         throw new FinancialDomainError('RECEIVABLE_PAYMENT_IDEMPOTENCY_CONFLICT', 'Este intento ya se utilizó para otro pago o con otros datos. Consulta el pago registrado antes de iniciar una operación nueva.', 409);
@@ -122,18 +132,21 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
             }
 
             // La devolución de un préstamo es un reintegro (Rodny, 20 de octubre de 2026): siempre
+            await assertBeneficiaryAccess(tx, receivable, actorId);
             // categoría PRESTAMO y sección FINANCING, sin pedir concepto, y sin exigir cliente porque
             // a un colaborador o a un socio no se le abre ficha de cliente.
             const isLoan = isLoanReceivable(receivable);
-            if (isLoan && retentions.length) {
+            const isBeneficiary = receivable.kind === 'BENEFICIARIO';
+            if ((isLoan || isBeneficiary) && retentions.length) {
                 throw new FinancialDomainError('RECEIVABLE_RETENTION_INVALID', 'El reintegro de un préstamo no lleva retenciones.');
             }
-            const category = isLoan ? 'PRESTAMO' : requestedCategory;
-            if (!isLoan && !financialRecordId && !PAYMENT_CATEGORIES.has(category)) {
+            const category = isLoan ? 'PRESTAMO' : isBeneficiary ? 'FINANCIAL' : requestedCategory;
+            if (isBeneficiary && financialRecordId) throw incompatibleRecord();
+            if (!isLoan && !isBeneficiary && !financialRecordId && !PAYMENT_CATEGORIES.has(category)) {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_CATEGORY_INVALID', 'Selecciona si el pago corresponde a una membresía, servicio o pauta.');
             }
             const client = receivable.clientId ? await tx.client.findUnique({ where: { id: receivable.clientId }, select: { id: true } }) : null;
-            if (!client && !isLoan) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'La cuenta por cobrar debe estar vinculada a un cliente existente.', 409);
+            if (!client && !isLoan && !isBeneficiary) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'La cuenta por cobrar debe estar vinculada a un cliente existente.', 409);
             const account = await tx.financialAccount.findUnique({ where: { id: accountId }, select: { id: true, isActive: true, currency: true } });
             if (!account?.isActive) throw new FinancialDomainError('RECEIVABLE_PAYMENT_ACCOUNT_UNAVAILABLE', 'Selecciona una cuenta de caja o banco activa.', 409);
             if (account.currency !== 'COP' || (receivable.metadata?.currency && receivable.metadata.currency !== 'COP')) {
@@ -198,15 +211,15 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                         amount,
                         category,
                         type: 'INCOME',
-                        section: isLoan ? 'FINANCING' : 'REVENUE',
+                        section: isLoan || isBeneficiary ? 'FINANCING' : 'REVENUE',
                         date: paidAt,
                         year,
                         month,
                         clientId: receivable.clientId || null,
                         createdById: actorId,
                         accountId,
-                        ...(isLoan ? { counterparty: receivable.counterpartyName || null } : {}),
-                        description: isLoan
+                        ...(isLoan || isBeneficiary ? { counterparty: receivable.counterpartyName || null } : {}),
+                        description: isBeneficiary ? `Recuperación de canje: ${receivable.counterpartyName}` : isLoan
                             ? `Reintegro de préstamo: ${receivable.counterpartyName || receivable.sourceLabel || receivableId}`
                             : `Pago de cartera: ${receivable.sourceLabel || receivable.notes || receivableId}`,
                         scenario: 'ACTUAL',
@@ -370,10 +383,12 @@ export const updateReceivablePayment = async (prismaClient, paymentId, input = {
                 }
             });
             if (!payment) throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono no existe.', 404);
+            if (payment.kind === 'CANJE' || payment.kind === 'REVERSO_CANJE') throw new FinancialDomainError('BARTER_LINKED', 'Usa Ver canje y su reversión conjunta para conservar ambos historiales.', 409);
             if (payment.detail?.payrollTransactionId) throw new FinancialDomainError('PAYROLL_DEDUCTION_LINKED', 'Este descuento está vinculado a Nómina. Usa «Descuentos de préstamos» en su liquidación para revertir ambas partes.', 409);
             if (payment.detail?.offsetPayableId) throw new FinancialDomainError('OFFSET_LINKED', 'Este ajuste pertenece a un cruce. Usa «Ver cruce» y «Revertir cruce»; después podrás registrar el correcto.', 409);
             if (payment.reversedAt) throw new FinancialDomainError('RECEIVABLE_PAYMENT_ALREADY_REVERSED', 'Este abono ya fue revertido: no se corrige, se registra uno nuevo.', 409);
             const receivable = payment.receivable;
+            await assertBeneficiaryAccess(tx, receivable, actorId);
             if (!receivable) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar del abono no existe.', 409);
             const isCash = !payment.kind || payment.kind === 'PAGO';
             if (!isCash && wantsAccount) {
@@ -541,12 +556,14 @@ export const reverseReceivablePayment = async (prismaClient, paymentId, input = 
             if (!payment) {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono no existe.', 404);
             }
+            if (payment.kind === 'CANJE' || payment.kind === 'REVERSO_CANJE') throw new FinancialDomainError('BARTER_LINKED', 'Usa Ver canje y su reversión conjunta para conservar ambos historiales.', 409);
             if (payment.detail?.payrollTransactionId) throw new FinancialDomainError('PAYROLL_DEDUCTION_LINKED', 'Este descuento está vinculado a Nómina. Usa «Descuentos de préstamos» en su liquidación para revertir ambas partes.', 409);
             if (payment.detail?.offsetPayableId) throw new FinancialDomainError('OFFSET_LINKED', 'Este ajuste pertenece a un cruce. Usa «Ver cruce» y «Revertir cruce» para devolver el saldo a ambas obligaciones.', 409);
             if (payment.reversedAt) {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_ALREADY_REVERSED', 'Este abono ya fue revertido.', 409);
             }
             const receivable = payment.receivable;
+            await assertBeneficiaryAccess(tx, receivable, actorId);
             if (!receivable) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar del abono no existe.', 409);
             }

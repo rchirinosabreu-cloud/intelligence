@@ -8,6 +8,7 @@ const civilDate = value => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 };
 export function financialDebtStatus(debt, asOf = today()) {
+  if (debt.payments?.some(p => p.kind === 'REVERSO_CANJE' && !p.reversedAt)) return 'Anulada por reversión del canje';
   if (debt.balanceReviewRequired) return 'Saldo por verificar';
   if (Number(debt.outstanding) <= 0.005) return 'Sin saldo pendiente';
   const due = civilDate(debt.dueDate);
@@ -25,8 +26,8 @@ export function groupFinancialReceivables(items = [], asOf = today()) {
   for (const item of items) {
     const isLoan = item.kind === 'PRESTAMO';
     const base = item.clientId || `unlinked:${item.sourceLabel || item.clientName || item.id}`;
-    const id = isLoan ? `loan:${base}` : base;
-    if (!groups.has(id)) groups.set(id, { clientId: id, kind: isLoan ? 'PRESTAMO' : 'CLIENTE', counterpartyType: isLoan ? item.counterpartyType || null : null, client: { name: item.clientName || 'Cliente sin nombre', slug: item.clientSlug }, totalOutstanding: 0, overdue: 0, unknownDue: 0, reviewCount: 0, oldestBucket: null, debts: [] });
+    const id = item.kind === 'BENEFICIARIO' ? `beneficiary:${item.beneficiaryThirdPartyId || item.id}` : isLoan ? `loan:${base}` : base;
+    if (!groups.has(id)) groups.set(id, { clientId: id, kind: item.kind || 'CLIENTE', counterpartyType: isLoan ? item.counterpartyType || null : null, client: { name: item.clientName || 'Cliente sin nombre', slug: item.clientSlug }, totalOutstanding: 0, overdue: 0, unknownDue: 0, reviewCount: 0, oldestBucket: null, debts: [] });
     const row = groups.get(id), remaining = Math.max(round(item.outstanding), 0);
     if (item.balanceReviewRequired) {
       row.reviewCount += 1;

@@ -46,13 +46,14 @@ async function load(tx, receivableId, payableId) {
 }
 const summary = ctx => ({
   outstanding: amountOf(ctx.receivableBalance),
-  receivable: { id: ctx.ar.id, label: ctx.ar.concept || ctx.ar.sourceLabel || 'Cuenta por cobrar', number: ctx.ar.number, clientName: ctx.ar.client?.name || ctx.ar.sourceLabel, amount: amountOf(cents(ctx.ar.amount)), outstanding: amountOf(ctx.receivableBalance), status: ctx.ar.status },
+  receivable: { id: ctx.ar.id, label: ctx.ar.concept || ctx.ar.sourceLabel || 'Cuenta por cobrar', number: ctx.ar.number, clientName: ctx.ar.client?.name || ctx.ar.counterpartyName || ctx.ar.sourceLabel, amount: amountOf(cents(ctx.ar.amount)), outstanding: amountOf(ctx.receivableBalance), status: ctx.ar.status },
   payable: { id: ctx.ap.id, label: ctx.ap.concept, number: ctx.ap.documentNumber, thirdPartyName: ctx.ap.thirdParty.name, amount: amountOf(cents(ctx.ap.amount)), outstanding: amountOf(ctx.payableBalance), status: ctx.ap.status },
   revision: ctx.revision
 });
 function eligible(ctx) {
   const { ar, ap } = ctx;
-  if (!ar.clientId || ar.kind !== 'CLIENTE' || ap.thirdParty.clientId !== ar.clientId) throw fail('OFFSET_PARTY_MISMATCH', 'Las obligaciones deben pertenecer al mismo cliente vinculado en Terceros. Completa ese vínculo en Financiero → Terceros.');
+  const sameParty = ar.kind === 'BENEFICIARIO' ? !!ar.beneficiaryThirdPartyId && ar.beneficiaryThirdPartyId === ap.thirdParty.id : ar.kind === 'CLIENTE' && !!ar.clientId && ap.thirdParty.clientId === ar.clientId;
+  if (!sameParty) throw fail('OFFSET_PARTY_MISMATCH', 'Las obligaciones deben pertenecer a la misma persona vinculada en Terceros. Completa ese vínculo en Financiero → Terceros.');
   if (!ap.thirdParty.isActive) throw fail('OFFSET_PARTY_INACTIVE', 'El tercero de pago está inactivo. Revisa su ficha en Terceros.');
   if (ar.currency !== 'COP' || ap.currency !== 'COP') throw fail('OFFSET_CURRENCY_UNSUPPORTED', 'Este cruce requiere ambas obligaciones en COP. Las obligaciones en otra moneda necesitan una revisión de conversión.');
   if (!ctx.receivableBalance || !ctx.payableBalance) throw fail('OFFSET_SOURCE_CLOSED', 'Ambas obligaciones deben tener saldo pendiente.');
@@ -84,7 +85,8 @@ export async function offsetOptions(db, receivableId, actor) {
     await authorize(tx, actor, 'read');
     const ar = await tx.accountsReceivable.findUnique({ where: { id: receivableId }, include: includeAR });
     if (!ar) throw fail('OFFSET_SOURCE_MISSING', 'No encontramos la cuenta por cobrar.', 404);
-    const payableRows = ar.clientId ? await tx.accountsPayable.findMany({ where: { thirdParty: { clientId: ar.clientId, isActive: true }, status: { in: ['POR_PAGAR', 'PARCIAL'] } }, include: includeAP, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] }) : [];
+    const partyFilter = ar.kind === 'BENEFICIARIO' && ar.beneficiaryThirdPartyId ? { id: ar.beneficiaryThirdPartyId, isActive: true } : ar.clientId ? { clientId: ar.clientId, isActive: true } : null;
+    const payableRows = partyFilter ? await tx.accountsPayable.findMany({ where: { thirdParty: partyFilter, status: { in: ['POR_PAGAR', 'PARCIAL'] } }, include: includeAP, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] }) : [];
     const options = [], unavailable = [];
     for (const ap of payableRows) {
       try { const ctx = context(ar, ap); eligible(ctx); options.push({ id: ap.id, ...summary(ctx) }); }
