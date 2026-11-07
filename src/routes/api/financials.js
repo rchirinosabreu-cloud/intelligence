@@ -1,4 +1,5 @@
 import express from 'express';
+import { payrollPeriodHandler } from '../../controllers/payrollPeriodController.js';
 import { offsetOptionsHandler, readOffsetHandler, reverseOffsetHandler } from '../../controllers/financialOffsetController.js';
 import { accountStatementHandler, paymentCorrectionContextHandler, paymentCorrectionHandler } from '../../controllers/financialCorrectionController.js';
 import multer from 'multer';
@@ -304,6 +305,13 @@ router.post('/payables/:id/documents', requireFinancialWrite, receiveFinancialDo
 router.get('/payables/:id/documents/:documentId/file', requireFinancialAccess, streamPayableDocumentHandler);
 router.post('/payable-payments/:paymentId/reverse', requireFinancialWrite, reversePayablePaymentHandler);
 router.get('/payroll-ledger', requireFinancialAccess, getFinancialPayrollLedger);
+router.get('/payroll-contracts/:id/periods', requireFinancialAccess, payrollPeriodHandler('periods'));
+router.post('/payroll-contracts/:id/periods', requireFinancialWrite, payrollPeriodHandler('create'));
+router.patch('/payroll-transactions/:id/service-period', requireFinancialApproval, payrollPeriodHandler('identify'));
+router.post('/payroll-transactions/:id/reverse-period', requireFinancialApproval, payrollPeriodHandler('reverse'));
+router.get('/payroll-transactions/:id/loan-deductions', requireFinancialAccess, payrollPeriodHandler('deductions'));
+router.post('/payroll-transactions/:id/loan-deductions', requireFinancialApproval, payrollPeriodHandler('deduct'));
+router.post('/payroll-adjustments/:id/reverse', requireFinancialApproval, payrollPeriodHandler('undoDeduction'));
 router.post('/payroll-contracts', requireFinancialWrite, createFinancialPayrollContract);
 router.patch('/payroll-contracts/:id', requireFinancialWrite, updateFinancialPayrollContract);
 router.post('/payroll/periods', requireFinancialWrite, generatePayrollPeriodHandler);

@@ -206,7 +206,7 @@ export const createFinancialRecord = async (prismaClient, input, actor) => {
 // la cartera lo sigue.
 const recordSourceRelations = {
     receivablePayment: { select: { id: true } },
-    loanReceivable: { select: { id: true, status: true, payments: { where: { reversedAt: null }, select: { id: true } } } },
+    loanReceivable: { select: { id: true, status: true, loanCollaboratorId: true, payments: { where: { reversedAt: null }, select: { id: true } } } },
     payrollTransaction: { select: { id: true } },
     payrollPayment: { select: { id: true } },
     payablePayment: { select: { id: true, payableId: true } }

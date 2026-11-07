@@ -67,7 +67,7 @@ test('payroll supports roles that change owner over time', () => {
     assert.match(schema, /model PayrollTransaction \{[\s\S]*baseSalary\s+Decimal/);
     assert.match(schema, /model PayrollTransaction \{[\s\S]*netAmount\s+Decimal/);
     assert.match(schema, /model PayrollTransaction \{[\s\S]*status\s+PayrollTransactionStatus/);
-    assert.match(schema, /@@unique\(\[contractId, month, year\]\)/);
+    assert.match(schema, /@@unique\(\[contractId, month, year, periodKey\]\)/);
 });
 
 test('receivables preserve monthly source and operational comments', () => {

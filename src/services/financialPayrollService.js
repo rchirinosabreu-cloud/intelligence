@@ -6,6 +6,7 @@ import {
 } from './financialRecordService.js';
 import { financialAmountFromCents, financialCents } from '../utils/financialMoney.js';
 import { LIVE_PAYROLL_CONTRACT } from './financialQueryFilters.js';
+import { payrollDay, payrollPeriodsOverlap } from '../lib/payrollPeriods.js';
 
 const toNumber = (value) => {
   if (value && typeof value.toNumber === 'function') return value.toNumber();
@@ -45,18 +46,33 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
     });
 
     const transactions = [];
+    const requiresPeriodReview = [];
     for (const contract of contracts) {
+      const existingPeriods = await tx.payrollTransaction.findMany({ where: { contractId: contract.id, month, year } });
+      if (existingPeriods.length) { transactions.push(...existingPeriods.filter(row => !row.voidedAt)); continue; }
+      if (payrollDay(contract.startDate) > payrollDay(periodStart) || (contract.endDate && payrollDay(contract.endDate) < payrollDay(periodEnd))) {
+        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'El contrato cubre solo una parte del mes. Define sus fechas e importe en «Períodos e historial».' }); continue;
+      }
+      const related = await tx.payrollTransaction.findMany({ where: { voidedAt: null, ...(contract.collaboratorId ? { contract: { collaboratorId: contract.collaboratorId, importBatchId: null } } : { contractId: contract.id }) } });
+      if (related.some(row => !row.serviceStart || !row.serviceEnd)) {
+        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
+      }
+      if (related.some(row => row.serviceStart && row.serviceEnd && payrollPeriodsOverlap(periodStart, periodEnd, row.serviceStart, row.serviceEnd))) {
+        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Ya hay días de este mes incluidos en otro período. Revisa las liquidaciones antes de crear otra.' }); continue;
+      }
       const baseSalary = toNumber(contract.baseSalary);
       const socialSecurity = toNumber(contract.socialSecurity);
       const grossAmount = baseSalary + socialSecurity;
       const transaction = await tx.payrollTransaction.upsert({
-        where: { contractId_month_year: { contractId: contract.id, month, year } },
+        where: { contractId_month_year_periodKey: { contractId: contract.id, month, year, periodKey: 'MONTHLY' } },
         update: {},
         create: {
           userId: contract.userId || null,
           contractId: contract.id,
           month,
           year,
+          serviceStart: periodStart,
+          serviceEnd: periodEnd,
           baseSalary,
           socialSecurity,
           grossAmount,
@@ -77,8 +93,8 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
         actorId
       }
     });
-    return { year, month, transactions };
-  });
+    return { year, month, transactions, requiresPeriodReview };
+  }, { isolationLevel: 'Serializable' });
 };
 
 export const approvePayrollTransaction = async (prismaClient, transactionId, actor) => {
@@ -86,6 +102,7 @@ export const approvePayrollTransaction = async (prismaClient, transactionId, act
   return prismaClient.$transaction(async (tx) => {
     const existing = await tx.payrollTransaction.findUnique({ where: { id: transactionId } });
     if (!existing) throw new FinancialDomainError('PAYROLL_TRANSACTION_NOT_FOUND', 'La liquidacion no existe.', 404);
+    if (existing.voidedAt) throw new FinancialDomainError('PAYROLL_PERIOD_VOIDED', 'La liquidación está revertida. Crea un período nuevo desde Nómina.', 409);
     if (existing.status === 'PAID') throw new FinancialDomainError('PAYROLL_ALREADY_PAID', 'La liquidacion ya fue pagada.', 409);
     await assertOpenFinancialPeriod(tx, existing.year, existing.month);
     const transaction = await tx.payrollTransaction.update({
@@ -147,6 +164,7 @@ const loadTransaction = async (tx, transactionId) => {
     include: { contract: { include: { collaborator: { select: { displayName: true } } } } }
   });
   if (!transaction) throw new FinancialDomainError('PAYROLL_TRANSACTION_NOT_FOUND', 'La liquidación no existe.', 404);
+  if (transaction.voidedAt) throw new FinancialDomainError('PAYROLL_PERIOD_VOIDED', 'La liquidación está revertida. Crea un período nuevo desde Nómina.', 409);
   return transaction;
 };
 

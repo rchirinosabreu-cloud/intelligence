@@ -59,6 +59,7 @@ export const closeFinancialPeriod = async (prismaClient, input, actor) => {
             where: {
                 year,
                 month,
+                voidedAt: null,
                 status: { in: ['DRAFT', 'APPROVED'] }
             }
         });

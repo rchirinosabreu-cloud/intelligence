@@ -14,8 +14,9 @@ const toCents = (value) => {
 /** El estado que se ve en la fila. Una aprobada con pagos es un pago parcial. */
 export const payrollStatus = (transaction) => {
     if (!transaction) return { key: 'NONE', label: 'Sin generar' };
+    if (transaction.voidedAt) return { key: 'VOID', label: 'Revertida' };
     if (transaction.status === 'DRAFT') return { key: 'DRAFT', label: 'Borrador' };
-    if (transaction.status === 'PAID') return { key: 'PAID', label: 'Pagada' };
+    if (transaction.status === 'PAID') return { key: 'PAID', label: transaction.loanDeductions?.some(item => !item.reversedAt) ? 'Liquidada con descuento' : 'Pagada' };
     if (transaction.status === 'APPROVED' && Number(transaction.paidAmount) > 0) return { key: 'PARTIAL', label: 'Pago parcial' };
     return { key: 'APPROVED', label: 'Aprobada' };
 };

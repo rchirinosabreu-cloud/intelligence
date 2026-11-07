@@ -370,6 +370,7 @@ export const updateReceivablePayment = async (prismaClient, paymentId, input = {
                 }
             });
             if (!payment) throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono no existe.', 404);
+            if (payment.detail?.payrollTransactionId) throw new FinancialDomainError('PAYROLL_DEDUCTION_LINKED', 'Este descuento está vinculado a Nómina. Usa «Descuentos de préstamos» en su liquidación para revertir ambas partes.', 409);
             if (payment.detail?.offsetPayableId) throw new FinancialDomainError('OFFSET_LINKED', 'Este ajuste pertenece a un cruce. Usa «Ver cruce» y «Revertir cruce»; después podrás registrar el correcto.', 409);
             if (payment.reversedAt) throw new FinancialDomainError('RECEIVABLE_PAYMENT_ALREADY_REVERSED', 'Este abono ya fue revertido: no se corrige, se registra uno nuevo.', 409);
             const receivable = payment.receivable;
@@ -540,6 +541,7 @@ export const reverseReceivablePayment = async (prismaClient, paymentId, input = 
             if (!payment) {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono no existe.', 404);
             }
+            if (payment.detail?.payrollTransactionId) throw new FinancialDomainError('PAYROLL_DEDUCTION_LINKED', 'Este descuento está vinculado a Nómina. Usa «Descuentos de préstamos» en su liquidación para revertir ambas partes.', 409);
             if (payment.detail?.offsetPayableId) throw new FinancialDomainError('OFFSET_LINKED', 'Este ajuste pertenece a un cruce. Usa «Ver cruce» y «Revertir cruce» para devolver el saldo a ambas obligaciones.', 409);
             if (payment.reversedAt) {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_ALREADY_REVERSED', 'Este abono ya fue revertido.', 409);

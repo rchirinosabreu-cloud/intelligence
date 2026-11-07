@@ -15,6 +15,24 @@ const makeResponse = () => ({
     }
 });
 
+test('un descuento de préstamo reduce el neto, pero no el costo del servicio ni inventa efectivo', async () => {
+    const prismaClient = {
+        financialRecord: { findMany: async () => [] }, accountsReceivable: { findMany: async () => [] }, payrollContract: { findMany: async () => [] },
+        payrollTransaction: { findMany: async ({ where }) => {
+            assert.equal(where.voidedAt, null);
+            return [{ id: 'period', contractId: 'contract', baseSalary: 750000, grossAmount: 750000, netAmount: 450000, deductions: 300000,
+                contract: { collaboratorId: 'person', collaborator: { displayName: 'Muestra' } },
+                adjustments: [{ id: 'discount', type: 'DEDUCTION', amount: 300000, receivablePaymentId: 'linked' }, { id: 'reversed', type: 'DEDUCTION', amount: 100000, receivablePaymentId: 'old', reversedAt: new Date() }] }];
+        } }
+    };
+    const res = makeResponse();
+    await getFinancialDashboard({ query: { year: 2026 } }, res, { prismaClient });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.payload.payroll.totalPayrollCost, 750000);
+    assert.equal(res.payload.payroll.collaborators[0].totalPaid, 450000);
+    assert.equal(res.payload.sourceSummary.totals.expense, 0);
+});
+
 // La carga del Excel se retiró el 23 de octubre de 2026: el tablero lee los movimientos
 // registrados y ya no compara contra el archivo. Lo que el Excel cargó sigue ahí como historia.
 test('getFinancialDashboard uses posted actual records as the only source of truth', async () => {
