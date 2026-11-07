@@ -10,6 +10,7 @@ Se seguía anuncio por anuncio, con fechas distintas en cada uno, y nadie veía 
 
 - **Una pauta** es el presupuesto global de un cliente, o de una de sus marcas, en una plataforma. Puede ser mensual o específica, en pesos o dólares, y dice quién la lleva y quién paga.
 - **El ciclo es el del cliente**: sale del día de corte propio de la pauta y, si no lo tiene, del contrato en Operación. Es propio porque en producción todos los contratos tienen corte 1, y moverlo cambiaría el semáforo y los avisos de Operación. Sin ninguno de los dos se usa el mes calendario y la pantalla lo dice.
+- **Una sola pauta, dos entradas:** desde la ficha operativa y la página del cliente se añade una pauta, se actualiza el gasto y se edita, con los mismos formularios del módulo. Es el mismo dato: lo que cambia en un lado se ve en el otro. Solo lo ve quien tiene acceso a Pautas; quien no, sigue viendo la ficha sin ese bloque.
 - **El gasto se escribe mirando Meta**: una lectura es el acumulado del ciclo hasta un día. La versión actual no se conecta a Meta, como se decidió en la reunión.
 - **Se gasta hasta dos días antes del cierre**, para hacer el informe con la cifra completa.
 - **El ritmo se mide en el día de la lectura**: una cifra vieja no se llama «atrasada», se pide actualizarla.

@@ -19,7 +19,7 @@ const SECTION = 'space-y-4 border-t border-zinc-100 pt-5 dark:border-white/5';
 
 const emptyContract = () => ({ serviceType: 'PARRILLA', status: 'ACTIVO', startDate: '', endDate: '', cutDay: 1, deliverables: [{ format: 'Reel', quantity: 2 }, { format: 'Carrusel', quantity: 2 }, { format: 'Post', quantity: 8 }], storiesPerWeek: 0, productionDays: 0, monthlyReport: true, notes: '' });
 
-export default function ClientOperationDialog({ client, team = [], onClose, onSave, initialRenew = false }) {
+export default function ClientOperationDialog({ client, team = [], onClose, onSave, initialRenew = false, adBudgetsSection = null }) {
   const base = client.contract || emptyContract();
   const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, ...(initialRenew ? { startDate: '', endDate: '', status: 'ACTIVO' } : {}), deliverables: (base.deliverables || []).map((row) => ({ ...row })) }));
   const [scope, setScope] = useState(() => base.scopeDetails ? structuredClone(base.scopeDetails) : null);
@@ -222,9 +222,11 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
 
             <div className="space-y-1.5">
               <label htmlFor={`${id}-notes`} className={LABEL}>Lo que no entra en las cifras</label>
-              <textarea id={`${id}-notes`} rows={3} value={contract.notes} onChange={(e) => setC({ notes: e.target.value })} placeholder="Blogs, actualizaciones web, reactivar TikTok, pauta…" className={cn(FIELD, 'resize-y')} />
+              <textarea id={`${id}-notes`} rows={3} value={contract.notes} onChange={(e) => setC({ notes: e.target.value })} placeholder="Blogs, actualizaciones web, reactivar TikTok…" className={cn(FIELD, 'resize-y')} />
             </div>
           </div>
+
+          {adBudgetsSection}
 
           {client.contract && (
             <label className="flex items-start gap-3 rounded-xl border border-zinc-200 p-3 text-sm dark:border-white/10">

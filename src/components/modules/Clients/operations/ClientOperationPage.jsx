@@ -344,7 +344,7 @@ function ExternalPlan({ client, onRefresh }) {
   );
 }
 
-function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan }) {
+function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan, adBudgetsSection }) {
   const { contract } = client;
   const quota = contractQuota(contract);
   const sharedQuota = quota > 0 && contract?.deliverables?.length === 1
@@ -400,6 +400,7 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
           {contract.notes && <details className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><summary className="cursor-pointer py-1 font-medium">Notas del contrato</summary><p className="mt-2 whitespace-pre-line">{contract.notes}</p></details>}
         </div>
       ) : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">Sin contrato no hay contra qué medir. {canManage && 'Cárgalo con «Editar».'}</p>}
+      {adBudgetsSection}
     </section>
   );
 }
@@ -470,11 +471,10 @@ export default function ClientOperationPage({
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Profile client={client} evaluation={evaluation} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null}
-            onSuspension={onSuspend || onLiftSuspension ? () => setSuspending(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} />
+            onSuspension={onSuspend || onLiftSuspension ? () => setSuspending(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} adBudgetsSection={adBudgetsSection} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
-      {adBudgetsSection}
       <ClientObservations key={`observations-${client.id}`} observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
         onAdd={onAddObservation} onDelete={onDeleteObservation} />
       {reportFor && <ReportDialog month={reportFor} onClose={() => setReportFor(null)}

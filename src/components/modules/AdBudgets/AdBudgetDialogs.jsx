@@ -30,12 +30,12 @@ function Label({ text, children }) {
 function Form({ open, title, description, onClose, onSubmit, saving, error, submitLabel, children, dataAttr, wide, secondary }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !saving && onClose()}>
-      <DialogContent {...{ [dataAttr]: '' }} className={`max-h-[90vh] overflow-y-auto dark:bg-zinc-900 ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`} onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
+      <DialogContent {...{ [dataAttr]: '' }} overlayClassName="z-[80]" className={`z-[81] max-h-[90vh] overflow-y-auto dark:bg-zinc-900 ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`} onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : <DialogDescription className="sr-only">{title}</DialogDescription>}
         </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={(event) => { event.stopPropagation(); onSubmit(event); }} className="space-y-4">
           {children}
           {error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
           <DialogFooter className="gap-2 sm:items-center">
