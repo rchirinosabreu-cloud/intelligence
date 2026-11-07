@@ -13,7 +13,7 @@ import { retentionCertificateApi } from '@/lib/financialDocumentsClient';
 const money = value => Number(value || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 const day = value => (value ? new Date(value).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : '');
 
-export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = true }) {
+export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = true, onOpenBarter }) {
   const [open, setOpen] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ['financial-receivable-adjustments', filterQuery],
@@ -65,6 +65,7 @@ export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = tr
           {items.length > 0 && <ul className="divide-y divide-zinc-200 dark:divide-white/10">
             {items.map(item => <li key={item.id} data-adjustment-item className="flex flex-wrap items-start justify-between gap-2 py-2 text-xs">
               <div className="min-w-0">
+                {item.kind === 'CANJE' && onOpenBarter && <button type="button" className="min-h-11 font-semibold text-brand-cyan-deep dark:text-brand-cyan" onClick={() => onOpenBarter(item.id)}>Ver canje y destino</button>}
                 <p className="font-semibold text-zinc-900 dark:text-white">{item.clientName}{item.counterpartyLabel ? <span className="ml-1.5 font-normal text-zinc-500">· {item.counterpartyLabel}</span> : null}</p>
                 <p className="text-zinc-500">{day(item.date)} · {item.kindLabel}{item.authorizedBy ? ` · Autorizó ${item.authorizedBy}` : ''}{item.certificateNumber ? ` · Certificado ${item.certificateNumber}` : ''} · de un valor original de {money(item.originalAmount)}</p>
                 {item.kind === RETENTION_KIND && <RecordDocumentsInline className="mt-1" recordId={item.id} documents={item.documents || []} api={retentionCertificateApi} canWrite={false} />}
@@ -78,6 +79,7 @@ export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = tr
           {exchange.length > 0 && <ul className="divide-y divide-zinc-200 dark:divide-white/10">
             {exchange.map(item => <li key={`${item.receivableId}-${item.date}`} data-adjustment-exchange-item className="flex flex-wrap items-start justify-between gap-2 py-2 text-xs">
               <div className="min-w-0">
+                {item.kind === 'CANJE' && onOpenBarter && <button type="button" className="min-h-11 font-semibold text-brand-cyan-deep dark:text-brand-cyan" onClick={() => onOpenBarter(item.id)}>Ver canje y destino</button>}
                 <p className="font-semibold text-zinc-900 dark:text-white">{item.clientName}</p>
                 <p className="text-zinc-500">{day(item.date)} · Cuenta en dólares{item.foreignAmount ? ` (USD ${Number(item.foreignAmount).toLocaleString('es-CO')})` : ''} · la cartera en pesos pasó de {money(item.from)} a {money(item.to)} por la tasa del día</p>
               </div>

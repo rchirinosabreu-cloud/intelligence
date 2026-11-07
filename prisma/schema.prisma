@@ -2520,6 +2520,7 @@ model ThirdParty {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   payables          AccountsPayable[]
+  barterReceivables AccountsReceivable[] @relation("BarterBeneficiary")
 
   @@index([kind, isActive])
   @@index([name])
@@ -2920,6 +2921,10 @@ enum ReceivableStatus {
 
 model AccountsReceivable {
   id            String                @id @default(uuid())
+  barterPaymentId String? @unique
+  barterPayment ReceivablePayment? @relation("BarterOrigin", fields: [barterPaymentId], references: [id], onDelete: Restrict)
+  beneficiaryThirdPartyId String?
+  beneficiaryThirdParty ThirdParty? @relation("BarterBeneficiary", fields: [beneficiaryThirdPartyId], references: [id], onDelete: Restrict)
   // Un préstamo a un colaborador o a un socio no tiene cliente (20 de octubre de 2026).
   clientId      String?
   loanCollaboratorId String?
@@ -2979,6 +2984,7 @@ model AccountsReceivable {
   payments      ReceivablePayment[]
 
   @@index([loanCollaboratorId])
+  @@index([beneficiaryThirdPartyId])
   @@index([clientId])
   @@index([period])
   @@index([year, month])
@@ -3037,6 +3043,7 @@ model ReceivablePayment {
   documents         ReceivablePaymentDocument[]
   offsetPayablePayment PayablePayment? @relation("FinancialOffset")
   payrollAdjustment PayrollAdjustment?
+  barterReceivable AccountsReceivable? @relation("BarterOrigin")
 
   @@index([receivableId, paidAt])
   @@index([accountId, paidAt])

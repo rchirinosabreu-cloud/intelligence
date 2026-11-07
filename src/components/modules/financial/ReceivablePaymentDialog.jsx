@@ -25,7 +25,8 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
   const existing = form.source === 'EXISTING';
   // La devolución de un préstamo es reintegro (Rodny, 20 de octubre de 2026): no se pide
   // concepto, siempre es Préstamo, y no cuenta como venta.
-  const loan = isLoanReceivable(debt);
+  const beneficiary = debt?.kind === 'BENEFICIARIO';
+  const loan = isLoanReceivable(debt) || beneficiary;
   const usd = debt?.currency === 'USD';
   // Lo que el cliente retuvo de este pago (Elisa, 22 de octubre de 2026, Fundación Grit): cierra esa
   // parte de la deuda sin contar como ingreso, en el mismo paso que el pago.
@@ -57,7 +58,7 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
     setForm(current => record ? { ...current, financialRecordId: id, amount: String(record.amount), paidAt: record.date.slice(0, 10), accountId: record.accountId, category: record.category, reference: record.reference || '' } : { ...current, financialRecordId: '' });
   };
   return <Dialog open={!!debt} onOpenChange={open => !open && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">
-    <DialogHeader><DialogTitle>{loan ? 'Registrar reintegro' : 'Registrar pago'}</DialogTitle><DialogDescription>{debt?.clientName} · {loan ? 'préstamo pendiente' : 'saldo pendiente'} {money(debt?.outstanding || 0)}{loan ? '. Entra como reintegro del préstamo, no como venta.' : ''}</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{loan ? 'Registrar reintegro' : 'Registrar pago'}</DialogTitle><DialogDescription>{debt?.clientName} · {loan && !beneficiary ? 'préstamo pendiente' : 'saldo pendiente'} {money(debt?.outstanding || 0)}{beneficiary ? '. Recuperación del canje en movimientos financieros; no es una venta de servicios.' : loan ? '. Entra como reintegro del préstamo, no como venta.' : ''}</DialogDescription></DialogHeader>
     <form onSubmit={onSubmit} className="space-y-4"><fieldset disabled={saving} className="space-y-4">
       {!loan && <label className="block space-y-1.5 text-sm">Origen del pago<Select className={field} value={form.source || 'NEW'} onChange={event => { setPage(1); setForm(current => ({ ...current, source: event.target.value, financialRecordId: '', category: '', amount: '', accountId: '', reference: '' })); }}><option value="NEW">Registrar un ingreso nuevo</option><option value="EXISTING" disabled={!debt?.clientId}>Ingreso ya registrado</option></Select></label>}
       {existing && <div className="space-y-3">

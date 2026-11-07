@@ -71,6 +71,7 @@ const serializeReceivable = (receivable) => {
         // CLIENTE o PRESTAMO (20 de octubre de 2026): un préstamo dice a quién se le prestó y de
         // qué egreso salió; la pantalla no le ofrece cuenta de cobro y su pago es reintegro.
         kind: receivable.kind || 'CLIENTE',
+        ...(receivable.barterPaymentId ? { barterPaymentId: receivable.barterPaymentId, beneficiaryThirdPartyId: receivable.beneficiaryThirdPartyId } : {}),
         collectionMode: receivableCollectionMode(receivable),
         collectionModeLocked: isFormalizationInstallment(receivable),
         counterpartyType: receivable.counterpartyType || null,
@@ -739,7 +740,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
 
         for (const rec of receivables) {
             // Un préstamo a un colaborador no tiene cliente: se agrupa por el nombre del tercero.
-            const clientId = rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
+            const clientId = rec.kind === 'BENEFICIARIO' ? `beneficiary:${rec.beneficiaryThirdPartyId || rec.id}` : rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
             const clientName = rec.client?.name || rec.counterpartyName || 'Cliente Desconocido';
             const clientSlug = rec.client?.slug || 'cliente-desconocido';
             const paidAmount = (rec.payments || []).reduce((sum, payment) => sum + toNum(payment.amount), 0);

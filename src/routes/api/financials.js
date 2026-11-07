@@ -1,3 +1,4 @@
+import { barterOptionsHandler, readBarterHandler, assignBarterHandler, reverseBarterHandler } from '../../controllers/financialBarterController.js';
 import express from 'express';
 import { payrollPeriodHandler } from '../../controllers/payrollPeriodController.js';
 import { offsetOptionsHandler, readOffsetHandler, reverseOffsetHandler } from '../../controllers/financialOffsetController.js';
@@ -154,6 +155,10 @@ router.post('/receivables/:id/payments', requireFinancialWrite, createReceivable
 // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo por menor valor, canje,
 // compensación o condonación. Mismo permiso que registrar un pago; nunca crea un ingreso.
 router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceivableHandler);
+router.get('/receivables/:id/barter-options', requireFinancialAccess, barterOptionsHandler);
+router.get('/barters/:paymentId', requireFinancialAccess, readBarterHandler);
+router.post('/barters/:paymentId/destination', requireFinancialWrite, assignBarterHandler);
+router.post('/barters/:paymentId/reverse', requireFinancialWrite, reverseBarterHandler);
 router.get('/receivables/:id/offset-options', requireFinancialAccess, offsetOptionsHandler);
 router.get('/offsets/:paymentId', requireFinancialAccess, readOffsetHandler);
 router.post('/offsets/:paymentId/reverse', requireFinancialWrite, reverseOffsetHandler);

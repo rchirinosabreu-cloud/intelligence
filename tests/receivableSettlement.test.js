@@ -127,20 +127,12 @@ test('Salsipuedes: 3.500.000 de deuda, 2.000.000 pagados, 1.500.000 por acuerdo 
     assert.equal(audit.after.outstanding, 0);
 });
 
-test('Nuva: la deuda se cierra con muebles y queda escrito qué entró y a dónde fue', async () => {
-    const receivable = { id: 'debt-nuva', clientId: 'client-2', amount: 3200000, status: 'DEBE', payments: [] };
-    const { calls, tx } = buildTx({ receivable });
-    const prismaClient = { $transaction: async (callback) => callback(tx) };
-
-    const result = await settleReceivable(prismaClient, 'debt-nuva', {
-        kind: 'CANJE', amount: 3200000, settledAt: '2026-10-15',
-        reason: 'Francisco acordó con Nuva recibir muebles por el valor de la deuda.',
-        authorizedBy: 'Francisco Villa', goods: 'Muebles de oficina (2 escritorios, 4 sillas, 1 biblioteca)', destination: 'Uso personal de Francisco Villa; pendiente definir si es anticipo a socio'
-    }, { id: 'user-elisa' });
-
-    assert.equal(result.receivable.status, 'SALDADO');
-    const created = calls.find(([name]) => name === 'payment.create')[1].data;
-    assert.deepEqual(created.detail, { authorizedBy: 'Francisco Villa', goods: 'Muebles de oficina (2 escritorios, 4 sillas, 1 biblioteca)', destination: 'Uso personal de Francisco Villa; pendiente definir si es anticipo a socio' });
+test('un canje nuevo exige revisión y destino estructurado; el texto legado no autoriza un cobro', async () => {
+    await assert.rejects(settleReceivable({}, 'debt-nuva', {
+        kind: 'CANJE', amount: 3200000, settledAt: '2026-10-15', reason: 'Acuerdo anterior',
+        authorizedBy: 'Dirección', goods: 'Muebles', destination: 'Uso personal; por confirmar'
+    }, { id: 'user-elisa' }), error => error.code === 'BARTER_REVIEW_REQUIRED');
+    // El registro, destino, cobro y reversión reales se comprueban con PostgreSQL en barterBeneficiariesPostgres.
 });
 
 test('un ajuste parcial deja la deuda abierta y nunca supera el saldo', async () => {

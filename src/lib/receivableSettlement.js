@@ -64,6 +64,7 @@ export const isRetentionType = (value) => RETENTION_TYPES.some((item) => item.va
 export const retentionTypeLabel = (value) => RETENTION_TYPES.find((item) => item.value === value)?.label || 'Retención';
 
 export const settlementKindLabel = (kind) => {
+    if (kind === 'REVERSO_CANJE') return 'Anulación de obligación por reversión del canje';
     if (!kind || kind === CASH_KIND) return 'Pago';
     return SETTLEMENT_KINDS.find((item) => item.value === kind)?.label || kind;
 };

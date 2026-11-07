@@ -60,23 +60,7 @@ try {
   await reverse.getByRole('button', { name: 'Revertir ajuste' }).click();
   await settle.waitFor();
 
-  // Nuva: canje con muebles, parcial, en oscuro.
-  await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await settle.click();
-  const canje = page.getByRole('dialog');
-  await chooseOption(canje.getByLabel('Forma de saldar'), 'CANJE');
-  await canje.getByLabel('Valor que se da por saldado').fill('500000');
-  assert.match(await canje.locator('[data-settlement-remaining]').innerText(), /300[.,]000/);
-  await canje.getByLabel('Autorizado por').fill('Francisco Villa');
-  await canje.getByLabel('Qué se recibió').fill('Muebles de oficina: 2 escritorios y 4 sillas');
-  await canje.getByLabel(/A dónde fue/).fill('Uso personal de Francisco Villa');
-  await canje.getByLabel('Motivo').fill('Francisco acordó recibir muebles por parte de la deuda.');
-  await page.screenshot({ path: shot('dialog-canje-dark.png'), animations: 'disabled' });
-  await canje.getByRole('button', { name: 'Saldar la deuda' }).click();
-  await page.locator('[data-receivable-payment-kind="CANJE"]').waitFor();
-  assert.match(await page.locator('[data-receivable-payment-kind="CANJE"]').innerText(), /Canje de bienes o servicios[\s\S]*Se recibió: Muebles de oficina[\s\S]*Destino: Uso personal de Francisco Villa/);
-  assert.equal(await settle.count(), 1, 'parcial: la deuda sigue abierta');
-  await page.screenshot({ path: shot('canje-parcial-dark.png'), animations: 'disabled', fullPage: true });
+  // Canjes con destino, cobro, reintento y reversión: tests/browser/barterBeneficiaries.mjs (PostgreSQL real).
 
   assert.deepEqual(errors, []);
   console.log('OK', fileURLToPath(outDir));
