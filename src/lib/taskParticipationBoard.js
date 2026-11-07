@@ -1,6 +1,13 @@
 // La tarea se guarda una vez; sus tarjetas representan la parte de cada persona.
 export const taskCardKey = task => task?.boardKey || String(task?.id || '');
 
+// El mecanismo personal conserva el historial; la presentación refleja solo el equipo vigente.
+export function hasActiveTaskTeam(task) {
+  const source = task?.canonicalTask || task;
+  if (Array.isArray(source?.participants)) return source.participants.length > 1;
+  return Boolean(source?.collaborators?.length);
+}
+
 export function projectTaskParticipations(tasks) {
   return (tasks || []).flatMap(task => {
     if (!task.sharedProgress || !Array.isArray(task.participants) || !task.participants.length) return [task];

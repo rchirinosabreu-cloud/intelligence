@@ -14,6 +14,19 @@ const fixture = () => ({ id: 'task-one', sharedProgress: true, rosterVersion: 2,
   collaborators: [{ id: 'luis', name: 'luis' }], participants: [participant('ana', 'REALIZADA'), participant('luis', 'EN_CURSO')],
   openSessions: [{ id: 'session-luis', workerId: 'luis', endedAt: null }] });
 
+test('la presentación depende del equipo vigente, sin borrar el mecanismo ni el historial personal', async () => {
+  const { hasActiveTaskTeam, projectTaskParticipations, participationRequest } = await api();
+  assert.equal(typeof hasActiveTaskTeam, 'function');
+  const solo = { ...fixture(), collaborators: [], participants: [participant('ana', 'EN_CURSO')] };
+  assert.equal(hasActiveTaskTeam(solo), false);
+  assert.equal(hasActiveTaskTeam(fixture()), true);
+  const [card] = projectTaskParticipations([solo]);
+  assert.equal(hasActiveTaskTeam(card), false);
+  assert.equal(card.participation.accumulatedWorkMs, 12000);
+  assert.equal(participationRequest(card, { status: 'REALIZADA' }).path, '/api/tasks/task-one/participants/ana');
+  assert.equal(hasActiveTaskTeam(projectTaskParticipations([fixture()])[0]), true);
+});
+
 test('dos tarjetas comparten Task ID pero conservan estado, reloj y clave de persona distintos', async () => {
   const { projectTaskParticipations, taskCardKey } = await api();
   const task = fixture();

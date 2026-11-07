@@ -39,7 +39,7 @@ import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
 import { compareTaskBoardOrder } from '@/lib/taskOrder';
 import { applyConfirmedTaskMove, projectTaskMove } from '@/lib/taskMoveConfirmation';
-import { projectTaskParticipations, taskCardKey, participationRequest, didCompleteParticipation, individualPriorityCards, individualPriorityAnchor, taskCardForDeepLink } from '@/lib/taskParticipationBoard';
+import { hasActiveTaskTeam, projectTaskParticipations, taskCardKey, participationRequest, didCompleteParticipation, individualPriorityCards, individualPriorityAnchor, taskCardForDeepLink } from '@/lib/taskParticipationBoard';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -1358,7 +1358,7 @@ const NativeTasks = () => {
                 }}
                 icon={TaskReintegrateIcon}
                 title="Reabrir tarea"
-                description={<><strong>{reopeningTask?.title}</strong>{reopeningTask?.participation ? ` · Parte de ${reopeningTask.assigneeName}. Las demás participaciones no cambian.` : ' conservará su código, responsable, prioridad e historial.'}</>}
+                description={<><strong>{reopeningTask?.title}</strong>{hasActiveTaskTeam(reopeningTask) ? ` · Parte de ${reopeningTask.assigneeName}. Las demás participaciones no cambian.` : ' conservará su código, responsable, prioridad e historial.'}</>}
                 tone="cyan"
                 reasons={REOPEN_REASONS}
                 reasonLabel="Motivo de reapertura"
@@ -1384,7 +1384,7 @@ const NativeTasks = () => {
                 }}
                 icon={TaskReturnIcon}
                 title="Devolver tarea"
-                description={<>Selecciona el motivo y explica qué debe corregirse en <strong>{returningTask?.title}</strong>{returningTask?.participation ? ` · Parte de ${returningTask.assigneeName}. Las demás participaciones no cambian.` : '.'}</>}
+                description={<>Selecciona el motivo y explica qué debe corregirse en <strong>{returningTask?.title}</strong>{hasActiveTaskTeam(returningTask) ? ` · Parte de ${returningTask.assigneeName}. Las demás participaciones no cambian.` : '.'}</>}
                 tone="red"
                 reasons={RETURN_REASONS}
                 reasonLabel="Motivo de devolución"
@@ -1409,7 +1409,7 @@ const NativeTasks = () => {
                 }}
                 icon={TaskReintegrateIcon}
                 title="Reintegrar tarea"
-                description={<><strong>{reintegratingTask?.title}</strong>{reintegratingTask?.participation ? ` · Parte de ${reintegratingTask.assigneeName}. Las demás participaciones no cambian.` : ' volverá a Pendiente conservando todo su historial.'}</>}
+                description={<><strong>{reintegratingTask?.title}</strong>{hasActiveTaskTeam(reintegratingTask) ? ` · Parte de ${reintegratingTask.assigneeName}. Las demás participaciones no cambian.` : ' volverá a Pendiente conservando todo su historial.'}</>}
                 tone="emerald"
                 noteLabel="Nota de reintegración"
                 noteValue={reintegrateNote}
@@ -1428,7 +1428,7 @@ const NativeTasks = () => {
                         </DialogTitle>
                         <DialogDescription>
                             La tarea <strong>{deletingTask?.title}</strong> dejará de ser visible en el Kanban y en las métricas.
-                            {deletingTask?.sharedProgress && ' Se eliminará la tarea completa y todas sus participaciones, también las de las demás personas.'}
+                            {hasActiveTaskTeam(deletingTask) && ' Se eliminará la tarea completa y todas sus participaciones, también las de las demás personas.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
@@ -1836,7 +1836,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                     {task.isLocked && <Lock data-task-private="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-label="Pendiente privado" />}
                                     <span className="min-w-0">{task.title}</span>
                                 </h4>
-                                {task.participation && <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{isDone ? 'Terminó su parte' : `Parte de ${task.assigneeName}`} · {task.participants.filter(row => row.status === 'REALIZADA').length}/{task.participants.length} completadas</p>}
+                                {task.participation && hasActiveTaskTeam(task) && <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{isDone ? 'Terminó su parte' : `Parte de ${task.assigneeName}`} · {task.participants.filter(row => row.status === 'REALIZADA').length}/{task.participants.length} completadas</p>}
                             </div>
 
                             {/* Responsable + fecha */}
