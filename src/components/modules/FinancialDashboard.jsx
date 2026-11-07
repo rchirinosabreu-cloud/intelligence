@@ -61,6 +61,7 @@ import MoneyInput from '@/components/ui/MoneyInput';
 import FinancialPartiesDirectory from '@/components/modules/financial/FinancialPartiesDirectory';
 import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
 import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/financial/PayrollPayments';
+import { PayrollPeriodsDialog, PayrollDeductionsDialog } from '@/components/modules/financial/PayrollPeriods';
 import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
 import { retentionCertificateApi, uploadRecordDocument } from '@/lib/financialDocumentsClient';
 import { payrollStatus } from '@/lib/payrollPayments';
@@ -173,6 +174,8 @@ const FinancialDashboard = () => {
     // Nómina: los pagos de cada persona van plegados y se abren por elección (Rodny, 20 de octubre
     // de 2026: «voy a nómina y veo todo eso enredado. Así como los de cartera»).
     const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
+    const [payrollPeriods, setPayrollPeriods] = useState(null);
+    const [payrollDeductions, setPayrollDeductions] = useState(null);
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
     // El aviso de arriba de la pantalla: lo que salió bien o mal de la última acción.
@@ -1015,11 +1018,12 @@ await invalidateFinancialQueries(queryClient);
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            await axios.post(`${baseUrl}/api/financials/payroll/periods`, {
+            const { data: generated } = await axios.post(`${baseUrl}/api/financials/payroll/periods`, {
                 year: selectedYear,
                 month: payrollMonth
             }, { headers: { Authorization: `Bearer ${token}` } });
             await invalidatePayroll();
+            if (generated.requiresPeriodReview?.length) setNoticeError(generated.requiresPeriodReview.map(item => `${item.name}: ${item.reason}`).join(' '));
             setIsPayrollGenerationConfirmOpen(false);
             setNoticeSuccess('Nómina mensual generada en borrador.');
         } catch (error) {
@@ -1146,16 +1150,16 @@ await invalidateFinancialQueries(queryClient);
 
     const payrollRows = useMemo(() => {
         if (payrollLedger?.items) {
-            return payrollLedger.items.map((item) => ({
-                ...item,
-                transaction: (item.transactions || []).find((transaction) => transaction.year === selectedYear && transaction.month === payrollMonth) || null
-            }));
+            return payrollLedger.items.flatMap((item) => {
+                const transactions = (item.transactions || []).filter(transaction => transaction.year === selectedYear && transaction.month === payrollMonth && !transaction.voidedAt);
+                return (transactions.length ? transactions : [null]).map(transaction => ({ ...item, transaction }));
+            });
         }
         return data?.payroll?.collaborators || [];
     }, [data?.payroll?.collaborators, payrollLedger?.items, payrollMonth, selectedYear]);
 
     const editablePayrollTotal = useMemo(() => (
-        payrollRows.reduce((sum, item) => sum + (Number(item.monthlyTotal ?? item.totalPaid) || 0), 0)
+        [...new Map(payrollRows.map(item => [item.id || item.contractId, item])).values()].reduce((sum, item) => sum + (Number(item.monthlyTotal ?? item.totalPaid) || 0), 0)
     ), [payrollRows]);
 
     // 2. Route Guard Security Check (After ALL Hook Declarations)
@@ -1661,7 +1665,8 @@ await invalidateFinancialQueries(queryClient);
                                                                                                 onError={(message) => { setNoticeSuccess(''); setNoticeError(message); }} />
                                                                                         )}
                                                                                     </div>
-                                                                                    {canWriteFinancials && !payment.reversedAt && (
+                                                                                    {payment.detail?.payrollTransactionId && <button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-brand-cyan-deep dark:border-white/10 dark:text-brand-cyan" onClick={() => setPayrollDeductions({ id: payment.detail.payrollTransactionId, collaboratorName: payment.detail.offsetAgainst || 'Préstamo de colaborador' })}>Ver descuento en Nómina</button>}
+                                                                                    {canWriteFinancials && !payment.reversedAt && !payment.detail?.payrollTransactionId && (
                                                                                         <div className="flex items-center gap-2">
                                                                                             {/* Corregir sin revertir (Rodny, 20 de octubre de 2026). */}
                                                                                             <button type="button" data-receivable-payment-edit onClick={() => { setNoticeError(''); setPaymentToEdit({ debt, payment }); }}
@@ -1762,7 +1767,7 @@ await invalidateFinancialQueries(queryClient);
                                                 <th className="p-4">Colaborador</th>
                                                 <th className="p-4">Contrato (Base)</th>
                                                 <th className="p-4">Seguridad Social</th>
-                                                <th className="p-4">Estado del mes</th>
+                                                <th className="p-4">Estado del período</th>
                                                 <th className="p-4 text-right">Total neto</th>
                                                 <th className="p-4 text-right">Acciones</th>
                                             </tr>
@@ -1772,17 +1777,19 @@ await invalidateFinancialQueries(queryClient);
                                                 const transaction = collab.transaction;
                                                 const netAmount = transaction?.netAmount ?? collab.monthlyTotal ?? collab.totalPaid ?? 0;
                                                 return (
-                                                <React.Fragment key={collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name}>
+                                                <React.Fragment key={transaction?.id || collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name}>
                                                 <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-violet-600/10 flex items-center justify-center text-violet-600 font-bold text-[11px]">
+                                                            <div className="w-8 h-8 rounded-full bg-brand-cyan/10 flex items-center justify-center text-brand-cyan-deep font-bold text-[11px]">
                                                                 {collab.name.substring(0, 2).toUpperCase()}
                                                             </div>
                                                             <div>
                                                                 <p className="font-bold text-zinc-900 dark:text-white">{collab.name}</p>
                                                                 <p className="text-[10px] text-zinc-500">{collab.position || collab.email || 'Sin cargo'}</p>
-                                                                {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor(collab)} className="mt-1 text-[10px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-300">Editar contrato</button>}
+                                                                <p className="mt-1 text-xs text-zinc-500">{transaction?.serviceStart ? `${new Date(transaction.serviceStart).toLocaleDateString('es-CO', { timeZone: 'UTC' })} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : transaction ? 'Fechas del servicio por precisar' : 'Sin liquidación para este mes'}</p>
+                                                                <button type="button" aria-label={`Períodos de ${collab.name}`} onClick={() => setPayrollPeriods(collab)} className="min-h-11 text-xs font-semibold text-primary hover:underline">Períodos e historial</button>
+                                                                {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor(collab)} className="mt-1 text-[10px] font-semibold text-brand-cyan-deep hover:text-brand-cyan-deep dark:text-brand-cyan">Editar contrato</button>}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -1800,7 +1807,7 @@ await invalidateFinancialQueries(queryClient);
                                                             onKeyDown={(event) => {
                                                                 if (event.key === 'Enter') event.currentTarget.blur();
                                                             }}
-                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                                                         />
                                                     </td>
                                                     <td className="p-4 text-zinc-500">
@@ -1817,7 +1824,7 @@ await invalidateFinancialQueries(queryClient);
                                                             onKeyDown={(event) => {
                                                                 if (event.key === 'Enter') event.currentTarget.blur();
                                                             }}
-                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                                                         />
                                                     </td>
                                                     <td className="p-4">
@@ -1854,6 +1861,7 @@ await invalidateFinancialQueries(queryClient);
                                                         )}
                                                     </td>
                                                     <td className="p-4 text-right">
+                                                        {transaction && <button type="button" aria-label={`Descuentos de ${collab.name}`} onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="mb-1 block min-h-11 text-xs font-semibold text-primary hover:underline">Descuentos de préstamos</button>}
                                                         {transaction?.status === 'DRAFT' && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="rounded-lg border border-[#009EB9]/30 px-3 py-1.5 text-[11px] font-semibold text-[#009EB9] hover:bg-[#009EB9]/10 disabled:opacity-50 dark:text-cyan-300">Aprobar</button>}
                                                         {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="rounded-lg bg-[#009EB9] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#008CA4]">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
                                                         {transaction?.status === 'PAID' && <span className="text-[11px] font-medium text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</span>}
@@ -1918,7 +1926,7 @@ await invalidateFinancialQueries(queryClient);
                     </div>
                     <DialogFooter>
                         <button type="button" onClick={() => setIsPayrollGenerationConfirmOpen(false)} disabled={isGeneratingPayroll} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button>
-                        <button type="button" onClick={handleGeneratePayroll} disabled={isGeneratingPayroll} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}Generar borradores</button>
+                        <button type="button" onClick={handleGeneratePayroll} disabled={isGeneratingPayroll} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-cyan-deep px-4 py-2 text-sm font-semibold text-white hover:bg-brand-cyan-deep/90 disabled:opacity-50">{isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}Generar borradores</button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -2013,6 +2021,8 @@ await invalidateFinancialQueries(queryClient);
             {offsetPaymentId && <FinancialOffsetDialog paymentId={offsetPaymentId} onClose={() => setOffsetPaymentId(null)} />}
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={noticeError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={noticeError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
+            {payrollPeriods && <PayrollPeriodsDialog collaborator={payrollPeriods} year={selectedYear} month={payrollMonth} canWrite={canWriteFinancials} canApprove={canApproveFinancials} onClose={() => setPayrollPeriods(null)} onSaved={handlePayrollChanged} />}
+            {payrollDeductions && <PayrollDeductionsDialog transaction={payrollDeductions} canApprove={canApproveFinancials} onClose={() => setPayrollDeductions(null)} onSaved={handlePayrollChanged} />}
             {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={noticeError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} onOpenDocument={openClientStatementDocument} openingDocument={downloadingDocumentId === `statement:${statementClient.id}`} />}
 

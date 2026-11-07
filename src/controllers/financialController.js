@@ -447,6 +447,12 @@ const serializePayrollTransaction = (transaction) => ({
     month: transaction.month,
     year: transaction.year,
     status: transaction.status,
+    serviceStart: transaction.serviceStart || null,
+    serviceEnd: transaction.serviceEnd || null,
+    periodKey: transaction.periodKey || 'MONTHLY',
+    voidedAt: transaction.voidedAt || null,
+    voidReason: transaction.voidReason || null,
+    loanDeductions: (transaction.adjustments || []).filter(item => item.receivablePaymentId).map(item => ({ id: item.id, amount: toNum(item.amount), reversedAt: item.reversedAt || null })),
     baseSalary: toNum(transaction.baseSalary),
     socialSecurity: toNum(transaction.socialSecurity),
     grossAmount: toNum(transaction.grossAmount),
@@ -485,7 +491,7 @@ const serializePayrollPayments = (transaction) => {
     return {
         payments,
         paidAmount,
-        outstanding: roundFloat(Math.max(toNum(transaction.netAmount) - paidAmount, 0))
+        outstanding: transaction.voidedAt ? 0 : roundFloat(Math.max(toNum(transaction.netAmount) - paidAmount, 0))
     };
 };
 
@@ -532,6 +538,7 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
                     where: { year },
                     orderBy: { month: 'desc' },
                     include: {
+                        adjustments: true,
                         payments: {
                             orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
                             include: {
@@ -798,6 +805,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         const payrollTransactions = await prismaClient.payrollTransaction.findMany({
             where: withFinancialSearch({
                 year: year,
+                voidedAt: null,
                 month: {
                     gte: monthStart,
                     lte: monthEnd
@@ -837,14 +845,15 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             const userName = tx.contract?.collaborator?.displayName || tx.user?.name || tx.contract?.sourceLabel || 'Colaborador';
             const userEmail = tx.user?.email || '';
 
-            const baseSalary = toNum(tx.baseSalary) || toNum(tx.contract?.baseSalary);
-            const socialSecurity = toNum(tx.socialSecurity) || toNum(tx.contract?.socialSecurity);
+            const baseSalary = tx.baseSalary == null ? toNum(tx.contract?.baseSalary) : toNum(tx.baseSalary);
+            const socialSecurity = tx.socialSecurity == null ? toNum(tx.contract?.socialSecurity) : toNum(tx.socialSecurity);
 
             // Compute algebraic adjustments total
             let adjustmentsTotal = 0;
             const adjustmentsList = [];
 
             for (const adj of tx.adjustments) {
+                if (adj.reversedAt) continue;
                 const adjAmount = toNum(adj.amount);
                 const adjType = adj.type; // BONUS, COMMISSION, DEDUCTION, NOVELTY
                 let algebraicValue = 0;
@@ -867,7 +876,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 });
             }
 
-            const totalPaid = toNum(tx.netAmount) || roundFloat(baseSalary + socialSecurity + adjustmentsTotal);
+            const totalPaid = tx.netAmount == null ? roundFloat(baseSalary + socialSecurity + adjustmentsTotal) : toNum(tx.netAmount);
 
             if (!collaboratorPayrollMap[collaboratorKey]) {
                 collaboratorPayrollMap[collaboratorKey] = {
@@ -891,7 +900,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             collaboratorPayrollMap[collaboratorKey].totalPaid = roundFloat(collaboratorPayrollMap[collaboratorKey].totalPaid + totalPaid);
             collaboratorPayrollMap[collaboratorKey].adjustments.push(...adjustmentsList);
 
-            totalPayrollCost = roundFloat(totalPayrollCost + totalPaid);
+            // Aplicar un préstamo liquida una deuda; no reduce el costo del servicio prestado.
+            const loanDeductions = tx.adjustments.filter(adj => adj.receivablePaymentId && !adj.reversedAt).reduce((sum, adj) => sum + toNum(adj.amount), 0);
+            totalPayrollCost = roundFloat(totalPayrollCost + totalPaid + loanDeductions);
         }
 
         const collaborators = Object.values(collaboratorPayrollMap);

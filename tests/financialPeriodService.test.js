@@ -49,7 +49,7 @@ test('closeFinancialPeriod locks the month and creates an audit event atomically
     const calls = [];
     const tx = {
         financialRecord: { count: async () => 0 },
-        payrollTransaction: { count: async () => 0 },
+        payrollTransaction: { count: async ({ where }) => where.voidedAt === null ? 0 : 1 },
         financialPeriod: {
             upsert: async (args) => {
                 calls.push(['period.upsert', args]);

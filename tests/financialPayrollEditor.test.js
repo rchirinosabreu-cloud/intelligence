@@ -83,6 +83,7 @@ test('getFinancialPayrollLedger returns the live payroll contracts as editable r
         monthlyTotal: 3000000,
         transactions: [{
             id: 'payroll-1', month: 8, year: 2026, status: 'DRAFT',
+            periodKey: 'MONTHLY', serviceStart: null, serviceEnd: null, voidedAt: null, voidReason: null, loanDeductions: [],
             baseSalary: 3000000, socialSecurity: 0, grossAmount: 3000000,
             deductions: 0, netAmount: 3000000, approvedAt: null, paidAt: null,
             financialRecordId: null,

@@ -2763,6 +2763,7 @@ model FinancialCollaborator {
   updatedAt      DateTime               @updatedAt
   aliases        FinancialImportAlias[]
   contracts      PayrollContract[]
+  loans          AccountsReceivable[]
 
   @@index([userId])
   @@index([isActive])
@@ -2825,6 +2826,13 @@ model PayrollTransaction {
   contract          PayrollContract          @relation(fields: [contractId], references: [id], onDelete: Restrict)
   month             Int // 1 - 12
   year              Int // e.g. 2026
+  periodKey         String                   @default("MONTHLY")
+  serviceStart      DateTime?                 @db.Date
+  serviceEnd        DateTime?                 @db.Date
+  periodDetails     Json?
+  creationRequestId String?                   @unique
+  voidedAt          DateTime?
+  voidReason        String?
   baseSalary        Decimal                  @default(0)
   socialSecurity    Decimal                  @default(0)
   grossAmount       Decimal                  @default(0)
@@ -2842,7 +2850,7 @@ model PayrollTransaction {
   adjustments       PayrollAdjustment[]
   payments          PayrollPayment[]
 
-  @@unique([contractId, month, year])
+  @@unique([contractId, month, year, periodKey])
   @@index([contractId])
   @@index([year, month])
 }
@@ -2884,10 +2892,17 @@ enum AdjustmentType {
 model PayrollAdjustment {
   id            String             @id @default(uuid())
   transactionId String
-  transaction   PayrollTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction   PayrollTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   type          AdjustmentType
   amount        Decimal
   description   String?
+  receivablePaymentId String? @unique
+  receivablePayment ReceivablePayment? @relation(fields: [receivablePaymentId], references: [id], onDelete: Restrict)
+  requestId String? @unique
+  detail Json?
+  reversedAt DateTime?
+  reversalReason String?
+  reversedById String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -2907,6 +2922,8 @@ model AccountsReceivable {
   id            String                @id @default(uuid())
   // Un préstamo a un colaborador o a un socio no tiene cliente (20 de octubre de 2026).
   clientId      String?
+  loanCollaboratorId String?
+  loanCollaborator FinancialCollaborator? @relation(fields: [loanCollaboratorId], references: [id], onDelete: Restrict)
   client        Client?               @relation(fields: [clientId], references: [id], onDelete: Cascade)
   // CLIENTE: lo de siempre. PRESTAMO: dinero prestado a un tercero (Rodny, 20 de octubre de
   // 2026), que vive en Cartera junto a lo de los clientes, nace ligado al egreso que lo sacó
@@ -2961,6 +2978,7 @@ model AccountsReceivable {
   updatedAt     DateTime              @updatedAt
   payments      ReceivablePayment[]
 
+  @@index([loanCollaboratorId])
   @@index([clientId])
   @@index([period])
   @@index([year, month])
@@ -3018,6 +3036,7 @@ model ReceivablePayment {
   // acta de un canje. Un pago no lo usa: sus comprobantes van en su ingreso.
   documents         ReceivablePaymentDocument[]
   offsetPayablePayment PayablePayment? @relation("FinancialOffset")
+  payrollAdjustment PayrollAdjustment?
 
   @@index([receivableId, paidAt])
   @@index([accountId, paidAt])

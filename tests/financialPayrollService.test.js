@@ -16,6 +16,7 @@ test('generatePayrollPeriod snapshots every active contract even without a platf
         return [{
           id: 'contract-1',
           userId: null,
+          startDate: new Date('2026-01-01'),
           baseSalary: 3000000,
           socialSecurity: 0,
           collaborator: { displayName: 'Kamila del Toro' }
@@ -23,6 +24,7 @@ test('generatePayrollPeriod snapshots every active contract even without a platf
       }
     },
     payrollTransaction: {
+      findMany: async () => [],
       upsert: async (args) => {
         calls.push(args);
         return { id: 'payroll-1', ...args.create };
