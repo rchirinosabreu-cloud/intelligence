@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import PaymentCorrectionDialog from './PaymentCorrectionDialog';
+import FinancialOffsetDialog from './FinancialOffsetDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -118,7 +119,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         <span data-payables-outstanding className="sr-only">{formatCurrency(totals.outstanding)}</span>
         {totals.overdue > 0 ? <span className="text-destructive brain-destructive-text">Vencido: {formatCurrency(totals.overdue)} en {totals.overdueCount} cuenta{totals.overdueCount === 1 ? '' : 's'}. </span> : null}
-        Pagado en el periodo: {formatCurrency(totals.paidInPeriod)}, según los filtros de arriba.{bucket ? ` Mostrando ${agingBucketLabel(bucket)}.` : ''}
+        Pagado en dinero en el periodo: {formatCurrency(totals.paidInPeriod)}. Compensado: {formatCurrency(totals.compensatedInPeriod || 0)}, según los filtros de arriba.{bucket ? ` Mostrando ${agingBucketLabel(bucket)}.` : ''}
       </p>
 
       {ledgerError ? <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">No fue posible cargar las cuentas por pagar.<button type="button" onClick={() => refetch()} className="ml-3 min-h-11 underline">Reintentar</button></div>
@@ -161,9 +162,10 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                                 </div>
                                 <div className="text-right">
                                   <p className="font-semibold text-zinc-900 dark:text-white">{formatCurrency(payable.amount)}</p>
+                                  {payable.settledAmount > 0 && <p className="text-xs text-zinc-500">Compensado {formatCurrency(payable.settledAmount)} · pendiente {formatCurrency(payable.outstanding)}</p>}
                                   {!closed && payable.paidAmount > 0 && <p className="text-xs text-zinc-500">Pagado {formatCurrency(payable.paidAmount)} · falta {formatCurrency(payable.outstanding)}</p>}
                                   <span data-payable-due={payable.dueState.key} className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                    payable.status === 'PAGADA' && 'bg-status-positive/10 text-status-positive',
+                                    ['PAGADA', 'SALDADA'].includes(payable.status) && 'bg-status-positive/10 text-status-positive',
                                     payable.status === 'ANULADA' && 'bg-zinc-100 text-zinc-500 dark:bg-white/10',
                                     payable.status === 'PARCIAL' && 'bg-primary/10 text-primary',
                                     payable.status === 'POR_PAGAR' && (payable.dueState.key === 'VENCIDA' ? 'bg-destructive/10 text-destructive' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'))}>
@@ -175,7 +177,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                                 <RecordDocumentsInline recordId={payable.id} documents={payable.documents} api={payableDocumentsApi} canWrite={canWrite && payable.status !== 'ANULADA'} onChanged={documentsChanged} onError={(message) => toast.error(message)} />
                                 {payable.payments.length > 0 && (
                                   <button type="button" data-payable-payments-toggle aria-expanded={paymentsOpen} onClick={() => setExpandedPayments((prev) => ({ ...prev, [payable.id]: !prev[payable.id] }))} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                                    {paymentsOpen ? 'Ocultar pagos' : activePayments.length > 0 ? `Ver ${activePayments.length} pago${activePayments.length === 1 ? '' : 's'}` : 'Ver pagos'}{paymentsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                    {paymentsOpen ? 'Ocultar aplicaciones' : activePayments.length > 0 ? `Ver ${activePayments.length} ${activePayments.length === 1 ? 'aplicación' : 'aplicaciones'}` : 'Ver historial'}{paymentsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                   </button>
                                 )}
                                 {canWrite && !closed && <button type="button" data-payable-pay onClick={() => setDialog({ kind: 'pay', payable: { ...payable, thirdParty: group.thirdParty } })} className="ml-auto min-h-9 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground">Registrar pago</button>}
@@ -189,12 +191,13 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                                         <span className={cn('w-24 shrink-0 font-medium text-zinc-900 dark:text-white', payment.reversedAt && 'line-through')}>{formatCurrency(payment.amount)}</span>
                                         <span className="text-zinc-500">{day(payment.paidAt)}</span>
-                                        <span className="truncate text-zinc-500">{payment.accountName || 'Sin cuenta'}</span>
+                                        <span className="truncate text-zinc-500">{payment.kind === 'COMPENSACION' ? 'Compensación · sin dinero' : payment.accountName || 'Sin cuenta'}</span>
                                         <span className="min-w-[6rem] flex-1 truncate text-zinc-600 dark:text-zinc-300">{payment.reference || <span className="text-zinc-400">Sin referencia</span>}</span>
                                         {payment.reversedAt ? <span className="text-destructive">Revertido: {payment.reversalReason}</span>
-                                          : canWrite && <><button type="button" data-payable-correct onClick={() => setDialog({ kind: 'correct', payment })} className="min-h-11 font-medium text-primary underline">Corregir pago</button><button type="button" onClick={() => setDialog({ kind: 'reverse', payment })} className="text-destructive brain-destructive-text hover:underline">Revertir</button></>}
+                                          : !payment.offsetReceivablePaymentId && canWrite && <><button type="button" data-payable-correct onClick={() => setDialog({ kind: 'correct', payment })} className="min-h-11 font-medium text-primary underline">Corregir pago</button><button type="button" onClick={() => setDialog({ kind: 'reverse', payment })} className="text-destructive brain-destructive-text hover:underline">Revertir</button></>}
                                       </div>
-                                      {!payment.reversedAt && <RecordDocumentsInline className="mt-1" recordId={payment.financialRecordId} documents={payment.documents} canWrite={canWrite} onChanged={documentsChanged} onError={(message) => toast.error(message)} />}
+                                      {payment.offsetReceivablePaymentId && <button type="button" className="min-h-11 text-sm font-medium text-primary underline" onClick={() => setDialog({ kind: 'offset', payment })}>Ver cruce</button>}
+                                      {!payment.reversedAt && !payment.offsetReceivablePaymentId && <RecordDocumentsInline className="mt-1" recordId={payment.financialRecordId} documents={payment.documents} canWrite={canWrite} onChanged={documentsChanged} onError={(message) => toast.error(message)} />}
                                     </li>
                                   ))}
                                 </ul>
@@ -219,6 +222,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
       {dialog?.kind === 'pay' && <PayablePaymentDialog payable={dialog.payable} accounts={accounts} saving={saving} error={error} onClose={close} onSubmit={pay} />}
       {dialog?.kind === 'correct' && <PaymentCorrectionDialog kind="payable" paymentId={dialog.payment.id} accounts={accounts} onClose={close} onSaved={async message => { close(); await invalidateFinancialQueries(queryClient); toast.success(message); }} />}
       {dialog?.kind === 'void' && <ReasonDialog open title="Anular cuenta por pagar" description={`${dialog.payable.concept} · ${formatCurrency(dialog.payable.amount)}. La cuenta queda anulada con su motivo; no se borra.`} confirmLabel="Anular" saving={saving} onClose={close} onConfirm={voidPayable} />}
+      {dialog?.kind === 'offset' && <FinancialOffsetDialog paymentId={dialog.payment.offsetReceivablePaymentId} onClose={close} />}
       {dialog?.kind === 'reverse' && <ReasonDialog open title="Revertir pago" description={`${formatCurrency(dialog.payment.amount)} del ${day(dialog.payment.paidAt)}. El pago queda como evidencia y su egreso en Movimientos se anula.`} confirmLabel="Revertir" saving={saving} onClose={close} onConfirm={reversePayment} />}
     </div>
   );

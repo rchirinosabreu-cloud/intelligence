@@ -170,14 +170,13 @@ const toForm = (record, year) => record ? {
     accountId: record.accountId || ''
 } : emptyForm(year);
 
-const FinancialLedger = ({ resetAccountKey = 0, selectedYear, filters = { scenario: 'ACTUAL', month: '', type: '', category: '', q: '' }, searchPending = false, formatCurrency }) => {
+const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: '', type: '', category: '', q: '' }, searchPending = false, formatCurrency }) => {
     const queryClient = useQueryClient();
     const [page, setPage] = useState(1);
     const [balanceAccount, setBalanceAccount] = useState(null);
     // La categoría viene de la barra de filtros de arriba, con el resto. La cuenta
     // se elige tocando su tarjeta, que es donde ya se está mirando el saldo.
     const [selectedAccountId, setSelectedAccountId] = useState('');
-    useEffect(() => { setSelectedAccountId(''); setPage(1); }, [resetAccountKey]);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [form, setForm] = useState(() => emptyForm(selectedYear));

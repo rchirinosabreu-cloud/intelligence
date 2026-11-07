@@ -5,6 +5,7 @@ import { outstandingCentsOf } from './receivablePaymentService.js';
 import { RETENTION_KIND, SETTLEMENT_KINDS, isReceivableClosed, paymentKindLabel, receivableStatusAfter, settlementDetail, settlementKindLabel, settlementProblem } from '../lib/receivableSettlement.js';
 import { adjustmentsRange, summarizeAdjustments } from '../lib/receivableAdjustments.js';
 import { loanCounterpartyLabel } from '../lib/receivableLoans.js';
+import { createOffset } from './financialOffsetService.js';
 
 const toNumber = (value) => (value === null || value === undefined ? 0 : (typeof value.toNumber === 'function' ? value.toNumber() : Number(value)) || 0);
 
@@ -90,6 +91,7 @@ const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
  * Revertirlo es el mismo «Revertir» de los abonos.
  */
 export const settleReceivable = async (prismaClient, receivableId, input = {}, actor) => {
+    if (input.kind === 'COMPENSACION') return createOffset(prismaClient, receivableId, input, actor);
     const problem = settlementProblem({ ...input, outstanding: undefined });
     if (problem) throw new FinancialDomainError('RECEIVABLE_SETTLEMENT_INVALID', problem);
     const amountCents = financialCents(input.amount);

@@ -32,6 +32,7 @@ import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
+import FinancialOffsetDialog from './financial/FinancialOffsetDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
 import ReceivableAdjustmentsSummary from './financial/ReceivableAdjustmentsSummary';
 import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog';
@@ -143,9 +144,7 @@ const FinancialDashboard = () => {
     const queryClient = useQueryClient();
 
     // 1. React Hook Declarations (Inconditional - at the absolute top)
-    const { selectedYear, setSelectedYear, filters, setFilters, activeTab, setActiveTab, linkedMonth, openRecords } = useFinancialNavigation();
-    const [indicatorRequest, setIndicatorRequest] = useState(0);
-    const showIndicator = type => { openRecords(type); setIndicatorRequest(value => value + 1); };
+    const { selectedYear, setSelectedYear, filters, setFilters, activeTab, setActiveTab, linkedMonth } = useFinancialNavigation();
     const [search, setSearch] = useState(filters.q);
     usePageLabel(`Financiero · ${visibleFinancialTabs({ isAdmin: true, canFormalize: true }).flatMap(group => group.views).find(view => view.key === activeTab)?.label || 'Movimientos'}`);
     useEffect(() => { setSearch(filters.q); }, [filters.q]);
@@ -186,6 +185,7 @@ const FinancialDashboard = () => {
     const [paymentDebt, setPaymentDebt] = useState(null);
     // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo, canje, compensación, condonación.
     const [settlementDebt, setSettlementDebt] = useState(null);
+    const [offsetPaymentId, setOffsetPaymentId] = useState(null);
     const [isSavingSettlement, setIsSavingSettlement] = useState(false);
     // Préstamos a terceros en Cartera (Rodny, 20 de octubre de 2026).
     const [isLoanDialogOpen, setIsLoanDialogOpen] = useState(false);
@@ -1205,7 +1205,6 @@ await invalidateFinancialQueries(queryClient);
                     {data?.sourceSummary?.totals?.loanRepayments > 0
                         ? <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
                         : <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
-                    <button type="button" disabled={indicatorsPending || !!error || (filters.type && filters.type !== 'INCOME')} onClick={() => showIndicator('INCOME')} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan underline disabled:opacity-40">Ver ingresos</button>
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
@@ -1220,7 +1219,6 @@ await invalidateFinancialQueries(queryClient);
                         {formatIndicator(kpis.totalExpense)}
                     </p>
                     <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
-                    <button type="button" disabled={indicatorsPending || !!error || (filters.type && filters.type !== 'EXPENSE')} onClick={() => showIndicator('EXPENSE')} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan underline disabled:opacity-40">Ver egresos</button>
                 </Card>
 
                 {/* KPI Card 3: Flujo Neto (Highest Visual Prominence) */}
@@ -1243,7 +1241,6 @@ await invalidateFinancialQueries(queryClient);
                         </span>
                         <span className="text-[10px] text-zinc-600 dark:text-zinc-300">Ingresos menos egresos del periodo</span>
                     </div>
-                    <button type="button" disabled={indicatorsPending || !!error} onClick={() => showIndicator()} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan underline disabled:opacity-40">Ver movimientos del resultado</button>
                 </Card>
 
                 {/* KPI Card 4: Cartera Pendiente (Alert) */}
@@ -1263,7 +1260,6 @@ await invalidateFinancialQueries(queryClient);
                         </span>
                         <span className="text-[10px] text-zinc-400">pendiente por cobrar</span>
                     </div>
-                    <button type="button" disabled={indicatorsPending || !!error} onClick={() => { setReceivableKind(null); setReceivableBucket(null); setActiveTab('receivables'); }} className="mt-2 min-h-11 text-sm font-medium text-brand-cyan-deep underline disabled:opacity-40 dark:text-brand-cyan">Ver cuentas por cobrar</button>
                 </Card>
             </div>
 
@@ -1293,7 +1289,7 @@ await invalidateFinancialQueries(queryClient);
             {/* --- SECTION 3: TAB SCENARIO VIEWS --- */}
             <div className="space-y-6">
                 {activeTab === 'records' && (
-                    <FinancialLedger resetAccountKey={indicatorRequest} selectedYear={selectedYear} filters={filters} searchPending={searchPending} formatCurrency={formatCurrency} />
+                    <FinancialLedger selectedYear={selectedYear} filters={filters} searchPending={searchPending} formatCurrency={formatCurrency} />
                 )}
                 {/* PESTAÑA 1: ANALISIS DE FLUJO */}
                 {activeTab === 'flow' && (
@@ -2014,6 +2010,7 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={noticeError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            {offsetPaymentId && <FinancialOffsetDialog paymentId={offsetPaymentId} onClose={() => setOffsetPaymentId(null)} />}
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={noticeError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={noticeError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
             {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={noticeError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}

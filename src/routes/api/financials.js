@@ -1,4 +1,5 @@
 import express from 'express';
+import { offsetOptionsHandler, readOffsetHandler, reverseOffsetHandler } from '../../controllers/financialOffsetController.js';
 import { accountStatementHandler, paymentCorrectionContextHandler, paymentCorrectionHandler } from '../../controllers/financialCorrectionController.js';
 import multer from 'multer';
 import { receivesFiles } from '../../lib/uploadMarker.js';
@@ -152,6 +153,9 @@ router.post('/receivables/:id/payments', requireFinancialWrite, createReceivable
 // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo por menor valor, canje,
 // compensación o condonación. Mismo permiso que registrar un pago; nunca crea un ingreso.
 router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceivableHandler);
+router.get('/receivables/:id/offset-options', requireFinancialAccess, offsetOptionsHandler);
+router.get('/offsets/:paymentId', requireFinancialAccess, readOffsetHandler);
+router.post('/offsets/:paymentId/reverse', requireFinancialWrite, reverseOffsetHandler);
 // Resumen de ajustes de cartera (Rodny, 20 de octubre de 2026): cierres sin dinero y
 // diferencia en cambio del periodo. Solo lee.
 router.get('/receivable-adjustments', requireFinancialAccess, listReceivableAdjustmentsHandler);

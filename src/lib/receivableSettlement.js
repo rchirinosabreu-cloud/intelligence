@@ -26,7 +26,7 @@ export const SETTLEMENT_KINDS = Object.freeze([
     {
         value: 'COMPENSACION',
         label: 'Compensación de obligaciones',
-        help: 'Se cruzó con algo que nosotros le debíamos al cliente. Queda escrito contra qué se compensó.'
+        help: 'Cruza con una cuenta por pagar del mismo tercero. Ambos saldos se reducen juntos y la reversión conserva el historial.'
     },
     {
         value: 'CONDONACION',

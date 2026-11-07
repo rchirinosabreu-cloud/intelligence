@@ -34,7 +34,8 @@ async function load(tx, kind, id) {
   const paid = sum(siblings);
   const revision = hash({ payment: fields(payment), record, parent, siblings: siblings.map(fields).sort((a, b) => a.id.localeCompare(b.id)) });
   let blocker = null;
-  if (payment.reversedAt) blocker = 'El pago está revertido. Registra uno nuevo desde su obligación.';
+  if (payment.offsetReceivablePaymentId || payment.kind === 'COMPENSACION') blocker = 'Este ajuste pertenece a un cruce. Usa «Ver cruce» y «Revertir cruce» para corregir ambas obligaciones.';
+  else if (payment.reversedAt) blocker = 'El pago está revertido. Registra uno nuevo desde su obligación.';
   else if (!record || record.status !== 'POSTED' || record.scenario !== 'ACTUAL' || record.isProjection || record.type !== 'EXPENSE') blocker = 'El movimiento vinculado requiere revisión antes de corregir el pago.';
   else if (record.origin !== 'SYSTEM') blocker = 'Este pago aplica un egreso que ya existía. Revierte su aplicación desde el origen y corrige el egreso en Movimientos; después vuelve a aplicarlo.';
   else if (money(record.amount) !== money(payment.amount) || record.accountId !== payment.accountId || day(record.date) !== day(payment.paidAt)) blocker = 'El pago y su movimiento no coinciden. Revisa el historial antes de corregirlos.';
@@ -100,7 +101,7 @@ export async function correctExpensePayment(db, kind, id, input, actor) {
       const paymentData = { amount: financialAmountFromCents(amount), paidAt: date.date, accountId, reference, notes };
       await tx[rule.payment].update({ where: { id }, data: paymentData });
       const updatedRecord = await tx.financialRecord.update({ where: { id: record.id }, data: { amount: financialAmountFromCents(amount), date: date.date, year: date.year, month: date.month, accountId, reference, notes } });
-      const status = kind === 'payroll' ? paidAfter === total ? 'PAID' : 'APPROVED' : payableStatusAfter({ amountCents: total, paidCents: paidAfter });
+      const status = kind === 'payroll' ? paidAfter === total ? 'PAID' : 'APPROVED' : payableStatusAfter({ amountCents: total, paidCents: paidAfter, hasSettlement: siblings.some(row => row.kind === 'COMPENSACION') });
       const paidAt = kind === 'payroll' && status === 'PAID' ? [...otherPayments.map(row => new Date(row.paidAt)), date.date].sort((a, b) => b - a)[0] : null;
       await tx[rule.parent].update({ where: { id: parent.id }, data: { status, ...(kind === 'payroll' ? { paidAt } : {}) } });
       const after = await load(tx, kind, id);

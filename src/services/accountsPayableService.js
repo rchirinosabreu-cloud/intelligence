@@ -21,6 +21,7 @@ const centsOrThrow = (value, code, message) => {
 };
 
 const paidCentsOf = (payable) => (payable.payments || []).reduce((sum, payment) => (payment.reversedAt ? sum : sum + (financialCents(payment.amount) || 0)), 0);
+const hasSettlement = payable => (payable.payments || []).some(payment => !payment.reversedAt && payment.kind === 'COMPENSACION');
 
 export const serializePayable = (payable, today = new Date()) => {
     const amountCents = financialCents(payable.amount) || 0;
@@ -29,7 +30,8 @@ export const serializePayable = (payable, today = new Date()) => {
     return {
         ...payable,
         amount: Number(financialAmountFromCents(amountCents)),
-        paidAmount: Number(financialAmountFromCents(paidCents)),
+        paidAmount: Number(financialAmountFromCents(paidCents - (payable.payments || []).filter(p => !p.reversedAt && p.kind === 'COMPENSACION').reduce((sum, p) => sum + financialCents(p.amount), 0))),
+        settledAmount: Number(financialAmountFromCents((payable.payments || []).filter(p => !p.reversedAt && p.kind === 'COMPENSACION').reduce((sum, p) => sum + financialCents(p.amount), 0))),
         outstanding: isPayableClosed(payable.status) && payable.status === 'ANULADA' ? 0 : Number(financialAmountFromCents(outstandingCents)),
         dueState: payableDueState(payable, today),
         payments: (payable.payments || []).map((payment) => ({
@@ -66,7 +68,7 @@ export const listPayablesLedger = async (prismaClient, filters = {}) => {
     const rows = await prismaClient.accountsPayable.findMany({ where, include: PAYABLE_INCLUDE, orderBy: [{ dueDate: 'asc' }, { receivedAt: 'asc' }] });
     const today = new Date();
     const groups = new Map();
-    const totals = { outstanding: 0, overdue: 0, paidInPeriod: 0, openCount: 0, overdueCount: 0 };
+    const totals = { outstanding: 0, overdue: 0, paidInPeriod: 0, compensatedInPeriod: 0, openCount: 0, overdueCount: 0 };
     for (const row of rows) {
         const payable = serializePayable(row, today);
         const key = row.thirdPartyId;
@@ -83,13 +85,13 @@ export const listPayablesLedger = async (prismaClient, filters = {}) => {
             if (payment.reversedAt) continue;
             const paid = new Date(payment.paidAt);
             const inPeriod = (!Number.isInteger(year) || paid.getUTCFullYear() === year) && (!(Number.isInteger(month) && month >= 1 && month <= 12) || paid.getUTCMonth() + 1 === month);
-            if (inPeriod) totals.paidInPeriod += payment.amount;
+            if (inPeriod) totals[payment.kind === 'COMPENSACION' ? 'compensatedInPeriod' : 'paidInPeriod'] += payment.amount;
         }
     }
     const round = (value) => Math.round(value * 100) / 100;
     const items = [...groups.values()].map((group) => ({ ...group, outstanding: round(group.outstanding), overdue: round(group.overdue) }))
         .sort((a, b) => (b.overdue - a.overdue) || (b.outstanding - a.outstanding) || a.thirdParty.name.localeCompare(b.thirdParty.name, 'es'));
-    return { items, totals: { ...totals, outstanding: round(totals.outstanding), overdue: round(totals.overdue), paidInPeriod: round(totals.paidInPeriod) } };
+    return { items, totals: { ...totals, outstanding: round(totals.outstanding), overdue: round(totals.overdue), paidInPeriod: round(totals.paidInPeriod), compensatedInPeriod: round(totals.compensatedInPeriod) } };
 };
 
 export const createPayable = async (prismaClient, input = {}, actor) => {
@@ -157,12 +159,15 @@ export const updatePayable = async (prismaClient, payableId, patch = {}, actor) 
                 concept: text(merged.concept), category: merged.category, amount: financialAmountFromCents(amountCents),
                 documentNumber: patch.documentNumber !== undefined ? text(patch.documentNumber) : existing.documentNumber,
                 receivedAt, year, month, dueDate, notes: text(merged.notes),
-                status: payableStatusAfter({ amountCents, paidCents })
+                status: payableStatusAfter({ amountCents, paidCents, hasSettlement: hasSettlement(existing) })
             },
             include: PAYABLE_INCLUDE
         });
         await tx.financialAuditEvent.create({ data: { entityType: 'AccountsPayable', entityId: payableId, action: 'UPDATE', before: cloneForAudit(existing), after: cloneForAudit(updated), actorId } });
         return serializePayable(updated);
+    }, { isolationLevel: 'Serializable' }).catch(error => {
+        if (error.code === 'P2034') throw new FinancialDomainError('PAYABLE_CONFLICT', 'La cuenta cambió durante la operación. Actualiza los datos antes de confirmar.', 409);
+        throw error;
     });
 };
 
@@ -179,6 +184,9 @@ export const voidPayable = async (prismaClient, payableId, reason, actor) => {
         const updated = await tx.accountsPayable.update({ where: { id: payableId }, data: { status: 'ANULADA', voidedAt: new Date(), voidReason, voidedById: actorId }, include: PAYABLE_INCLUDE });
         await tx.financialAuditEvent.create({ data: { entityType: 'AccountsPayable', entityId: payableId, action: 'VOID', before: cloneForAudit(existing), after: cloneForAudit(updated), actorId } });
         return serializePayable(updated);
+    }, { isolationLevel: 'Serializable' }).catch(error => {
+        if (error.code === 'P2034') throw new FinancialDomainError('PAYABLE_CONFLICT', 'La cuenta cambió durante la operación. Actualiza los datos antes de confirmar.', 409);
+        throw error;
     });
 };
 
@@ -222,7 +230,7 @@ export const payPayable = async (prismaClient, payableId, input = {}, actor) => 
             });
             const payment = await tx.payablePayment.create({ data: { payableId, accountId, financialRecordId: financialRecord.id, amount, paidAt, reference, notes, createdById: actorId } });
             const paidAfter = paidBefore + amountCents;
-            const updated = await tx.accountsPayable.update({ where: { id: payableId }, data: { status: payableStatusAfter({ amountCents: totalCents, paidCents: paidAfter }) }, include: PAYABLE_INCLUDE });
+            const updated = await tx.accountsPayable.update({ where: { id: payableId }, data: { status: payableStatusAfter({ amountCents: totalCents, paidCents: paidAfter, hasSettlement: hasSettlement(payable) }) }, include: PAYABLE_INCLUDE });
             await tx.financialAuditEvent.create({ data: { entityType: 'FinancialRecord', entityId: financialRecord.id, action: 'CREATE', after: cloneForAudit(financialRecord), actorId } });
             await tx.financialAuditEvent.create({
                 data: {
@@ -252,6 +260,7 @@ export const reversePayablePayment = async (prismaClient, paymentId, reason, act
         return await prismaClient.$transaction(async (tx) => {
             const payment = await tx.payablePayment.findUnique({ where: { id: paymentId }, include: { financialRecord: true } });
             if (!payment) throw new FinancialDomainError('PAYABLE_PAYMENT_NOT_FOUND', 'El pago no existe.', 404);
+            if (payment.offsetReceivablePaymentId || payment.kind === 'COMPENSACION') throw new FinancialDomainError('OFFSET_LINKED', 'Este pago pertenece a un cruce. Usa «Ver cruce» y «Revertir cruce» para devolver el saldo a ambas obligaciones.', 409);
             if (payment.reversedAt) throw new FinancialDomainError('PAYABLE_PAYMENT_ALREADY_REVERSED', 'El pago ya fue revertido.', 409);
             const paidDate = new Date(payment.paidAt);
             await assertOpenFinancialPeriod(tx, paidDate.getUTCFullYear(), paidDate.getUTCMonth() + 1);
@@ -263,7 +272,7 @@ export const reversePayablePayment = async (prismaClient, paymentId, reason, act
             }
             const payable = await tx.accountsPayable.findUnique({ where: { id: payment.payableId }, include: PAYABLE_INCLUDE });
             const totalCents = financialCents(payable.amount) || 0;
-            const updated = await tx.accountsPayable.update({ where: { id: payable.id }, data: { status: payableStatusAfter({ amountCents: totalCents, paidCents: paidCentsOf(payable), voided: payable.status === 'ANULADA' }) }, include: PAYABLE_INCLUDE });
+            const updated = await tx.accountsPayable.update({ where: { id: payable.id }, data: { status: payableStatusAfter({ amountCents: totalCents, paidCents: paidCentsOf(payable), voided: payable.status === 'ANULADA', hasSettlement: hasSettlement(payable) }) }, include: PAYABLE_INCLUDE });
             await tx.financialAuditEvent.create({ data: { entityType: 'PayablePayment', entityId: paymentId, action: 'VOID', before: cloneForAudit(payment), after: cloneForAudit(reversed), actorId } });
             return { payment: reversed, payable: serializePayable(updated) };
         }, { isolationLevel: 'Serializable' });

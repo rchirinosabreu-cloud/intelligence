@@ -58,7 +58,7 @@ const sumsForRows = (operation, rows) => {
       summed('expense', group.filter(row => row.type === 'EXPENSE').map(row => row.amount), currency),
       summed('net', group.map(row => row.type === 'INCOME' ? row.amount : row.type === 'EXPENSE' && centsOf(row.amount) !== null ? decimal(-centsOf(row.amount)) : null), currency)
     ];
-    const open = group.filter(row => !['PAGADA', 'ANULADA'].includes(row.status));
+    const open = group.filter(row => !['PAGADA', 'SALDADA', 'ANULADA'].includes(row.status));
     return [summed('outstanding', open.map(row => row.outstanding), currency),
       summed('overdue', open.filter(row => row.dueState?.key === 'VENCIDA').map(row => row.outstanding), currency)];
   });

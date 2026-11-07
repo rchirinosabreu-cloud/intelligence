@@ -28,6 +28,7 @@ export const PAYABLE_STATUSES = Object.freeze([
     { value: 'POR_PAGAR', label: 'Por pagar' },
     { value: 'PARCIAL', label: 'Pago parcial' },
     { value: 'PAGADA', label: 'Pagada' },
+    { value: 'SALDADA', label: 'Saldada con compensación' },
     { value: 'ANULADA', label: 'Anulada' }
 ]);
 
@@ -45,7 +46,7 @@ export const isThirdPartyKind = (value) => THIRD_PARTY_KINDS.some((item) => item
 export const thirdPartyKindLabel = (value) => THIRD_PARTY_KINDS.find((item) => item.value === value)?.label || 'Tercero';
 export const payableStatusLabel = (value) => PAYABLE_STATUSES.find((item) => item.value === value)?.label || value;
 export const isPayableCategory = (value) => PAYABLE_CATEGORY_OPTIONS.some(([category]) => category === value);
-export const isPayableClosed = (status) => status === 'PAGADA' || status === 'ANULADA';
+export const isPayableClosed = (status) => ['PAGADA', 'SALDADA', 'ANULADA'].includes(status);
 
 // Qué le falta a un tercero para guardarse, en palabras; `null` si está completo.
 export const thirdPartyProblem = ({ kind, name, documentType, documentNumber, email } = {}) => {
@@ -84,10 +85,10 @@ export const payablePaymentProblem = ({ amount, paidAt, accountId, outstanding }
 };
 
 // El estado sale de los números, nunca se escribe a mano.
-export const payableStatusAfter = ({ amountCents, paidCents, voided = false }) => {
+export const payableStatusAfter = ({ amountCents, paidCents, voided = false, hasSettlement = false }) => {
     if (voided) return 'ANULADA';
     if (paidCents <= 0) return 'POR_PAGAR';
-    return paidCents >= amountCents ? 'PAGADA' : 'PARCIAL';
+    return paidCents >= amountCents ? (hasSettlement ? 'SALDADA' : 'PAGADA') : 'PARCIAL';
 };
 
 // Vencida, por vencer o sin vencimiento, con los días, para la tarjeta y los totales.

@@ -2560,6 +2560,11 @@ model PayablePayment {
   id                String           @id @default(uuid())
   payableId         String
   payable           AccountsPayable  @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  // Compensación vinculada: aplicación sin banco; ambos lados se revierten juntos.
+  kind              String           @default("PAGO")
+  offsetReceivablePaymentId String?   @unique
+  offsetReceivablePayment ReceivablePayment? @relation("FinancialOffset", fields: [offsetReceivablePaymentId], references: [id], onDelete: Restrict)
+  offsetRequestId   String?          @unique
   accountId         String?
   account           FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
   financialRecordId String?          @unique
@@ -3012,6 +3017,7 @@ model ReceivablePayment {
   // El soporte de un ajuste sin dinero: el certificado de una retención (22 de octubre de 2026), el
   // acta de un canje. Un pago no lo usa: sus comprobantes van en su ingreso.
   documents         ReceivablePaymentDocument[]
+  offsetPayablePayment PayablePayment? @relation("FinancialOffset")
 
   @@index([receivableId, paidAt])
   @@index([accountId, paidAt])

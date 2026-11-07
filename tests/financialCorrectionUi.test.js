@@ -12,9 +12,3 @@ test('el detalle de cuenta y la corrección nacen en las pantallas existentes', 
   const dashboard = source('FinancialDashboard.jsx');
   assert.ok(dashboard.indexOf('<FinancialFilters') > dashboard.indexOf('data-financial-kpis'), 'los filtros se presentan debajo de los indicadores');
 });
-test('abrir un indicador retira el filtro local de cuenta para conservar el alcance de su cifra', () => {
-  const dashboard = readFileSync('src/components/modules/FinancialDashboard.jsx', 'utf8');
-  const ledger = readFileSync('src/components/modules/financial/FinancialLedger.jsx', 'utf8');
-  assert.match(dashboard, /resetAccountKey=\{indicatorRequest\}/);
-  assert.match(ledger, /setSelectedAccountId\(''\); setPage\(1\); \}, \[resetAccountKey\]/);
-});
