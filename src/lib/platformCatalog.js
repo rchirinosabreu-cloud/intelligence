@@ -15,6 +15,7 @@
 //   su frase rompe CI, así Bria crece con la plataforma sin que nadie se acuerde de avisarle.
 
 export const PLATFORM_EXCLUDED = [
+  { match: /^POST \/dashboard\/announcements\/:id\/response$/, reason: 'apertura o cierre personal del anuncio: solo se registra al actuar en su pantalla; Bria no puede declarar que alguien lo abrió ni cerrar su aviso por él' },
   { match: /^\w+ \/drive\/folders\/[^/]+\/(password|unlock|lock)$/, reason: 'las contraseñas y el desbloqueo de carpetas se gestionan solo en Drive; las claves nunca se solicitan ni pasan por Bria' },
   { match: /^\w+ \/(public|quotations\/public|login|password-reset|services-catalog)(\/|$)/, reason: 'puerta pública o de inicio de sesión' },
   { match: /^POST \/users$/, reason: 'crear cuentas es de la pantalla de Equipo' },
@@ -175,13 +176,15 @@ export const PLATFORM_OPERATIONS = {
   'POST /important-notices/:id/snooze': { que: 'Pospone un aviso importante.', campos: 'option (10m, 1h o tomorrow)' },
   'POST /important-notices/:id/close': { que: 'Cierra la oportunidad de una revisión de 30 días: perdida o descartada.', campos: 'outcome (PERDIDO o DESCARTADO)' },
   'GET /global-announcements': { que: 'Los anuncios generales del dashboard.' },
-  'POST /global-announcements': { que: 'Publica un anuncio general para todo el equipo.', campos: 'content, type' },
-  'DELETE /global-announcements/:id': { que: 'Retira un anuncio general.' },
+  'POST /global-announcements': { que: 'Publica un anuncio general para todo el equipo activo en la banda existente, sin duplicar campanas; conserva el mismo requestId ante un reintento.', campos: 'content, requestId (identificador único de la solicitud)' },
+  'DELETE /global-announcements/:id': { que: 'Archiva un anuncio general y retira sus avisos pendientes conservando contenido y respuestas; exige la revisión recién consultada.', campos: 'expectedRevision' },
   'GET /general-chat': { que: 'El chat general (historial).' },
   'POST /general-chat': { que: 'Escribe en el chat general.', campos: 'content' },
-  'POST /dashboard/announcements': { que: 'Crea un anuncio del dashboard (general o para una persona).', campos: 'content, scope (global|personal), userId' },
-  'PATCH /dashboard/announcements/:scope/:id': { que: 'Edita un anuncio del dashboard.', campos: 'content' },
-  'DELETE /dashboard/announcements/:scope/:id': { que: 'Retira un anuncio del dashboard.' },
+  'POST /dashboard/announcements': { que: 'Crea un anuncio del dashboard, general en la banda del equipo activo o personal para el destinatario elegido; ante un reintento conserva el mismo requestId.', campos: 'content, scope (GLOBAL|MEMBER), targetUserId (solo MEMBER), requestId (identificador único obligatorio para GLOBAL)' },
+  'GET /dashboard/announcements/:id/preview': { que: 'Consulta el contenido, autor y revisión actual de un anuncio general sin registrar que la persona lo abrió ni cerrar su aviso.' },
+  'GET /dashboard/announcements/:id/history': { que: 'Consulta las respuestas personales de un anuncio general con acceso vigente de gestor; solo administradores reciben además la auditoría detallada. Apertura y cierre no acreditan lectura completa, aceptación ni cumplimiento.' },
+  'PATCH /dashboard/announcements/:scope/:id': { que: 'Corrige un anuncio del dashboard; en generales conserva la versión anterior y no reemite avisos atendidos. Un conflicto de revisión requiere volver a consultar.', campos: 'content, expectedRevision (obligatorio para GLOBAL)' },
+  'DELETE /dashboard/announcements/:scope/:id': { que: 'Archiva un anuncio general conservando su historial y retirando los avisos pendientes; un anuncio personal conserva su eliminación habitual.', campos: 'expectedRevision (obligatorio para GLOBAL)' },
   'PATCH /dashboard/clients/:clientId/responsible': { que: 'Asigna el community manager de un cliente.', campos: 'responsibleId' },
   'GET /dashboard/personal': { que: 'El dashboard personal de quien pregunta: tareas, reuniones y recordatorios.' },
   // La liga del mes (2 y 3 de noviembre de 2026): el buen uso de la plataforma, en puntos que se suman.

@@ -28,6 +28,14 @@ test('every real route is described for Bria or excluded with a reason', () => {
   assert.deepEqual(missing, [], `rutas sin describir ni excluir:\n${missing.join('\n')}`);
 });
 
+test('Bria puede consultar anuncios pero no registrar una apertura o cierre personal en nombre de alguien', () => {
+  assert.ok(PLATFORM_OPERATIONS['GET /dashboard/announcements/:id/preview']);
+  assert.ok(PLATFORM_OPERATIONS['GET /dashboard/announcements/:id/history']);
+  assert.ok(isExcludedOperation('POST /dashboard/announcements/:id/response'));
+  assert.match(PLATFORM_OPERATIONS['POST /dashboard/announcements'].campos, /requestId/);
+  assert.match(PLATFORM_OPERATIONS['PATCH /dashboard/announcements/:scope/:id'].campos, /expectedRevision/);
+});
+
 // 22 de octubre de 2026: una pantalla que recibe archivos lo dice en su código (`receivesFiles`) y en el mapa
 // (`archivo`), así Bria la usa desde el chat o WhatsApp sin una herramienta propia; una que recibe archivos sin
 // decirlo, o un mapa que promete archivos donde la ruta no los recibe, rompe esta prueba.
@@ -82,7 +90,8 @@ test('a concrete path finds its operation and its parameters; a search finds by 
   assert.equal(matchOperation('GET', '/content/plans/p1/criteria').key, 'GET /content/plans/:id/criteria');
   assert.equal(matchOperation('POST', '/no/existe'), null);
   const found = findOperations('anuncio general equipo');
-  assert.equal(found[0].key, 'POST /global-announcements');
+  assert.equal(found[0].key, 'POST /dashboard/announcements');
+  assert.ok(found.some(row => row.key === 'POST /global-announcements'), 'la ruta anterior sigue disponible y comparte el origen nativo');
   assert.ok(findOperations('abono cartera', { writesOnly: true }).some((row) => row.key === 'POST /financials/receivables/:id/payments'));
   assert.deepEqual(findOperations(''), []);
 });
