@@ -21,7 +21,7 @@ const sqlFiles = (await Promise.all(['vault.sql', 'bria-agency-facts.sql', 'bria
 test('el catálogo cubre todos los registros de auditoría y de historial', () => {
     assert.deepEqual(AUDIT_TABLES.map((spec) => `${spec.schema}.${spec.name}`).sort(), [
         'bria_memory.agency_fact_events', 'bria_memory.decision_events', 'bria_memory.learning_events',
-        'public.AdBudgetEvent', 'public.AiGovernanceEvent', 'public.AiUsageEvent', 'public.ClientContractDecision', 'public.ContentItemDeliveryChange', 'public.ContentItemPeriodChange', 'public.DeletedTaskLog',
+        'public.AdBudgetEvent', 'public.AiGovernanceEvent', 'public.AiUsageEvent', 'public.AnnouncementEvent', 'public.ClientContractDecision', 'public.ContentItemDeliveryChange', 'public.ContentItemPeriodChange', 'public.DeletedTaskLog',
         'public.FinancialAuditEvent', 'public.OperationalTraceEvent', 'public.TaskDeliverableEvent', 'public.TaskParticipationArchive',
         'vault.credential_events', 'vault.reveal_events'
     ]);

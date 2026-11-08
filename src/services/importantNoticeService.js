@@ -8,6 +8,7 @@
 // la banda se le mostró a alguien, lo que decidió y lo que salió solo. Una traza que no se guarda nunca deshace la decisión.
 import { createHash } from 'node:crypto';
 import prisma from '../lib/prisma.js';
+import { announcementNoticeState } from './announcementDeliveryService.js';
 import * as crmService from './crmService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { hasModulePermission } from '../config/security.js';
@@ -56,6 +57,7 @@ const CLIENT_COLLECTION_KINDS = new Set(['CARTERA_MENSUAL', 'CARTERA_SUSPENSION'
 const isClientCollectionNotice = (notice) => CLIENT_COLLECTION_KINDS.has(notice.kind);
 // De quién es el aviso, para nombrarlo en la traza: la oportunidad o el cliente.
 const readSubjectName = async (db, notice) => {
+    if (notice.kind === 'ANUNCIO_GENERAL') return 'Anuncio general';
     try {
         if (isOperationalNotice(notice) || isAdNotice(notice)) return notice.label?.split(' · ').slice(1).join(' · ') || null;
         if (isClientCollectionNotice(notice)) return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
@@ -147,6 +149,7 @@ const planStillPending = async (db, notice, overduePlans, now, coveredCycles = n
 // ¿La oportunidad sigue esperando al cliente y nadie registró una gestión desde que salió el aviso? Si no, por qué.
 // En cartera: ¿el cliente sigue con lo vencido? En parrillas: ¿quedan piezas sin publicar?
 const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans, coveredCycles } = {}) => {
+    if (notice.kind === 'ANUNCIO_GENERAL') return announcementNoticeState(db, notice);
     if (isOperationalNotice(notice)) return null; // Revalidado por la proyección autorizada antes de seleccionar.
     if (isPlanNotice(notice)) return planStillPending(db, notice, overduePlans, now, coveredCycles);
     if (isAdNotice(notice)) return (await import('./adBudgetNoticeService.js')).adNoticeStillNeeded(db, notice, now);
@@ -214,7 +217,8 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
         if (cleared.sourceRevision) return { notice: serialize(notice, undefined, undefined, cleared.sourceRevision), nextAt };
         if (cleared.refresh) {
             const refreshed = await db.importantNotice.update({ where: { id: notice.id }, data: cleared.refresh });
-            return { notice: serialize(refreshed, cleared.receivableIds), nextAt };
+            return { notice: { ...serialize(refreshed, cleared.receivableIds), ...(cleared.announcement ? { announcement: cleared.announcement,
+                pendingAnnouncements: candidates.filter(row => row.kind === 'ANUNCIO_GENERAL').length } : {}) }, nextAt };
         }
         if (cleared.receivableIds) return { notice: serialize(notice, cleared.receivableIds), nextAt };
         await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
@@ -236,6 +240,7 @@ const ownOpenNotice = async (db, id, actor, now = new Date(), { overduePlans = r
         if (!wanted.some(item => item.subjectId === notice.subjectId)) throw httpError(409, 'Este aviso cambió. Actualiza para revisar la operación actual.');
     }
     if (notice.resolvedAt) throw httpError(409, 'Ese aviso ya se resolvió.');
+    if (notice.kind === 'ANUNCIO_GENERAL' && (await announcementNoticeState(db, notice)).reason) throw httpError(409, 'Este anuncio ya fue atendido o archivado.');
     if (isPlanNotice(notice)) {
         const fresh = await planStillPending(db, notice, overduePlans, now);
         if (fresh?.reason) throw httpError(409, 'La parrilla o su asignación cambió. Actualiza el aviso.');

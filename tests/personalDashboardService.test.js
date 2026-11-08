@@ -11,7 +11,8 @@ import {
   createDashboardAnnouncement,
   deleteDashboardAnnouncement,
   getDashboardAnnouncements,
-  updateDashboardAnnouncement
+  updateDashboardAnnouncement,
+  sanitizeDashboardAnnouncementContent
 } from '../src/services/personalDashboardService.js';
 
 const fixedNow = new Date('2026-08-08T15:00:00.000Z');
@@ -105,7 +106,8 @@ test('dashboard announcement history only queries personal announcements for the
     userId: 'user-helen',
     type: 'TEAM_ANNOUNCEMENT'
   });
-  assert.equal(queries[0].query.take, 50);
+  assert.equal(queries[0].query.take, undefined, 'el historial general no descarta registros tras cincuenta anuncios');
+  assert.deepEqual(queries[0].query.include.deliveries.where, { userId: 'user-helen' });
   assert.equal(queries[1].query.take, 50);
   assert.equal(announcements.length, 2);
   assert.equal(announcements[0].scope, 'MEMBER');
@@ -136,54 +138,22 @@ test('dashboard announcements preserve safe rich text and target only the select
   };
 
   await createDashboardAnnouncement({
-    requester: { role: 'ADMIN', userId: 'user-admin' },
-    scope: 'GLOBAL',
-    content: '<p>Hola <strong>equipo</strong> 🚀<script>alert(1)</script></p>'
-  }, { db });
-  await createDashboardAnnouncement({
     requester: { role: 'PROJECT_MANAGER', userId: 'user-rodny' },
     scope: 'MEMBER',
     targetUserId: 'user-helen',
     content: '<p>Mensaje <em>personal</em></p>'
   }, { db, notificationCreator: data => db.notification.create({ data }) });
 
-  assert.match(writes[0].payload.data.content, /<strong>equipo<\/strong>/);
-  assert.equal(writes[0].payload.data.authorId, 'user-admin');
-  assert.match(writes[0].payload.data.content, /🚀/);
-  assert.doesNotMatch(writes[0].payload.data.content, /script|alert\(1\)/i);
-  assert.equal(writes[1].payload.data.userId, 'user-helen');
-  assert.equal(writes[1].payload.data.type, 'TEAM_ANNOUNCEMENT');
-  assert.equal(writes[1].payload.data.relatedId, 'user-rodny');
-  assert.match(writes[1].payload.data.message, /<em>personal<\/em>/);
+  assert.equal(writes[0].payload.data.userId, 'user-helen');
+  assert.equal(writes[0].payload.data.type, 'TEAM_ANNOUNCEMENT');
+  assert.equal(writes[0].payload.data.relatedId, 'user-rodny');
+  assert.match(writes[0].payload.data.message, /<em>personal<\/em>/);
 });
 
-test('global dashboard announcements create a notification for each active teammate except the author', async () => {
-  const notifications = [];
-  const db = {
-    globalAnnouncement: {
-      create: async (payload) => ({ id: 'global-created', ...payload.data })
-    },
-    user: {
-      findMany: async () => [
-        { id: 'user-admin' },
-        { id: 'user-helen' },
-        { id: 'user-francisco' }
-      ]
-    }
-  };
-
-  await createDashboardAnnouncement({
-    requester: { role: 'ADMIN', userId: 'user-admin' },
-    scope: 'GLOBAL',
-    content: '<p>Reunion general a las 4:00 p. m.</p>'
-  }, {
-    db,
-    notificationCreator: async (data) => notifications.push(data)
-  });
-
-  assert.deepEqual(notifications.map(({ userId }) => userId), ['user-helen', 'user-francisco']);
-  assert.ok(notifications.every(({ type }) => type === 'ANNOUNCEMENT_GLOBAL'));
-  assert.ok(notifications.every(({ relatedId }) => relatedId === 'global-created'));
+test('general announcement rich text is sanitized before native delivery', () => {
+  const content = sanitizeDashboardAnnouncementContent('<p>Hola <strong>equipo</strong><script>alert(1)</script></p>');
+  assert.match(content, /<strong>equipo<\/strong>/);
+  assert.doesNotMatch(content, /script|alert\(1\)/i);
 });
 
 test('global announcements keep an optional author relation for role-based challenges', () => {
@@ -239,19 +209,13 @@ test('only admins and project managers can edit and delete dashboard announcemen
     id: 'member-1',
     content: '<p>Mensaje <strong>actualizado</strong><script>bad()</script></p>'
   }, { db });
-  await deleteDashboardAnnouncement({
-    requester: { role: 'ADMIN' },
-    scope: 'GLOBAL',
-    id: 'global-1'
-  }, { db });
+  await deleteDashboardAnnouncement({ requester: { role: 'ADMIN' }, scope: 'MEMBER', id: 'member-1' }, { db });
 
   assert.deepEqual(writes[0].payload.where, { id: 'member-1', type: 'TEAM_ANNOUNCEMENT' });
   assert.match(writes[1].payload.data.message, /<strong>actualizado<\/strong>/);
   assert.doesNotMatch(writes[1].payload.data.message, /script|bad\(\)/i);
-  assert.deepEqual(writes[2], {
-    action: 'delete-global',
-    payload: { where: { id: 'global-1' } }
-  });
+  assert.equal(writes[3].action, 'delete-member');
+  assert.deepEqual(writes[3].payload.where, { id: 'member-1' });
 });
 
 // Para armar los recordatorios de otra persona hace falta saber qué puede ver ella (9 de octubre de 2026). Solo

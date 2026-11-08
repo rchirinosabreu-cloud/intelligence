@@ -36,6 +36,7 @@ const CHANNEL_PHRASES = { WHATSAPP: 'por WhatsApp', LLAMADA: 'por llamada', CORR
 const SNOOZE_PHRASES = { '10m': 'por 10 minutos', '1h': 'por 1 hora', tomorrow: 'hasta mañana a las 8:00' };
 const OUTCOME_PHRASES = { PERDIDO: 'perdida', DESCARTADO: 'descartada', GANADO: 'ganada' };
 const CLEARED_REASONS = {
+    ANUNCIO_ATENDIDO: 'el anuncio fue archivado o su aviso personal ya fue atendido',
     GESTION: 'ya se registró una gestión con el cliente en el CRM',
     ETAPA: 'la oportunidad ya no espera respuesta del cliente',
     INACTIVA: 'la oportunidad ya no está activa en el CRM',

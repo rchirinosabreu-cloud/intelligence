@@ -39,7 +39,7 @@ test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» s
     assert.match(band, /aria-label="Motivo de la decisión"/);
     // En la revisión: «Ya hice seguimiento», «No sigue» y «Recordarme»; sin «Abrir». «Cerrar» se confundía con cerrar el
     // aviso y «Descartar» elegía de antemano una de las dos etapas.
-    assert.doesNotMatch(band, /Sigue: ya hice seguimiento|Cerrar como perdida|>\s*Cerrar\s*<|>\s*Descartar\s*</);
+    assert.doesNotMatch(band.slice(band.indexOf('isOperational ? (')), /Sigue: ya hice seguimiento|Cerrar como perdida|>\s*Cerrar\s*<|>\s*Descartar\s*</); // Cerrar existe solo en anuncios, no en CRM.
     assert.match(base, />\s*Resolver oportunidad\s*</);
     assert.match(band, /¿Qué resultado confirmó el cliente o el equipo\?/);
     assert.match(band, /mode === 'close' && REVIEW_OUTCOMES\.map/);

@@ -9,6 +9,8 @@ import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { FOLLOW_UP_CHANNELS, NOTICE_ARCHIVE_OUTCOME, REVIEW_OUTCOMES, SNOOZE_OPTIONS, noticeTitleHref } from '@/lib/importantNotices';
 import ContractContinuityDecision from '@/components/modules/Clients/operations/ContractContinuityDecision';
 import { noticeResponsePolicy, noticeAllows } from '@/lib/alertResponsePolicy';
+import AnnouncementPreview from './AnnouncementPreview';
+import { announcementRequest, openAnnouncementPreview } from '@/lib/announcementApi';
 
 // Avisos importantes: tarjeta inferior con halo suave, por encima del menú. Un aviso
 // a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
@@ -83,6 +85,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   const policy = noticeResponsePolicy(notice);
   // Un aviso de una oportunidad: se puede archivar a la vista (Rodny, 4 de noviembre de 2026).
   const isCrm = policy?.family === 'CRM';
+  const isAnnouncement = policy?.family === 'ANNOUNCEMENT';
   const titleHref = noticeTitleHref(notice);
   // Cartera vencida (28 de octubre de 2026): la decide Elisa. «Ya le escribí» deja la gestión de cobro en la
   // trazabilidad y «Registrar pago» abre Cuentas por cobrar; el aviso sale solo cuando el cliente se pone al día.
@@ -142,6 +145,16 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
     }
   };
 
+  const dismissAnnouncement = async () => {
+    setBusy(true);
+    try {
+      await announcementRequest(notice.announcement.id, 'response', { action: 'dismiss', expectedRevision: notice.announcement.revision });
+      onDecided();
+    } catch (error) {
+      toast.error(error.message); setBusy(false); onRefresh();
+    }
+  };
+
   // Mirar no es decidir (Rodny, 4 de noviembre de 2026): el título lleva a lo que nombra y el aviso sigue ahí. Con Ctrl o
   // Cmd se abre en otra pestaña, como cualquier enlace.
   const openTitle = (event) => {
@@ -156,6 +169,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
       <div className="brain-notice-content">
         <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite">
           <p className="brain-notice-label"><span className="brain-notice-dot" aria-hidden="true" />{notice.label}</p>
+          {isAnnouncement && notice.pendingAnnouncements > 1 && <p className="mb-2 text-xs text-zinc-500">{notice.pendingAnnouncements} anuncios pendientes · uno a la vez</p>}
           <p className="brain-notice-title">
             {titleHref ? (
               <a href={titleHref} data-notice-title-link onClick={openTitle} className="rounded transition-colors hover:underline">
@@ -163,7 +177,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
               </a>
             ) : notice.message}
           </p>
-          {mode === 'base' && policy?.explanation && <p className="mb-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300" data-notice-effect>{policy.explanation}</p>}
+          {mode === 'base' && !isAnnouncement && policy?.explanation && <p className="mb-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300" data-notice-effect>{policy.explanation}</p>}
           {mode === 'channels' && <p className="mb-3 text-sm font-medium">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
           {mode === 'snooze' && <p className="mb-3 text-sm font-medium">¿Cuándo te lo recuerdo?</p>}
           {mode === 'close' && <p className="mb-3 text-sm font-medium">¿Qué resultado confirmó el cliente o el equipo?</p>}
@@ -175,7 +189,10 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
           <div className="flex flex-wrap gap-2" role="group" aria-label={mode === 'base' ? 'Acciones del aviso' : 'Opciones del aviso'} aria-busy={busy}>
             {mode === 'base' && (
               <>
-                {isOperational ? (
+                {isAnnouncement ? <>
+                  <NoticeButton primary disabled={busy} data-notice-action="preview" onClick={() => openAnnouncementPreview(notice.announcement.id)}>Ver anuncio</NoticeButton>
+                  <NoticeButton disabled={busy} data-notice-action="dismiss" onClick={dismissAnnouncement}>Cerrar</NoticeButton>
+                </> : isOperational ? (
                   <NoticeButton primary disabled={busy} data-notice-action="open-operation" onClick={() => navigateFrom(notice.kind === 'OPERACION_RENOVACION' ? `${notice.url}?action=renew-contract` : notice.url)}>
                     {policy.openLabel}
                   </NoticeButton>
@@ -277,9 +294,8 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange, o
   const visible = Boolean(notice);
   useEffect(() => { onVisibleChange?.(visible); }, [visible, onVisibleChange]);
 
-  if (!notice) return null;
   return (
-    <NoticeBody
+    <><AnnouncementPreview />{notice && <NoticeBody
       key={notice.id}
       notice={notice}
       appearance={appearance}
@@ -291,7 +307,8 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange, o
         queryClient.invalidateQueries({ queryKey: ['crm'] });
         queryClient.invalidateQueries({ queryKey: ['client-operations'] });
         queryClient.invalidateQueries({ queryKey: ['financial-collection-activities'] });
+        queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
       }}
-    />
+    />}</>
   );
 }

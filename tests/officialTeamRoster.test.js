@@ -136,12 +136,21 @@ test('queued push delivery rechecks membership before reading subscriptions',asy
 });
 
 test('global announcement recipient query includes only official active members',async()=>{
-  let query;
-  await createDashboardAnnouncement({requester:{role:'ADMIN',userId:'u1'},scope:'GLOBAL',content:'Aviso'}, {db:{
-    globalAnnouncement:{create:async()=>({id:'a1'})},
-    user:{findMany:async args=>{query=args;return[];}},
-  },notificationCreator:async()=>{}});
+  let query, actorQuery, transactionOptions;
+  const db = {
+    globalAnnouncement:{findUnique:async()=>null,create:async()=>({id:'a1',revision:1})},
+    announcementEvent:{create:async()=>({id:'e1'})},
+    user:{findFirst:async args=>{actorQuery=args;return{id:'u1',name:'Admin',role:'ADMIN'};},findMany:async args=>{query=args;return[];}},
+    $transaction:async(work,options)=>{transactionOptions=options;return work(db);},
+  };
+  await createDashboardAnnouncement({requester:{role:'ADMIN',userId:'u1'},scope:'GLOBAL',content:'Aviso',requestId:'roster-announcement'}, {db,
+    notificationCreator:async()=>{throw new Error('A general announcement must not duplicate the band in the bell');}});
   assert.deepEqual(query.where.teamMember,{is:{isActive:true}});
+  assert.equal(query.where.isActive,true);
+  assert.deepEqual(query.where.id,{not:'u1'});
+  assert.deepEqual(actorQuery.where.teamMember,{is:{isActive:true}});
+  assert.equal(actorQuery.where.isActive,true);
+  assert.equal(transactionOptions.isolationLevel,'Serializable');
 });
 
 test('personal announcements reject a target that left Equipo',async()=>{

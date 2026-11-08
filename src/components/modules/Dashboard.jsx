@@ -195,25 +195,29 @@ const Dashboard = () => {
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['important-notice'] });
     }
   });
 
   const updateAnnouncementMutation = useMutation({
     mutationFn: (announcement) => sendJson(`${baseUrl}/api/dashboard/announcements/${announcement.scope}/${announcement.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ content: announcement.content })
+      body: JSON.stringify({ content: announcement.content, expectedRevision: announcement.expectedRevision })
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['important-notice'] });
     }
   });
 
   const deleteAnnouncementMutation = useMutation({
     mutationFn: (announcement) => sendJson(`${baseUrl}/api/dashboard/announcements/${announcement.scope}/${announcement.id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      body: JSON.stringify({ expectedRevision: announcement.expectedRevision })
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['important-notice'] });
     }
   });
 

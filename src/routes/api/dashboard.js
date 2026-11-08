@@ -1,4 +1,5 @@
 import express from 'express';
+import { createAnnouncementDeliveryRouter } from './announcementDelivery.js';
 import {
   assignClientOwnerHandler,
   createDashboardAnnouncementHandler,
@@ -11,6 +12,7 @@ import { getOperationalTraceHandler } from '../../controllers/operationalTraceCo
 import { requireRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
+router.use('/announcements', createAnnouncementDeliveryRouter());
 
 router.get('/personal', getPersonalDashboardHandler);
 router.get('/personal/:userId', getPersonalDashboardHandler);

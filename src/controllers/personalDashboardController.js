@@ -30,7 +30,8 @@ export const createDashboardAnnouncementHandler = async (req, res) => {
       requester: req.user,
       scope: req.body.scope,
       content: req.body.content,
-      targetUserId: req.body.targetUserId
+      targetUserId: req.body.targetUserId,
+      requestId: req.body.requestId
     });
     return res.status(201).json(announcement);
   } catch (error) {
@@ -50,7 +51,8 @@ export const updateDashboardAnnouncementHandler = async (req, res) => {
       requester: req.user,
       scope: req.params.scope,
       id: req.params.id,
-      content: req.body.content
+      content: req.body.content,
+      expectedRevision: req.body.expectedRevision
     });
     return res.json(announcement);
   } catch (error) {
@@ -69,7 +71,8 @@ export const deleteDashboardAnnouncementHandler = async (req, res) => {
     await deleteDashboardAnnouncement({
       requester: req.user,
       scope: req.params.scope,
-      id: req.params.id
+      id: req.params.id,
+      expectedRevision: req.body.expectedRevision
     });
     return res.status(204).send();
   } catch (error) {
