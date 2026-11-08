@@ -1,3 +1,4 @@
+import { publishAnnouncement, changeAnnouncement, archiveAnnouncement } from './announcementDeliveryService.js';
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
 import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js';
@@ -849,7 +850,7 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
   const [globalAnnouncements, targetedAnnouncements] = await Promise.all([
     db.globalAnnouncement.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 50
+      include: { author: { select: { name: true } }, deliveries: { where: { userId } } }
     }),
     db.notification.findMany({
       where: {
@@ -877,7 +878,13 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
       content: announcement.content,
       type: announcement.type,
       createdAt: announcement.createdAt,
-      isRead: true
+      isRead: Boolean(announcement.deliveries?.[0]?.openedAt),
+      openedAt: announcement.deliveries?.[0]?.openedAt || null,
+      dismissedAt: announcement.deliveries?.[0]?.dismissedAt || null,
+      openedRevision: announcement.deliveries?.[0]?.openedRevision || null,
+      revision: announcement.revision || 1,
+      archivedAt: announcement.archivedAt || null,
+      author: announcement.author || null
     })),
     ...targetedAnnouncements.map((announcement) => ({
       id: announcement.id,
@@ -892,7 +899,7 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
 };
 
 export const createDashboardAnnouncement = async (
-  { requester, scope, content, targetUserId },
+  { requester, scope, content, targetUserId, requestId },
   { db = prisma, notificationCreator = createNotification } = {}
 ) => {
   assertDashboardManagerAccess(requester);
@@ -904,40 +911,7 @@ export const createDashboardAnnouncement = async (
     throw error;
   }
 
-  if (scope === 'GLOBAL') {
-    const announcement = await db.globalAnnouncement.create({
-      data: {
-        content: cleanContent,
-        type: 'DASHBOARD',
-        authorId: requester?.userId || null
-      }
-    });
-
-    if (typeof db.user?.findMany === 'function') {
-      const recipients = await db.user.findMany({
-        where: {
-          ...activeTeamUserWhere(),
-          id: requester?.userId ? { not: requester.userId } : undefined
-        },
-        select: { id: true }
-      });
-      const recipientUsers = recipients.filter(({ id }) => id !== requester?.userId);
-      const deliveryResults = await Promise.allSettled(recipientUsers.map(({ id: userId }) => notificationCreator({
-        userId,
-        message: cleanContent,
-        type: 'ANNOUNCEMENT_GLOBAL',
-        relatedId: announcement.id,
-        resourceId: 'dashboard',
-        url: '/'
-      }, { db })));
-      const failedDeliveries = deliveryResults.filter(({ status }) => status === 'rejected');
-      if (failedDeliveries.length > 0) {
-        console.error(`[PersonalDashboardService] ${failedDeliveries.length} global announcement notifications failed.`);
-      }
-    }
-
-    return announcement;
-  }
+  if (scope === 'GLOBAL') return publishAnnouncement(db, { content: cleanContent, requestId }, requester);
 
   if (scope === 'MEMBER') {
     if (!targetUserId || !await findActiveTeamUser(db, targetUserId)) {
@@ -986,7 +960,7 @@ const findMemberAnnouncement = async (db, id) => {
   return announcement;
 };
 
-export const updateDashboardAnnouncement = async ({ requester, scope, id, content }, { db = prisma } = {}) => {
+export const updateDashboardAnnouncement = async ({ requester, scope, id, content, expectedRevision }, { db = prisma } = {}) => {
   assertDashboardManagerAccess(requester);
   assertSupportedAnnouncementScope(scope);
 
@@ -997,12 +971,7 @@ export const updateDashboardAnnouncement = async ({ requester, scope, id, conten
     throw error;
   }
 
-  if (scope === 'GLOBAL') {
-    return db.globalAnnouncement.update({
-      where: { id },
-      data: { content: cleanContent }
-    });
-  }
+  if (scope === 'GLOBAL') return changeAnnouncement(db, id, { content: cleanContent, expectedRevision }, requester);
 
   await findMemberAnnouncement(db, id);
   return db.notification.update({
@@ -1011,13 +980,11 @@ export const updateDashboardAnnouncement = async ({ requester, scope, id, conten
   });
 };
 
-export const deleteDashboardAnnouncement = async ({ requester, scope, id }, { db = prisma } = {}) => {
+export const deleteDashboardAnnouncement = async ({ requester, scope, id, expectedRevision }, { db = prisma } = {}) => {
   assertDashboardManagerAccess(requester);
   assertSupportedAnnouncementScope(scope);
 
-  if (scope === 'GLOBAL') {
-    return db.globalAnnouncement.delete({ where: { id } });
-  }
+  if (scope === 'GLOBAL') return archiveAnnouncement(db, id, { expectedRevision }, requester);
 
   await findMemberAnnouncement(db, id);
   return db.notification.delete({ where: { id } });

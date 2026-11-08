@@ -80,6 +80,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     }, [fetchAnnouncements, isModalOpen]);
 
     // Handle Create
+    const requestId = useRef(crypto.randomUUID());
     const handleAdd = async () => {
         if (!text.trim() || isSubmitting) return;
 
@@ -99,13 +100,15 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     content: formattedContent,
-                    type: selectedType
+                    type: selectedType,
+                    requestId: requestId.current
                 })
             });
 
             if (res.ok) {
                 const newAnnouncement = await res.json();
-                setAnnouncements(prev => [newAnnouncement, ...prev].slice(0, scope === 'general' ? 5 : 50));
+                setAnnouncements(prev => [newAnnouncement, ...prev]);
+                requestId.current = crypto.randomUUID();
                 setText('');
                 setMentionMap({});
                 if (scope === 'general') fetchAnnouncements(); // Refresh for cleanup logic
@@ -120,19 +123,22 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     const handleDelete = async (id) => {
         if (scope !== 'general') return;
         if (!(await confirm({
-            title: 'Eliminar anuncio',
-            description: '¿Deseas eliminar este anuncio? Esta acción no se puede deshacer.',
-            confirmLabel: 'Eliminar'
+            title: 'Archivar anuncio',
+            description: 'Se retirarán sus avisos pendientes. El contenido se conserva en el historial del Dashboard.',
+            confirmLabel: 'Archivar'
         }))) return;
 
         const prev = [...announcements];
-        setAnnouncements(prev.filter(a => a.id !== id));
+
 
         try {
             const baseUrl = getApiBaseUrl();
-            await fetch(`${baseUrl}/api/global-announcements/${id}`, {
-                method: 'DELETE'
+            const response = await fetch(`${baseUrl}/api/global-announcements/${id}`, {
+                method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expectedRevision: prev.find(row => row.id === id)?.revision })
             });
+            if (!response.ok) throw new Error((await response.json()).error || 'No se pudo archivar el anuncio.');
+            setAnnouncements(prev.filter(a => a.id !== id));
         } catch (error) {
             console.error("Error deleting announcement:", error);
             setAnnouncements(prev);

@@ -11,6 +11,8 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { APPROVED_EMOJIS } from '@/constants/approvedEmojis';
 import { cn } from '@/lib/utils';
 import { announcementsInWeek, getAnnouncementWeek } from '@/lib/announcementWeek';
+import { openAnnouncementPreview } from '@/lib/announcementApi';
+import AnnouncementResponses from '@/components/notifications/AnnouncementResponses';
 
 const formatAnnouncementDate = (value) => {
   if (!value) return '';
@@ -34,7 +36,7 @@ const groupAnnouncementsByDate = (announcements) => announcements.reduce((groups
   return groups;
 }, []);
 
-const AnnouncementCard = ({ announcement, compact = false, showDate = true, canManage = false, onEdit, onDelete, isSubmitting = false }) => {
+const AnnouncementCard = ({ announcement, compact = false, showDate = true, canManage = false, onEdit, onDelete, onResponses, isSubmitting = false }) => {
   const isPersonal = announcement.scope === 'MEMBER';
 
   // General announcements are for the whole team: soft cyan surface with a full border and larger text. Personal ones stay neutral.
@@ -71,7 +73,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
               {formatAnnouncementDate(announcement.createdAt)}
             </time>
           )}
-          {!compact && canManage && (
+          {!compact && canManage && !announcement.archivedAt && (
             <>
               <button
                 type="button"
@@ -91,8 +93,8 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
                   'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
                   'brain-danger-button-icon'
                 )}
-                title="Eliminar anuncio"
-                aria-label="Eliminar anuncio"
+                title={isPersonal ? 'Eliminar anuncio' : 'Archivar anuncio'}
+                aria-label={isPersonal ? 'Eliminar anuncio' : 'Archivar anuncio'}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -107,6 +109,11 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
       )}>
         <RichCommentContent content={announcement.content} />
       </div>
+      {!isPersonal && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+        <span className="text-zinc-500">{announcement.archivedAt ? 'Archivado' : announcement.openedAt ? (announcement.openedRevision === announcement.revision ? 'Abriste este anuncio' : 'Abriste una versión anterior') : announcement.dismissedAt ? 'Aviso cerrado sin abrir' : 'Sin apertura registrada'}</span>
+        <button type="button" onClick={() => openAnnouncementPreview(announcement.id)} className="min-h-11 font-semibold text-primary">Ver anuncio</button>
+        {canManage && <button type="button" onClick={() => onResponses?.(announcement.id)} className="min-h-11 font-semibold text-primary">Ver respuestas</button>}
+      </div>}
     </article>
   );
 };
@@ -132,6 +139,8 @@ const DashboardAnnouncements = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [responsesId, setResponsesId] = useState(null);
+  const requestId = useRef(crypto.randomUUID());
   const [announcementWeek, setAnnouncementWeek] = useState(() => getAnnouncementWeek());
 
   useEffect(() => {
@@ -156,9 +165,10 @@ const DashboardAnnouncements = ({
   const activeMembers = teamMembers.filter((member) => member.userId && member.isActive !== false);
   const canPublish = plainText.trim() && (editingAnnouncement || scope === 'GLOBAL' || targetUserId);
   const announcementGroups = groupAnnouncementsByDate(announcements);
-  const weeklyAnnouncements = announcementsInWeek(announcements, announcementWeek);
+  const weeklyAnnouncements = announcementsInWeek(announcements.filter(row => !row.archivedAt), announcementWeek);
 
   const resetComposer = () => {
+    requestId.current = crypto.randomUUID();
     setContent('');
     setPlainText('');
     setTargetUserId('');
@@ -197,12 +207,14 @@ const DashboardAnnouncements = ({
         await onUpdate({
           id: editingAnnouncement.id,
           scope: editingAnnouncement.scope,
+          expectedRevision: editingAnnouncement.revision,
           content
         });
       } else {
         if (!onCreate) return;
         await onCreate({
           scope,
+          requestId: requestId.current,
           targetUserId: scope === 'MEMBER' ? targetUserId : undefined,
           content
         });
@@ -223,7 +235,7 @@ const DashboardAnnouncements = ({
     if (!canManage || !onDelete || !deleteCandidate || isSubmitting) return;
 
     try {
-      await onDelete({ id: deleteCandidate.id, scope: deleteCandidate.scope });
+      await onDelete({ id: deleteCandidate.id, scope: deleteCandidate.scope, expectedRevision: deleteCandidate.revision });
       if (editingAnnouncement?.id === deleteCandidate.id) {
         resetComposer();
         setIsComposerOpen(false);
@@ -441,6 +453,7 @@ const DashboardAnnouncements = ({
                       canManage={canManage}
                       onEdit={startEditing}
                       onDelete={requestDelete}
+                      onResponses={setResponsesId}
                       isSubmitting={isSubmitting}
                     />
                   ))}
@@ -467,9 +480,9 @@ const DashboardAnnouncements = ({
             <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
               <Trash2 className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-zinc-950 dark:text-white">Eliminar anuncio</DialogTitle>
+            <DialogTitle className="text-zinc-950 dark:text-white">{deleteCandidate?.scope === 'GLOBAL' ? 'Archivar anuncio' : 'Eliminar anuncio'}</DialogTitle>
             <DialogDescription className="text-zinc-500 dark:text-zinc-400 leading-6">
-              Este anuncio dejará de aparecer en el dashboard y en su historial. Esta acción no se puede deshacer.
+              {deleteCandidate?.scope === 'GLOBAL' ? 'Dejará de aparecer en el tablero y se retirarán sus avisos pendientes. El contenido y las respuestas se conservan en el historial.' : 'Este anuncio personal dejará de aparecer en el dashboard y en su historial. Esta acción no se puede deshacer.'}
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-xs font-semibold text-destructive">{error.message}</p>}
@@ -479,11 +492,12 @@ const DashboardAnnouncements = ({
             </Button>
             <Button variant="destructive" className="rounded-lg gap-2" disabled={isSubmitting} onClick={confirmDelete}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              Eliminar anuncio
+              {deleteCandidate?.scope === 'GLOBAL' ? 'Archivar anuncio' : 'Eliminar anuncio'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AnnouncementResponses id={responsesId} onClose={() => setResponsesId(null)} />
     </>
   );
 };

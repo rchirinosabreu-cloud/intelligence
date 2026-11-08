@@ -253,6 +253,8 @@ model User {
   teamChatReactions           TeamChatReaction[]
   teamChatRequests            TeamChatRequest[]
   authoredGlobalAnnouncements GlobalAnnouncement[]
+  announcementDeliveries AnnouncementDelivery[]
+  announcementEvents AnnouncementEvent[]
   createdOperationalEvents    OperationalEvent[]      @relation("OperationalEventCreator")
   notifications               Notification[]
   importantNotices            ImportantNotice[]
@@ -2173,8 +2175,41 @@ model GlobalAnnouncement {
   createdAt DateTime @default(now())
   authorId  String?
   author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  revision Int @default(1)
+  requestId String? @unique
+  archivedAt DateTime? @db.Timestamptz(6)
+  deliveries AnnouncementDelivery[]
+  events AnnouncementEvent[]
 
   @@index([authorId, createdAt])
+}
+
+model AnnouncementDelivery {
+  id String @id @default(uuid())
+  announcementId String
+  announcement GlobalAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  openedAt DateTime? @db.Timestamptz(6)
+  openedRevision Int?
+  dismissedAt DateTime? @db.Timestamptz(6)
+  @@unique([announcementId, userId])
+  @@index([userId, createdAt])
+}
+
+model AnnouncementEvent {
+  id String @id @default(uuid())
+  announcementId String
+  announcement GlobalAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action String
+  revision Int
+  content String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([announcementId, createdAt])
+  @@index([actorId])
 }
 
 model AgencyIntegration {

@@ -16,36 +16,21 @@ export const addGlobal = async (req, res) => {
     try {
         const { content, type } = req.body;
         if (!content) return res.status(400).json({ error: "Missing content" });
-        const announcement = await createGlobalAnnouncement({ content, type });
-
-        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
-        let match;
-        const mentionedUserIds = new Set();
-        while ((match = mentionRegex.exec(content)) !== null) {
-            mentionedUserIds.add(match[2]);
-        }
-
-        for (const mentionedId of mentionedUserIds) {
-            const tm = await prisma.teamMember.findUnique({ where: { id: mentionedId } });
-            if (tm && tm.email) {
-                const user = await prisma.user.findUnique({ where: { email: tm.email.trim().toLowerCase() } });
-                if (user && user.id !== req.user.userId) {
-                    await createNotification({ userId: user.id, message: `${req.user.name} te mencionó en un anuncio global`, type: 'ANNOUNCEMENT_GLOBAL', relatedId: announcement.id });
-                }
-            }
-        }
+        const announcement = await createGlobalAnnouncement({ content, type, requestId: req.body.requestId }, req.user);
         res.json(announcement);
     } catch (error) {
-        res.status(500).json({ error: "Failed to create global announcement" });
+        console.error("[Anuncios] Crear:", error.message);
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 
 export const deleteGlobal = async (req, res) => {
     try {
-        await deleteGlobalAnnouncement(req.params.id);
+        await deleteGlobalAnnouncement(req.params.id, req.body || {}, req.user);
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: "Failed to delete global announcement" });
+        console.error("[Anuncios] Archivar:", error.message);
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 

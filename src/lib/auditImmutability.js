@@ -21,6 +21,7 @@ const GUARD_FUNCTION = 'brainstudio_audit_guard';
 
 // Una sola lista. Quien cree otro registro de auditoría lo añade aquí en el mismo PR.
 export const AUDIT_TABLES = Object.freeze([
+    { schema: 'public', name: 'AnnouncementEvent', retention: null, nullableRefs: ['actorId'] },
     // Trazabilidad operativa (docs/OPERATIONAL_TRACE.md): retención de 365 días, como TRACE_RETENTION_DAYS.
     { schema: 'public', name: 'OperationalTraceEvent', retention: { column: 'occurredAt', days: 365 }, nullableRefs: ['actorId', 'subjectUserId'] },
     // Registro central de uso de IA: retención de 365 días, como USAGE_RETENTION_DAYS. Sin llaves.
