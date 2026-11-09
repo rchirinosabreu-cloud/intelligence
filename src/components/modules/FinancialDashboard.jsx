@@ -1,3 +1,4 @@
+import LegacyOffsetDialog from './financial/LegacyOffsetDialog';
 import FinancialBarterDialog from './financial/FinancialBarterDialog';
 import Select from '@/components/ui/Select';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -190,6 +191,7 @@ const FinancialDashboard = () => {
     // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo, canje, compensación, condonación.
     const [settlementDebt, setSettlementDebt] = useState(null);
     const [barterPaymentId, setBarterPaymentId] = useState(null);
+    const [legacyOffsetId, setLegacyOffsetId] = useState(null);
     const [offsetPaymentId, setOffsetPaymentId] = useState(null);
     const [isSavingSettlement, setIsSavingSettlement] = useState(false);
     // Préstamos a terceros en Cartera (Rodny, 20 de octubre de 2026).
@@ -1669,9 +1671,10 @@ await invalidateFinancialQueries(queryClient);
                                                                                                 onError={(message) => { setNoticeSuccess(''); setNoticeError(message); }} />
                                                                                         )}
                                                                                     </div>
+                                                                                    {payment.kind === 'COMPENSACION' && !payment.detail?.payrollTransactionId && (payment.detail?.offsetPayableId || (canWriteFinancials && !payment.reversedAt)) && <button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-brand-cyan-deep dark:border-white/10 dark:text-brand-cyan" onClick={() => payment.detail?.offsetPayableId ? setOffsetPaymentId(payment.id) : setLegacyOffsetId(payment.id)}>{payment.detail?.offsetPayableId ? 'Ver cruce' : 'Completar cruce anterior'}</button>}
                                                                                     {['CANJE', 'REVERSO_CANJE'].includes(payment.kind) && <button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-brand-cyan-deep dark:border-white/10 dark:text-brand-cyan" onClick={() => setBarterPaymentId(payment.kind === 'CANJE' ? payment.id : payment.detail.barterPaymentId)}>Ver canje</button>}
                                                                                     {payment.detail?.payrollTransactionId && <button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-brand-cyan-deep dark:border-white/10 dark:text-brand-cyan" onClick={() => setPayrollDeductions({ id: payment.detail.payrollTransactionId, collaboratorName: payment.detail.offsetAgainst || 'Préstamo de colaborador' })}>Ver descuento en Nómina</button>}
-                                                                                    {canWriteFinancials && !payment.reversedAt && !payment.detail?.payrollTransactionId && !['CANJE', 'REVERSO_CANJE'].includes(payment.kind) && (
+                                                                                    {canWriteFinancials && !payment.reversedAt && !payment.detail?.payrollTransactionId && !payment.detail?.offsetPayableId && !['CANJE', 'REVERSO_CANJE'].includes(payment.kind) && (
                                                                                         <div className="flex items-center gap-2">
                                                                                             {/* Corregir sin revertir (Rodny, 20 de octubre de 2026). */}
                                                                                             <button type="button" data-receivable-payment-edit onClick={() => { setNoticeError(''); setPaymentToEdit({ debt, payment }); }}
@@ -2024,6 +2027,7 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={noticeError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {barterPaymentId && <FinancialBarterDialog paymentId={barterPaymentId} onClose={() => setBarterPaymentId(null)} />}
+            {legacyOffsetId && <LegacyOffsetDialog paymentId={legacyOffsetId} onClose={() => setLegacyOffsetId(null)} onLinked={id => { setLegacyOffsetId(null); setOffsetPaymentId(id); }} />}
             {offsetPaymentId && <FinancialOffsetDialog paymentId={offsetPaymentId} onClose={() => setOffsetPaymentId(null)} />}
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={noticeError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={noticeError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}

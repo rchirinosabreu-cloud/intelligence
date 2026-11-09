@@ -20,3 +20,10 @@ export function calculatePayrollPeriod(input) {
   return { start, end, days, mode: input.mode, baseSalary: financialAmountFromCents(base * multiplier), socialSecurity: financialAmountFromCents(security * multiplier), grossAmount: financialAmountFromCents((base + security) * multiplier) };
 }
 export const payrollPeriodsOverlap = (start, end, otherStart, otherEnd) => payrollDay(start) <= payrollDay(otherEnd) && payrollDay(otherStart) <= payrollDay(end);
+// Read-only diagnosis shared by the form and server. Never infer service dates.
+export function unknownPayrollPeriods(rows = []) {
+  return rows.filter(row => !row.voidedAt && (!row.serviceStart || !row.serviceEnd)).map(row => ({
+    id: row.id, year: row.year, month: row.month, status: row.status, netAmount: Number(row.netAmount),
+    canReverse: !row.financialRecordId && !(row.payments || []).some(p => !p.reversedAt) && !(row.adjustments || []).some(a => !a.reversedAt),
+  }));
+}

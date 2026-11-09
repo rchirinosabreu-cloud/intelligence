@@ -18,7 +18,7 @@ export async function financialCorrectionDatabase({ additionalTables = [] } = {}
   const close = async () => { await db.$disconnect(); await connection.query(`DROP SCHEMA "${schema}" CASCADE`); await connection.end(); };
   try {
     const ddl = execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: url.href }, stdio: ['ignore', 'pipe', 'pipe'] });
-    const tables = new Set(['User', 'FinancialAccount', 'FinancialRecord', 'FinancialRecordAllocation', 'FinancialRecordDocument', 'FinancialAuditEvent', 'FinancialPeriod', 'PayrollContract', 'FinancialCollaborator', 'PayrollTransaction', 'PayrollPayment', 'ThirdParty', 'AccountsPayable', 'PayablePayment', 'BankReconciliationMatch']);
+    const tables = new Set(['TeamMember', 'Client', 'User', 'FinancialAccount', 'FinancialRecord', 'FinancialRecordAllocation', 'FinancialRecordDocument', 'FinancialAuditEvent', 'FinancialPeriod', 'PayrollContract', 'FinancialCollaborator', 'PayrollTransaction', 'PayrollPayment', 'ThirdParty', 'AccountsPayable', 'PayablePayment', 'BankReconciliationMatch']);
     for (const name of additionalTables) tables.add(name);
     for (const [sql] of ddl.matchAll(/CREATE TYPE "[^"]+" AS ENUM \([\s\S]*?\);/g)) await connection.query(sql);
     for (const [sql, name] of ddl.matchAll(/CREATE TABLE "([^"]+)" \([\s\S]*?\n\);/g)) if (tables.has(name)) await connection.query(sql);

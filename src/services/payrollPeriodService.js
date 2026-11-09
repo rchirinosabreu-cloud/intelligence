@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { calculatePayrollPeriod, payrollDay, payrollPeriodsOverlap } from '../lib/payrollPeriods.js';
+import { calculatePayrollPeriod, payrollDay, payrollPeriodsOverlap, unknownPayrollPeriods } from '../lib/payrollPeriods.js';
 import { assertOpenFinancialPeriod } from './financialRecordService.js';
 import { atomic, authorize, audit, clone, hash, fail, conflict, request, includePayroll, payroll, openPayrollPeriod } from './payrollPeriodShared.js';
 export { readPayrollDeductions, createPayrollDeduction, reversePayrollDeduction } from './payrollLoanDeductionService.js';
@@ -12,7 +12,8 @@ async function load(tx, contractId) {
 }
 function checkRange(ctx, start, end, excludeId) {
   const live = ctx.rows.filter(row => !row.voidedAt && row.id !== excludeId);
-  if (live.some(row => !row.serviceStart || !row.serviceEnd)) throw fail('PAYROLL_LEGACY_PERIOD_UNKNOWN', 'Primero identifica las fechas de las liquidaciones anteriores de esta persona. Sus pagos e importes se conservarán.');
+  const unknown = unknownPayrollPeriods(live);
+  if (unknown.length) throw fail('PAYROLL_LEGACY_PERIOD_UNKNOWN', `Faltan las fechas de ${unknown.map(row => `${row.month}/${row.year} (${row.status === 'DRAFT' ? 'borrador' : 'liquidación'})`).join(', ')}. En «Períodos e historial», precisa sus fechas o revisa la reversión si el registro sobra. Sus pagos se conservan.`);
   if (live.some(row => payrollPeriodsOverlap(start, end, row.serviceStart, row.serviceEnd))) throw fail('PAYROLL_PERIOD_OVERLAP', 'Estas fechas se superponen con una liquidación vigente. Revisa los períodos antes de continuar.');
 }
 const result = ctx => ({ ...ctx, transactions: ctx.rows.map(row => ({ ...row, contract: undefined })) });

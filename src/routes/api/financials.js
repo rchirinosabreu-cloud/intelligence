@@ -1,7 +1,7 @@
 import { barterOptionsHandler, readBarterHandler, assignBarterHandler, reverseBarterHandler } from '../../controllers/financialBarterController.js';
 import express from 'express';
 import { payrollPeriodHandler } from '../../controllers/payrollPeriodController.js';
-import { offsetOptionsHandler, readOffsetHandler, reverseOffsetHandler } from '../../controllers/financialOffsetController.js';
+import { reviewPartyMergeHandler, mergePartiesHandler, readPartyMergeHandler, reversePartyMergeHandler, offsetOptionsHandler, readOffsetHandler, reverseOffsetHandler, legacyOffsetOptionsHandler, linkLegacyOffsetHandler } from '../../controllers/financialOffsetController.js';
 import { accountStatementHandler, paymentCorrectionContextHandler, paymentCorrectionHandler } from '../../controllers/financialCorrectionController.js';
 import multer from 'multer';
 import { receivesFiles } from '../../lib/uploadMarker.js';
@@ -160,6 +160,8 @@ router.get('/barters/:paymentId', requireFinancialAccess, readBarterHandler);
 router.post('/barters/:paymentId/destination', requireFinancialWrite, assignBarterHandler);
 router.post('/barters/:paymentId/reverse', requireFinancialWrite, reverseBarterHandler);
 router.get('/receivables/:id/offset-options', requireFinancialAccess, offsetOptionsHandler);
+router.get('/offsets/:paymentId/legacy-options', requireFinancialAccess, legacyOffsetOptionsHandler);
+router.post('/offsets/:paymentId/link', requireFinancialWrite, linkLegacyOffsetHandler);
 router.get('/offsets/:paymentId', requireFinancialAccess, readOffsetHandler);
 router.post('/offsets/:paymentId/reverse', requireFinancialWrite, reverseOffsetHandler);
 // Resumen de ajustes de cartera (Rodny, 20 de octubre de 2026): cierres sin dinero y
@@ -295,6 +297,10 @@ router.get('/receivable-payments/:paymentId/documents/:documentId/file', require
 router.patch('/receivable-payments/:paymentId', requireFinancialWrite, updateReceivablePaymentHandler);
 // Terceros y cuentas por pagar (Rodny, 20 de octubre de 2026): el espejo de Cartera. Pagar crea el
 // egreso en Movimientos ligado al pago; el soporte del tercero se guarda como evidencia.
+router.get('/third-parties/:id/merge-review', requireFinancialAccess, reviewPartyMergeHandler);
+router.post('/third-parties/:id/merge', requireFinancialWrite, mergePartiesHandler);
+router.get('/party-merges/:id', requireFinancialAccess, readPartyMergeHandler);
+router.post('/party-merges/:id/reverse', requireFinancialWrite, reversePartyMergeHandler);
 router.get('/third-parties', requireFinancialAccess, listThirdPartiesHandler);
 router.get('/parties/commercial', requireFinancialAccess, listPartyCommercialHandler);
 router.get('/parties/team', requireFinancialAccess, listPartyTeamHandler);

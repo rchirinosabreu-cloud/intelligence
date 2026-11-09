@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { calculatePayrollPeriod } from '@/lib/payrollPeriods';
+import { calculatePayrollPeriod, unknownPayrollPeriods } from '@/lib/payrollPeriods';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -65,6 +65,7 @@ export function PayrollPeriodsDialog({ collaborator, year, month, canWrite, canA
   const context = useReview(`/payroll-contracts/${collaborator.id}/periods`), [action, setAction] = useState(null), [message, setMessage] = useState('');
   const done = async () => { setAction(null); setMessage(action?.type === 'reverse' ? 'Período revertido.' : 'Período guardado.'); await context.load(); await onSaved('Nómina actualizada; pagos e historial conservados.'); };
   const choose = next => { setMessage(''); setAction(next); };
+  const blockers = unknownPayrollPeriods(context.data?.transactions || []);
   const initial = action && { start: dateValue(action.row?.serviceStart), end: dateValue(action.row?.serviceEnd), baseSalary: '', socialSecurity: '0', mode: 'AGREED', year, month, reason: '', reviewContractId: collaborator.id };
   return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}><DialogContent data-payroll-periods className="max-h-[90vh] overflow-y-auto sm:max-w-3xl dark:bg-zinc-900" onInteractOutside={event => event.preventDefault()}>
     <DialogHeader><DialogTitle>Períodos de nómina · {collaborator.name}</DialogTitle><DialogDescription>Cada período conserva sus pagos. Los importes del contrato no reemplazan las liquidaciones anteriores.</DialogDescription></DialogHeader>
@@ -72,10 +73,15 @@ export function PayrollPeriodsDialog({ collaborator, year, month, canWrite, canA
     {!context.data && !context.error && <p>Cargando períodos…</p>}
     {message && <p role="status" className="text-sm text-status-positive-fg">{message}</p>}
     {context.data && (action ? <ReviewForm key={`${action.type}:${action.row?.id || 'new'}`} scope={`payroll:period:${collaborator.id}:${action.type}:${action.row?.id || `${year}-${month}`}`} revision={context.data.revision} initial={initial} onCancel={() => setAction(null)} onDone={done} onBusy={setSaving} onRefresh={context.load}
-      summarize={form => action.type === 'create' ? (() => { const result = calculatePayrollPeriod(form); return [['Servicio', `${day(form.start)} – ${day(form.end)}`], ['Mes de liquidación', `${month}/${year}`], ['Días calendario incluidos', result.days], ['Importe del período', money(result.grossAmount)], ['Estado inicial', 'Borrador · requiere aprobación'], ['Pagos anteriores', 'Se conservan sin cambios']]; })() : action.type === 'identify' ? (() => { if (!form.start || !form.end || form.end < form.start) throw new Error('Revisa las fechas del servicio.'); return [['Período identificado', `${day(form.start)} – ${day(form.end)}`], ['Neto y pagos', 'Se conservan sin cambios']]; })() : [['Período a revertir', `${day(action.row.serviceStart)} – ${day(action.row.serviceEnd)}`], ['Importe que sale de pendientes', money(action.row.netAmount)], ['Historial', 'Se conserva la liquidación revertida']]}
+      summarize={form => action.type === 'create' ? (() => { const result = calculatePayrollPeriod(form); return [['Servicio', `${day(form.start)} – ${day(form.end)}`], ['Mes de liquidación', `${month}/${year}`], ['Días calendario incluidos', result.days], ['Importe del período', money(result.grossAmount)], ['Estado inicial', 'Borrador · requiere aprobación'], ['Pagos anteriores', 'Se conservan sin cambios']]; })() : action.type === 'identify' ? (() => { if (!form.start || !form.end || form.end < form.start) throw new Error('Revisa las fechas del servicio.'); return [['Período identificado', `${day(form.start)} – ${day(form.end)}`], ['Neto y pagos', 'Se conservan sin cambios']]; })() : [['Liquidación a revertir', `${action.row.month}/${action.row.year}`], ['Fechas de servicio', `${day(action.row.serviceStart)} – ${day(action.row.serviceEnd)}`], ['Importe que sale de pendientes', money(action.row.netAmount)], ['Historial', 'Se conserva la liquidación revertida']]}
       send={payload => action.type === 'create' ? axios.post(api(`/payroll-contracts/${collaborator.id}/periods`), payload, auth()) : action.type === 'identify' ? axios.patch(api(`/payroll-transactions/${action.row.id}/service-period`), payload, auth()) : axios.post(api(`/payroll-transactions/${action.row.id}/reverse-period`), payload, auth())}>
       {(form, set) => <>{action.type !== 'reverse' && <Dates form={form} set={set} />}{action.type === 'create' && <><label className={label}><span>Cómo se calcula</span><Select className={field} value={form.mode} onChange={event => set({ mode: event.target.value })}><option value="AGREED">Importe acordado para todo el período</option><option value="DAILY">Tarifa por cada día calendario del período</option></Select></label><div className="grid gap-4 sm:grid-cols-2"><label className={label}><span>Valor del servicio{form.mode === 'DAILY' ? ' por día' : ''}</span><MoneyInput required min="0.01" className={field} aria-label="Valor del servicio" value={form.baseSalary} onChange={baseSalary => set({ baseSalary })} /></label><label className={label}><span>Seguridad social{form.mode === 'DAILY' ? ' por día' : ' del período'}</span><MoneyInput className={field} value={form.socialSecurity} onChange={socialSecurity => set({ socialSecurity })} /></label></div><p className="text-xs text-zinc-500">Se liquidará en {month}/{year}, el mes elegido en Nómina. La tarifa diaria cuenta inicio y fin; no supone una quincena de 15 días.</p></>}{action.type === 'identify' && <p className="text-sm text-zinc-500">Solo se precisan las fechas. Se conservan los valores, pagos y comprobantes.</p>}{action.type === 'reverse' && <p className="text-sm">La liquidación dejará de estar pendiente. Si tiene pagos o descuentos vigentes, debes revertirlos antes desde su origen.</p>}</>}
     </ReviewForm> : <>
+      {blockers.length > 0 && <section className="space-y-3 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 p-4" aria-label="Períodos por revisar">
+        <h3 className="font-semibold">Antes de crear otro período</h3><p className="text-sm">Estas liquidaciones no tienen fechas de servicio. Precisa sus fechas o revierte únicamente las que no correspondan a una obligación real. No se modifica lo ya pagado.</p>
+        {blockers.map(blocker => <div key={blocker.id} className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm"><strong>{blocker.month}/{blocker.year}</strong> · {blocker.status === 'DRAFT' ? 'Borrador' : 'Liquidación'} · {money(blocker.netAmount)}</p>{canApprove && <div className="flex flex-wrap gap-2"><button className={button} onClick={() => choose({type:'identify', row:context.data.transactions.find(r => r.id === blocker.id)})}>Precisar fechas</button>{blocker.canReverse && <button className={button} onClick={() => choose({type:'reverse', row:context.data.transactions.find(r => r.id === blocker.id)})}>Revisar reversión</button>}</div>}</div>)}
+        {!canApprove && <p className="text-sm">Quien tenga permiso de aprobación de nómina debe revisar estos registros.</p>}
+      </section>}
       <div className="space-y-3">{context.data.transactions.map(row => {
         const cash = row.payments.filter(p => !p.reversedAt).reduce((sum, p) => sum + Number(p.amount), 0), applied = row.adjustments.some(a => !a.reversedAt);
         return <article key={row.id} className="rounded-xl border border-zinc-200 p-4 dark:border-white/10">
@@ -87,7 +93,7 @@ export function PayrollPeriodsDialog({ collaborator, year, month, canWrite, canA
           {!row.voidedAt && canApprove && <div className="mt-2 flex flex-wrap gap-2"><button type="button" className={button} onClick={() => choose({ type: 'identify', row })}>{row.serviceStart ? 'Corregir fechas' : 'Precisar fechas'}</button><button type="button" className={button} disabled={cash > 0 || applied || Boolean(row.financialRecordId)} onClick={() => choose({ type: 'reverse', row })}>Revertir período</button></div>}
         </article>;
       })}</div>
-      <div className="flex justify-end gap-2"><button className={button} type="button" onClick={onClose}>Cerrar</button>{canWrite && <button className={primary} type="button" onClick={() => choose({ type: 'create' })}>Nuevo período</button>}</div>
+      <div className="flex justify-end gap-2"><button className={button} type="button" onClick={onClose}>Cerrar</button>{canWrite && <button className={primary} disabled={blockers.length > 0} type="button" onClick={() => choose({ type: 'create' })}>Nuevo período</button>}</div>
     </>)}
   </DialogContent></Dialog>;
 }
@@ -98,6 +104,7 @@ export function PayrollDeductionsDialog({ transaction, canApprove, onClose, onSa
   const data = context.data, row = data?.transaction;
   const done = async () => { setMessage(action?.type === 'reverse' ? 'Descuento revertido.' : 'Descuento guardado.'); setAction(null); await context.load(); await onSaved('Descuento actualizado en Nómina y Cartera.'); };
   const choose = next => { setMessage(''); setAction(next); };
+  const blockers = unknownPayrollPeriods(context.data?.transactions || []);
   return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}><DialogContent data-payroll-deductions className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900" onInteractOutside={event => event.preventDefault()}>
     <DialogHeader><DialogTitle>Descuentos de préstamos · {transaction.collaboratorName}</DialogTitle><DialogDescription>El descuento reduce el préstamo y el neto de esta liquidación. El dinero transferido se registra con «Registrar pago».</DialogDescription></DialogHeader>
     {context.error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{context.error}</p>}

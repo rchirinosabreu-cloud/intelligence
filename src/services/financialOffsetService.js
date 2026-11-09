@@ -134,6 +134,55 @@ async function loadOffset(tx, id) {
   if (payment.kind !== 'COMPENSACION' || payablePayment.kind !== 'COMPENSACION' || cents(payment.amount) !== cents(payablePayment.amount) || payment.accountId || payablePayment.accountId || payment.financialRecordId || payablePayment.financialRecordId || String(payment.paidAt) !== String(payablePayment.paidAt) || String(payment.reversedAt) !== String(payablePayment.reversedAt)) throw fail('OFFSET_INCONSISTENT', 'Los dos lados del cruce requieren revisión antes de revertir.');
   return { ctx: await load(tx, payment.receivableId, payablePayment.payableId), payment, payablePayment };
 }
+
+async function legacyPayment(tx, id) {
+  const payment = await tx.receivablePayment.findUnique({ where: { id }, include: { offsetPayablePayment: true } });
+  if (!payment || payment.kind !== 'COMPENSACION' || payment.reversedAt || payment.offsetPayablePayment || payment.accountId || payment.financialRecordId || cents(payment.amount) <= 0) throw fail('OFFSET_LEGACY_UNAVAILABLE', 'Esta compensación ya está vinculada, fue revertida o necesita revisión. Actualiza su detalle.');
+  return payment;
+}
+function legacyEligible(ctx, payment) {
+  eligible({ ...ctx, receivableBalance: cents(payment.amount) });
+  if (ctx.payableBalance < cents(payment.amount)) throw fail('OFFSET_AMOUNT_EXCEEDS_BALANCE', 'La cuenta por pagar no tiene saldo suficiente para la compensación histórica completa. Revisa sus pagos antes de vincular.');
+}
+export async function legacyOffsetOptions(db, paymentId, actor) {
+  return db.$transaction(async tx => {
+    await authorize(tx, actor, 'read');
+    const payment = await legacyPayment(tx, paymentId);
+    const ar = await tx.accountsReceivable.findUnique({ where: { id: payment.receivableId }, include: includeAR });
+    const filter = ar.kind === 'BENEFICIARIO' ? { id: ar.beneficiaryThirdPartyId || '' } : { clientId: ar.clientId || '' };
+    const rows = await tx.accountsPayable.findMany({ where: { thirdParty: { ...filter, isActive: true }, status: { in: ['POR_PAGAR', 'PARCIAL'] } }, include: includeAP, orderBy: { id: 'asc' } });
+    const options = [], unavailable = [];
+    for (const ap of rows) {
+      try { const ctx = context(ar, ap); legacyEligible(ctx, payment); options.push({ id: ap.id, ...summary(ctx) }); }
+      catch (error) { if (!(error instanceof FinancialDomainError)) throw error; unavailable.push({ id: ap.id, label: ap.concept, reason: error.message }); }
+    }
+    return { payment: { id: payment.id, amount: amountOf(cents(payment.amount)), paidAt: payment.paidAt, authorizedBy: payment.detail?.authorizedBy }, options, unavailable, message: options.length ? null : 'No hay contrapartida disponible. Revisa en Terceros el vínculo con el cliente y en Por pagar el saldo de la obligación.' };
+  }, { isolationLevel: 'RepeatableRead' });
+}
+export async function linkLegacyOffset(db, paymentId, input, actor) {
+  const { reason, requestId } = request(input), fingerprint = hash({ paymentId, input });
+  return transaction(db, async tx => {
+    const user = await authorize(tx, actor, 'write');
+    const prior = await tx.payablePayment.findUnique({ where: { offsetRequestId: requestId }, include: { offsetReceivablePayment: true } });
+    if (prior) {
+      const original = prior.offsetReceivablePayment;
+      if (original?.id !== paymentId || original.detail?.legacyLink?.fingerprint !== fingerprint || prior.createdById !== user.id || prior.reversedAt) throw conflict();
+      return { ...summary(await load(tx, original.receivableId, prior.payableId)), replayed: true };
+    }
+    const payment = await legacyPayment(tx, paymentId), ctx = await load(tx, payment.receivableId, text(input.payableId));
+    const authorizedBy = text(input.authorizedBy || payment.detail?.authorizedBy);
+    if (!authorizedBy || authorizedBy.length > 120) throw fail('OFFSET_INVALID', 'Confirma quién autorizó la contrapartida de este cruce (máximo 120 caracteres).', 400);
+    legacyEligible(ctx, payment);
+    if (ctx.revision !== input.expectedRevision) throw conflict();
+    await periods(tx, ctx, payment.paidAt);
+    const payablePayment = await tx.payablePayment.create({ data: { payableId: ctx.ap.id, kind: 'COMPENSACION', offsetReceivablePaymentId: payment.id, offsetRequestId: requestId, amount: payment.amount, paidAt: payment.paidAt, notes: reason, createdById: user.id } });
+    const updated = await tx.receivablePayment.update({ where: { id: payment.id }, data: { detail: clone({ ...payment.detail, offsetPayableId: ctx.ap.id, legacyLink: { fingerprint, requestId, reason, authorizedBy, actorId: user.id, actorName: user.name, at: new Date() } }) } });
+    await tx.accountsPayable.update({ where: { id: ctx.ap.id }, data: { status: payableStatusAfter({ amountCents: cents(ctx.ap.amount), paidCents: cents(ctx.ap.amount) - ctx.payableBalance + cents(payment.amount), hasSettlement: true }) } });
+    const after = await load(tx, payment.receivableId, ctx.ap.id);
+    await audit(tx, ctx, after, 'LEGACY_OFFSET_LINKED', user, { paymentId, payablePaymentId: payablePayment.id, reason, requestId, originalPayment: clone(payment) });
+    return { ...summary(after), payment: updated, payablePayment };
+  });
+}
 export async function readOffset(db, id, actor) {
   return db.$transaction(async tx => {
     const user = await authorize(tx, actor, 'read');

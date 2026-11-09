@@ -16,7 +16,7 @@ try {
   await dialog.getByLabel('Fecha del canje').fill('07/11/2026'); await dialog.getByLabel('Fecha del canje').press('Tab');
   await dialog.getByLabel('Bienes o servicios recibidos').fill('Mobiliario entregado al beneficiario · muestra ficticia');
   await chooseOption(dialog.getByRole('combobox', { name: 'Destino', exact: true }), 'BENEFICIARIO');
-  await chooseOption(dialog.getByRole('combobox', { name: /Beneficiario en Terceros/ }), 'demo-beneficiary');
+  await chooseOption(dialog.getByRole('combobox', { name: /Beneficiario/ }), 'demo-beneficiary');
   await dialog.getByLabel('Autorizado por').fill('Dirección · ejemplo local');
   await dialog.getByLabel('Motivo', { exact: true }).fill('Entrega al beneficiario con reintegro autorizado; importes ficticios.');
   await dialog.getByRole('button', { name: 'Revisar canje y destino' }).click();

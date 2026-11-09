@@ -56,8 +56,8 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
     enabled
   });
   const { data: thirdPartiesData } = useQuery({
-    queryKey: ['financial-third-parties'],
-    queryFn: async () => (await axios.get(apiUrl('/third-parties'), { ...authed(), params: { includeInactive: true } })).data,
+    queryKey: ['financial-third-parties', 'selection'],
+    queryFn: async () => (await axios.get(apiUrl('/third-parties?selection=true'), { ...authed(), params: { includeInactive: true } })).data,
     enabled
   });
   const thirdParties = thirdPartiesData?.thirdParties || [];
@@ -79,7 +79,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
     } finally { setSaving(false); }
   };
 
-  const saveThirdParty = (form, onCommitted) => run(() => (form.id ? axios.patch(apiUrl(`/third-parties/${form.id}`), form, authed()) : axios.post(apiUrl('/third-parties'), form, authed())), { success: 'Tercero guardado.', onCommitted })
+  const saveThirdParty = (form, onCommitted) => run(() => (form.id ? axios.patch(apiUrl(`/third-parties/${form.id}`), form, authed()) : axios.post(apiUrl('/third-parties?selection=true'), form, authed())), { success: 'Tercero guardado.', onCommitted })
     .then((data) => { if (data?.thirdParty && dialog?.returnTo === 'payable') setDialog({ kind: 'payable', defaultThirdPartyId: data.thirdParty.id }); });
   const savePayable = (form, onCommitted) => run(() => (dialog?.payable ? axios.patch(apiUrl(`/payables/${dialog.payable.id}`), form, authed()) : axios.post(apiUrl('/payables'), form, authed())), { success: 'Cuenta por pagar registrada.', onCommitted });
   const pay = async (form) => {

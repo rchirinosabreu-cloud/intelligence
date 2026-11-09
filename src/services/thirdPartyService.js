@@ -1,5 +1,7 @@
+export { reviewPartyMerge, mergeParties, readPartyMerge, reversePartyMerge } from './financialPartyMergeService.js';
+import { financialPartyChoices } from './financialPartySelection.js';
 import { FinancialDomainError } from './financialRecordService.js';
-import { thirdPartyProblem } from '../lib/accountsPayable.js';
+import { thirdPartyProblem, thirdPartyRoles, isThirdPartyKind } from '../lib/accountsPayable.js';
 
 // El registro de terceros (Rodny, 20 de octubre de 2026): cada proveedor, colaborador, arrendador
 // o socio al que Brain Studio le paga, una sola vez, con sus datos de pago. Nada se borra: un
@@ -42,18 +44,25 @@ export const listPartyTeam = async (prismaClient) => ({
 
 const normalize = (input) => {
     const data = {};
+    if (input.roles !== undefined) {
+        if (!Array.isArray(input.roles) || !input.roles.length || input.roles.some(role => !isThirdPartyKind(role))) throw new FinancialDomainError('THIRD_PARTY_INVALID', 'Selecciona una o más clasificaciones válidas.');
+        data.roles = [...new Set(input.roles)]; data.kind = data.roles[0];
+    }
     for (const field of FIELDS) if (input[field] !== undefined) data[field] = text(input[field]);
+    if (data.roles) data.kind = data.roles[0];
     if (data.documentType) data.documentType = data.documentType.toUpperCase();
     return data;
 };
 
 export const listThirdParties = async (prismaClient, filters = {}) => {
+    if (filters.selection === 'true' || filters.selection === true) return prismaClient.$transaction(async tx => ({ thirdParties: await financialPartyChoices(tx) }), { isolationLevel: 'RepeatableRead' });
     const q = text(filters.q);
     const kind = text(filters.kind);
     const includeInactive = filters.includeInactive === true || filters.includeInactive === 'true';
     const where = {
+        ...(filters.includeMerged === 'true' ? {} : { mergedIntoId: null }),
         ...(includeInactive ? {} : { isActive: true }),
-        ...(kind ? { kind } : {}),
+        ...(kind ? { AND: [{ OR: [{ kind }, { roles: { has: kind } }] }] } : {}),
         ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { legalName: { contains: q, mode: 'insensitive' } }, { documentNumber: { contains: q } }] } : {})
     };
     const thirdParties = await prismaClient.thirdParty.findMany({ where, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] });
@@ -66,14 +75,15 @@ export const createThirdParty = async (prismaClient, input = {}, actor) => {
     if (problem) throw new FinancialDomainError('THIRD_PARTY_INVALID', problem);
     const actorId = actorIdFrom(actor);
     return prismaClient.$transaction(async (tx) => {
-        const duplicate = await tx.thirdParty.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' }, kind: data.kind, isActive: true }, select: { id: true, name: true } });
-        if (duplicate) throw new FinancialDomainError('THIRD_PARTY_DUPLICATE', `Ya existe «${duplicate.name}» como ${data.kind.toLowerCase()}. Úsalo o edítalo en vez de crear otro.`, 409);
+        const duplicate = await tx.thirdParty.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' }, isActive: true }, select: { id: true, name: true } });
+        if (duplicate) throw new FinancialDomainError('THIRD_PARTY_DUPLICATE', `Ya existe «${duplicate.name}». Añade sus clasificaciones en esa ficha o revisa el duplicado antes de crear otra.`, 409);
         await assertClientLink(tx, data.clientId);
         await assertTeamMemberLink(tx, data.teamMemberId);
+        data.roles = thirdPartyRoles(data);
         const thirdParty = await tx.thirdParty.create({ data: { ...data, createdById: actorId } });
         await tx.financialAuditEvent.create({ data: { entityType: 'ThirdParty', entityId: thirdParty.id, action: 'CREATE', after: cloneForAudit(thirdParty), actorId } });
         return thirdParty;
-    });
+    }, { isolationLevel: 'Serializable' });
 };
 
 export const updateThirdParty = async (prismaClient, thirdPartyId, patch = {}, actor) => {
@@ -81,15 +91,23 @@ export const updateThirdParty = async (prismaClient, thirdPartyId, patch = {}, a
     return prismaClient.$transaction(async (tx) => {
         const existing = await tx.thirdParty.findUnique({ where: { id: thirdPartyId } });
         if (!existing) throw new FinancialDomainError('THIRD_PARTY_NOT_FOUND', 'El tercero no existe.', 404);
+        if (existing.mergedIntoId) throw new FinancialDomainError('THIRD_PARTY_MERGED', 'Esta ficha está unificada. Edita la ficha de destino o revisa la reversión de la unificación.', 409);
         const data = normalize(patch);
         if (patch.isActive !== undefined) data.isActive = patch.isActive === true || patch.isActive === 'true';
         const merged = { ...existing, ...data };
         const problem = thirdPartyProblem(merged);
         if (problem) throw new FinancialDomainError('THIRD_PARTY_INVALID', problem);
+        if (existing.clientId && data.clientId !== undefined && data.clientId !== existing.clientId) {
+            const offset = await tx.accountsPayable.findFirst({
+                where: { thirdPartyId, payments: { some: { offsetReceivablePaymentId: { not: null } } } },
+                select: { id: true }
+            });
+            if (offset) throw new FinancialDomainError('THIRD_PARTY_OFFSET_LINK_LOCKED', 'Esta ficha tiene cruces registrados con ese cliente. Conserva el vínculo y revisa cualquier corrección desde el cruce para no alterar su historial.', 409);
+        }
         if (data.clientId && data.clientId !== existing.clientId) await assertClientLink(tx, data.clientId, thirdPartyId);
         if (data.teamMemberId && data.teamMemberId !== existing.teamMemberId) await assertTeamMemberLink(tx, data.teamMemberId, thirdPartyId);
         const updated = await tx.thirdParty.update({ where: { id: thirdPartyId }, data });
         await tx.financialAuditEvent.create({ data: { entityType: 'ThirdParty', entityId: thirdPartyId, action: 'UPDATE', before: cloneForAudit(existing), after: cloneForAudit(updated), actorId } });
         return updated;
-    });
+    }, { isolationLevel: 'Serializable' });
 };

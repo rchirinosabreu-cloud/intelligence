@@ -1,3 +1,4 @@
+import { resolveFinancialParty } from './financialPartySelection.js';
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { assertOpenFinancialPeriod, FinancialDomainError, parseFinancialDateInput } from './financialRecordService.js';
 import {
@@ -105,7 +106,7 @@ export const createPayable = async (prismaClient, input = {}, actor) => {
     }
     const actorId = actorIdFrom(actor);
     return prismaClient.$transaction(async (tx) => {
-        const thirdParty = await tx.thirdParty.findUnique({ where: { id: String(input.thirdPartyId) }, select: { id: true, name: true, isActive: true } });
+        const thirdParty = /^(client|team):/.test(String(input.thirdPartyId)) ? await resolveFinancialParty(tx, input.thirdPartyId, actor) : await tx.thirdParty.findUnique({ where: { id: String(input.thirdPartyId) }, select: { id: true, name: true, isActive: true } });
         if (!thirdParty?.isActive) throw new FinancialDomainError('THIRD_PARTY_NOT_FOUND', 'El tercero no existe o está desactivado.', 404);
         await assertOpenFinancialPeriod(tx, year, month);
         const payable = await tx.accountsPayable.create({
@@ -126,7 +127,7 @@ export const createPayable = async (prismaClient, input = {}, actor) => {
         });
         await tx.financialAuditEvent.create({ data: { entityType: 'AccountsPayable', entityId: payable.id, action: 'CREATE', after: cloneForAudit(payable), actorId } });
         return serializePayable(payable);
-    });
+    }, { isolationLevel: 'Serializable' });
 };
 
 export const updatePayable = async (prismaClient, payableId, patch = {}, actor) => {
