@@ -3,7 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Award, ArrowRight, CalendarClock, Check, ChevronDown, Clock, FileText, Flame, Sparkles, Sun, ThumbsUp, Trophy, Users, X } from '@/components/ui/icons';
+import { Award, ArrowRight, CalendarClock, Check, ChevronDown, ClipboardList, Clock, FileText, Flame, Sparkles, Sun, ThumbsUp, Trophy, Users, X } from '@/components/ui/icons';
 import BriaPortrait from '@/components/bria/BriaPortrait';
 import RunnerAvatar from './RunnerAvatar';
 import KudosGift from './KudosGift';
@@ -16,7 +16,8 @@ import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS
 
 // El nombre de archivo conserva compatibilidad con el dock y ?carrera.
 // Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
-const HABIT_ICON = { RELOJ: Clock, AL_DIA: Sparkles, A_TIEMPO: CalendarClock, DOCUMENTADO: FileText, SIN_DEVOLUCION: ThumbsUp };
+// La semana arranca en cero cada lunes y el mes sigue sumando para la premiación mensual (Rodny, 9 de noviembre de 2026).
+const HABIT_ICON = { RELOJ: Clock, AL_DIA: Sparkles, A_TIEMPO: CalendarClock, DOCUMENTADO: FileText, SIN_DEVOLUCION: ThumbsUp, TRABAJO_REGISTRADO: ClipboardList };
 const EXTRA_ICON = { PRIMERO_EN_ABRIR: Sun, PRIMERO_EN_REUNION: Users };
 const POSITION_MESSAGES = [
   '¡Arriba se siente bien!',
@@ -63,7 +64,9 @@ function Rules() {
   return <details className="group text-xs">
     <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Cómo se cuentan los puntos<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
     <ul className={cn(surface, 'mt-2 list-disc space-y-2 p-4 pl-8 leading-5', muted)}>
-      <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos.</li>
+      <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
+      <li>Una jornada de producción vale para Reloj con el tiempo declarado al cerrar el pendiente.</li>
+      <li>La semana arranca en cero cada lunes; el mes sigue sumando para la premiación mensual.</li>
       <li>La primera actividad registrada desde las 8:00 am suma {EXTRA_POINTS} puntos.</li>
       <li>Si eres el primero en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
@@ -84,6 +87,9 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
   const month = leagueMonthLabel(league?.month);
   const today = league?.today;
   const positionMessage = POSITION_MESSAGES[league?.position?.rank - 1];
+  const week = league?.week;
+  const weekRanked = useMemo(() => [...(week?.lanes || [])].filter(lane => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es')), [week]);
+  const weekLeaders = week?.lastWeek?.leaders || [];
   const history = useQuery({ queryKey: ['league', 'recognitions', league?.month, league?.startsAt], queryFn: () => requestLeague('/recognitions'), enabled: open && Boolean(league), staleTime: 60000, retry: false });
   const currentGift = given && given.startsAt === league?.startsAt && given.week === league?.kudos?.weekKey ? given.gift : null;
 
@@ -119,6 +125,10 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                     <div className="flex flex-wrap items-center justify-between gap-2"><span data-race-position className="font-semibold">{league.position ? `Vas en el puesto ${league.position.rank}` : 'Tu mes está comenzando'}</span><span className={muted}>{typeof league.daysLeft === 'number' && `${league.daysLeft} días para el cierre`}</span></div>
                     {positionMessage && <p data-race-position-message className="mt-2 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{positionMessage}</p>}
                   </div>
+                  {week && <div data-race-week className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/70 px-3 py-2 text-xs dark:bg-zinc-900/60">
+                    <span className="min-w-0"><span className="font-semibold">Esta semana</span>{week.label && <span className={cn('ml-1', muted)}>{week.label}</span>}</span>
+                    <span className="tabular-nums"><strong data-race-week-score className="text-sm">{week.score ?? 0}</strong> <span className={muted}>pts</span>{week.position && <span data-race-week-position className={cn('ml-2', muted)}>· puesto {week.position.rank}</span>}</span>
+                  </div>}
                 </section>}
                 {league.nextStep && <section className={cn(surface, 'relative overflow-hidden p-4')}>
                   <span aria-hidden="true" className="brain-gradient-primary absolute inset-x-0 top-0 h-1" />
@@ -137,6 +147,14 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
               <TabsContent value="achievements" className="space-y-5 pt-4"><RecognitionStatus query={history}>{data => <RecognitionCollection data={data} />}</RecognitionStatus></TabsContent>
               <TabsContent value="team" className="space-y-4 pt-3">
                 <div><h3 className="text-xl font-bold">Así va el equipo</h3><p className={cn('mt-1 text-sm', muted)}>La clasificación incluye el avance provisional de hoy. Los empates comparten puesto.</p></div>
+                {week && <section data-race-week-ranking aria-label="Clasificación de la semana" className="space-y-3 rounded-3xl border border-brand-green/25 bg-brand-green/10 p-3 dark:border-brand-green/20 dark:bg-brand-green/10">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><h4 className="flex items-center gap-2 text-sm font-semibold"><Flame className="h-4 w-4 text-brand-green-deep dark:text-brand-green" />Esta semana</h4>{week.label && <span className={cn('text-xs', muted)}>{week.label}</span>}</div>
+                  <p className={cn('text-xs leading-5', muted)}>Arranca en cero cada lunes. El mes sigue sumando abajo.</p>
+                  {weekRanked.some(person => person.score > 0) ? <ol className="divide-y divide-brand-green/15 rounded-2xl bg-white/70 px-3 dark:bg-zinc-900/60">{weekRanked.filter(person => person.score > 0).map((person, index) => <li key={person.id} data-league-week-member={person.id} className={cn('flex min-h-12 items-center gap-3 rounded-lg px-1 py-1.5', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{leagueRank(person.score, weekRanked) ?? '–'}</span><span className="flex w-8 shrink-0 justify-center"><RunnerAvatar person={person} size={32} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><span className="shrink-0 text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></span></li>)}</ol>
+                    : <p className={cn('rounded-2xl bg-white/70 px-3 py-3 text-center text-xs dark:bg-zinc-900/60', muted)}>La semana está comenzando: todavía nadie suma.</p>}
+                  {weekLeaders.length > 0 && <p data-race-last-week className="flex items-center gap-2 text-xs leading-5 text-zinc-700 dark:text-zinc-200"><Trophy className="h-4 w-4 shrink-0 text-brand-yellow-deep dark:text-brand-yellow" /><span>{weekLeaders.length === 1 ? <><strong>{weekLeaders[0].name}</strong> ganó la semana pasada con {weekLeaders[0].score} puntos.</> : <>La semana pasada la ganaron <strong>{weekLeaders.map(person => person.name).join(', ')}</strong> con {weekLeaders[0].score} puntos.</>}</span></p>}
+                </section>}
+                <h4 className="flex items-center gap-2 pt-1 text-sm font-semibold"><Trophy className="h-4 w-4 text-brand-yellow-deep dark:text-brand-yellow" />El mes</h4>
                 {podium.length > 0 && <section data-race-podium aria-label="Primeras posiciones del mes" className="space-y-3 rounded-3xl bg-brand-yellow/10 p-3 dark:bg-brand-yellow/5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold"><Trophy className="h-4 w-4 text-brand-yellow-deep dark:text-brand-yellow" />Podio del mes</h4>
                   {podium.every(group => group.people.length === 1) ? <div className="grid grid-cols-3 items-end gap-2">

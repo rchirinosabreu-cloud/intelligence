@@ -4,7 +4,9 @@ const moduleLabels = {
   dashboard: 'Dashboard', feedback: 'Feedback', financials: 'Financiero', integrations: 'Integraciones',
   notifications: 'Notificaciones', quotations: 'Cotizaciones', reports: 'Reportes', tasks: 'Gestión de tareas',
   team: 'Equipo', user: 'Perfil', users: 'Usuarios', fireflies: 'Minutas', minutes: 'Minutas',
-  'report-pdf': 'Minutas', drive: 'Minutas', recognitions: 'Logros recientes', league: 'Liga del mes',
+  'report-pdf': 'Minutas', drive: 'Drive', recognitions: 'Logros recientes', league: 'Liga del mes',
+  crm: 'CRM', 'ad-budgets': 'Pautas', 'client-operations': 'Operación de clientes', 'global-announcements': 'Anuncios',
+  'content-plans': 'Parrillas', 'external-plans': 'Parrillas', 'collection-activities': 'Financiero',
 };
 const routePath = value => String(value || '').split('?')[0].replace(/\/+$/, '');
 const entry = (method, path, label, phrase) => ({ method, path: path.replace(/:[a-zA-Z]+/g, ':id'), label, phrase,

@@ -159,7 +159,9 @@ const leagueDb = (shared) => ({
     { taskId: shared.id, workerId: 'a', isCollaborator: false, durationMs: 20 * 60000 },
     { taskId: shared.id, workerId: 'b', isCollaborator: true, durationMs: 30 * 60000 }
   ] : [] },
-  recognitionTaskState: { findMany: async () => [] }, operationalTraceEvent: { findFirst: async () => null }
+  recognitionTaskState: { findMany: async () => [] },
+  operationalTraceEvent: { findFirst: async () => null, findMany: async () => [] },
+  operationalEvent: { findMany: async () => [] }
 });
 
 test('league reads each personal completion once on its own day, with that worker’s time', async () => {
