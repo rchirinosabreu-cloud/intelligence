@@ -30,6 +30,25 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
     return rows;
   },
 
+  /** Las filas de un tramo de días (ambos incluidos) anteriores a un día: la semana, que puede cruzar de mes. */
+  async daysInRange(fromDay, toDay, { before }) {
+    const { rows } = await pool.query('SELECT day_key, member_id, habits, extras, evidence FROM bria_memory.league_run_days WHERE day_key >= $1 AND day_key <= $2 AND day_key < $3 AND run_id = $4 ORDER BY day_key', [fromDay, toDay, before, LEAGUE_RUN_ID]);
+    return rows;
+  },
+
+  /** Los regalos de una semana de Bogotá («2026-W46»), dentro de esta edición. */
+  async kudosOfWeek(weekKey) {
+    const { rows } = await pool.query(`SELECT id, week_key, giver_member_id, receiver_member_id, note, points, created_at
+      FROM bria_memory.league_run_kudos WHERE run_id = $1 AND week_key = $2 ORDER BY created_at`, [LEAGUE_RUN_ID, weekKey]);
+    return rows;
+  },
+
+  async meetingsOfWeek(weekKey) {
+    const { rows } = await pool.query(`SELECT id, week_key, day_key, member_id, awarded_by FROM bria_memory.league_meeting_awards
+      WHERE run_id=$1 AND week_key=$2 ORDER BY day_key`, [LEAGUE_RUN_ID, weekKey]);
+    return rows;
+  },
+
   /** Los regalos recibidos en el mes de Bogotá, dentro de esta edición. */
   async kudosOfMonth(monthKey) {
     const [year, month] = monthKey.split('-').map(Number);

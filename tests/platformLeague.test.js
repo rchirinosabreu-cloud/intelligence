@@ -6,14 +6,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DAILY_HABITS, EXTRA_ACTIONS, BADGE_THRESHOLD, HABIT_POINTS, EXTRA_POINTS, KUDOS_VALUE, KUDOS_WEEKLY,
-  summarizeDays, habitsScore, kudosScore, leagueScore, habitRates, leagueNextStep, todayPoints, trackScale, trackPosition, leagueMonthLabel, ordinalLabel, leagueRank
+  summarizeDays, habitsScore, kudosScore, leagueScore, habitRates, leagueNextStep, todayPoints, trackScale, trackPosition, leagueMonthLabel, leagueWeekLabel, ordinalLabel, leagueRank
 } from '../src/lib/platformLeague.js';
 
 const day = (values, extras = {}) => ({ day: '2026-11-03', habits: Object.fromEntries(DAILY_HABITS.map((h, i) => [h.key, values[i]])), extras });
-const full = (value, count) => Array.from({ length: count }, () => day([value, value, value, value, value]));
+const full = (value, count) => Array.from({ length: count }, () => day(DAILY_HABITS.map(() => value)));
 
-test('five daily habits and two extras, each one described as a habit and never as a judgment; the values Rodny named', () => {
-  assert.deepEqual(DAILY_HABITS.map((h) => h.key), ['RELOJ', 'AL_DIA', 'A_TIEMPO', 'DOCUMENTADO', 'SIN_DEVOLUCION']);
+test('six daily habits and two extras, each one described as a habit and never as a judgment; the values Rodny named', () => {
+  // Trabajo registrado llegó el 9 de noviembre de 2026: Elisa (Financiero) y Brayan (jornadas de producción) no sumaban nada.
+  assert.deepEqual(DAILY_HABITS.map((h) => h.key), ['RELOJ', 'AL_DIA', 'A_TIEMPO', 'DOCUMENTADO', 'SIN_DEVOLUCION', 'TRABAJO_REGISTRADO']);
+  assert.match(DAILY_HABITS.at(-1).hint, /movimiento|gestión|pieza|jornada/);
   assert.deepEqual(EXTRA_ACTIONS.map((e) => e.key), ['PRIMERO_EN_ABRIR', 'PRIMERO_EN_REUNION']);
   for (const item of [...DAILY_HABITS, ...EXTRA_ACTIONS]) {
     assert.ok(item.label && item.hint);
@@ -27,7 +29,8 @@ test('five daily habits and two extras, each one described as a habit and never 
 });
 
 test('the platform part adds 5 per habit earned and 5 per extra; a day without closings does not subtract', () => {
-  assert.equal(habitsScore(full(true, 22)), 550);
+  assert.equal(habitsScore(full(true, 22)), 660, 'six habits at five, twenty-two days');
+  assert.equal(habitsScore([day([true, true, true, true, true])]), 25, 'a saved day from before the sixth habit keeps its value: the missing key is not played');
   assert.equal(habitsScore(full(false, 22)), 0);
   assert.equal(habitsScore([]), null, 'nothing played yet: no score');
   const quiet = [day([true, true, null, null, null]), day([true, true, true, true, true], { PRIMERO_EN_ABRIR: true })];
@@ -41,7 +44,7 @@ test('the platform part adds 5 per habit earned and 5 per extra; a day without c
 test('the team part counts new gifts at five and preserves recorded historical values, and the month score adds both', () => {
   assert.equal(kudosScore([]), 0);
   assert.equal(kudosScore([{}, {}, {}]), 15);
-  assert.equal(leagueScore({ days: full(true, 10), kudos: [{}, {}] }), 260);
+  assert.equal(leagueScore({ days: full(true, 10), kudos: [{}, {}] }), 310);
   assert.equal(leagueScore({ days: [], kudos: [] }), null);
   assert.equal(leagueScore({ days: [], kudos: [{}] }), 5, 'a gift counts even before the first played day');
 });
@@ -79,13 +82,16 @@ test('today’s points, the track scale, the month label and the ordinal', () =>
   assert.equal(trackPosition(null, 350), 0);
   assert.equal(trackPosition(400, 350), 100, 'never past the finish line');
   assert.equal(leagueMonthLabel('2026-11'), 'noviembre');
+  assert.equal(leagueWeekLabel('2026-11-09', '2026-11-15'), 'del 9 al 15 de noviembre');
+  assert.equal(leagueWeekLabel('2026-10-26', '2026-11-01'), 'del 26 de octubre al 1 de noviembre');
+  assert.equal(leagueWeekLabel(null, null), '');
   assert.equal(ordinalLabel(2), '2.º');
   assert.equal(ordinalLabel(2, 'F'), '2.ª');
 });
 
  test('meeting, awards and historical gifts count once and equal scores share a position', () => {
- assert.equal(leagueScore({ days: full(true, 1), kudos: [{points:10},{points:5}], meetings:1, recognitions:2 }),60);
- assert.equal(todayPoints(day([true,true,true,true,true],{PRIMERO_EN_REUNION:true})).points,35);
+ assert.equal(leagueScore({ days: full(true, 1), kudos: [{points:10},{points:5}], meetings:1, recognitions:2 }),65);
+ assert.equal(todayPoints(day([true,true,true,true,true,true],{PRIMERO_EN_REUNION:true})).points,40);
  const scores=[{score:20},{score:10},{score:10},{score:0}];
  assert.equal(leagueRank(10,scores),2); assert.equal(leagueRank(0,scores),null);
 });

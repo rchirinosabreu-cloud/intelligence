@@ -34,7 +34,9 @@ try {
   await dock.click();
   await tab('Mi mes').waitFor({ timeout: 10000 });
   assert.equal(await tab('Mi mes').getAttribute('aria-selected'), 'true');
-  assert.match(await panel.locator('[data-race-panel-score]').innerText(), /85\s*puntos/);
+  assert.match(await panel.locator('[data-race-panel-score]').innerText(), /100\s*puntos/);
+  // La semana arranca en cero cada lunes y convive con el mes (Rodny, 9 de noviembre de 2026).
+  assert.match(await panel.locator('[data-race-week]').innerText(), /Esta semana[\s\S]*del 2 al 8 de noviembre[\s\S]*100\s*pts[\s\S]*puesto 1/);
   assert.equal(await panel.locator('[data-race-track]').count(), 0);
   const avatar = panel.locator('[data-race-hero] [data-runner-avatar="pixel"]');
   await avatar.waitFor();
@@ -61,6 +63,12 @@ try {
   await shot('logros-claro');
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
+  const weekRanking = panel.locator('[data-race-week-ranking]');
+  assert.equal(await weekRanking.locator('[data-league-week-member]').count(), 13, 'everyone with weekly points is in the weekly ranking');
+  assert.match(await weekRanking.innerText(), /Esta semana[\s\S]*Arranca en cero cada lunes/);
+  assert.match(await panel.locator('[data-race-last-week]').innerText(), /Melissa ganó la semana pasada con 60 puntos/);
+  const weekBox = await weekRanking.boundingBox(), monthBox = await panel.locator('[data-race-podium]').boundingBox();
+  assert.ok(weekBox.y < monthBox.y, 'the week comes before the month');
   await panel.getByText('5 puntos para…', { exact: true }).waitFor();
   assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada semana podrás regalar cinco puntos/);
   assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
@@ -146,6 +154,7 @@ try {
     league.startsAt = '2026-11-03T13:00:00Z';
     league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 5, weekKey: '2026-W45' };
     league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0, scoreBreakdown: league.scoreBreakdown }));
+    league.week = { ...league.week, score: 0, position: null, podium: [], lanes: league.week.lanes.map(person => ({ ...person, score: 0 })), lastWeek: { ...league.week.lastWeek, leaders: [] } };
     league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0, isProvisional: true, isConfirmed: false };
     await route.fulfill({ response, json: league });
   });
@@ -160,6 +169,7 @@ try {
     'Terminaste pendientes antes de la fecha de entrega.',
     'Las tareas que has creado tienen un comentario o un archivo que da mejor contexto.',
     'Nadie te devolvió un pendiente',
+    'Dejaste registro de tu trabajo en la plataforma: un movimiento, una gestión, una pieza, una lectura de pauta, una jornada o una tarea con reloj.',
     'Fuiste el primero en ingresar a la plataforma desde las 8:00 am',
     'Fuiste el primero en ingresar a la reunión semanal',
   ]) assert.ok(await panel.getByText(description, { exact: true }).isVisible());
@@ -167,6 +177,9 @@ try {
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-race-podium]').count(), 0);
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
+  assert.equal(await panel.locator('[data-league-week-member]').count(), 0, 'a week at zero lists nobody');
+  assert.match(await panel.locator('[data-race-week-ranking]').innerText(), /La semana está comenzando/);
+  assert.equal(await panel.locator('[data-race-last-week]').count(), 0);
   for (const member of await panel.locator('[data-league-member]').all()) assert.match(await member.innerText(), /0\s*pts/);
   await shot('equipo-cero');
   await page.unroute('**/api/league');

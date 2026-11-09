@@ -49,15 +49,25 @@ const fakeDb = () => ({
       assert.ok(where.eventType.in.includes('SESSION_STARTED') && where.eventType.in.includes('TASK_LIST_SYNCED'));
       const sameDay = where.occurredAt.gte.getTime() === at(`${DAY}T13:00:00.000Z`).getTime() && where.occurredAt.lt.getTime() === at('2026-11-04T05:00:00.000Z').getTime();
       return sameDay && where.actorId.in.includes('u-helen') ? { actorId: 'u-helen', occurredAt: at(`${DAY}T13:04:00.000Z`) } : null;
-    }
-  }
+    },
+    // Las huellas del día: Helen entró; Rodny registró un movimiento en Financiero y una gestión de cobro; Jesu solo abrió tareas.
+    findMany: async ({ where }) => TRACES.filter(trace => trace.occurredAt >= where.occurredAt.gte && trace.occurredAt < where.occurredAt.lt && where.actorId.in.includes(trace.actorId) && where.eventType.in.includes(trace.eventType))
+  },
+  operationalEvent: { findMany: async () => [] }
 });
+const TRACES = [
+  { actorId: 'u-helen', eventType: 'SESSION_STARTED', metadata: {}, occurredAt: at(`${DAY}T13:04:00.000Z`) },
+  { actorId: 'u-rodny', eventType: 'PLATFORM_MUTATION', metadata: { method: 'POST', path: '/api/financials/records', module: 'Financiero' }, occurredAt: at(`${DAY}T15:00:00.000Z`) },
+  { actorId: 'u-rodny', eventType: 'PLATFORM_MUTATION', metadata: { method: 'POST', path: '/api/financials/collection-activities' }, occurredAt: at(`${DAY}T15:30:00.000Z`) },
+  { actorId: 'u-rodny', eventType: 'PLATFORM_MUTATION', metadata: { method: 'POST', path: '/api/league/kudos' }, occurredAt: at(`${DAY}T16:00:00.000Z`) },
+  { actorId: 'u-jesu', eventType: 'TASK_OPENED', metadata: {}, occurredAt: at(`${DAY}T14:00:00.000Z`) }
+];
 
 test('league sends bundled avatar keys for known people without altering the points', async () => {
   const service = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.race.lanes.find(p => p.isSelf).pixelAvatarKey, 'rodny');
-  assert.equal(league.score, 25);
+  assert.equal(league.score, 30);
 });
 
 test('recognition collection reads only the current recipient and Bogotá month, without task details or writes', async () => {
@@ -105,6 +115,9 @@ const fakeRepo = (seed = []) => {
     meetings: [],
     async givenInWeek(memberId, weekKey) { return kudos.find(k => k.giver_member_id === memberId && k.week_key === weekKey) || null; },
     async meetingsOfMonth(monthKey) { return this.meetings.filter(m => m.day_key.startsWith(monthKey)); },
+    async meetingsOfWeek(weekKey) { return this.meetings.filter(m => m.week_key === weekKey); },
+    async kudosOfWeek(weekKey) { return kudos.filter(k => k.week_key === weekKey); },
+    async daysInRange(fromDay, toDay, { before }) { return [...days.values()].filter((r) => r.day_key >= fromDay && r.day_key <= toDay && r.day_key < before); },
     async awardMeeting(row) { if (this.meetings.some(m => m.week_key === row.week_key)) throw Object.assign(new Error("duplicate"), {code:"23505"}); const saved = {id:"meeting",...row}; this.meetings.push(saved); return saved; },
     startedAt: async () => at("2026-10-01T05:00:00Z"),
     async saveDays(rows) { for (const row of rows) days.set(`${row.day_key}:${row.member_id}`, { ...row, computed_at: new Date() }); return rows.length; },
@@ -144,13 +157,13 @@ test('live habits can change without reducing confirmed points, including gifts 
   db.recognitionAward.findMany = async () => [{ id: 'award', recipientId: 'u-rodny', occurredAt: at(`${DAY}T19:00:00Z`) }];
   const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T22:00:00Z`) });
   const before = await service.leagueFor({ userId: 'u-rodny' });
-  assert.deepEqual(before.scoreBreakdown, { confirmed: 25, provisional: 25 });
+  assert.deepEqual(before.scoreBreakdown, { confirmed: 25, provisional: 30 });
   assert.equal(before.today.isProvisional, true);
   const find = db.task.findMany;
   db.task.findMany = async args => args.select.returnedAt ? [{ assigneeId: 'm-rodny', returnedAt: at(`${DAY}T18:00:00Z`) }] : find(args);
   const after = await service.leagueFor({ userId: 'u-rodny' });
-  assert.deepEqual(after.scoreBreakdown, { confirmed: 25, provisional: 20 });
-  assert.equal(after.score, 45);
+  assert.deepEqual(after.scoreBreakdown, { confirmed: 25, provisional: 25 });
+  assert.equal(after.score, 50);
   assert.deepEqual(after.race.lanes.find(lane => lane.isSelf).scoreBreakdown, after.scoreBreakdown);
 });
 
@@ -162,8 +175,8 @@ test('a saved daily close confirms today once and survives later source changes'
   const find = db.task.findMany;
   db.task.findMany = async args => args.select.returnedAt ? [{ assigneeId: 'm-rodny', returnedAt: at(`${DAY}T18:00:00Z`) }] : find(args);
   const result = await service.leagueFor({ userId: 'u-rodny' });
-  assert.deepEqual(result.scoreBreakdown, { confirmed: 25, provisional: 0 });
-  assert.equal(result.score, 25);
+  assert.deepEqual(result.scoreBreakdown, { confirmed: 30, provisional: 0 });
+  assert.equal(result.score, 30);
   assert.equal(result.today.isProvisional, false);
   assert.equal(result.today.habits.SIN_DEVOLUCION, true);
   assert.equal(result.today.evidence.SIN_DEVOLUCION, 'Nada devuelto.');
@@ -253,9 +266,12 @@ test('a day is evaluated for every active person from the real sources, and save
   const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T23:30:00.000Z`) });
   const rows = await service.evaluateDay(DAY);
   const by = Object.fromEntries(rows.map((row) => [row.memberId, row.habits]));
-  assert.deepEqual(by['m-rodny'], { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true });
-  assert.deepEqual(by['m-helen'], { RELOJ: false, AL_DIA: false, A_TIEMPO: false, DOCUMENTADO: false, SIN_DEVOLUCION: true }, 'declared time, two overdue at dawn, closed after the original date, no comment');
-  assert.deepEqual(by['m-jesu'], { RELOJ: true, AL_DIA: true, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: false }, 'worked without closing; one task returned');
+  assert.deepEqual(by['m-rodny'], { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
+  assert.deepEqual(by['m-helen'], { RELOJ: false, AL_DIA: false, A_TIEMPO: false, DOCUMENTADO: false, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true }, 'declared time, two overdue at dawn, closed after the original date, no comment; the closing itself is recorded work');
+  assert.deepEqual(by['m-jesu'], { RELOJ: true, AL_DIA: true, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: false, TRABAJO_REGISTRADO: true }, 'worked without closing; one task returned');
+  const evidence = Object.fromEntries(rows.map((row) => [row.memberId, row.evidence]));
+  assert.match(evidence['m-rodny'].TRABAJO_REGISTRADO, /Financiero/, 'the financial record and the collection activity count as work (the league gift does not)');
+  assert.doesNotMatch(evidence['m-rodny'].TRABAJO_REGISTRADO, /Liga/);
   const extras = Object.fromEntries(rows.map((row) => [row.memberId, row.extras]));
   assert.deepEqual(extras['m-helen'], { PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the first human trace from 8:00 was hers');
   assert.deepEqual(extras['m-rodny'], { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null });
@@ -290,17 +306,17 @@ test('the league of a person: the month so far plus today live, the lanes of the
   const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) }); // 14:00 Bogotá del 3
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.month, '2026-11');
-  assert.equal(league.score, 55, 'ten habits at 5 each, plus one gift at 10');
-  assert.deepEqual(league.today.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true });
-  assert.deepEqual({ earned: league.today.earned, possible: league.today.possible, extrasEarned: league.today.extrasEarned, points: league.today.points }, { earned: 5, possible: 5, extrasEarned: [], points: 30 });
+  assert.equal(league.score, 60, 'five habits on the 2nd and six today at 5 each, plus one gift at 5');
+  assert.deepEqual(league.today.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
+  assert.deepEqual({ earned: league.today.earned, possible: league.today.possible, extrasEarned: league.today.extrasEarned, points: league.today.points }, { earned: 6, possible: 6, extrasEarned: [], points: 35 });
   assert.deepEqual(league.today.extras, { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null }, 'the extras object survives beside today’s points');
   assert.equal(league.streak.days, 2);
   assert.equal(league.kudos.score, 5);
   assert.equal(league.kudos.received[0].from, 'Helen');
   assert.equal(league.race.lanes.length, 3);
   assert.deepEqual(league.race.lanes.map((lane) => lane.name), ['Helen', 'Jesu', 'Rodny'], 'fixed order by name, never by score');
-  assert.equal(league.race.lanes.find((lane) => lane.isSelf).score, 55);
-  assert.equal(league.race.lanes.find((lane) => lane.name === 'Helen').score, 20, 'two habits on the 2nd, one today and the extra for opening first');
+  assert.equal(league.race.lanes.find((lane) => lane.isSelf).score, 60);
+  assert.equal(league.race.lanes.find((lane) => lane.name === 'Helen').score, 25, 'two habits on the 2nd, two today and the extra for opening first');
   assert.ok(!('level' in league.race.lanes[0]), 'no levels anywhere');
   assert.deepEqual(league.race.track, { max: 100, marks: [0, 25, 50, 75, 100] });
   assert.equal(league.position.rank, 1);
@@ -313,7 +329,68 @@ test('the league of a person: the month so far plus today live, the lanes of the
   assert.equal(helen.kudos.givenThisWeek.name, 'Rodny');
   assert.equal(helen.nextStep.key, 'RELOJ');
   assert.deepEqual(helen.today.extrasEarned, ['PRIMERO_EN_ABRIR']);
-  assert.equal(helen.today.points, 10);
+  assert.equal(helen.today.points, 15);
+});
+
+test('the week starts at zero every Monday beside the month total (Rodny, 9 de noviembre de 2026), and names who won the previous week', async () => {
+  // W44 (26 de octubre al 1 de noviembre): Helen jugó un día perfecto; Rodny, dos hábitos. W45: el lunes 2, Rodny perfecto.
+  const repo = fakeRepo([
+    { day_key: '2026-10-30', member_id: 'm-helen', habits: { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true }, extras: {}, evidence: {} },
+    { day_key: '2026-10-30', member_id: 'm-rodny', habits: { RELOJ: true, AL_DIA: true }, extras: {}, evidence: {} },
+    { day_key: '2026-11-02', member_id: 'm-rodny', habits: { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true }, extras: {}, evidence: {} }
+  ]);
+  await repo.giveKudos({ week_key: '2026-W44', giver_member_id: 'm-jesu', receiver_member_id: 'm-rodny', created_at: at('2026-10-30T19:00:00Z') });
+  await repo.giveKudos({ week_key: '2026-W45', giver_member_id: 'm-helen', receiver_member_id: 'm-rodny' });
+  const db = fakeDb();
+  db.recognitionAward.findMany = async ({ where }) => {
+    assert.ok(where.occurredAt.gte <= at('2026-10-26T05:00:00Z'), 'the awards query covers the previous week too');
+    return [{ id: 'old', recipientId: 'u-helen', occurredAt: at('2026-10-29T15:00:00Z') }, { id: 'new', recipientId: 'u-rodny', occurredAt: at(`${DAY}T15:00:00Z`) }];
+  };
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) }); // martes 3 de noviembre
+  const league = await service.leagueFor({ userId: 'u-rodny' });
+  assert.equal(league.week.key, '2026-W45');
+  assert.deepEqual([league.week.from, league.week.to, league.week.label], ['2026-11-02', '2026-11-08', 'del 2 al 8 de noviembre']);
+  assert.equal(league.week.score, 25 + 30 + 5 + 5, 'the 2nd, today live, this week’s gift and today’s award; nothing from October');
+  assert.equal(league.score, 65, 'the month does not include October either');
+  assert.deepEqual(league.week.position, { rank: 1, of: 3 });
+  assert.deepEqual(league.week.lanes.map(lane => [lane.name, lane.score]), [['Helen', 15], ['Jesu', 15], ['Rodny', 65]], 'Helen: today’s two habits and the extra; Jesu: today’s three habits (clock, dawn, recorded work)');
+  assert.equal(league.week.podium[0].name, 'Rodny');
+  assert.deepEqual([league.week.lastWeek.key, league.week.lastWeek.label], ['2026-W44', 'del 26 de octubre al 1 de noviembre']);
+  assert.deepEqual(league.week.lastWeek.leaders.map(lane => [lane.name, lane.score]), [['Helen', 30]], 'Helen won W44: five habits and an award; Rodny had two habits and a gift (15)');
+  // El lunes 9 la semana vuelve a cero aunque el mes siga sumando.
+  const monday = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at('2026-11-09T12:00:00.000Z') }); // 7:00 Bogotá, sin actividad aún
+  db.task.findMany = async () => []; db.taskWorkSession.findMany = async () => []; db.operationalTraceEvent.findMany = async () => []; db.operationalTraceEvent.findFirst = async () => null;
+  db.recognitionAward.findMany = async () => [];
+  const fresh = await monday.leagueFor({ userId: 'u-rodny' });
+  assert.equal(fresh.week.key, '2026-W46');
+  assert.equal(fresh.week.score, 5, 'only today’s provisional «Sin devolución»: nothing carried over from last week');
+  assert.deepEqual(fresh.week.position, { rank: 1, of: 3 }, 'everyone starts the week tied');
+  assert.ok(fresh.score >= 30, 'the month keeps the 2nd and the gift');
+  assert.deepEqual(fresh.week.lastWeek.leaders.map(lane => lane.name), ['Rodny'], 'last week (W45) is now the one that just closed');
+});
+
+test('a production day from Actividad counts as recorded work, and declared time on a production task keeps the clock (Brayan)', async () => {
+  const db = fakeDb();
+  db.operationalEvent.findMany = async ({ where }) => {
+    assert.equal(where.type, 'PRODUCTION');
+    assert.equal(where.googleCancelled, false);
+    return [{ id: 'ev-1', title: 'Grabación Nutresa', memberIds: ['m-jesu', 'm-helen'] }];
+  };
+  const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T23:30:00.000Z`) });
+  const rows = await service.evaluateDay(DAY);
+  const jesu = rows.find(row => row.memberId === 'm-jesu');
+  assert.equal(jesu.habits.TRABAJO_REGISTRADO, true);
+  assert.match(jesu.evidence.TRABAJO_REGISTRADO, /Jornada de producción: Grabación Nutresa/);
+  const helen = rows.find(row => row.memberId === 'm-helen');
+  assert.equal(helen.habits.RELOJ, true, 'Helen closed with declared time on a production day: that is her recorded time');
+  assert.match(helen.evidence.RELOJ, /1 jornada con tiempo declarado/);
+  // Sin evento, una tarea cuyo título o categoría dicen producción también lo es.
+  const plain = fakeDb();
+  const find = plain.task.findMany;
+  plain.task.findMany = async args => (await find(args)).map(task => task.id === 't-h' ? { ...task, title: 'Jornada de fotos Verona', aiCategory: 'Producción Audiovisual' } : task);
+  const byTitle = await createPlatformLeagueService({ db: plain, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T23:30:00.000Z`) }).evaluateDay(DAY);
+  assert.equal(byTitle.find(row => row.memberId === 'm-helen').habits.RELOJ, true);
+  assert.equal(byTitle.find(row => row.memberId === 'm-rodny').habits.RELOJ, true, 'the others are untouched');
 });
 
 test('five weekly points renew Monday in Bogotá, not at the month boundary', async () => {
@@ -340,8 +417,8 @@ test('only an admin records one traffic winner per week; saved days and repeated
  await service.awardMeeting({userId:'u-rodny',memberId:'m-rodny',day:DAY});
  assert.equal(repo.meetings[0].awarded_by,'u-rodny');
  await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-helen',day:DAY}),e=>e.statusCode===409);
- db.recognitionAward.findMany=async({where,select})=>{ assert.equal(where.occurredAt.gte.toISOString(),'2026-11-01T05:00:00.000Z');assert.deepEqual(select,{id:true,recipientId:true,occurredAt:true});return [{id:'a',recipientId:'u-rodny',occurredAt:at(DAY+'T15:00:00Z')}];};
- for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,40);assert.equal(league.today.points,40);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);}
+ db.recognitionAward.findMany=async({where,select})=>{ assert.ok(where.occurredAt.gte<=at('2026-11-01T05:00:00.000Z'), 'the awards read covers the month (and the previous week)');assert.deepEqual(select,{id:true,recipientId:true,occurredAt:true});return [{id:'a',recipientId:'u-rodny',occurredAt:at(DAY+'T15:00:00Z')}];};
+ for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,45);assert.equal(league.today.points,45);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);}
 });
 
 test('the pilot: only the accounts with the «Liga del mes» box in Equipo get the league and the gift; the rest get 404 and the trophy stays hidden; an administrator without the box is out too; the daily computation still runs for everyone', async () => {

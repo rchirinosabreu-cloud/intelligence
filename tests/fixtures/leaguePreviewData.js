@@ -2,7 +2,7 @@
 // en píxel (los diseños de OpenAI, recortados de su lámina para la muestra) y puntajes ficticios. Nunca decide nada
 // en producción. Los nombres son los del equipo real porque la muestra es para que Rodny vea cómo se verá; los
 // puntajes y los regalos son inventados.
-import { DAILY_HABITS, leagueNextStep, leagueScore, kudosScore, leagueRank, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
+import { DAILY_HABITS, leagueNextStep, leagueScore, kudosScore, leagueRank, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
 
 
 export const LEAGUE_ROSTER = [
@@ -16,17 +16,20 @@ const SCORES = { jesu: 35, keila: 65, sara: 50, kamila: 70, brayan: 45, rodny: 6
 
 const habitsOf = (values) => Object.fromEntries(DAILY_HABITS.map((habit, index) => [habit.key, values[index]]));
 
-/** Los días jugados por quien mira (Rodny): dos días hábiles cerrados (uno con los cinco hábitos y el extra de abrir primero). */
+/** Los días jugados por quien mira (Rodny): dos días hábiles cerrados (uno con los seis hábitos y el extra de abrir primero). */
 const myDays = ({ perfect = false } = {}) => {
   const closed = perfect
-    ? [[true, true, true, true, true], [true, true, true, true, true]]
-    : [[true, true, true, true, true], [true, false, true, false, true]];
+    ? [[true, true, true, true, true, true], [true, true, true, true, true, true]]
+    : [[true, true, true, true, true, true], [true, false, true, false, true, true]];
   return closed.map((values, index) => ({ day: `2026-11-0${index + 2}`, habits: habitsOf(values), extras: { PRIMERO_EN_ABRIR: index === 0 || perfect, PRIMERO_EN_REUNION: null } }));
 };
 
+/** La semana de la muestra (miércoles 4 de noviembre, semana del 2 al 8) y la anterior, que ganó Melissa. */
+const WEEK_SCORES = { jesu: 20, keila: 35, sara: 30, kamila: 40, brayan: 30, rodny: 0, francisco: 25, melissa: 45, elisa: 25, helen: 40, francys: 20, david: 10, mariceth: 30 };
+
 export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 'rodny' } = {}) {
   const days = myDays({ perfect });
-  const today = { day: '2026-11-04', habits: habitsOf(perfect ? [true, true, true, true, true] : [true, true, false, null, true]), extras: { PRIMERO_EN_ABRIR: perfect ? true : false, PRIMERO_EN_REUNION: null } };
+  const today = { day: '2026-11-04', habits: habitsOf(perfect ? [true, true, true, true, true, true] : [true, true, false, null, true, true]), extras: { PRIMERO_EN_ABRIR: perfect ? true : false, PRIMERO_EN_REUNION: null } };
   const kudos = {
     received: perfect
       ? [{ from: 'Helen', note: 'Siempre responde primero.', week: '2026-W45' }, { from: 'Melissa', note: 'Me salvó con el reel.', week: '2026-W45' }]
@@ -43,8 +46,21 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
   });
   const ranked = [...lanes].sort((a, b) => b.score - a.score);
   const melissa = LEAGUE_ROSTER.find((person) => person.id === 'melissa');
+  // La semana arranca en cero cada lunes (Rodny, 9 de noviembre de 2026): quien mira lleva lo de esta semana (los tres días caen en ella).
+  const weekLanes = LEAGUE_ROSTER.map((person) => ({ id: person.id, name: person.name, fullName: person.name, avatarUrl: null, pixelAvatarKey: person.pixelAvatarKey, isSelf: person.id === viewerId,
+    score: person.id === viewerId ? score : WEEK_SCORES[person.id] }));
+  const weekRanked = [...weekLanes].filter(lane => lane.score > 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));
+  const weekSelf = weekLanes.find(lane => lane.isSelf);
   return {
     month: '2026-11',
+    week: {
+      key: '2026-W45', from: '2026-11-02', to: '2026-11-08', label: leagueWeekLabel('2026-11-02', '2026-11-08'),
+      score: weekSelf.score,
+      position: weekSelf.score > 0 ? { rank: leagueRank(weekSelf.score, weekRanked), of: weekRanked.length } : null,
+      lanes: weekLanes,
+      podium: weekRanked.slice(0, 3).map((lane, index) => ({ id: lane.id, name: lane.name, pixelAvatarKey: lane.pixelAvatarKey, avatarUrl: null, score: lane.score, rank: index + 1 })),
+      lastWeek: { key: '2026-W44', from: '2026-10-26', to: '2026-11-01', label: leagueWeekLabel('2026-10-26', '2026-11-01'), leaders: [{ id: 'melissa', name: 'Melissa', pixelAvatarKey: 'melissa', avatarUrl: null, score: 60 }] }
+    },
     closesOn: 'lunes 30',
     daysLeft: 26,
     score,
@@ -54,7 +70,7 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     recognitionPoints: 20,
     meetings: { canManage: true, minDate: "2026-11-03", maxDate: "2026-11-04", entries: [] },
     nextStep: leagueNextStep(allDays),
-    streak: { days: summarizeDays(allDays).fullDays, label: 'con los 5 hábitos' },
+    streak: { days: summarizeDays(allDays).fullDays, label: 'con todos los hábitos' },
     kudos: { ...kudos, score: kudosScore(kudos.received) },
     position: { rank: leagueRank(score, ranked), of: lanes.length },
     nextStepUrl: '/gestion',

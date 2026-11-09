@@ -2,14 +2,26 @@
 // 5 por reconocimiento nativo y regalos semanales de 5. Los regalos históricos conservan su valor.
 // Los empates comparten puesto. Una lectura nunca concede premios.
 
-/** Los cinco hábitos de cada día hábil. Son hábitos de uso, dichos como hábitos y nunca como juicio. */
+/** Los seis hábitos de cada día hábil. Son hábitos de uso, dichos como hábitos y nunca como juicio. */
 export const DAILY_HABITS = [
   { key: 'RELOJ', label: 'Reloj', hint: 'Registraste tu tiempo correctamente, sin sesiones olvidadas.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
   { key: 'AL_DIA', label: 'Al día', hint: 'Amaneciste sin tareas vencidas.', step: 'Saca las vencidas de tu tablero: ciérralas o acuerda una fecha nueva.' },
   { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Terminaste pendientes antes de la fecha de entrega.', step: 'Cierra hoy lo que vence hoy, o pide mover la fecha antes de que pase.' },
   { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Las tareas que has creado tienen un comentario o un archivo que da mejor contexto.', step: 'Añade un comentario o un archivo que dé contexto a las tareas que creaste hoy.' },
-  { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nadie te devolvió un pendiente', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' }
+  { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nadie te devolvió un pendiente', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' },
+  // Rodny, 9 de noviembre de 2026: Elisa registra ingresos y egresos y Brayan sale a jornadas de producción, y la liga no
+  // se lo reconocía. El trabajo de cualquier módulo cuenta: lo que se registra en la plataforma, venga de donde venga.
+  { key: 'TRABAJO_REGISTRADO', label: 'Trabajo registrado', hint: 'Dejaste registro de tu trabajo en la plataforma: un movimiento, una gestión, una pieza, una lectura de pauta, una jornada o una tarea con reloj.', step: 'Registra en la plataforma lo que hiciste hoy: el movimiento, la gestión, la pieza o la jornada.' }
 ];
+
+/** «del 9 al 15 de noviembre», para la semana de la liga. */
+export function leagueWeekLabel(from, to) {
+  if (!from || !to) return '';
+  const day = (key) => Number(String(key).slice(8, 10));
+  const month = new Intl.DateTimeFormat('es-CO', { month: 'long', timeZone: 'UTC' }).format(new Date(`${to}T12:00:00Z`));
+  const fromMonth = new Intl.DateTimeFormat('es-CO', { month: 'long', timeZone: 'UTC' }).format(new Date(`${from}T12:00:00Z`));
+  return fromMonth === month ? `del ${day(from)} al ${day(to)} de ${month}` : `del ${day(from)} de ${fromMonth} al ${day(to)} de ${month}`;
+}
 
 /** Los extras del día: los gana una sola persona cada día. `source` dice de dónde los lee la plataforma. */
 export const EXTRA_ACTIONS = [

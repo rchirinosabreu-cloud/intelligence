@@ -3,6 +3,7 @@
 // las 6:00 y las devoluciones) y esto decide. Un hábito que no se pudo jugar queda `null` y nunca resta. La
 // evidencia es una frase en español por hábito, hechos y números, nunca un juicio sobre la persona.
 import { DAILY_HABITS, EXTRA_ACTIONS } from './platformLeague.js';
+import { describePlatformMutation } from './operationalMutationLabels.js';
 
 /** Menos de diez minutos medidos no es una tarea con cronómetro (el mismo umbral que pide el tiempo declarado). */
 export const MIN_MEASURED_MS = 10 * 60 * 1000;
@@ -40,24 +41,51 @@ export const openWindowOf = (dayKey) => ({
   end: new Date(Date.parse(`${dayKey}T05:00:00.000Z`) + 86_400_000)
 });
 
+/** Una jornada de producción: un evento de Actividad de tipo producción, o una tarea cuya categoría o título lo dicen. */
+const PRODUCTION_WORDS = /\b(jornada|grabaci[oó]n|rodaje|producci[oó]n|sesi[oó]n de fotos|shooting)\b/i;
+export const isProductionWork = ({ type, title, aiCategory } = {}) =>
+  String(type || '').toUpperCase() === 'PRODUCTION' || PRODUCTION_WORDS.test(String(aiCategory || '')) || PRODUCTION_WORDS.test(String(title || ''));
+
+/**
+ * Qué huellas de la traza operativa son trabajo registrado y de qué módulo. Las tareas cuentan por sus propios eventos;
+ * lo demás por `PLATFORM_MUTATION` con un método de escritura. Lo que no es trabajo —la propia liga, el perfil, las
+ * cuentas, los avisos, el chat de Bria— no cuenta, pero sí deja presencia.
+ */
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const NOT_WORK_PATH = /^\/api\/(league|user|users|auth|login|logout|notifications|push|client-errors|bria|important-notices|service-health|incident-reports|onboarding|whatsapp)(\/|$)/;
+export const TASK_WORK_EVENTS = new Set(['TASK_CREATED', 'TASK_UPDATED', 'TASK_ASSIGNED', 'TASK_PARTICIPATION_CHANGED']);
+export function workRecordFromTrace(event = {}) {
+  if (TASK_WORK_EVENTS.has(event.eventType)) return 'Gestión de tareas';
+  if (event.eventType !== 'PLATFORM_MUTATION') return null;
+  const method = String(event.metadata?.method || '').toUpperCase();
+  const path = String(event.metadata?.path || '');
+  if (!WRITE_METHODS.has(method) || !path.startsWith('/api/') || NOT_WORK_PATH.test(path)) return null;
+  return describePlatformMutation({ method, pathname: path }).module;
+}
+
 /**
  * Evalúa un día. `closedTasks`: lo que la persona cerró ese día como responsable, con `measuredMs` (solo sesiones
- * medidas, nunca declaradas), `declared` y su fecha original. `createdTasks`: sus creaciones con `documented`.
+ * medidas, nunca declaradas), `declared`, `production` y su fecha original. `createdTasks`: sus creaciones con `documented`.
  * `sessions`: sus relojes de ese día.
  * `overdueAtDawn`: las vencidas con que amaneció (null sin foto). `returnedToday`: cuántas le devolvieron (null sin lectura).
  * `firstOpener`: quién dejó la primera huella en la plataforma desde las 8:00 (`{ memberId, name, at }`; `null` si
  * nadie; `undefined` sin lectura) y `memberId`, para saber si fue esta persona.
+ * `workRecords`: los módulos donde la persona dejó registro ese día; `presence`: si dejó alguna huella aunque no
+ * registrara trabajo; `productionDays`: las jornadas de producción (eventos de Actividad) en que participó.
  */
-export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener } = {}) {
+export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [] } = {}) {
   const habits = {}, evidence = {}, extras = {};
 
   // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
+  // Una jornada de producción se cierra con tiempo declarado y vale: en campo no hay cronómetro (Rodny, 9 de noviembre de 2026).
   if (closedTasks.length || sessions.length) {
-    const unmeasured = closedTasks.filter((task) => task.declared || Number(task.measuredMs || 0) < MIN_MEASURED_MS);
+    const unmeasured = closedTasks.filter((task) => task.production ? !task.declared && Number(task.measuredMs || 0) < MIN_MEASURED_MS : (task.declared || Number(task.measuredMs || 0) < MIN_MEASURED_MS));
+    const declaredProduction = closedTasks.filter((task) => task.production && task.declared).length;
     const dirty = sessions.filter((session) => session.isOverlapping || Boolean(session.correctedAt) || Number(session.durationMs || 0) > FORGOTTEN_SESSION_MS);
     habits.RELOJ = unmeasured.length === 0 && dirty.length === 0;
     const parts = [];
-    if (closedTasks.length) parts.push(`${plural(closedTasks.length - unmeasured.length, 'cierre con cronómetro', 'cierres con cronómetro')} de ${closedTasks.length}`);
+    if (closedTasks.length) parts.push(`${plural(closedTasks.length - unmeasured.length, 'cierre con tiempo registrado', 'cierres con tiempo registrado')} de ${closedTasks.length}`);
+    if (declaredProduction) parts.push(plural(declaredProduction, 'jornada con tiempo declarado', 'jornadas con tiempo declarado'));
     if (dirty.length) parts.push(plural(dirty.length, 'sesión olvidada, encimada o corregida', 'sesiones olvidadas, encimadas o corregidas'));
     else parts.push(`${plural(sessions.length, 'sesión limpia', 'sesiones limpias')}`);
     evidence.RELOJ = parts.join(' · ');
@@ -105,6 +133,23 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     evidence.SIN_DEVOLUCION = Number(returnedToday) === 0 ? 'Nada devuelto.' : `${plural(Number(returnedToday), 'tarea devuelta', 'tareas devueltas')}.`;
   }
 
+  // Trabajo registrado: cualquier módulo. Se juega si la persona dejó alguna huella ese día; sin huella, no se jugó.
+  const records = [...workRecords];
+  if (closedTasks.length || sessions.length) records.push('Gestión de tareas');
+  if (createdTasks.length) records.push('Gestión de tareas');
+  for (const jornada of productionDays) records.push(`Jornada de producción${jornada?.title ? `: ${jornada.title}` : ''}`);
+  if (records.length) {
+    habits.TRABAJO_REGISTRADO = true;
+    const modules = [...new Set(records)];
+    evidence.TRABAJO_REGISTRADO = `${plural(records.length, 'registro', 'registros')}: ${modules.join(', ')}.`;
+  } else if (presence || closedTasks.length || sessions.length) {
+    habits.TRABAJO_REGISTRADO = false;
+    evidence.TRABAJO_REGISTRADO = 'Entró a la plataforma, pero no quedó registro de trabajo.';
+  } else {
+    habits.TRABAJO_REGISTRADO = null;
+    evidence.TRABAJO_REGISTRADO = 'Sin actividad en la plataforma ese día.';
+  }
+
   // Primero en abrir: la primera huella en la plataforma desde las 8:00 es de una sola persona.
   if (firstOpener === undefined) {
     extras.PRIMERO_EN_ABRIR = null;
@@ -136,4 +181,18 @@ export function isoWeekKey(dayKey) {
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   const week = Math.ceil(((date - yearStart) / 86_400_000 + 1) / 7);
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+const shiftDay = (dayKey, days) => new Date(Date.parse(`${dayKey}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** La semana de un día, de lunes a domingo (Rodny, 9 de noviembre de 2026: «hoy es lunes, el puntaje semanal debe reiniciarse»). */
+export function isoWeekRange(dayKey) {
+  const weekday = new Date(`${dayKey}T00:00:00Z`).getUTCDay() || 7;
+  const from = shiftDay(dayKey, 1 - weekday);
+  return { weekKey: isoWeekKey(dayKey), from, to: shiftDay(from, 6) };
+}
+
+/** La semana anterior a la de un día. */
+export function previousWeekRange(dayKey) {
+  return isoWeekRange(shiftDay(isoWeekRange(dayKey).from, -7));
 }
