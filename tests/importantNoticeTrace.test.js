@@ -37,7 +37,7 @@ test('cada evento se dice en una frase, con la persona y la oportunidad', () => 
     assert.equal(noticeTraceDescription(E.SNOOZED, { subject: 'Café Altura', option: 'tomorrow' }, who),
         'Francys Caballero pospuso el aviso de Café Altura hasta mañana a las 8:00.');
     assert.equal(noticeTraceDescription(E.CLOSED, { subject: 'Centro Andino', outcome: 'PERDIDO' }, who),
-        'Francys Caballero marcó Centro Andino como perdida desde el aviso de revisión.');
+        'Francys Caballero registró que el cliente no aprobó la oportunidad Centro Andino.');
     assert.equal(noticeTraceDescription(E.CLOSED, { subject: 'Centro Andino', outcome: 'DESCARTADO' }, who),
         'Francys Caballero marcó Centro Andino como descartada desde el aviso de revisión.');
     assert.equal(noticeTraceDescription(E.CLOSED, { subject: 'Andy', outcome: 'GANADO' }, who),

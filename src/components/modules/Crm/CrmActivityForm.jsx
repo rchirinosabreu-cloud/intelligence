@@ -7,6 +7,7 @@ import { Loader2, Send } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAddActivity } from './crmApi';
 import { CRM_ACTIVITY_TYPES, inputClass, labelClass } from './crmPresentation';
+import CrmActivityNote from './CrmActivityNote';
 
 const bogotaNowLocal = () => {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
@@ -79,7 +80,9 @@ const CrmActivityForm = ({ leadId, defaultNextAction = '', compact = false, onSa
       <div className={cn('grid gap-3', compact ? '' : 'sm:grid-cols-2')}>
         <div>
           <label className={labelClass} htmlFor={`crm-note-${leadId}`}>Qué se hizo</label>
-          <textarea id={`crm-note-${leadId}`} rows={compact ? 2 : 3} value={form.note} onChange={set('note')} className={cn(inputClass, 'resize-y')} placeholder="Ej. Llamé a Catalina, revisamos el alcance del RFP." />
+          <CrmActivityNote id={`crm-note-${leadId}`} rows={compact ? 2 : 3} value={form.note}
+            onChange={note => setForm(current => ({ ...current, note }))} refreshKey={requestId}
+            className={cn(inputClass, 'resize-y')} placeholder="Ej. Llamé a Catalina, revisamos el alcance del RFP." />
         </div>
         <div>
           <label className={labelClass} htmlFor={`crm-result-${leadId}`}>Resultado / respuesta</label>

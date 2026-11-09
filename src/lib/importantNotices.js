@@ -37,7 +37,7 @@ export const isFollowUpChannel = (value) => FOLLOW_UP_CHANNELS.some((channel) =>
 // decisión nuestra (Rodny, 26 de octubre de 2026). Reunión del 4 de noviembre de 2026: con Andy «sí se hizo» —la
 // propuesta terminó en trabajo— y faltaba poder decirlo.
 export const REVIEW_OUTCOMES = Object.freeze([
-    Object.freeze({ value: 'PERDIDO', label: 'Perdida', stage: 'Perdido', done: 'La oportunidad pasó a Perdido' }),
+    Object.freeze({ value: 'PERDIDO', label: 'Cliente no aprobó', stage: 'Cliente no aprobó', done: 'Se registró que el cliente no aprobó' }),
     Object.freeze({ value: 'DESCARTADO', label: 'Descartada', stage: 'Descartado', done: 'La oportunidad pasó a Descartado' }),
     Object.freeze({ value: 'GANADO', label: 'Ya es cliente', stage: 'Ganado', done: 'La oportunidad pasó a Ganado' })
 ]);

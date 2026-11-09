@@ -72,7 +72,7 @@ test('una fuente de publicaciones que falla no acredita resolución ni entrega u
 });
 
 test('el catálogo vigente declara origen y efecto; solo CRM/cartera admiten registrar gestión',()=>{
-  assert.equal(Object.keys(NOTICE_RESPONSE_POLICIES).length,17);
+  assert.equal(Object.keys(NOTICE_RESPONSE_POLICIES).length,18);
   for(const [kind,policy] of Object.entries(NOTICE_RESPONSE_POLICIES)){
     assert.ok(policy.source && policy.explanation && policy.openLabel);
     assert.ok(noticeAllows({kind},policy.family === 'ANNOUNCEMENT' ? 'preview' : 'open'));

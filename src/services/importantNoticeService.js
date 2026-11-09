@@ -25,6 +25,7 @@ import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from
 import { readOperationalNotices, syncOperationalNotices } from './operationalNoticeService.js';
 import { isOperationalNotice, operationalNoticeAcknowledges, operationalCycleSubject } from '../lib/clientOperationalNotices.js';
 import { assertNoticeResponsePolicy, noticeAllows, noticeResponsePolicy } from '../lib/alertResponsePolicy.js';
+import { CRM_NOTICE_KINDS, nextFollowUpPlan, plannedNoticeProjection } from '../lib/crmNextFollowUp.js';
 export { readOperationalNotices };
 
 const CONTACT_TYPES = CRM_ACTIVITY_TYPES.filter((type) => type.contact).map((type) => type.value);
@@ -91,6 +92,14 @@ const traceNotice = async (db, eventType, { notice, subject, actor = null, subje
 /** Un aviso nuevo de la misma oportunidad reemplaza al que esa persona tenía abierto: la banda dice siempre lo último. */
 export const queueImportantNotice = async (db, data, now = new Date()) => db.$transaction(async (tx) => {
     assertNoticeResponsePolicy(data);
+    // El reloj de silencio no reemplaza una acción acordada todavía pendiente.
+    if (isCrmNotice(data)) {
+        const planned = await tx.importantNotice.findFirst({ where: { userId: data.userId, subjectId: data.subjectId, kind: 'CRM_NEXT_FOLLOW_UP', resolvedAt: null } });
+        if (planned) {
+            const state = await whyNotNeeded(tx, planned, now);
+            if (!state?.reason && state?.plan) return planned;
+        }
+    }
     // Un recordatorio de cartera actualiza el mismo asunto abierto. Recrearlo borraba «Recordarme», la antigüedad y
     // la decisión de la persona cada vez que cambiaba el saldo o tocaba otro paso del reloj. Una escalada de tipo
     // (por ejemplo, proponer suspensión) mantiene el recorrido explícito de reemplazo.
@@ -120,7 +129,7 @@ export const queueImportantNotice = async (db, data, now = new Date()) => db.$tr
             message: data.message, url: data.url || null, notificationId: data.notificationId || null, createdAt: now
         }
     });
-});
+}, isCrmNotice(data) ? { isolationLevel: 'Serializable' } : undefined);
 
 /**
  * Los avisos de parrilla (30 de octubre de 2026) se caen solos en cuanto las piezas quedan publicadas: por eso el
@@ -148,6 +157,12 @@ const planStillPending = async (db, notice, overduePlans, now, coveredCycles = n
 
 // ¿La oportunidad sigue esperando al cliente y nadie registró una gestión desde que salió el aviso? Si no, por qué.
 // En cartera: ¿el cliente sigue con lo vencido? En parrillas: ¿quedan piezas sin publicar?
+export const plannedFollowUpStartedAt = async (db, leadId, fallback) => {
+    const activity = await db.crmActivity.findFirst({ where: { leadId, type: 'NOTA', requestId: { startsWith: 'notice-plan:' } },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], select: { occurredAt: true } });
+    return activity?.occurredAt || fallback;
+};
+
 const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans, coveredCycles } = {}) => {
     if (notice.kind === 'ANUNCIO_GENERAL') return announcementNoticeState(db, notice);
     if (isOperationalNotice(notice)) return null; // Revalidado por la proyección autorizada antes de seleccionar.
@@ -155,18 +170,20 @@ const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans, 
     if (isAdNotice(notice)) return (await import('./adBudgetNoticeService.js')).adNoticeStillNeeded(db, notice, now);
     if (isCollectionNotice(notice)) return collectionStillDue(db, notice, now);
     if (noticeResponsePolicy(notice)?.family !== 'CRM') return null;
+    const contactSince = notice.kind === 'CRM_NEXT_FOLLOW_UP' ? await plannedFollowUpStartedAt(db, notice.subjectId, notice.createdAt) : notice.createdAt;
     const lead = await db.crmLead.findUnique({
         where: { id: notice.subjectId },
         select: {
-            company: true, contactName: true, stage: true, archivedAt: true, updatedAt: true,
-            activities: { where: { type: { in: CONTACT_TYPES }, occurredAt: { gt: notice.createdAt } }, select: { id: true }, take: 1 }
+            company: true, contactName: true, stage: true, archivedAt: true, updatedAt: true, nextAction: true, nextFollowUpAt: true,
+            activities: { where: { type: { in: CONTACT_TYPES }, occurredAt: { gt: contactSince } }, select: { id: true }, take: 1 }
         }
     });
     const subject = leadName(lead);
     if (!lead || lead.archivedAt) return { reason: 'INACTIVA', subject };
     if (!FOLLOW_UP_ALERT_STAGES.includes(lead.stage)) return { reason: 'ETAPA', subject };
     if ((lead.activities || []).length) return { reason: 'GESTION', subject };
-    return lead.updatedAt ? { sourceRevision: new Date(lead.updatedAt).toISOString() } : null;
+    return lead.updatedAt ? { sourceRevision: new Date(lead.updatedAt).toISOString(),
+        ...(notice.kind === 'CRM_NEXT_FOLLOW_UP' ? { plan: nextFollowUpPlan(lead), projection: plannedNoticeProjection(notice, lead) } : {}) } : null;
 };
 
 // Los avisos del CRM son del equipo comercial (Rodny, 28 de octubre de 2026). A quien no lo es la banda no se los
@@ -202,11 +219,23 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
         .filter(notice => !isOperationalNotice(notice) || operational.has(notice.subjectId))
         .filter((notice) => commercial || !isCrmNotice(notice))
         .filter((notice) => administrative || !isCollectionNotice(notice));
+    // Leer incluso los programados que aún no vencieron: la ficha puede adelantar o cambiar la fecha.
+    const plannedStates = new Map();
+    const projected = [];
+    for (const notice of candidates) {
+        if (notice.kind !== 'CRM_NEXT_FOLLOW_UP') { projected.push(notice); continue; }
+        try {
+            const state = await whyNotNeeded(db, notice, now);
+            plannedStates.set(notice.id, state);
+            projected.push(state?.projection || { ...notice, snoozedUntil: null });
+        } catch (error) { console.error('[Avisos importantes] No se pudo leer el próximo seguimiento:', error?.code || error?.name); }
+    }
+    candidates = projected;
     for (let discarded = 0; discarded <= MAX_STALE_PER_READ; discarded += 1) {
         const { notice, nextAt } = pickCurrentNotice(candidates, lastDecision?.decidedAt || null, now);
         if (!notice) return { notice: null, nextAt };
         let cleared;
-        try { cleared = await whyNotNeeded(db, notice, now, { overduePlans, coveredCycles }); }
+        try { cleared = plannedStates.has(notice.id) ? plannedStates.get(notice.id) : await whyNotNeeded(db, notice, now, { overduePlans, coveredCycles }); }
         catch (error) {
             // No entregar botones de decisión de una fuente que no se pudo comprobar ni cerrarla por ausencia supuesta.
             console.error('[Avisos importantes] Fuente no disponible:', notice.kind, error?.code || error?.name);
@@ -214,7 +243,8 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
             continue;
         }
         if (!cleared) return { notice: serialize(notice, undefined, operational.get(notice.subjectId)), nextAt };
-        if (cleared.sourceRevision) return { notice: serialize(notice, undefined, undefined, cleared.sourceRevision), nextAt };
+        if (cleared.sourceRevision) return { notice: { ...serialize(notice, undefined, undefined, cleared.sourceRevision),
+            ...(cleared.plan ? { followUpPlan: { action: cleared.plan.action, date: cleared.plan.date } } : {}) }, nextAt };
         if (cleared.refresh) {
             const refreshed = await db.importantNotice.update({ where: { id: notice.id }, data: cleared.refresh });
             return { notice: { ...serialize(refreshed, cleared.receivableIds), ...(cleared.announcement ? { announcement: cleared.announcement,
@@ -248,6 +278,22 @@ const ownOpenNotice = async (db, id, actor, now = new Date(), { overduePlans = r
     return notice;
 };
 
+/** Programa en la oportunidad y conserva los avisos existentes para la fecha acordada. */
+export const scheduleFollowUpNotice = async (db, id, body, actor, { now = new Date(), log } = {}) => noticeDecisionTransaction(db, async tx => {
+    const notice = await ownOpenNotice(tx, id, actor, now, { action: 'schedule-follow-up' });
+    const state = await whyNotNeeded(tx, notice, now);
+    if (state?.reason) throw httpError(409, 'La oportunidad ya cambió o recibió una gestión. Actualiza el aviso.');
+    const result = await crmService.scheduleFollowUp(tx, notice.subjectId,
+        { ...body, requestId: typeof body.requestId === 'string' ? `notice-plan:${id}:${body.requestId}` : null }, actor, now);
+    if (result.replayed) return { ok: true };
+    await tx.importantNotice.updateMany({ where: { subjectId: notice.subjectId, kind: { in: CRM_NOTICE_KINDS }, resolvedAt: null },
+        data: { kind: 'CRM_NEXT_FOLLOW_UP', snoozedUntil: null } });
+    await tx.importantNotice.update({ where: { id }, data: { decidedAt: now } });
+    await traceNotice(tx, NOTICE_TRACE_EVENTS.SCHEDULED, { notice, subject: await readSubjectName(tx, notice), actor,
+        extra: { nextAction: body.nextAction.trim(), nextFollowUpAt: body.nextFollowUpAt }, now, log });
+    return { ok: true };
+});
+
 const requireCrm = (actor) => {
     if (!hasModulePermission(actor, 'crm')) throw httpError(403, 'Para registrar la gestión necesitas acceso al CRM.');
 };
@@ -263,7 +309,7 @@ const resolve = async (db, notice, resolution, now) => {
     }
     if (isCrmNotice(notice)) {
         // La decisión es compartida; el resto no figura como autor ni como quien tomó una decisión.
-        const where = { subjectId: notice.subjectId, kind: { in: ['CRM_FOLLOW_UP', 'CRM_REVIEW'] }, resolvedAt: null };
+        const where = { subjectId: notice.subjectId, kind: { in: CRM_NOTICE_KINDS }, resolvedAt: null };
         const others = await db.importantNotice.findMany({ where, select: { notificationId: true, userId: true } });
         await db.importantNotice.updateMany({ where, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
         for (const other of others) if (other.notificationId) await db.notification.updateMany({
@@ -311,7 +357,10 @@ export const reassignCrmNotices = async (db = prisma, { commercialIds = [], now 
  */
 export const markNoticeShown = async (db = prisma, id, actor, { now = new Date(), log, overduePlans } = {}) => {
     const notice = await ownOpenNotice(db, id, actor, now, { overduePlans });
-    const snoozed = notice.snoozedUntil ? new Date(notice.snoozedUntil) : null;
+    const planned = notice.kind === 'CRM_NEXT_FOLLOW_UP' ? await whyNotNeeded(db, notice, now) : null;
+    if (planned?.reason) throw httpError(409, 'La oportunidad ya fue atendida. Actualiza el aviso.');
+    const pause = planned?.projection?.snoozedUntil || notice.snoozedUntil;
+    const snoozed = pause ? new Date(pause) : null;
     if (snoozed && snoozed > now) throw httpError(409, 'Ese aviso está pospuesto.');
     const appearance = snoozed ? snoozed.toISOString() : 'inicial';
     const traceId = createHash('sha256').update(`${notice.id}:SHOWN:${appearance}`).digest('hex');
@@ -407,7 +456,7 @@ export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm
         if (!isCrmNotice(notice)) throw httpError(409, 'Solo una oportunidad del CRM se archiva desde el aviso.');
     } else {
         if (!noticeAllows(notice, 'close')) throw httpError(409, 'Este aviso no es una oportunidad del CRM.');
-        if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige qué pasa con la oportunidad: perdida, descartada o ya es cliente.');
+        if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige un resultado válido para la oportunidad.');
     }
     requireCrm(actor);
     const cleared = await whyNotNeeded(db, notice, now);
@@ -416,7 +465,7 @@ export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm
     if (body.confirmed !== true) throw httpError(400, 'Confirma el resultado que quieres registrar en la oportunidad.');
     if (!lead?.updatedAt || new Date(lead.updatedAt).toISOString() !== body.expectedUpdatedAt) throw httpError(409, 'La oportunidad cambió. Vuelve a revisar antes de confirmar.');
     const reason = String(body.reason || '').trim();
-    if (['PERDIDO', 'DESCARTADO'].includes(body.outcome) && (!reason || reason.length > 1000)) throw httpError(400, 'Indica el motivo de esta decisión (máximo 1000 caracteres).');
+    if ((body.outcome === 'PERDIDO' && !reason) || reason.length > 1000) throw httpError(400, 'Indica el motivo de esta decisión (máximo 1000 caracteres).');
     const { payload, archive, resolution } = CLOSE_STAGES[body.outcome];
     if (archive) await crm.archiveLead(db, notice.subjectId, actor, now);
     else await crm.changeStage(db, notice.subjectId, { ...payload,

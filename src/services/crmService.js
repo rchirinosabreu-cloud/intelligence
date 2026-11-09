@@ -10,6 +10,9 @@ import { parseAmountText } from '../lib/amountInput.js';
 import { partyNameKey } from '../lib/quotationParty.js';
 import { followUpSilence } from '../lib/crmFollowUpAlerts.js';
 import { readFollowUpAlertDays } from './crmFollowUpAlertService.js';
+import { frequentActivityNotes } from '../lib/crmActivitySuggestions.js';
+import { followUpDateKey } from '../lib/crmNextFollowUp.js';
+import { hasModulePermission } from '../config/security.js';
 
 export class CrmValidationError extends Error {
   constructor(message) {
@@ -18,6 +21,20 @@ export class CrmValidationError extends Error {
     this.statusCode = 400;
   }
 }
+
+export const activityNoteSuggestions = async (db, actor) => {
+  const authorId = actor?.userId || actor?.id;
+  if (!authorId) throw Object.assign(new Error('Inicia sesión.'), { statusCode: 401 });
+  const user = await db.user.findUnique({ where: { id: authorId }, select: { isActive: true, role: true, modulePermissions: true } });
+  if (!user?.isActive || !hasModulePermission(user, 'crm')) throw Object.assign(new Error('No tienes acceso vigente al CRM.'), { statusCode: 403 });
+  const rows = await db.crmActivity.findMany({
+    where: { authorId, lead: { archivedAt: null }, note: { not: null },
+      type: { in: CRM_ACTIVITY_TYPES.filter(type => type.contact).map(type => type.value) },
+      OR: [{ requestId: null }, { requestId: { not: { startsWith: 'aviso-' } } }] },
+    select: { note: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 500
+  });
+  return { suggestions: frequentActivityNotes(rows) };
+};
 
 const notFound = () => Object.assign(new Error('Oportunidad no encontrada.'), { statusCode: 404 });
 // Permite que una decisión desde un aviso use la misma transacción que su registro de origen.
@@ -322,7 +339,7 @@ export const changeStage = async (db, id, payload = {}, actor = {}, now = new Da
   const stage = text(payload.stage);
   if (!isValidStage(stage)) throw new CrmValidationError('La etapa no está en el catálogo.');
   const lostReason = text(payload.lostReason);
-  if (stage === 'PERDIDO' && !lostReason) throw new CrmValidationError('Registra el motivo de pérdida antes de cerrar la oportunidad.');
+  if (stage === 'PERDIDO' && !lostReason) throw new CrmValidationError('Registra el motivo de no aprobación antes de cerrar la oportunidad.');
   return crmTransaction(db, async tx => {
     const lead = await loadLead(tx, id);
     if (lead.stage === stage) return serializeLead(lead, now);
@@ -437,6 +454,34 @@ export const setTrafficLight = async (db, id, payload = {}, actor = {}, now = ne
 // Quién archivó queda en la bitácora a su nombre (Rodny, 4 de noviembre de 2026: «debe decir quién decidió archivar»),
 // sin pedirle nada a la persona. Es una nota y no una gestión: no reinicia la cuenta de días ni mueve el semáforo, por
 // eso no toca `lastActivityAt`.
+// Planificar no acredita una llamada ni reinicia la antigüedad de la última gestión.
+export const scheduleFollowUp = async (db, id, payload, actor, now) => {
+  const date = followUpDateKey(payload.nextFollowUpAt);
+  const nextAction = typeof payload.nextAction === 'string' ? payload.nextAction.trim() : '';
+  if (!date || !nextAction || nextAction.length > 1000) throw new CrmValidationError('Indica una fecha válida y la acción del próximo seguimiento (máximo 1000 caracteres).');
+  if (payload.confirmed !== true) throw new CrmValidationError('Confirma la programación del seguimiento.');
+  const requestId = payload.requestId;
+  if (typeof requestId !== 'string' || !/^[a-zA-Z0-9:_-]{8,160}$/.test(requestId)) throw new CrmValidationError('Falta identificar esta programación. Vuelve a intentarlo.');
+  const authorId = actor.userId || actor.id;
+  return crmTransaction(db, async tx => {
+    const existing = await tx.crmActivity.findFirst({ where: { authorId, requestId } });
+    if (existing) {
+      if (existing.leadId !== id || existing.type !== 'NOTA' || existing.nextAction !== nextAction || followUpDateKey(existing.nextFollowUpAt) !== date)
+        throw Object.assign(new Error('Esta solicitud ya se usó con otros datos.'), { statusCode: 409 });
+      return { replayed: true };
+    }
+    if (date <= bogotaDateKey(now)) throw new CrmValidationError('Elige una fecha posterior a hoy para el próximo seguimiento.');
+    const lead = await loadLead(tx, id);
+    if (!payload.expectedUpdatedAt || new Date(lead.updatedAt).toISOString() !== payload.expectedUpdatedAt)
+      throw Object.assign(new Error('La oportunidad cambió. Actualiza el aviso antes de programar.'), { statusCode: 409 });
+    const nextFollowUpAt = new Date(`${date}T00:00:00Z`);
+    await tx.crmActivity.create({ data: { leadId: id, type: 'NOTA', occurredAt: now, authorId, requestId, nextAction, nextFollowUpAt,
+      note: `Próximo seguimiento programado para ${date.split('-').reverse().join('/')}: ${nextAction}` } });
+    await tx.crmLead.update({ where: { id }, data: { nextAction, nextFollowUpAt, updatedAt: now } });
+    return { replayed: false };
+  });
+};
+
 const archiveNote = (leadId, note, actor, now) => ({ leadId, type: 'NOTA', occurredAt: now, note, authorId: actor.userId || actor.id || null });
 
 export const archiveLead = async (db, id, actor = {}, now = new Date()) => crmTransaction(db, async tx => {

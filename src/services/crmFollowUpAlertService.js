@@ -14,8 +14,9 @@ import {
 import { activeAreaUserIds } from './teamAreaService.js';
 import { followUpNoticeText } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription } from '../lib/importantNoticeTrace.js';
-import { queueImportantNotice, reassignCrmNotices } from './importantNoticeService.js';
+import { queueImportantNotice, reassignCrmNotices, plannedFollowUpStartedAt } from './importantNoticeService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
+import { nextFollowUpPlan } from '../lib/crmNextFollowUp.js';
 
 export const FOLLOW_UP_REMINDER_TYPE = 'CRM_FOLLOW_UP_REMINDER';
 export const FOLLOW_UP_REVIEW_TYPE = 'CRM_FOLLOW_UP_REVIEW';
@@ -84,7 +85,7 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
     const leads = await db.crmLead.findMany({
         where: { archivedAt: null, stage: { in: FOLLOW_UP_ALERT_STAGES }, proposalSentAt: { not: null } },
         select: {
-            id: true, company: true, contactName: true, stage: true, proposalSentAt: true, archivedAt: true,
+            id: true, company: true, contactName: true, stage: true, proposalSentAt: true, archivedAt: true, nextAction: true, nextFollowUpAt: true,
             owner: { select: { userId: true } },
             activities: { where: { type: { in: CONTACT_TYPES } }, select: { type: true, occurredAt: true } },
             quotations: { where: { status: 'ACTIVA' }, orderBy: { created_at: 'desc' }, take: 1, select: { consecutive: true } },
@@ -97,6 +98,8 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
         await reassignCrmNotices(db, { commercialIds: commercial, now, log: info })
             .catch((error) => log('[CRM] Avisos de la banda no reasignados:', error?.message || error));
     }
+    const planned = typeof db.importantNotice?.findMany === 'function'
+        ? await db.importantNotice.findMany({ where: { kind: 'CRM_NEXT_FOLLOW_UP', resolvedAt: null }, select: { subjectId: true, createdAt: true } }) : [];
     let missingCommercial = false;
     let sent = 0;
     // Lo que le toca a cada persona en este pase, por tipo: se reparte al final para poder resumir.
@@ -106,6 +109,11 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
         outbox.get(userId)[kind].push(item);
     };
     for (const lead of leads) {
+        const plannedNotice = planned.find(notice => notice.subjectId === lead.id);
+        if (plannedNotice && nextFollowUpPlan(lead)) {
+            const since = await plannedFollowUpStartedAt(db, lead.id, plannedNotice.createdAt);
+            if (!(lead.activities || []).some(activity => new Date(activity.occurredAt) > new Date(since))) continue;
+        }
         const alert = dueFollowUpAlert({ ...lead, followUpAlerts: sentInLatestCycle(lead.followUpAlertLog) }, lead.activities, now, settings);
         if (!alert) continue;
         try {

@@ -11,12 +11,13 @@ import { operationalNoticeMemory } from '../tests/helpers/operationalNoticeMemor
 import { createImportantNoticeRouter } from '../src/routes/api/importantNotices.js';
 import { setContractContinuity } from '../src/services/contractContinuityService.js';
 import * as noticeService from '../src/services/importantNoticeService.js';
+import { createCrmRouter } from '../src/routes/api/crm.js';
 
-export async function createOperationalNoticePreview({port=3846}={}) {
+export async function createOperationalNoticePreview({port=3846, crmPreview=false}={}) {
   const root=path.resolve(import.meta.dirname,'..');const out=path.join(root,'output/avisos-operativos-local');await mkdir(out,{recursive:true});
-  await build({entryPoints:[path.join(root,'tests/fixtures/operational-notices.jsx')],outfile:path.join(out,'preview.js'),bundle:true,format:'esm',jsx:'automatic',minify:false,
+  await build({entryPoints:[path.join(root,crmPreview?'tests/fixtures/crm-improvements.jsx':'tests/fixtures/operational-notices.jsx')],outfile:path.join(out,'preview.js'),bundle:true,format:'esm',jsx:'automatic',minify:false,
     alias:{'@':path.join(root,'src')},define:{'process.env.NODE_ENV':'"development"','import.meta.env.VITE_API_URL':'window.location.origin'},loader:{'.css':'empty'},logLevel:'silent'});
-  const css=await postcss([tailwind({...config,content:[...config.content,'./tests/fixtures/operational-notices.jsx']}),autoprefixer]).process(await readFile(path.join(root,'src/index.css'),'utf8'),{from:path.join(root,'src/index.css')});
+  const css=await postcss([tailwind({...config,content:[...config.content,'./tests/fixtures/operational-notices.jsx','./tests/fixtures/crm-improvements.jsx']}),autoprefixer]).process((await readFile(path.join(root,'node_modules/react-datepicker/dist/react-datepicker.css'),'utf8'))+'\n'+await readFile(path.join(root,'src/index.css'),'utf8'),{from:path.join(root,'src/index.css')});
   await writeFile(path.join(out,'preview.css'),css.css);
   const {db,data,actor}=operationalNoticeMemory();let now=new Date('2026-11-06T15:00:00Z');let planRows=[];let activeScene='cierre';
   const scene=(name='cierre')=>{
@@ -56,11 +57,16 @@ export async function createOperationalNoticePreview({port=3846}={}) {
       }
       data.importantNotice.push({id:'aviso-global-local',userId:actor.id,kind:customKind,subjectId,label,message,url,resolvedAt:null,createdAt:new Date('2026-11-02'),level:'IMPORTANTE'});
     }else data.importantNotice.push({id:'cartera-invisible',userId:actor.id,kind:'CARTERA_UNICO',subjectId:'r',label:'Cartera privada de prueba',message:'Este texto financiero NO debe mostrarse a Kamila',resolvedAt:null,createdAt:new Date('2026-01-01'),level:'IMPORTANTE'});
-  };scene();
+    if(crmPreview && data.crmLead[0]) {
+      const lead=data.crmLead[0]; lead.lastActivityAt=new Date('2026-10-01T15:00:00Z');lead.proposalSentAt=new Date('2026-10-01T15:00:00Z');
+      for(let i=0;i<2;i++)data.crmActivity.push({id:`frase-${i}`,leadId:lead.id,authorId:actor.id,type:'WHATSAPP',note:'Se contactó al cliente, pendiente de respuesta.',occurredAt:new Date('2026-10-01T15:00:00Z'),requestId:`manual-${i}`});
+    }
+  };scene(crmPreview?'revision':'cierre');
   const api=express();api.use(express.json());api.use((req,res,next)=>{res.set('Cache-Control','no-store');req.user=actor;next();});
   api.get('/api/preview/state',(_req,res)=>res.json({now,scene:activeScene,actor:actor.name,client:data.client[0],lead:data.crmLead[0],activities:data.crmActivity,collectionActivities:data.collectionActivity,plans:planRows}));
   api.post('/api/preview/scene/:name',(req,res)=>{scene(req.params.name);res.json({ok:true});});
   api.post('/api/preview/advance',(_req,res)=>{now=new Date(now.getTime()+5*60000);res.json({ok:true});});
+  api.post('/api/preview/follow-up-day',(_req,res)=>{const date=data.crmLead[0]?.nextFollowUpAt;if(date)now=new Date(`${new Date(date).toISOString().slice(0,10)}T13:01:00Z`);res.json({ok:true});});
   api.post('/api/preview/close',(_req,res)=>{data.client[0].monthlyCloses.push({year:2026,month:10});res.json({ok:true});});
   api.post('/api/preview/review',(_req,res)=>{data.projectFormalization.forEach(p=>p.operation.reviewStatus='REVISADO');res.json({ok:true});});
   api.post('/api/preview/publish',(_req,res)=>{planRows=[];res.json({ok:true});});
@@ -68,6 +74,7 @@ export async function createOperationalNoticePreview({port=3846}={}) {
   const localService={...noticeService};
   for(const method of ['currentImportantNotice','markNoticeShown','snoozeNotice'])localService[method]=(...args)=>{const index=method==='snoozeNotice'?4:3;args[index]={...args[index],overduePlans:async()=>planRows};return noticeService[method](...args);};
   api.use('/api/important-notices',createImportantNoticeRouter({service:localService,db,clock:()=>now}));
+  api.use('/api/crm',createCrmRouter({db}));
   api.post('/api/client-operations/:id/continuity',async(req,res)=>{
     try { res.json(await setContractContinuity(db,req.params.id,req.body,actor.id,{now})); }
     catch(error){res.status(error.status||500).json({error:error.message});}
@@ -77,4 +84,4 @@ export async function createOperationalNoticePreview({port=3846}={}) {
   const server=await new Promise(resolve=>{const s=api.listen(port,'127.0.0.1',()=>resolve(s));});
   return {origin:`http://127.0.0.1:${server.address().port}`,db,data,close:()=>new Promise(resolve=>server.close(resolve))};
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){const preview=await createOperationalNoticePreview();console.log(`Vista local: ${preview.origin}`);}
+if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){const crmPreview=process.argv.includes('--crm');const preview=await createOperationalNoticePreview(crmPreview?{port:3853,crmPreview}:{});console.log(`Vista local: ${preview.origin}`);}
