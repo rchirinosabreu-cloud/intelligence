@@ -118,7 +118,11 @@ const fakeRepo = (seed = []) => {
     async meetingsOfWeek(weekKey) { return this.meetings.filter(m => m.week_key === weekKey); },
     async kudosOfWeek(weekKey) { return kudos.filter(k => k.week_key === weekKey); },
     async daysInRange(fromDay, toDay, { before }) { return [...days.values()].filter((r) => r.day_key >= fromDay && r.day_key <= toDay && r.day_key < before); },
-    async awardMeeting(row) { if (this.meetings.some(m => m.week_key === row.week_key)) throw Object.assign(new Error("duplicate"), {code:"23505"}); const saved = {id:"meeting",...row}; this.meetings.push(saved); return saved; },
+    async awardMeeting({ limit = 2, ...row }) {
+      if (this.meetings.some(m => m.week_key === row.week_key && m.member_id === row.member_id)) throw Object.assign(new Error("duplicate"), {code:"23505"});
+      if (this.meetings.filter(m => m.week_key === row.week_key).length >= limit) return null;
+      const saved = {id:`meeting-${this.meetings.length + 1}`,...row}; this.meetings.push(saved); return saved;
+    },
     startedAt: async () => at("2026-10-01T05:00:00Z"),
     async saveDays(rows) { for (const row of rows) days.set(`${row.day_key}:${row.member_id}`, { ...row, computed_at: new Date() }); return rows.length; },
     async computedDays(monthKey) { return [...new Set([...days.values()].filter((r) => r.day_key.startsWith(monthKey)).map((r) => r.day_key))]; },
@@ -410,15 +414,23 @@ test('five weekly points renew Monday in Bogotá, not at the month boundary', as
  await assert.rejects(service.giveKudos({userId:'u-helen',memberId:'missing'}),e=>e.statusCode===404);
  await assert.rejects(service.giveKudos({userId:'u-helen',memberId:'m-rodny',note:'a'.repeat(121)}),e=>e.statusCode===400);
 });
-test('only an admin records one traffic winner per week; saved days and repeated reads do not double its ten points or badge points', async()=>{
+test('only an admin records the two traffic winners of a week (same meeting, never the same person twice); saved days and repeated reads do not double the ten points or badge points', async()=>{
  const repo=fakeRepo();const db=fakeDb();const service=createPlatformLeagueService({db,repository:repo,snapshots,now:()=>at(DAY+'T19:00:00Z')});
  await assert.rejects(service.awardMeeting({userId:'u-helen',memberId:'m-rodny',day:DAY}),e=>e.statusCode===403);
  for(const day of ['2026-11-04','2026-10-01','invalid']) await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-helen',day}),e=>e.statusCode===400);
  await service.awardMeeting({userId:'u-rodny',memberId:'m-rodny',day:DAY});
  assert.equal(repo.meetings[0].awarded_by,'u-rodny');
- await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-helen',day:DAY}),e=>e.statusCode===409);
+ // Rodny, 9 de noviembre de 2026: Sara y Melissa entraron a la vez, así que la segunda persona también recibe sus diez puntos.
+ await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-rodny',day:DAY}),e=>e.statusCode===409&&e.code==='LEAGUE_MEETING_ALREADY');
+ await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-helen',day:'2026-11-02'}),e=>e.statusCode===400&&e.code==='LEAGUE_MEETING_OTHER_DAY');
+ assert.equal((await service.awardMeeting({userId:'u-rodny',memberId:'m-helen',day:DAY})).name,'Helen');
+ await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-jesu',day:DAY}),e=>e.statusCode===409&&e.code==='LEAGUE_MEETING_FULL');
+ assert.equal(repo.meetings.length,2);
  db.recognitionAward.findMany=async({where,select})=>{ assert.ok(where.occurredAt.gte<=at('2026-11-01T05:00:00.000Z'), 'the awards read covers the month (and the previous week)');assert.deepEqual(select,{id:true,recipientId:true,occurredAt:true});return [{id:'a',recipientId:'u-rodny',occurredAt:at(DAY+'T15:00:00Z')}];};
- for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,45);assert.equal(league.today.points,45);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);}
+ for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,45);assert.equal(league.today.points,45);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);
+  assert.equal(league.today.extras.PRIMERO_EN_REUNION,true);assert.match(league.today.evidence.PRIMERO_EN_REUNION,/Rodny y Helen/);assert.equal(league.meetings.entries.length,2);}
+ const helen=await service.leagueFor({userId:'u-helen'});
+ assert.equal(helen.today.extras.PRIMERO_EN_REUNION,true,'the second winner also sees her extra');
 });
 
 test('the pilot: only the accounts with the «Liga del mes» box in Equipo get the league and the gift; the rest get 404 and the trophy stays hidden; an administrator without the box is out too; the daily computation still runs for everyone', async () => {

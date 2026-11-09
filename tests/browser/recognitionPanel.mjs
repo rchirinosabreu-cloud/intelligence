@@ -183,7 +183,7 @@ try {
     'Nadie te devolvió un pendiente',
     'Dejaste registro de tu trabajo en la plataforma: un movimiento, una gestión, una pieza, una lectura de pauta, una jornada o una tarea con reloj.',
     'Fuiste el primero en ingresar a la plataforma desde las 8:00 am',
-    'Fuiste el primero en ingresar a la reunión semanal',
+    'Fuiste de los dos primeros en ingresar a la reunión semanal',
   ]) assert.ok(await panel.getByText(description, { exact: true }).isVisible());
   await shot('habitos-corregidos');
   await tab('Equipo').click();

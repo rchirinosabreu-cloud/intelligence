@@ -26,7 +26,7 @@ export function leagueWeekLabel(from, to) {
 /** Los extras del día: los gana una sola persona cada día. `source` dice de dónde los lee la plataforma. */
 export const EXTRA_ACTIONS = [
   { key: 'PRIMERO_EN_ABRIR', label: 'Primero en abrir', hint: 'Fuiste el primero en ingresar a la plataforma desde las 8:00 am', points: 5, source: 'La primera huella en la plataforma desde las 8:00 de Bogotá.' },
-  { key: 'PRIMERO_EN_REUNION', label: 'Primero en la reunión', hint: 'Fuiste el primero en ingresar a la reunión semanal', points: 10, source: 'Registro de un administrador para la reunión de tráfico.' }
+  { key: 'PRIMERO_EN_REUNION', label: 'Primero en la reunión', hint: 'Fuiste de los dos primeros en ingresar a la reunión semanal', points: 10, source: 'Registro de un administrador para la reunión de tráfico.' }
 ];
 
 /** Cuánto vale cada cosa. */
@@ -35,6 +35,8 @@ export const EXTRA_POINTS = 5;
 export const KUDOS_WEEKLY = 5;
 export const KUDOS_VALUE = 5;
 export const MEETING_POINTS = 10;
+/** Los dos primeros en la reunión de tráfico reciben los diez puntos (Rodny, 9 de noviembre de 2026: dos personas entraron a la vez). */
+export const MEETING_WINNERS_PER_WEEK = 2;
 export const RECOGNITION_POINTS = 5;
 export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'PLAN_APPROVED', 'WEEKLY_FIFTY'];
 
