@@ -39,6 +39,49 @@ const POSITION_MESSAGES = [
 const surface = 'rounded-2xl border border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900';
 const muted = 'text-zinc-500 dark:text-zinc-400';
 
+/**
+ * El podio, igual para la semana y para el mes (Rodny, 9 de noviembre de 2026: «necesito el podio de la semana también, de primero»).
+ * Tres puestos limpios van en escalón; un empate muestra a todas las personas del puesto, sin recortar a nadie.
+ */
+function Podium({ groups, title, tone = 'month', ...attrs }) {
+  if (!groups.length) return null;
+  const Icon = tone === 'week' ? Flame : Trophy;
+  const iconClass = tone === 'week' ? 'text-brand-green-deep dark:text-brand-green' : 'text-brand-yellow-deep dark:text-brand-yellow';
+  return <section {...attrs} className={cn('space-y-3 rounded-3xl p-3', tone === 'week' ? 'bg-white/70 dark:bg-zinc-900/60' : 'bg-brand-yellow/10 dark:bg-brand-yellow/5')}>
+    <h4 className="flex items-center gap-2 text-sm font-semibold"><Icon className={cn('h-4 w-4', iconClass)} />{title}</h4>
+    <div className="grid grid-cols-3 items-end gap-2">
+      {[2, 1, 3].map(rank => {
+        const group = groups.find(item => item.rank === rank);
+        if (!group) return <div key={rank} aria-hidden="true" />;
+        const shared = group.people.length > 1;
+        return <div key={rank} data-podium-rank={rank} className="flex min-w-0 flex-col items-center">
+          <div className="flex w-full flex-wrap items-end justify-center gap-x-1 gap-y-2">{group.people.map(person => <div key={person.id} data-podium-member={person.id} className={cn('flex min-w-0 flex-col items-center', shared ? 'w-[52px]' : 'w-full')}>
+            <RunnerAvatar person={person} size={rank === 1 ? (shared ? 48 : 76) : (shared ? 40 : 60)} /><p className={cn('mt-1.5 max-w-full text-center font-semibold', shared ? 'truncate text-[11px]' : 'break-words text-sm')}>{person.name}</p>
+          </div>)}</div>
+          <p className={cn('mt-1 text-xs', muted)}>{group.score} pts</p>
+          {shared && <p className={cn('text-[10px] leading-4', muted)}>Puesto compartido</p>}
+          <span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
+        </div>;
+      })}
+    </div>
+  </section>;
+}
+
+/**
+ * La clasificación completa en tarjetas de tres por fila (Rodny, 9 de noviembre de 2026: «varios por fila para que no se
+ * vuelva tan largo»). El puesto se comparte en los empates; quien mira va resaltado.
+ */
+function RankingGrid({ people, ranked, attribute, tone = 'month', label }) {
+  return <ol aria-label={label} className="grid grid-cols-3 gap-2">{people.map((person, index) => <li key={person.id} {...{ [attribute]: person.id }}
+    className={cn('relative flex min-w-0 flex-col items-center rounded-2xl px-1.5 pb-2.5 pt-3 text-center', person.isSelf ? 'bg-brand-cyan/10 dark:bg-brand-cyan/10' : tone === 'week' ? 'bg-white/70 dark:bg-zinc-900/60' : cn(surface, 'rounded-2xl'))}>
+    <span className={cn('absolute left-2 top-1.5 text-[11px] font-semibold tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span>
+    <RunnerAvatar person={person} size={40} phase={index} />
+    <p className="mt-1.5 flex w-full items-center justify-center gap-1 text-xs font-semibold"><span className="truncate">{person.name}</span>{person.isSelf && <span className="shrink-0 text-[10px] text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</p>
+    <p className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-[11px] font-normal', muted)}>pts</span></p>
+    {person.scoreBreakdown && <p className={cn('mt-0.5 text-[10px] leading-[14px]', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}
+  </li>)}</ol>;
+}
+
 function Habits({ today }) {
   const items = [...DAILY_HABITS.map(item => ({ ...item, icon: HABIT_ICON[item.key], value: today.habits?.[item.key], points: HABIT_POINTS })),
     ...EXTRA_ACTIONS.map(item => ({ ...item, extra: true, icon: EXTRA_ICON[item.key], value: today.extras?.[item.key] }))];
@@ -89,6 +132,7 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
   const positionMessage = POSITION_MESSAGES[league?.position?.rank - 1];
   const week = league?.week;
   const weekRanked = useMemo(() => [...(week?.lanes || [])].filter(lane => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es')), [week]);
+  const weekPodium = useMemo(() => leaguePodiumGroups(weekRanked), [weekRanked]);
   const weekLeaders = week?.lastWeek?.leaders || [];
   const history = useQuery({ queryKey: ['league', 'recognitions', league?.month, league?.startsAt], queryFn: () => requestLeague('/recognitions'), enabled: open && Boolean(league), staleTime: 60000, retry: false });
   const currentGift = given && given.startsAt === league?.startsAt && given.week === league?.kudos?.weekKey ? given.gift : null;
@@ -150,27 +194,14 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                 {week && <section data-race-week-ranking aria-label="Clasificación de la semana" className="space-y-3 rounded-3xl border border-brand-green/25 bg-brand-green/10 p-3 dark:border-brand-green/20 dark:bg-brand-green/10">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><h4 className="flex items-center gap-2 text-sm font-semibold"><Flame className="h-4 w-4 text-brand-green-deep dark:text-brand-green" />Esta semana</h4>{week.label && <span className={cn('text-xs', muted)}>{week.label}</span>}</div>
                   <p className={cn('text-xs leading-5', muted)}>Arranca en cero cada lunes. El mes sigue sumando abajo.</p>
-                  {weekRanked.some(person => person.score > 0) ? <ol className="divide-y divide-brand-green/15 rounded-2xl bg-white/70 px-3 dark:bg-zinc-900/60">{weekRanked.filter(person => person.score > 0).map((person, index) => <li key={person.id} data-league-week-member={person.id} className={cn('flex min-h-12 items-center gap-3 rounded-lg px-1 py-1.5', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{leagueRank(person.score, weekRanked) ?? '–'}</span><span className="flex w-8 shrink-0 justify-center"><RunnerAvatar person={person} size={32} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><span className="shrink-0 text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></span></li>)}</ol>
+                  <Podium groups={weekPodium} title="Podio de la semana" tone="week" data-race-week-podium aria-label="Primeras posiciones de la semana" />
+                  {weekRanked.some(person => person.score > 0) ? <RankingGrid people={weekRanked.filter(person => person.score > 0)} ranked={weekRanked} attribute="data-league-week-member" tone="week" label="Clasificación de la semana" />
                     : <p className={cn('rounded-2xl bg-white/70 px-3 py-3 text-center text-xs dark:bg-zinc-900/60', muted)}>La semana está comenzando: todavía nadie suma.</p>}
                   {weekLeaders.length > 0 && <p data-race-last-week className="flex items-center gap-2 text-xs leading-5 text-zinc-700 dark:text-zinc-200"><Trophy className="h-4 w-4 shrink-0 text-brand-yellow-deep dark:text-brand-yellow" /><span>{weekLeaders.length === 1 ? <><strong>{weekLeaders[0].name}</strong> ganó la semana pasada con {weekLeaders[0].score} puntos.</> : <>La semana pasada la ganaron <strong>{weekLeaders.map(person => person.name).join(', ')}</strong> con {weekLeaders[0].score} puntos.</>}</span></p>}
                 </section>}
                 <h4 className="flex items-center gap-2 pt-1 text-sm font-semibold"><Trophy className="h-4 w-4 text-brand-yellow-deep dark:text-brand-yellow" />El mes</h4>
-                {podium.length > 0 && <section data-race-podium aria-label="Primeras posiciones del mes" className="space-y-3 rounded-3xl bg-brand-yellow/10 p-3 dark:bg-brand-yellow/5">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold"><Trophy className="h-4 w-4 text-brand-yellow-deep dark:text-brand-yellow" />Podio del mes</h4>
-                  {podium.every(group => group.people.length === 1) ? <div className="grid grid-cols-3 items-end gap-2">
-                    {[2, 1, 3].map(rank => {
-                      const person = podium.find(group => group.rank === rank)?.people[0];
-                      if (!person) return <div key={rank} aria-hidden="true" />;
-                      return <div key={rank} data-podium-rank={rank} data-podium-member={person.id} className="flex min-w-0 flex-col items-center">
-                        <RunnerAvatar person={person} size={rank === 1 ? 76 : 60} /><p className="mt-2 max-w-full break-words text-center text-sm font-semibold">{person.name}</p><p className={cn('text-xs', muted)}>{person.score} pts</p><span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
-                      </div>;
-                    })}
-                  </div> : podium.map(({ rank, score, people }) => <div key={rank} data-podium-rank={rank} className={cn(surface, 'p-3')}>
-                    <div className="flex items-center gap-2"><span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-xl font-bold', rank === 1 ? 'bg-brand-yellow/25 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{people.length > 1 ? 'Puesto compartido' : `Puesto ${rank}`}</p></div><span className="text-sm font-bold">{score} <span className="text-xs font-normal">pts</span></span></div>
-                    <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-3">{people.map(person => <div key={person.id} data-podium-member={person.id} className="flex min-w-0 flex-col items-center"><RunnerAvatar person={person} size={rank === 1 ? 64 : 48} /><p className="mt-1 max-w-full break-words text-center text-xs font-medium">{person.name}</p></div>)}</div>
-                  </div>)}
-                </section>}
-                <section className={cn(surface, 'overflow-hidden px-3')} aria-label="Clasificación del mes"><ol className="divide-y divide-zinc-100 dark:divide-white/5">{ranked.map((person, index) => <li key={person.id} data-league-member={person.id} className={cn('flex min-h-14 items-center gap-3 rounded-lg px-1 py-2', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span><span className="flex w-9 shrink-0 justify-center"><RunnerAvatar person={person} size={38} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><div className="shrink-0 text-right tabular-nums"><p className="text-sm font-bold">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></p>{person.scoreBreakdown && <p className={cn('mt-0.5 text-[11px] leading-4', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}</div></li>)}</ol></section>
+                <Podium groups={podium} title="Podio del mes" data-race-podium aria-label="Primeras posiciones del mes" />
+                <RankingGrid people={ranked} ranked={ranked} attribute="data-league-member" label="Clasificación del mes" />
                 {league.meetings && <MeetingAward meetings={league.meetings} lanes={lanes} />}
                 {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />5 puntos para…</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Cada semana podrás regalar cinco puntos a algún miembro del equipo para agradecerle por alguna ayuda o reconocer su trabajo</p><KudosGift lanes={lanes} selfId={self.id} given={currentGift || league.kudos?.givenThisWeek} onGiven={gift => { setGiven({ startsAt: league.startsAt, week: league.kudos.weekKey, gift }); queryClient.invalidateQueries({ queryKey: ['league'] }); }} />{league.kudos?.received?.map((gift, index) => <p key={index} className="mt-3 border-t border-brand-magenta/10 pt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><strong>{gift.from}</strong>{gift.note ? `: «${gift.note}»` : ' te regaló puntos.'}</p>)}</section>}
                 <p className={cn('text-center text-xs', muted)}>El resultado se valida al cierre del mes.</p>
