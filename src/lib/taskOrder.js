@@ -17,11 +17,17 @@ const completionTime = task => {
   return Number.isFinite(time) ? time : -Infinity;
 };
 
-// Completed cards follow their own completion, not a shared/manual priority.
-// Open cards keep the server queue; an unknown personal date never borrows another person's.
+// La prioridad manual de la tarjeta prevalece dentro de su columna. Sin ella,
+// realizadas sigue el cierre personal reciente y las demás conservan su cola.
 export const compareTaskBoardOrder = (a, b) => {
   const aCompleted = completed(a), bCompleted = completed(b);
   if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+  const rank = task => task.boardOrder?.status === task.status ? task.boardOrder.sortOrder : null;
+  const aRank = rank(a), bRank = rank(b);
+  if (aRank != null || bRank != null) {
+    const difference = (aRank ?? Infinity) - (bRank ?? Infinity);
+    if (difference) return difference;
+  }
   if (!aCompleted) return compareTaskOrder(a, b);
   return completionTime(b) - completionTime(a)
     || compareText(String(a.boardKey || a.id), String(b.boardKey || b.id));

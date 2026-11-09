@@ -14,11 +14,12 @@ const at = new Date('2026-10-05T15:00:00.000Z');
 const MIN = 60_000;
 
 const fakeTx = ({ collaborators = [], activeMembers = ['m-melissa', 'm-bruno', 'm-angela'], openSessions = [], task = {} } = {}) => {
-  const calls = { deleted: [], created: [], closed: [], opened: [], taskUpdates: [], comments: [], archived: [] };
+  const calls = { deleted: [], created: [], closed: [], opened: [], taskUpdates: [], comments: [], archived: [], retiredPositions: [] };
   const stored = { id: 't-1', status: 'PENDIENTE', assigneeId: 'm-rodny', assigneeStatus: 'PENDIENTE', assigneeRevision: 2,
     rosterVersion: 0, sharedProgress: collaborators.length > 0,
     collaborators: collaborators.map(memberId => ({ memberId, status: 'PENDIENTE', revision: 1 })), workSessions: openSessions, ...task };
   const tx = {
+    $executeRaw: async (sql, taskId, memberId) => { calls.retiredPositions.push({ taskId, memberId }); },
     calls,
     stored,
     task: {
@@ -86,6 +87,7 @@ test('a collaborator who leaves the task stops their own clock', async () => {
   assert.equal(tx.calls.archived[0].memberId, 'm-melissa');
   assert.equal(tx.calls.archived[0].taskId, 't-1');
   assert.equal(tx.calls.archived[0].currentTaskId, 't-1');
+  assert.deepEqual(tx.calls.retiredPositions, [{ taskId: 't-1', memberId: 'm-melissa' }]);
 });
 
 test('only active team members can be added; old ones that stay are kept', async () => {

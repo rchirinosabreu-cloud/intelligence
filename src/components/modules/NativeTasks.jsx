@@ -38,8 +38,9 @@ import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenF
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
 import { compareTaskBoardOrder } from '@/lib/taskOrder';
+import { taskOrderDescriptor, applyTaskCardOrder } from '@/lib/taskCardOrder';
 import { applyConfirmedTaskMove, projectTaskMove } from '@/lib/taskMoveConfirmation';
-import { hasActiveTaskTeam, projectTaskParticipations, taskCardKey, participationRequest, didCompleteParticipation, individualPriorityCards, individualPriorityAnchor, taskCardForDeepLink } from '@/lib/taskParticipationBoard';
+import { hasActiveTaskTeam, projectTaskParticipations, taskCardKey, participationRequest, didCompleteParticipation, individualPriorityAnchor, taskCardForDeepLink } from '@/lib/taskParticipationBoard';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -351,6 +352,7 @@ const NativeTasks = () => {
                 sharedProgress: task.sharedProgress,
                 rosterVersion: task.rosterVersion,
                 participants: task.participants,
+                cardOrders: task.cardOrders,
                 title: task.title,
                 // Lo marca el servidor: la tarea es privada y este usuario no puede
                 // abrirla, así que llega sin descripción, adjuntos ni comentarios.
@@ -398,6 +400,7 @@ const NativeTasks = () => {
                 plan: task.plan,
                 sortOrder: task.sortOrder ?? 0,
                 createdAt: task.createdAt,
+                updatedAt: task.updatedAt,
                 taskComments: task.taskComments || [],
                 taskAttachments: task.taskAttachments || []
             }));
@@ -691,7 +694,7 @@ const NativeTasks = () => {
     ];
 
     const returnedTasks = useMemo(() => {
-        return projectTaskMove(taskCards, pendingTaskMove, task => getColumnId(task.status))
+        return projectTaskMove([...taskCards].sort(compareTaskBoardOrder), pendingTaskMove, task => getColumnId(task.status))
             .filter(task => (task.pendingColumnId ?? getColumnId(task.status)) === 'devuelto');
     }, [taskCards, pendingTaskMove]);
 
@@ -806,6 +809,69 @@ const NativeTasks = () => {
         const sourceColumnId = source.droppableId;
         const targetTask = taskCards.find(task => taskCardKey(task) === String(taskId));
 
+        const isPMOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER' || currentUser?.role === 'PM';
+
+        // 1. Dragged within the same column (Reordering Priority)
+        if (sourceColumnId === destinationColumnId) {
+            if (!isPMOrAdmin) {
+                toast({
+                    variant: "destructive",
+                    title: "Acceso denegado",
+                    description: "Solo PM y administradores pueden reordenar la prioridad."
+                });
+                return;
+            }
+
+            const columnTasks = visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId);
+            const reordered = [...columnTasks];
+            const sourceIndex = reordered.findIndex(t => taskCardKey(t) === taskId);
+            if (sourceIndex < 0) return;
+            const [removed] = reordered.splice(sourceIndex, 1);
+            reordered.splice(destination.index, 0, removed);
+            savingTaskOrder.current = true;
+            setSavingTaskId(taskId);
+            setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
+            try {
+                const baseUrl = getApiBaseUrl();
+                const token = localStorage.getItem('authToken');
+
+                const res = await fetch(`${baseUrl}/api/tasks/reorder`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({ cards: reordered.map(taskOrderDescriptor), previousCards: columnTasks.map(taskOrderDescriptor) })
+                });
+
+                const saved = await res.json().catch(() => null);
+                if (!res.ok) throw new Error(saved?.error || 'No se pudo guardar la prioridad.');
+                await queryClient.cancelQueries({ queryKey: ['nativeTasks'], exact: true });
+                queryClient.setQueryData(['nativeTasks'], current => applyTaskCardOrder(current, saved?.order));
+                queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+                toast({ title: 'Prioridad guardada' });
+            } catch (err) {
+                console.error("Reorder failed:", err);
+                toast({ variant: 'destructive', description: err.message || 'No se pudo guardar la prioridad.' });
+                queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            } finally {
+                savingTaskOrder.current = false;
+                setSavingTaskId(null);
+                setPendingTaskMove(null);
+            }
+            return;
+        }
+
+        if (targetTask?.isLocked) {
+            toast({ variant: 'destructive', description: 'Puedes ordenar esta tarjeta, pero su estado solo lo cambia quien tiene acceso a la tarea.' });
+            return;
+        }
+        const participationPermission = sourceColumnId === 'realizado' ? 'canReopen'
+            : sourceColumnId === 'devuelto' ? 'canReintegrate' : 'canChangeStatus';
+        if (targetTask?.participation && !targetTask.participation.permissions?.[participationPermission]) {
+            toast({ variant: 'destructive', description: 'Puedes ordenar esta tarjeta, pero no cambiar el estado de esta participación.' });
+            return;
+        }
         const lock = getTaskLock({ tasks: taskCards, task: targetTask, viewerUserId: currentUser?.id, viewerIsManager });
         if (lock) {
             setFocusLockNotice(lock);
@@ -830,70 +896,6 @@ const NativeTasks = () => {
 
         if (sourceColumnId === 'devuelto' && destinationColumnId !== 'devuelto') {
             setReintegratingTask(targetTask);
-            return;
-        }
-
-        const isPMOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER' || currentUser?.role === 'PM';
-
-        // 1. Dragged within the same column (Reordering Priority)
-        if (sourceColumnId === destinationColumnId) {
-            if (sourceColumnId === 'realizado') {
-                toast({ description: 'Realizado se ordena por fecha de cierre, con lo más reciente primero.' });
-                return;
-            }
-            if (targetTask?.participation) {
-                toast({ description: 'Esta tarea comparte una prioridad para todo el equipo. Puedes mover tu parte entre estados.' });
-                return;
-            }
-            if (!isPMOrAdmin) {
-                toast({
-                    variant: "destructive",
-                    title: "Acceso denegado",
-                    description: "Solo PM y administradores pueden reordenar la prioridad."
-                });
-                return;
-            }
-
-            const columnTasks = individualPriorityCards(visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId));
-            const reordered = [...columnTasks];
-            const sourceIndex = reordered.findIndex(t => taskCardKey(t) === taskId);
-            if (sourceIndex < 0) return;
-            const [removed] = reordered.splice(sourceIndex, 1);
-            const individualIndex = individualPriorityCards(visibleAtDrag.filter(t => getColumnId(t.status) === sourceColumnId).slice(0, destination.index)).length;
-            reordered.splice(individualIndex, 0, removed);
-            savingTaskOrder.current = true;
-            setSavingTaskId(taskId);
-            setPendingTaskMove({ taskId, columnId: destinationColumnId, index: destination.index });
-            try {
-                const baseUrl = getApiBaseUrl();
-                const token = localStorage.getItem('authToken');
-                const reorderList = [...new Map(reordered.map(task => [task.id, task])).values()].map((task, idx) => ({ id: task.id, sortOrder: idx }));
-
-                const res = await fetch(`${baseUrl}/api/tasks/reorder`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    },
-                    body: JSON.stringify({ reorderList, previousIds: [...new Set(columnTasks.map(task => task.id))] })
-                });
-
-                const saved = await res.json().catch(() => null);
-                if (!res.ok) throw new Error(saved?.error || 'No se pudo guardar la prioridad.');
-                const order = new Map((saved?.order || []).map(item => [item.id, item.sortOrder]));
-                await queryClient.cancelQueries({ queryKey: ['nativeTasks'], exact: true });
-                queryClient.setQueryData(['nativeTasks'], current => (current || []).map(task => order.has(task.id) ? { ...task, sortOrder: order.get(task.id) } : task));
-                queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
-                toast({ title: 'Prioridad guardada' });
-            } catch (err) {
-                console.error("Reorder failed:", err);
-                toast({ variant: 'destructive', description: err.message || 'No se pudo guardar la prioridad.' });
-                queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
-            } finally {
-                savingTaskOrder.current = false;
-                setSavingTaskId(null);
-                setPendingTaskMove(null);
-            }
             return;
         }
 
@@ -955,7 +957,7 @@ const NativeTasks = () => {
                 // La tarea ya movida: si se abre desde el aviso, el panel tiene que verla «En proceso».
                 setTeamStartTask({ ...targetTask, status: savedTask.status, sortOrder: savedTask.sortOrder });
             }
-            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
@@ -1461,7 +1463,7 @@ const NativeTasks = () => {
                 </DialogContent>
             </Dialog>
 
-            <DragDropContext onDragStart={() => { dragVisibleTasks.current = filteredTasks; }} onDragEnd={onDragEnd}>
+            <DragDropContext onDragStart={({ source }) => { dragVisibleTasks.current = source.droppableId === 'devuelto' ? returnedTasks : filteredTasks; }} onDragEnd={onDragEnd}>
                 <div className="flex gap-6 flex-1 min-h-[500px] relative">
                     <Dialog open={isReturnedDialogOpen} onOpenChange={setIsReturnedDialogOpen}>
                         <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] flex-col overflow-hidden border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-2xl">
@@ -1492,6 +1494,7 @@ const NativeTasks = () => {
                                         ) : (
                                             returnedTasks.map((task, index) => (
                                                 <TaskCard
+                                                    canPrioritize={viewerIsManager}
                                                     key={taskCardKey(task)}
                                                     task={task}
                                                     index={index}
@@ -1587,6 +1590,7 @@ const NativeTasks = () => {
                                             >
                                                 {columnTasks.map((task, index) => (
                                                     <TaskCard
+                                                        canPrioritize={viewerIsManager}
                                                         key={taskCardKey(task)}
                                                         task={task}
                                                         index={index}
@@ -1623,10 +1627,10 @@ const NativeTasks = () => {
     );
 };
 
-const TaskCard = ({ task, index, lock = null, movePending = false, ...surfaceProps }) => (
-    <Draggable draggableId={taskCardKey(task)} index={index} isDragDisabled={Boolean(lock) || movePending || Boolean(task.participation && !(task.status === 'REALIZADA' ? task.participation.permissions?.canReopen : task.status === 'DEVUELTA' ? task.participation.permissions?.canReintegrate : task.participation.permissions?.canChangeStatus))}>
+const TaskCard = ({ task, index, lock = null, movePending = false, canPrioritize = false, ...surfaceProps }) => (
+    <Draggable draggableId={taskCardKey(task)} index={index} isDragDisabled={movePending || (!canPrioritize && (Boolean(lock) || task.isLocked || Boolean(task.participation && !(task.status === 'REALIZADA' ? task.participation.permissions?.canReopen : task.status === 'DEVUELTA' ? task.participation.permissions?.canReintegrate : task.participation.permissions?.canChangeStatus))))}>
         {(provided, snapshot) => (
-            <TaskCardSurface task={task} provided={provided} snapshot={snapshot} lock={lock} {...surfaceProps} />
+            <TaskCardSurface task={task} provided={provided} snapshot={snapshot} lock={lock} canPrioritize={canPrioritize} {...surfaceProps} />
         )}
     </Draggable>
 );
@@ -1635,7 +1639,7 @@ const TaskCard = ({ task, index, lock = null, movePending = false, ...surfacePro
 // `renderClone` draws through a portal on <body>. The glass columns (backdrop-blur) each create a
 // stacking context, so a card dragged from inside its column would paint behind the neighbouring
 // column no matter its z-index; the portal takes the moving card out of the columns altogether.
-const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd, saving = false, showSaving = false }) => {
+const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd, saving = false, showSaving = false }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
     const isFocusTask = isActiveFocusTask(task);
     const focusTime = isFocusTask ? bogotaTimeOf(task.focusDeadlineAt) : '';
@@ -1660,10 +1664,9 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
     const hasStatusChips = isFocusTask || isReturned || isRunning || workingIds.length > 0;
     const attachmentCount = Array.isArray(task.taskAttachments) ? task.taskAttachments.length : 0;
     const commentCount = Array.isArray(task.taskComments) ? task.taskComments.length : 0;
-    // Un pendiente privado ajeno tampoco se arrastra: mover su estado es cambiarlo, y el
-    // servidor responde 403 a ese cambio. Dejar arrastrar para después fallar sería
-    // prometer algo que no se cumple.
-    const dragHandleProps = task.isLocked ? {} : provided.dragHandleProps;
+    // Admin y PM pueden priorizar una privada; abrirla o cambiar su estado conserva
+    // los permisos propios de la tarea.
+    const dragHandleProps = task.isLocked && !canPrioritize ? {} : provided.dragHandleProps;
     const taskCardFooterBadges = [
         overdue && {
             key: 'overdue',

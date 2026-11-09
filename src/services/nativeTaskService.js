@@ -7,6 +7,7 @@ import { hydrateTaskParticipations, hydrateArchivedTaskParticipations } from './
 import { applyTaskAggregateEffects } from './taskCompletionEffectsService.js';
 import { taskParticipationSelect, completedTaskParticipationWhere, completedTaskParticipationViews } from '../lib/taskParticipationMetrics.js';
 import { nextTaskOrder, updateOrderedTask } from './taskOrderService.js';
+import { hydrateTaskCardOrder } from './taskCardOrderService.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { assertTaskClientChange } from './taskClientChange.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
@@ -153,7 +154,7 @@ export const getTasks = async (clientId, viewerUserId = null) => {
             })
           ]);
           const viewer = viewerUserId ? await tx.user.findUnique({ where: { id: viewerUserId }, select: { id: true, role: true } }) : null;
-          return hydrateTaskParticipations(tx, [...activeTasks, ...recentCompletedTasks], viewer);
+          return hydrateTaskCardOrder(tx, await hydrateTaskParticipations(tx, [...activeTasks, ...recentCompletedTasks], viewer));
         }, { isolationLevel: 'RepeatableRead' });
         // La reserva se aplica antes de cualquier otra cosa: lo que no se puede ver no
         // debe llegar a la respuesta ni siquiera para ser transformado.

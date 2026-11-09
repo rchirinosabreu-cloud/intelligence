@@ -13,7 +13,7 @@ function database(initial) {
   const rows = structuredClone(initial);
   const matches = (row, where = {}) => (!where.status || row.status === where.status)
     && (!where.id || (typeof where.id === 'string' ? row.id === where.id : where.id.in.includes(row.id)));
-  const db = { task: {
+  const db = { $executeRaw: async () => {}, $queryRaw: async () => [], task: {
     findFirst: async () => null,
     findMany: async ({ where } = {}) => structuredClone(rows.filter(row => matches(row, where))),
     findUnique: async ({ where }) => structuredClone(rows.find(row => row.id === where.id)),

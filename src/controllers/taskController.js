@@ -23,6 +23,7 @@ import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 import { taskWorkCorrectionService } from '../services/taskWorkCorrectionService.js';
 import { checkTaskUpdate } from '../services/taskUpdateGate.js';
 import { reorderTaskSelection } from '../services/taskOrderService.js';
+import { reorderTaskCards } from '../services/taskCardOrderService.js';
 import { needsDeclaredTime, declareTaskTime } from '../services/declaredTimeService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
@@ -240,7 +241,9 @@ export const requestTaskFocusExtension = async (req, res) => {
 
 export const reorderTasks = async (req, res) => {
     try {
-        const order = await reorderTaskSelection({ db: prisma, user: req.user, reorderList: req.body?.reorderList, previousIds: req.body?.previousIds });
+        const order = req.body?.cards !== undefined
+            ? await reorderTaskCards({ db: prisma, user: req.user, cards: req.body.cards, previousCards: req.body.previousCards })
+            : await reorderTaskSelection({ db: prisma, user: req.user, reorderList: req.body?.reorderList, previousIds: req.body?.previousIds });
         res.json({ success: true, order });
     } catch (error) {
         console.error('[TaskController] Failed to reorder tasks:', error.response?.data || error);

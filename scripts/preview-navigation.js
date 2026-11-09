@@ -23,7 +23,8 @@ const task = { id: 'navigation-task', title: 'Diseñar contenido', status: 'PEND
   contentItemId: 'uno', contentItem: items[0], plan: { id: plan.id }, taskComments: [], taskAttachments: [],
   dueDate: new Date().toISOString(), createdAt: new Date().toISOString(), accumulatedWorkMs: 0 };
 
-export async function createNavigationPreview({ port = 3711 } = {}) {
+export async function createNavigationPreview({ port = 3711, role = 'ADMIN' } = {}) {
+  const user = { id: 'navigation-user', userId: 'navigation-user', name: 'Lucía Faro', role, modulePermissions: {} };
   const source = `
     import React from 'react';
     import {createRoot} from 'react-dom/client';

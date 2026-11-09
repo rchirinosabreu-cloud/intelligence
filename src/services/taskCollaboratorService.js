@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { clearTaskCardOrder } from './taskCardOrderService.js';
 import { assertTaskSourceActive, taskSourceSelect } from '../lib/taskRetirement.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction } from './recognitionService.js';
@@ -76,6 +77,7 @@ export const replaceTaskCollaborators = async (tx, { taskId, assigneeId, collabo
     // Los tramos pertenecen al trabajador incluso después de un cambio de responsable.
     const leaving = previousParts.filter(p => !nextIds.includes(p.memberId));
     for (const part of leaving) {
+      await clearTaskCardOrder(tx, taskId, part.memberId);
       await tx.taskParticipationArchive.create({ data: { taskId, currentTaskId: taskId, memberId: part.memberId,
         userId: part.member?.userId || null, memberName: part.member?.name || null, role: part.role,
         status: part.status, completedAt: part.completedAt, returnedAt: part.returnedAt,
