@@ -8,7 +8,7 @@ const team = [['elisa', 'Elisa'], ['jesu', 'Jesu'], ['rodny', 'Rodny'], ['helen'
 const waysToScore = [
   { title: 'Cuida los hábitos', detail: 'Por cada hábito cumplido en un día hábil, también el trabajo registrado en cualquier módulo.', points: HABIT_POINTS, icon: Check },
   { title: 'Registra la primera actividad', detail: 'Desde las 8:00 a. m., en horario de Bogotá.', points: EXTRA_POINTS, icon: Sun },
-  { title: 'Llega primero a tráfico', detail: 'Un administrador registra quién llegó primero.', points: MEETING_POINTS, icon: Users },
+  { title: 'Llega primero a tráfico', detail: 'Un administrador registra a las dos primeras personas en llegar.', points: MEETING_POINTS, icon: Users },
   { title: 'Consigue logros', detail: 'Cada insignia obtenida también suma.', points: RECOGNITION_POINTS, icon: Award },
 ];
 

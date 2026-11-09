@@ -1,4 +1,5 @@
 // La liga desde su nuevo inicio: toda lectura y escritura queda separada del piloto conservado.
+import { MEETING_WINNERS_PER_WEEK } from '../lib/platformLeague.js';
 
 export const LEAGUE_RUN_ID = 'fresh-start-2026-11';
 export const createPlatformLeagueRepository = ({ pool }) => ({
@@ -68,10 +69,15 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
       WHERE run_id=$1 AND day_key LIKE $2 ORDER BY day_key`, [LEAGUE_RUN_ID, `${monthKey}-%`]);
     return rows;
   },
-  async awardMeeting({ week_key, day_key, member_id, awarded_by }) {
+  /**
+   * Hasta `limit` personas por semana (los dos primeros en la reunión); la misma persona dos veces la rechaza la base (23505).
+   * Devuelve null cuando la semana ya tiene su cupo: la cuenta y la inserción van en una sola sentencia.
+   */
+  async awardMeeting({ week_key, day_key, member_id, awarded_by, limit = MEETING_WINNERS_PER_WEEK }) {
     const { rows } = await pool.query(`INSERT INTO bria_memory.league_meeting_awards(run_id,week_key,day_key,member_id,awarded_by)
-      VALUES($1,$2,$3,$4,$5) RETURNING id`, [LEAGUE_RUN_ID, week_key, day_key, member_id, awarded_by]);
-    return rows[0];
+      SELECT $1,$2,$3,$4,$5 WHERE (SELECT count(*) FROM bria_memory.league_meeting_awards WHERE run_id=$1 AND week_key=$2) < $6
+      RETURNING id`, [LEAGUE_RUN_ID, week_key, day_key, member_id, awarded_by, limit]);
+    return rows[0] || null;
   },
   /** Un regalo de cinco puntos por semana de Bogotá; la base rechaza el segundo (23505). */
   async giveKudos({ giver_member_id, receiver_member_id, note, created_at = new Date() }) {

@@ -16,6 +16,10 @@ test('PostgreSQL: weekly gifts and meeting winners are atomic, old points and th
   await database.query(sql.split('-- Cupo semanal')[0]);
   await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id,week_key,giver_member_id,receiver_member_id,created_at)
    VALUES('fresh-start-2026-11','2026-W49','legacy','person','2026-11-30T15:00:00Z'),('fresh-start-2026-11','2026-W49','legacy','person','2026-12-01T15:00:00Z')`);
+  // La tabla de la reunión con su forma anterior (una persona por semana), como quedó en producción antes del 9 de noviembre de 2026.
+  await database.query(`CREATE TABLE ${schema}.league_meeting_awards (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), run_id TEXT NOT NULL REFERENCES ${schema}.league_runs(id),
+   week_key TEXT NOT NULL, day_key TEXT NOT NULL, member_id TEXT NOT NULL, awarded_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (run_id, week_key))`);
+  await pool.query(`INSERT INTO bria_memory.league_meeting_awards(run_id,week_key,day_key,member_id,awarded_by) VALUES('fresh-start-2026-11','2026-W44','2026-10-27','sara','admin')`);
   const launch=await repo.startedAt();await database.query(sql);await database.query(sql);
   assert.equal((await repo.startedAt()).getTime(),launch.getTime());
   assert.equal((await repo.kudosOfMonth('2026-11'))[0].points,10,'historical ten-point gifts keep their value');
@@ -28,10 +32,15 @@ test('PostgreSQL: weekly gifts and meeting winners are atomic, old points and th
   await assert.rejects(give('giver','2026-11-09T04:59:59Z'),e=>e.code==='23505');
   await give('giver','2026-11-09T05:00:00Z');
   assert.equal((await repo.givenInWeek('giver','2026-W46')).points,5);
-  const meetings=await Promise.allSettled(['person','other'].map(member_id=>repo.awardMeeting({week_key:'2026-W45',day_key:'2026-11-03',member_id,awarded_by:'admin'})));
-  assert.equal(meetings.filter(r=>r.status==='fulfilled').length,1);
-  assert.equal(meetings.find(r=>r.status==='rejected').reason.code,'23505');
+  // Los dos primeros de la semana entran; la tercera persona no, y la misma persona dos veces la rechaza la base.
+  const award=member_id=>repo.awardMeeting({week_key:'2026-W45',day_key:'2026-11-03',member_id,awarded_by:'admin'});
+  const meetings=await Promise.all(['person','other'].map(award));
+  assert.ok(meetings.every(Boolean),'both first arrivals keep their ten points');
+  assert.equal(await award('third'),null,'the week is full');
+  await assert.rejects(award('person'),e=>e.code==='23505');
+  assert.equal((await repo.meetingsOfWeek('2026-W45')).length,2);
   assert.equal((await repo.meetingsOfMonth('2026-11'))[0].awarded_by,'admin');
+  assert.ok(await repo.awardMeeting({week_key:'2026-W44',day_key:'2026-10-27',member_id:'melissa',awarded_by:'admin'}),'the week registered before the upgrade admits its second winner');
   await database.query(sql);
   assert.equal((await repo.kudosOfMonth('2026-11')).length,3);
  } finally {await database.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await database.end();}

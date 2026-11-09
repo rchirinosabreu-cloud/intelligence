@@ -111,7 +111,7 @@ function Rules() {
       <li>Una jornada de producción vale para Reloj con el tiempo declarado al cerrar el pendiente.</li>
       <li>La semana arranca en cero cada lunes; el mes sigue sumando para la premiación mensual.</li>
       <li>La primera actividad registrada desde las 8:00 am suma {EXTRA_POINTS} puntos.</li>
-      <li>Si eres el primero en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
+      <li>Si estás entre las dos primeras personas en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
       <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos.</li>
     </ul>
