@@ -9,5 +9,5 @@ axios.defaults.adapter = config => {
 };
 new MutationObserver(() => {
   const paragraph = document.querySelector('#root > div > div > p');
-  if (paragraph?.textContent.includes('datos ficticios en memoria')) paragraph.textContent = 'Muestra local · Jesu y Melissa son ejemplos ficticios · fechas e importes por confirmar · sin acceso a datos reales';
+  if (paragraph?.textContent.includes('datos ficticios en memoria')) paragraph.textContent = new URLSearchParams(location.search).has('contractFlow') ? 'Nómina en local · misma pantalla y servicios de la plataforma · datos de prueba aislados' : 'Muestra local · Jesu y Melissa son ejemplos ficticios · fechas e importes por confirmar · sin acceso a datos reales';
 }).observe(document.getElementById('root'), { childList: true, subtree: true });

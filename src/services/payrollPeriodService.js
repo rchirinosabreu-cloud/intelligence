@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { calculatePayrollPeriod, payrollDay, payrollPeriodsOverlap, unknownPayrollPeriods } from '../lib/payrollPeriods.js';
+import { calculatePayrollPeriod, payrollDay, payrollPeriodsOverlap, unknownPayrollPeriods, payrollServiceRange, payrollMonthRange } from '../lib/payrollPeriods.js';
+import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
+import { withPayrollMonthlyBasis } from './payrollMonthlyBasis.js';
 import { assertOpenFinancialPeriod } from './financialRecordService.js';
 import { atomic, authorize, audit, clone, hash, fail, conflict, request, includePayroll, payroll, openPayrollPeriod } from './payrollPeriodShared.js';
 export { readPayrollDeductions, createPayrollDeduction, reversePayrollDeduction } from './payrollLoanDeductionService.js';
@@ -8,16 +10,47 @@ async function load(tx, contractId) {
   const contract = await tx.payrollContract.findUnique({ where: { id: contractId }, include: { collaborator: true } });
   if (!contract) throw fail('PAYROLL_CONTRACT_NOT_FOUND', 'El contrato no existe.', 404);
   const rows = await tx.payrollTransaction.findMany({ where: contract.collaboratorId ? { contract: { collaboratorId: contract.collaboratorId, importBatchId: null } } : { contractId }, include: includePayroll, orderBy: [{ year: 'asc' }, { month: 'asc' }, { id: 'asc' }] });
-  return { contract, rows, revision: hash({ contract, rows }) };
+  const projected = await withPayrollMonthlyBasis(tx, rows);
+  return { contract, rows: projected, revision: hash({ contract, rows: projected }) };
 }
 function checkRange(ctx, start, end, excludeId) {
   const live = ctx.rows.filter(row => !row.voidedAt && row.id !== excludeId);
   const unknown = unknownPayrollPeriods(live);
-  if (unknown.length) throw fail('PAYROLL_LEGACY_PERIOD_UNKNOWN', `Faltan las fechas de ${unknown.map(row => `${row.month}/${row.year} (${row.status === 'DRAFT' ? 'borrador' : 'liquidación'})`).join(', ')}. En «Períodos e historial», precisa sus fechas o revisa la reversión si el registro sobra. Sus pagos se conservan.`);
-  if (live.some(row => payrollPeriodsOverlap(start, end, row.serviceStart, row.serviceEnd))) throw fail('PAYROLL_PERIOD_OVERLAP', 'Estas fechas se superponen con una liquidación vigente. Revisa los períodos antes de continuar.');
+  if (unknown.length) throw fail('PAYROLL_LEGACY_PERIOD_UNKNOWN', `Faltan las fechas de ${unknown.map(row => `${row.month}/${row.year} (${row.status === 'DRAFT' ? 'borrador' : 'liquidación'})`).join(', ')}. En «Liquidación e historial», precisa sus fechas o revisa la reversión si el registro sobra. Sus pagos se conservan.`);
+  if (live.some(row => { const range = payrollServiceRange(row); return range && payrollPeriodsOverlap(start, end, range.start, range.end); })) throw fail('PAYROLL_PERIOD_OVERLAP', 'Estas fechas se superponen con una liquidación vigente. Revisa los períodos antes de continuar.');
 }
 const result = ctx => ({ ...ctx, transactions: ctx.rows.map(row => ({ ...row, contract: undefined })) });
 export const readPayrollPeriods = (db, contractId, actor) => db.$transaction(async tx => { await authorize(tx, actor, 'read'); return result(await load(tx, contractId)); }, { isolationLevel: 'RepeatableRead' });
+
+export async function syncPayrollPeriod(db, id, input, actor) {
+  const { reason, requestId } = request(input), fingerprint = hash({ id, input });
+  return atomic(db, async tx => {
+    const user = await authorize(tx, actor, 'write'), row = await payroll(tx, id);
+    const prior = row.periodDetails?.contractSync;
+    if (prior?.requestId === requestId) {
+      if (prior.fingerprint !== fingerprint || prior.actorId !== user.id) throw conflict();
+      return { transaction: row, replayed: true };
+    }
+    if (row.voidedAt || row.status !== 'DRAFT' || row.financialRecordId || row.payments.some(p => !p.reversedAt) || row.adjustments.some(a => !a.reversedAt) || Number(row.deductions)) throw fail('PAYROLL_DRAFT_REQUIRED', 'Solo se actualizan borradores sin pagos ni descuentos. Las liquidaciones aprobadas y pagadas conservan sus valores.');
+    const ctx = await load(tx, row.contractId);
+    if (ctx.revision !== input.expectedRevision || (input.reviewContractId && input.reviewContractId !== row.contractId)) throw conflict();
+    if (ctx.contract.importBatchId || ctx.contract.collaborator?.isActive === false) throw fail('PAYROLL_CONTRACT_UNAVAILABLE', 'El contrato no está disponible para nuevas liquidaciones.');
+    const range = payrollMonthRange(row.year, row.month), existing = payrollServiceRange(ctx.rows.find(item => item.id === id));
+    if (!existing || existing.start !== range.start || existing.end !== range.end) throw fail('PAYROLL_MONTHLY_REQUIRED', 'Este período tiene un alcance distinto al mes completo. Conserva su importe acordado; revisa sus fechas desde el período.');
+    if (payrollDay(ctx.contract.startDate) > range.start || (ctx.contract.endDate && payrollDay(ctx.contract.endDate) < range.end)) throw fail('PAYROLL_OUTSIDE_CONTRACT', 'El contrato no cubre el mes completo. Revisa el importe acordado para el tramo correspondiente.');
+    checkRange(ctx, range.start, range.end, id);
+    await openPayrollPeriod(tx, row);
+    const base = financialCents(ctx.contract.baseSalary), security = financialCents(ctx.contract.socialSecurity);
+    if (base === null || security === null || base < 0 || security < 0 || base + security <= 0 || !Number.isSafeInteger(base + security)) throw fail('PAYROLL_CONTRACT_AMOUNT_INVALID', 'Revisa los importes del contrato.');
+    const transaction = await tx.payrollTransaction.update({ where: { id }, data: {
+      baseSalary: financialAmountFromCents(base), socialSecurity: financialAmountFromCents(security), grossAmount: financialAmountFromCents(base + security), netAmount: financialAmountFromCents(base + security),
+      serviceStart: new Date(`${range.start}T12:00:00Z`), serviceEnd: new Date(`${range.end}T12:00:00Z`),
+      periodDetails: clone({ ...row.periodDetails, contractSync: { requestId, fingerprint, actorId: user.id, reason, contractSnapshot: ctx.contract } }),
+    } });
+    await audit(tx, 'PayrollTransaction', id, row, { operation: 'PERIOD_CONTRACT_SYNC', transaction, reason }, user);
+    return { transaction };
+  });
+}
 
 export async function createPayrollPeriod(db, contractId, input, actor) {
   const { reason, requestId } = request(input), calculation = calculatePayrollPeriod(input);
@@ -63,7 +96,7 @@ export async function identifyPayrollPeriod(db, id, input, actor) {
     if (!ctx.rows.some(item => item.id === id)) throw conflict();
     if (ctx.revision !== input.expectedRevision) throw conflict();
     // Identificar fechas no altera valores ni pagos. Las filas aún sin fechas no se inventan.
-    if (ctx.rows.some(other => other.id !== id && !other.voidedAt && other.serviceStart && other.serviceEnd && payrollPeriodsOverlap(start, end, other.serviceStart, other.serviceEnd))) throw fail('PAYROLL_PERIOD_OVERLAP', 'Las fechas se superponen con otra liquidación vigente.');
+    if (ctx.rows.some(other => { const range = payrollServiceRange(other); return other.id !== id && !other.voidedAt && range && payrollPeriodsOverlap(start, end, range.start, range.end); })) throw fail('PAYROLL_PERIOD_OVERLAP', 'Las fechas se superponen con otra liquidación vigente.');
     await openPayrollPeriod(tx, row);
     const transaction = await tx.payrollTransaction.update({ where: { id }, data: { serviceStart: new Date(`${start}T12:00:00Z`), serviceEnd: new Date(`${end}T12:00:00Z`), periodDetails: clone({ ...row.periodDetails, identification: { requestId, fingerprint, reason, actorId: user.id, actorName: user.name, at: new Date() } }) } });
     await audit(tx, 'PayrollTransaction', id, row, { operation: 'PERIOD_IDENTIFIED', transaction, reason }, user);

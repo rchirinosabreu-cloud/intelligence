@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { withPayrollMonthlyBasis } from '../services/payrollMonthlyBasis.js';
 import { withFinancialSearch, financialMonthFilter, ACTIVE_RECEIVABLE_PAYMENT, LIVE_PAYROLL_CONTRACT } from '../services/financialQueryFilters.js';
 import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
@@ -444,6 +445,7 @@ export const updateFinancialReceivable = async (req, res, dependencies = {}) => 
 };
 
 const serializePayrollTransaction = (transaction) => ({
+    ...(transaction.monthlyBasis ? { monthlyBasis: transaction.monthlyBasis } : {}),
     id: transaction.id,
     month: transaction.month,
     year: transaction.year,
@@ -561,10 +563,9 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
             }
         });
 
-        return res.json({
-            year,
-            items: contracts.map(serializePayrollContract)
-        });
+        const projected = await withPayrollMonthlyBasis(prismaClient, contracts.flatMap(contract => contract.transactions || []));
+        const byId = new Map(projected.map(row => [row.id, row]));
+        return res.json({ year, items: contracts.map(contract => serializePayrollContract({ ...contract, transactions: (contract.transactions || []).map(row => byId.get(row.id)) })) });
     } catch (error) {
         console.error('[Financials API] Payroll ledger failed:', error.response?.data || error);
         return res.status(error.statusCode || 500).json({

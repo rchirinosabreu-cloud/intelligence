@@ -66,6 +66,7 @@ import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/f
 import { PayrollPeriodsDialog, PayrollDeductionsDialog } from '@/components/modules/financial/PayrollPeriods';
 import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
 import { retentionCertificateApi, uploadRecordDocument } from '@/lib/financialDocumentsClient';
+import { payrollDraftNeedsContract } from '@/lib/payrollPeriods';
 import { payrollStatus } from '@/lib/payrollPayments';
 import ClientProfileFields from '@/components/modules/Clients/ClientProfileFields';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
@@ -184,7 +185,6 @@ const FinancialDashboard = () => {
     const [noticeError, setNoticeError] = useState('');
     const [noticeSuccess, setNoticeSuccess] = useState('');
     const [savingReceivableId, setSavingReceivableId] = useState('');
-    const [savingPayrollContractId, setSavingPayrollContractId] = useState('');
     const [savingClientLinkId, setSavingClientLinkId] = useState('');
     const [clientLinkTargets, setClientLinkTargets] = useState({});
     const [paymentDebt, setPaymentDebt] = useState(null);
@@ -942,31 +942,8 @@ const FinancialDashboard = () => {
         }
     };
 
-    const handlePayrollContractUpdate = async (contract, patch) => {
-        const contractId = contract?.id || contract?.contractId;
-        if (!contractId) return;
-
-        setSavingPayrollContractId(contractId);
-        setNoticeError('');
-        setNoticeSuccess('');
-
-        try {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            await axios.patch(`${baseUrl}/api/financials/payroll-contracts/${contractId}`, patch, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-await invalidateFinancialQueries(queryClient);
-            setNoticeSuccess('Nómina actualizada.');
-        } catch (error) {
-            console.error('Error updating financial payroll contract:', error.response?.data || error);
-            setNoticeError(error.response?.data?.message || 'No fue posible guardar el cambio de nómina.');
-        } finally {
-            setSavingPayrollContractId('');
-        }
-    };
-
     const openPayrollContractEditor = (contract = null) => {
+        setNoticeError('');
         setEditingPayrollContract(contract);
         setPayrollContractForm(contract ? {
             name: contract.name || '',
@@ -989,7 +966,7 @@ await invalidateFinancialQueries(queryClient);
             ...payrollContractForm,
             baseSalary: Number(payrollContractForm.baseSalary),
             socialSecurity: Number(payrollContractForm.socialSecurity),
-            monthlyTotal: Number(payrollContractForm.monthlyTotal),
+            monthlyTotal: Number(payrollContractForm.baseSalary) + Number(payrollContractForm.socialSecurity),
             endDate: payrollContractForm.endDate || null
         };
         try {
@@ -1002,7 +979,8 @@ await invalidateFinancialQueries(queryClient);
             }
             await invalidatePayroll();
             setIsPayrollContractEditorOpen(false);
-            setNoticeSuccess(editingPayrollContract ? 'Contrato actualizado.' : 'Contrato creado.');
+            setNoticeSuccess(editingPayrollContract ? 'Contrato guardado. Revisa la liquidación del mes; los pagos anteriores se conservan.' : 'Contrato creado. Usa Generar nómina para preparar el mes.');
+            if (editingPayrollContract) setPayrollPeriods({ ...editingPayrollContract, ...payload, reviewContractChange: true });
         } catch (error) {
             console.error('Error saving payroll contract:', error.response?.data || error);
             setNoticeError(error.response?.data?.message || 'No fue posible guardar el contrato.');
@@ -1029,7 +1007,7 @@ await invalidateFinancialQueries(queryClient);
             await invalidatePayroll();
             if (generated.requiresPeriodReview?.length) setNoticeError(generated.requiresPeriodReview.map(item => `${item.name}: ${item.reason}`).join(' '));
             setIsPayrollGenerationConfirmOpen(false);
-            setNoticeSuccess('Nómina mensual generada en borrador.');
+            setNoticeSuccess(generated.createdCount > 0 ? `Se ${generated.createdCount === 1 ? 'creó 1 borrador' : `crearon ${generated.createdCount} borradores`}.` : `No se crearon borradores. ${generated.existingCount || 0} liquidaciones mensuales ya están registradas.${generated.requiresPeriodReview?.length ? ' Revisa los casos indicados.' : ''}`);
         } catch (error) {
             console.error('Error generating payroll period:', error.response?.data || error);
             setNoticeError(error.response?.data?.message || 'No fue posible generar la nómina mensual.');
@@ -1752,7 +1730,7 @@ await invalidateFinancialQueries(queryClient);
                         <FinancialSectionHeader title="Nómina"
                             description={`Liquidación de ${FINANCIAL_MONTHS[payrollMonth - 1].toLowerCase()} (elige el mes en los filtros de arriba). Genera las liquidaciones, apruébalas y registra el pago desde la cuenta que corresponde.`}>
                             <span className="rounded-lg bg-primary/10 px-3 py-2 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan" title={`Total contractual: ${formatCurrency(editablePayrollTotal || 0)}`}>
-                                {formatCurrency(editablePayrollTotal || 0)}
+                                Mensual contratado: {formatCurrency(editablePayrollTotal || 0)}
                             </span>
                             {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor()} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Nuevo contrato</button>}
                             {canWriteFinancials && <button type="button" onClick={() => setIsPayrollGenerationConfirmOpen(true)} disabled={isGeneratingPayroll} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
@@ -1773,8 +1751,8 @@ await invalidateFinancialQueries(queryClient);
                                         <thead>
                                             <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
                                                 <th className="p-4">Colaborador</th>
-                                                <th className="p-4">Contrato (Base)</th>
-                                                <th className="p-4">Seguridad Social</th>
+                                                <th className="p-4">Base del período</th>
+                                                <th className="p-4">Seguridad social del período</th>
                                                 <th className="p-4">Estado del período</th>
                                                 <th className="p-4 text-right">Total neto</th>
                                                 <th className="p-4 text-right">Acciones</th>
@@ -1783,7 +1761,8 @@ await invalidateFinancialQueries(queryClient);
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
                                             {payrollRows.map((collab) => {
                                                 const transaction = collab.transaction;
-                                                const netAmount = transaction?.netAmount ?? collab.monthlyTotal ?? collab.totalPaid ?? 0;
+                                                const netAmount = transaction?.netAmount;
+                                                const draftChanged = payrollDraftNeedsContract(transaction, collab);
                                                 return (
                                                 <React.Fragment key={transaction?.id || collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name}>
                                                 <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
@@ -1795,46 +1774,18 @@ await invalidateFinancialQueries(queryClient);
                                                             <div>
                                                                 <p className="font-bold text-zinc-900 dark:text-white">{collab.name}</p>
                                                                 <p className="text-[10px] text-zinc-500">{collab.position || collab.email || 'Sin cargo'}</p>
-                                                                <p className="mt-1 text-xs text-zinc-500">{transaction?.serviceStart ? `${new Date(transaction.serviceStart).toLocaleDateString('es-CO', { timeZone: 'UTC' })} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : transaction ? 'Fechas del servicio por precisar' : 'Sin liquidación para este mes'}</p>
-                                                                <button type="button" aria-label={`Períodos de ${collab.name}`} onClick={() => setPayrollPeriods(collab)} className="min-h-11 text-xs font-semibold text-primary hover:underline">Períodos e historial</button>
-                                                                {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor(collab)} className="mt-1 text-[10px] font-semibold text-brand-cyan-deep hover:text-brand-cyan-deep dark:text-brand-cyan">Editar contrato</button>}
+                                                                <p className="mt-1 text-xs text-zinc-500">Contrato: {collab.startDate ? new Date(collab.startDate).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Sin fecha'} – {collab.endDate ? new Date(collab.endDate).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Sin terminación'}</p>
+                                                                <p className="text-xs text-zinc-500">Mensual vigente: {formatCurrency(Number(collab.baseSalary || 0) + Number(collab.socialSecurity || 0))}</p>
+                                                                <p className="mt-1 text-xs">{transaction?.serviceStart ? `Servicio: ${new Date(transaction.serviceStart).toLocaleDateString('es-CO', { timeZone: 'UTC' })} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : transaction?.monthlyBasis ? `Mensual registrado · ${FINANCIAL_MONTHS[transaction.month - 1]} ${transaction.year}` : transaction ? 'Servicio por identificar en el historial' : 'Sin liquidación para este mes'}</p>
+                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                                                    <button type="button" aria-label={`Períodos de ${collab.name}`} onClick={() => setPayrollPeriods(collab)} className="min-h-9 text-xs font-semibold text-primary hover:underline">Liquidación e historial</button>
+                                                                    {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor(collab)} className="min-h-9 text-xs font-semibold text-primary hover:underline">Editar contrato</button>}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-4 font-medium">
-                                                        <MoneyInput
-                                                            aria-label={`Salario base de ${collab.name || 'la persona'}`}
-                                                            defaultValue={collab.baseSalary || 0}
-                                                            disabled={savingPayrollContractId === (collab.id || collab.contractId)}
-                                                            onCommit={(value) => {
-                                                                const nextValue = Number(value || 0);
-                                                                if (Number.isFinite(nextValue) && nextValue !== collab.baseSalary) {
-                                                                    handlePayrollContractUpdate(collab, { baseSalary: nextValue });
-                                                                }
-                                                            }}
-                                                            onKeyDown={(event) => {
-                                                                if (event.key === 'Enter') event.currentTarget.blur();
-                                                            }}
-                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                        />
-                                                    </td>
-                                                    <td className="p-4 text-zinc-500">
-                                                        <MoneyInput
-                                                            aria-label={`Seguridad social de ${collab.name || 'la persona'}`}
-                                                            defaultValue={collab.socialSecurity || 0}
-                                                            disabled={savingPayrollContractId === (collab.id || collab.contractId)}
-                                                            onCommit={(value) => {
-                                                                const nextValue = Number(value || 0);
-                                                                if (Number.isFinite(nextValue) && nextValue !== collab.socialSecurity) {
-                                                                    handlePayrollContractUpdate(collab, { socialSecurity: nextValue });
-                                                                }
-                                                            }}
-                                                            onKeyDown={(event) => {
-                                                                if (event.key === 'Enter') event.currentTarget.blur();
-                                                            }}
-                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                        />
-                                                    </td>
+                                                    <td className="p-4 font-medium tabular-nums">{transaction ? formatCurrency(transaction.baseSalary) : '—'}</td>
+                                                    <td className="p-4 text-zinc-500 tabular-nums">{transaction ? formatCurrency(transaction.socialSecurity) : '—'}</td>
                                                     <td className="p-4">
                                                         {(() => {
                                                             const status = payrollStatus(transaction);
@@ -1849,6 +1800,7 @@ await invalidateFinancialQueries(queryClient);
                                                                 )}>{status.label}</span>
                                                             );
                                                         })()}
+                                                        {transaction?.status === 'PAID' && <p className="mt-1 text-xs text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</p>}
                                                         {transaction?.payments?.length > 0 && (() => {
                                                             const activeCount = transaction.payments.filter((payment) => !payment.reversedAt).length;
                                                             const open = !!expandedPayrollPayments[transaction.id];
@@ -1863,17 +1815,19 @@ await invalidateFinancialQueries(queryClient);
                                                         })()}
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
-                                                        {formatCurrency(netAmount)}
+                                                        {transaction ? formatCurrency(netAmount) : "—"}
                                                         {transaction?.status === 'APPROVED' && Number(transaction.paidAmount) > 0 && (
                                                             <p className="mt-0.5 text-[10px] font-medium text-zinc-500">Falta {formatCurrency(transaction.outstanding)}</p>
                                                         )}
                                                     </td>
                                                     <td className="p-4 text-right">
-                                                        {transaction && <button type="button" aria-label={`Descuentos de ${collab.name}`} onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="mb-1 block min-h-11 text-xs font-semibold text-primary hover:underline">Descuentos de préstamos</button>}
-                                                        {transaction?.status === 'DRAFT' && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="rounded-lg border border-[#009EB9]/30 px-3 py-1.5 text-[11px] font-semibold text-[#009EB9] hover:bg-[#009EB9]/10 disabled:opacity-50 dark:text-cyan-300">Aprobar</button>}
-                                                        {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="rounded-lg bg-[#009EB9] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#008CA4]">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
-                                                        {transaction?.status === 'PAID' && <span className="text-[11px] font-medium text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</span>}
-                                                        {!transaction && <span className="text-[11px] text-zinc-400">Pendiente</span>}
+                                                        <div className="flex items-center justify-end gap-2 whitespace-nowrap" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
+                                                            {transaction && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Descuentos</button>}
+                                                            {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10">Revisar importe</button>}
+                                                            {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
+                                                            {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-xs font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
+                                                            {!transaction && <span className="text-xs text-zinc-400">Pendiente</span>}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                                 {transaction?.payments?.length > 0 && expandedPayrollPayments[transaction.id] && (
@@ -2303,16 +2257,17 @@ await invalidateFinancialQueries(queryClient);
                         <DialogDescription>La vigencia determina en cuáles meses se incluye al colaborador al generar la nómina.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSavePayrollContract} className="space-y-4">
+                        {noticeError && <p role="alert" className="text-sm text-destructive brain-destructive-text">{noticeError}</p>}
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Colaborador<input required value={payrollContractForm.name} onChange={(event) => setPayrollContractForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cargo<input value={payrollContractForm.position} onChange={(event) => setPayrollContractForm((current) => ({ ...current, position: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Inicio</span><BrainDatePicker ariaLabel="Inicio del contrato" value={payrollContractForm.startDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, startDate: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Terminación</span><BrainDatePicker ariaLabel="Terminación del contrato" isClearable placeholder="Contrato activo" value={payrollContractForm.endDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, endDate: value }))} className="rounded-lg py-2.5" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base<MoneyInput required min="0" value={payrollContractForm.baseSalary} onChange={(baseSalary) => setPayrollContractForm((current) => ({ ...current, baseSalary }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base mensual<MoneyInput required min="0" value={payrollContractForm.baseSalary} onChange={(baseSalary) => setPayrollContractForm((current) => ({ ...current, baseSalary }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Seguridad social<MoneyInput required min="0" value={payrollContractForm.socialSecurity} onChange={(socialSecurity) => setPayrollContractForm((current) => ({ ...current, socialSecurity }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Total mensual<MoneyInput required min="0" value={payrollContractForm.monthlyTotal} onChange={(monthlyTotal) => setPayrollContractForm((current) => ({ ...current, monthlyTotal }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <div className="rounded-lg bg-zinc-50 p-3 text-sm sm:col-span-2 dark:bg-white/5"><span className="text-zinc-500">Total mensual del contrato</span><p className="mt-1 font-semibold">{formatCurrency(Number(payrollContractForm.baseSalary || 0) + Number(payrollContractForm.socialSecurity || 0))}</p><p className="mt-1 text-xs text-zinc-500">Se aplica al generar nuevos meses. Un borrador existente se revisa antes de actualizarlo; los pagos anteriores se conservan.</p></div>
                         </div>
-                        <DialogFooter><button type="button" onClick={() => setIsPayrollContractEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollContract} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayrollContract && <Loader2 className="h-4 w-4 animate-spin" />}Guardar contrato</button></DialogFooter>
+                        <DialogFooter><button type="button" onClick={() => setIsPayrollContractEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollContract} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayrollContract && <Loader2 className="h-4 w-4 animate-spin" />}{editingPayrollContract ? 'Guardar y revisar nómina' : 'Guardar contrato'}</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
