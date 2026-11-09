@@ -18,6 +18,11 @@
     // knip no ve un import.
     "@babel/preset-react"
   ],
+  "ignoreBinaries": [
+    // La prueba manual de descarga genera su vídeo con FFmpeg instalado en el sistema;
+    // no es una dependencia npm ni un binario de producción.
+    "ffmpeg"
+  ],
   // Archivos, dependencias, imports sin resolver y binarios fallan la auditoría.
   // Las exportaciones sin uso solo avisan: hay ~90 (sobre todo constantes y helpers que
   // se usan dentro del propio archivo) y limpiarlas de golpe tocaría decenas de archivos
