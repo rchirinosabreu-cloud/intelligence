@@ -20,9 +20,43 @@ export function calculatePayrollPeriod(input) {
   return { start, end, days, mode: input.mode, baseSalary: financialAmountFromCents(base * multiplier), socialSecurity: financialAmountFromCents(security * multiplier), grossAmount: financialAmountFromCents((base + security) * multiplier) };
 }
 export const payrollPeriodsOverlap = (start, end, otherStart, otherEnd) => payrollDay(start) <= payrollDay(otherEnd) && payrollDay(otherStart) <= payrollDay(end);
+export function payrollMonthRange(year, month) {
+  return { start: new Date(Date.UTC(year, month - 1, 1, 12)).toISOString().slice(0, 10), end: new Date(Date.UTC(year, month, 0, 12)).toISOString().slice(0, 10) };
+}
+// A projection of the original monthly generation, never a backfill of service dates.
+// The current contract cannot establish the scope of a historical payroll.
+export function recordedMonthlyBasis(row, events) {
+  if (row.serviceStart || row.serviceEnd || row.periodKey !== 'MONTHLY') return null;
+  const ordered = [...events].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const generation = ordered.find(e => e.entityType === 'PayrollPeriod' && e.entityId === `${row.year}-${String(row.month).padStart(2, '0')}` && e.after?.transactionIds?.includes(row.id));
+  if (!generation) return null;
+  const history = ordered.filter(e => e.entityType === 'PayrollContract' && e.entityId === row.contractId && new Date(e.createdAt) <= new Date(generation.createdAt));
+  const contract = history.at(-1)?.after;
+  if (!contract?.startDate) return null;
+  const range = payrollMonthRange(row.year, row.month);
+  const date = value => payrollDay(String(value).slice(0, 10));
+  try {
+    if (date(contract.startDate) > range.start || (contract.endDate && date(contract.endDate) < range.end)) return null;
+    const base = financialCents(contract.baseSalary), security = financialCents(contract.socialSecurity ?? 0);
+    if (base === null || security === null || base < 0 || security < 0 || base !== financialCents(row.baseSalary) || security !== financialCents(row.socialSecurity ?? 0)) return null;
+  } catch { return null; }
+  return { ...range, source: 'MONTHLY_GENERATION', eventId: generation.id };
+}
+export function payrollServiceRange(row) {
+  if (row.serviceStart && row.serviceEnd) return { start: String(row.serviceStart instanceof Date ? row.serviceStart.toISOString() : row.serviceStart).slice(0, 10), end: String(row.serviceEnd instanceof Date ? row.serviceEnd.toISOString() : row.serviceEnd).slice(0, 10) };
+  return row.monthlyBasis || null;
+}
+export function payrollDraftNeedsContract(row, contract) {
+  if (!row || row.voidedAt || row.status !== 'DRAFT' || row.financialRecordId || Number(row.deductions) || (row.payments || []).some(p => !p.reversedAt) || (row.adjustments || row.loanDeductions || []).some(a => !a.reversedAt)) return false;
+  const range = payrollServiceRange(row), month = payrollMonthRange(row.year, row.month);
+  if (!range || range.start !== month.start || range.end !== month.end || !contract.startDate) return false;
+  const start = String(contract.startDate instanceof Date ? contract.startDate.toISOString() : contract.startDate).slice(0, 10);
+  const end = contract.endDate ? String(contract.endDate instanceof Date ? contract.endDate.toISOString() : contract.endDate).slice(0, 10) : null;
+  return start <= month.start && (!end || end >= month.end) && (Number(row.baseSalary) !== Number(contract.baseSalary) || Number(row.socialSecurity) !== Number(contract.socialSecurity));
+}
 // Read-only diagnosis shared by the form and server. Never infer service dates.
 export function unknownPayrollPeriods(rows = []) {
-  return rows.filter(row => !row.voidedAt && (!row.serviceStart || !row.serviceEnd)).map(row => ({
+  return rows.filter(row => !row.voidedAt && !payrollServiceRange(row)).map(row => ({
     id: row.id, year: row.year, month: row.month, status: row.status, netAmount: Number(row.netAmount),
     canReverse: !row.financialRecordId && !(row.payments || []).some(p => !p.reversedAt) && !(row.adjustments || []).some(a => !a.reversedAt),
   }));

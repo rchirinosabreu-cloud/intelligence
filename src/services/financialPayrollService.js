@@ -6,7 +6,8 @@ import {
 } from './financialRecordService.js';
 import { financialAmountFromCents, financialCents } from '../utils/financialMoney.js';
 import { LIVE_PAYROLL_CONTRACT } from './financialQueryFilters.js';
-import { payrollDay, payrollPeriodsOverlap } from '../lib/payrollPeriods.js';
+import { payrollDay, payrollPeriodsOverlap, payrollServiceRange } from '../lib/payrollPeriods.js';
+import { withPayrollMonthlyBasis } from './payrollMonthlyBasis.js';
 
 const toNumber = (value) => {
   if (value && typeof value.toNumber === 'function') return value.toNumber();
@@ -47,30 +48,37 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
 
     const transactions = [];
     const requiresPeriodReview = [];
+    let createdCount = 0;
+    let existingCount = 0;
     for (const contract of contracts) {
       const existingPeriods = await tx.payrollTransaction.findMany({ where: { contractId: contract.id, month, year } });
-      if (existingPeriods.length) { transactions.push(...existingPeriods.filter(row => !row.voidedAt)); continue; }
+      const related = await withPayrollMonthlyBasis(tx, await tx.payrollTransaction.findMany({ where: { voidedAt: null, ...(contract.collaboratorId ? { contract: { collaboratorId: contract.collaboratorId, importBatchId: null } } : { contractId: contract.id }) } }));
+      const live = related.filter(row => !row.voidedAt);
+      const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === payrollDay(periodStart) && range.end === payrollDay(periodEnd); });
+      if (covered) { transactions.push(covered); existingCount++; continue; }
       if (payrollDay(contract.startDate) > payrollDay(periodStart) || (contract.endDate && payrollDay(contract.endDate) < payrollDay(periodEnd))) {
-        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'El contrato cubre solo una parte del mes. Define sus fechas e importe en «Períodos e historial».' }); continue;
+        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'El contrato cubre solo una parte del mes. Define sus fechas e importe en «Liquidación e historial».' }); continue;
       }
-      const related = await tx.payrollTransaction.findMany({ where: { voidedAt: null, ...(contract.collaboratorId ? { contract: { collaboratorId: contract.collaboratorId, importBatchId: null } } : { contractId: contract.id }) } });
-      if (related.some(row => !row.serviceStart || !row.serviceEnd)) {
+      if (live.some(row => !payrollServiceRange(row))) {
         requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
       }
-      if (related.some(row => row.serviceStart && row.serviceEnd && payrollPeriodsOverlap(periodStart, periodEnd, row.serviceStart, row.serviceEnd))) {
+      if (live.some(row => { const range = payrollServiceRange(row); return range && payrollPeriodsOverlap(periodStart, periodEnd, range.start, range.end); })) {
         requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Ya hay días de este mes incluidos en otro período. Revisa las liquidaciones antes de crear otra.' }); continue;
       }
       const baseSalary = toNumber(contract.baseSalary);
       const socialSecurity = toNumber(contract.socialSecurity);
       const grossAmount = baseSalary + socialSecurity;
+      // A reversed or explicitly redated monthly row keeps its key and history.
+      const periodKey = existingPeriods.some(row => row.periodKey === 'MONTHLY') ? randomUUID() : 'MONTHLY';
       const transaction = await tx.payrollTransaction.upsert({
-        where: { contractId_month_year_periodKey: { contractId: contract.id, month, year, periodKey: 'MONTHLY' } },
+        where: { contractId_month_year_periodKey: { contractId: contract.id, month, year, periodKey } },
         update: {},
         create: {
           userId: contract.userId || null,
           contractId: contract.id,
           month,
           year,
+          periodKey,
           serviceStart: periodStart,
           serviceEnd: periodEnd,
           baseSalary,
@@ -82,6 +90,7 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
         }
       });
       transactions.push(transaction);
+      createdCount++;
     }
 
     await tx.financialAuditEvent.create({
@@ -93,7 +102,7 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
         actorId
       }
     });
-    return { year, month, transactions, requiresPeriodReview };
+    return { year, month, transactions, requiresPeriodReview, createdCount, existingCount };
   }, { isolationLevel: 'Serializable' });
 };
 
