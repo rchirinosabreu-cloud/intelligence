@@ -34,10 +34,10 @@ test('PostgreSQL: weekly gifts and meeting winners are atomic, old points and th
   assert.equal((await repo.givenInWeek('giver','2026-W46')).points,5);
   // Los dos primeros de la semana entran; la tercera persona no, y la misma persona dos veces la rechaza la base.
   const award=member_id=>repo.awardMeeting({week_key:'2026-W45',day_key:'2026-11-03',member_id,awarded_by:'admin'});
-  const meetings=await Promise.all(['person','other'].map(award));
-  assert.ok(meetings.every(Boolean),'both first arrivals keep their ten points');
-  assert.equal(await award('third'),null,'the week is full');
-  await assert.rejects(award('person'),e=>e.code==='23505');
+  assert.ok(await award('person'),'the first arrival gets her ten points');
+  await assert.rejects(award('person'),e=>e.code==='23505','the same person twice is rejected by the database');
+  assert.ok(await award('other'),'the second arrival keeps her ten points too');
+  assert.equal(await award('third'),null,'the week is full: no insert, no error');
   assert.equal((await repo.meetingsOfWeek('2026-W45')).length,2);
   assert.equal((await repo.meetingsOfMonth('2026-11'))[0].awarded_by,'admin');
   assert.ok(await repo.awardMeeting({week_key:'2026-W44',day_key:'2026-10-27',member_id:'melissa',awarded_by:'admin'}),'the week registered before the upgrade admits its second winner');
