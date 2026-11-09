@@ -94,7 +94,7 @@ test('cada persona tiene su tarjeta y terminar una parte conserva el reloj de la
     const partner = page.locator('[data-task-member="partner"]');
     await mine.waitFor(); await partner.waitFor();
     assert.equal(await page.locator('[data-task-id="shared-task"]').count(), 2);
-    assert.equal(await partner.getAttribute('data-rfd-drag-handle-draggable-id'), null, 'los permisos de la participación gobiernan el arrastre');
+    assert.ok(await partner.getAttribute('data-rfd-drag-handle-draggable-id'), 'admin puede priorizar una parte ajena sin cambiar su estado');
     const partnerBefore = json(task.participants[1]);
     const savingRequest = page.waitForRequest(request => request.url().includes('/participants/navigation-member'));
     await mine.focus(); await page.keyboard.press('Space'); await page.waitForTimeout(250);

@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { clearTaskCardOrder } from './taskCardOrderService.js';
 import { assertTaskSourceActive } from '../lib/taskRetirement.js';
 import { hasTaskParticipations, taskParticipations, aggregateParticipationStatus, participationPermissions, participationTransitionProblem } from '../lib/taskParticipation.js';
 import { canOpenTask } from '../lib/taskPrivacy.js';
@@ -139,6 +140,7 @@ export async function changeTaskParticipation({ db = prisma, transaction, taskId
       ...(owner ? { ...participantData(changedPart, true), startedAt: next === 'EN_CURSO' ? at : null, accumulatedWorkMs: personalMs } : {}),
     };
     // Los estados personales ya persistidos más el cambio del dueño justifican el agregado.
+    await clearTaskCardOrder(tx, taskId, memberId);
     const updated = await updateOrderedTask(tx, { where: { id: taskId }, data, include: participationInclude }, task);
     if (status === 'REALIZADA') await closeActiveTaskWorkCycle(tx, { taskId, actorId, at, closeReason: 'COMPLETED' });
     await applyTaskAggregateEffects(tx, task, status, actorId);

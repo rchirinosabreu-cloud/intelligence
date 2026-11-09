@@ -1655,6 +1655,7 @@ model DeletedTaskLog {
 }
 
 model Task {
+  cardOrders        TaskCardOrder[]
   id                String            @id @default(uuid())
   title             String
   dueDate           DateTime?
@@ -1722,6 +1723,17 @@ model Task {
   @@index([status, completedAt])
   @@index([assigneeStatus, assigneeCompletedAt])
   @@index([contentItemId, title])
+}
+
+model TaskCardOrder {
+  taskId    String
+  memberId  String     @default("")
+  status    TaskStatus
+  sortOrder Int
+  revision  Int        @default(1)
+  task      Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, memberId])
 }
 
 model TaskDeliverable {

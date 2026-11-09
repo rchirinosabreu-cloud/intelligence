@@ -2,6 +2,7 @@ import { compareTaskOrder, mergeFilteredTaskOrder, taskEntersNewQueue } from '..
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import { recognitionTransaction } from './recognitionService.js';
 import { hasTaskParticipations, taskParticipations, aggregateParticipationStatus } from '../lib/taskParticipation.js';
+import { clearTaskCardOrder, placeIndividualTaskCard } from './taskCardOrderService.js';
 
 const fail = (message, statusCode = 400) => Object.assign(new Error(message), { statusCode });
 const orderSelect = { id: true, status: true, sortOrder: true, dueDate: true, createdAt: true };
@@ -38,6 +39,8 @@ export const reorderTaskSelection = async ({ db, user, reorderList, previousIds 
     throw fail('El orden anterior no corresponde a la selección.');
   }
   return recognitionTransaction(db, async tx => {
+    const positions = await tx.$queryRaw`SELECT 1 FROM "TaskCardOrder" WHERE "taskId" = ANY(${orderedIds}::text[]) LIMIT 1`;
+    if (positions.length) throw fail('Actualiza la pantalla para ordenar con las prioridades vigentes.', 409);
     const selected = await tx.task.findMany({ where: { id: { in: orderedIds }, AND: [activeTaskSourceWhere] }, select: orderSelect });
     if (selected.length !== orderedIds.length || new Set(selected.map(task => task.status)).size !== 1) {
       throw fail('Los pendientes cambiaron. Actualiza el tablero.', 409);
@@ -79,11 +82,19 @@ export const updateOrderedTask = async (tx, args, current) => {
   }
   if (hasAnchor || hasIndex || taskEntersNewQueue(current, data)) data.sortOrder = await nextTaskOrder(tx, status);
   const updated = await tx.task.update({ ...args, data });
+  // Un cambio del agregado compartido no mueve las prioridades de las otras personas.
+  const queueChanged = hasTaskParticipations(current)
+    ? taskEntersNewQueue(current, { ...data, status: current.status })
+    : taskEntersNewQueue(current, data);
+  if (queueChanged || hasAnchor || hasIndex) await clearTaskCardOrder(tx, args.where.id);
   if (column) {
     const position = hasAnchor ? column.findIndex(task => task.id === anchor) : Math.min(index, column.length);
     column.splice(position, 0, updated);
     await saveOrder(tx, column);
     updated.sortOrder = position;
+  }
+  if ((hasAnchor || hasIndex) && !hasTaskParticipations(current)) {
+    updated.cardOrders = await placeIndividualTaskCard(tx, args.where.id, status, { anchor, index });
   }
   return updated;
 };

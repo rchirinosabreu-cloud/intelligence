@@ -10,12 +10,13 @@ export function hasActiveTaskTeam(task) {
 
 export function projectTaskParticipations(tasks) {
   return (tasks || []).flatMap(task => {
-    if (!task.sharedProgress || !Array.isArray(task.participants) || !task.participants.length) return [task];
+    if (!task.sharedProgress || !Array.isArray(task.participants) || !task.participants.length) return [{ ...task, boardOrder: task.cardOrders?.find(row => row.memberId === '') }];
     return task.participants.map(participation => ({
       ...task,
       canonicalTask: task,
       boardKey: JSON.stringify([String(task.id), String(participation.memberId)]),
       participation,
+      boardOrder: task.cardOrders?.find(row => row.memberId === participation.memberId),
       globalStatus: task.status,
       focusDeadlineAt: participation.role === 'ASSIGNEE' ? task.focusDeadlineAt : null,
       status: participation.status,
@@ -59,10 +60,11 @@ export function applyParticipationReceipt(tasks, saved) {
   return (tasks || []).map(task => {
     if (String(task.id) !== String(saved.id)) return task;
     const confirmed = {};
-    for (const key of ['status', 'sortOrder', 'completedAt', 'startedAt', 'accumulatedWorkMs', 'isReturned', 'sharedProgress', 'rosterVersion', 'participants']) {
+    for (const key of ['status', 'sortOrder', 'completedAt', 'startedAt', 'accumulatedWorkMs', 'isReturned', 'sharedProgress', 'rosterVersion', 'participants', 'updatedAt']) {
       if (Object.hasOwn(saved, key)) confirmed[key] = saved[key];
     }
     if (Array.isArray(saved.workSessions)) confirmed.openSessions = saved.workSessions;
+    if (saved.participationTransition?.changed) confirmed.cardOrders = (task.cardOrders || []).filter(row => row.memberId !== saved.participationTransition.memberId);
     return { ...task, ...confirmed };
   });
 }

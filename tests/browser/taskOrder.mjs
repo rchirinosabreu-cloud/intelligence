@@ -31,7 +31,8 @@ for (const dark of [false, true]) test(`filtered priority survives new tasks and
       writes.push(route.request().postDataJSON());
       if (reject) return route.fulfill({ status: 409, json: { error: 'La prioridad cambió. Actualiza el tablero antes de ordenar.' } });
       rows = [row('b', 0), row('hidden', 1, 'Otra cuenta'), row('a', 2), row('new', 3)];
-      return route.fulfill({ json: { success: true, order: rows.map(({ id, sortOrder }) => ({ id, sortOrder })) } });
+      rows = rows.map(r => ({ ...r, cardOrders: [{ memberId: '', status: r.status, sortOrder: r.sortOrder, revision: 1 }] }));
+      return route.fulfill({ json: { success: true, order: rows.map(r => ({ id: r.id, ...r.cardOrders[0] })) } });
     }
     return route.continue();
   });
@@ -56,7 +57,7 @@ for (const dark of [false, true]) test(`filtered priority survives new tasks and
   await dragUp('b');
   await page.waitForResponse(response => response.url().endsWith('/api/tasks/reorder'));
   await page.getByText('Prioridad guardada', { exact: false }).first().waitFor();
-  assert.deepEqual(writes[0].previousIds, ['a', 'b']);
+  assert.deepEqual(writes[0].previousCards.map(c => c.id), ['a', 'b']);
   await choose('Cliente', 'Todos los clientes');
   await page.getByRole('button', { name: 'Actualizar tareas', exact: true }).click();
   await column.locator('[data-rfd-draggable-id="new"]').waitFor();

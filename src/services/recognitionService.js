@@ -16,7 +16,9 @@ export async function recognitionTransaction(db, work) {
         return work(tx);
       }, { isolationLevel: 'Serializable', maxWait: 15000, timeout: 20000 });
     } catch (error) {
-      if (error.code !== 'P2034' || attempt >= 5) throw error;
+      const retryable = error.code === 'P2034'
+        || (error.code === 'P2010' && ['40001', '40P01'].includes(error.meta?.code));
+      if (!retryable || attempt >= 5) throw error;
       await new Promise(resolve => setTimeout(resolve, 15 * (attempt + 1)));
     }
   }
