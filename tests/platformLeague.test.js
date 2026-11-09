@@ -94,4 +94,5 @@ test('today’s points, the track scale, the month label and the ordinal', () =>
  assert.equal(todayPoints(day([true,true,true,true,true,true],{PRIMERO_EN_REUNION:true})).points,40);
  const scores=[{score:20},{score:10},{score:10},{score:0}];
  assert.equal(leagueRank(10,scores),2); assert.equal(leagueRank(0,scores),null);
+ assert.equal(leagueRank(10,[{score:20},{score:20},{score:10}]),2,'a tie above does not skip the next position');
 });

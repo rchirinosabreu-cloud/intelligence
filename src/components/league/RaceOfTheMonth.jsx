@@ -41,7 +41,9 @@ const muted = 'text-zinc-500 dark:text-zinc-400';
 
 /**
  * El podio, igual para la semana y para el mes (Rodny, 9 de noviembre de 2026: «necesito el podio de la semana también, de primero»).
- * Tres puestos limpios van en escalón; un empate muestra a todas las personas del puesto, sin recortar a nadie.
+ * Los puestos van por puntaje, así que tras un empate en primero siguen el segundo y el tercero. Un empate muestra a todas
+ * las personas del puesto **de a dos por fila** (Rodny, el mismo día, al ver cuatro primeros apilados en una columna:
+ * «horrible, puede verse partido, dos por fila»); nunca se recorta a nadie.
  */
 function Podium({ groups, title, tone = 'month', ...attrs }) {
   if (!groups.length) return null;
@@ -54,9 +56,9 @@ function Podium({ groups, title, tone = 'month', ...attrs }) {
         const group = groups.find(item => item.rank === rank);
         if (!group) return <div key={rank} aria-hidden="true" />;
         const shared = group.people.length > 1;
-        return <div key={rank} data-podium-rank={rank} className="flex min-w-0 flex-col items-center">
-          <div className="flex w-full flex-wrap items-end justify-center gap-x-1 gap-y-2">{group.people.map(person => <div key={person.id} data-podium-member={person.id} className={cn('flex min-w-0 flex-col items-center', shared ? 'w-[52px]' : 'w-full')}>
-            <RunnerAvatar person={person} size={rank === 1 ? (shared ? 48 : 76) : (shared ? 40 : 60)} /><p className={cn('mt-1.5 max-w-full text-center font-semibold', shared ? 'truncate text-[11px]' : 'break-words text-sm')}>{person.name}</p>
+        return <div key={rank} data-podium-rank={rank} data-podium-shared={shared ? 'true' : undefined} className="flex min-w-0 flex-col items-center">
+          <div className={cn('grid w-full items-end justify-items-center gap-x-1 gap-y-2', shared ? 'grid-cols-2' : 'grid-cols-1')}>{group.people.map(person => <div key={person.id} data-podium-member={person.id} className="flex w-full min-w-0 flex-col items-center">
+            <RunnerAvatar person={person} size={rank === 1 ? (shared ? 44 : 76) : (shared ? 36 : 60)} /><p className={cn('mt-1.5 w-full text-center font-semibold', shared ? 'truncate text-[11px] leading-4' : 'break-words text-sm')}>{person.name}</p>
           </div>)}</div>
           <p className={cn('mt-1 text-xs', muted)}>{group.score} pts</p>
           {shared && <p className={cn('text-[10px] leading-4', muted)}>Puesto compartido</p>}
@@ -201,7 +203,11 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                 </section>}
                 <h4 className="flex items-center gap-2 pt-1 text-sm font-semibold"><Trophy className="h-4 w-4 text-brand-yellow-deep dark:text-brand-yellow" />El mes</h4>
                 <Podium groups={podium} title="Podio del mes" data-race-podium aria-label="Primeras posiciones del mes" />
-                <RankingGrid people={ranked} ranked={ranked} attribute="data-league-member" label="Clasificación del mes" />
+                {/* La clasificación completa del mes va plegada (Rodny, 9 de noviembre de 2026: «todo ese montón de gente y más avatares solo crea confusión y ruido»). */}
+                <details data-race-month-ranking className="group">
+                  <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Ver la clasificación completa del mes<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
+                  <div className="pt-2"><RankingGrid people={ranked} ranked={ranked} attribute="data-league-member" label="Clasificación del mes" /></div>
+                </details>
                 {league.meetings && <MeetingAward meetings={league.meetings} lanes={lanes} />}
                 {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />5 puntos para…</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Cada semana podrás regalar cinco puntos a algún miembro del equipo para agradecerle por alguna ayuda o reconocer su trabajo</p><KudosGift lanes={lanes} selfId={self.id} given={currentGift || league.kudos?.givenThisWeek} onGiven={gift => { setGiven({ startsAt: league.startsAt, week: league.kudos.weekKey, gift }); queryClient.invalidateQueries({ queryKey: ['league'] }); }} />{league.kudos?.received?.map((gift, index) => <p key={index} className="mt-3 border-t border-brand-magenta/10 pt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><strong>{gift.from}</strong>{gift.note ? `: «${gift.note}»` : ' te regaló puntos.'}</p>)}</section>}
                 <p className={cn('text-center text-xs', muted)}>El resultado se valida al cierre del mes.</p>
