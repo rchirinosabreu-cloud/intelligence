@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
+import { finalAssetDownloadName } from '@/lib/finalAssetDownloadName';
 import { Download, ExternalLink, Trash2, Plus, Loader2, Image as ImageIcon, FileText } from '@/components/ui/icons';
 
 const FIELD_LABEL = 'flex h-5 items-center text-xs font-medium text-zinc-500 dark:text-zinc-400';
@@ -179,6 +180,8 @@ const FinalAssetTile = ({
   const sourceUrl = drive
     ? null
     : customUrls ? customUrls.previewUrl : `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
+  const downloadUrl = drive ? null : customUrls ? customUrls.downloadUrl : sourceUrl;
+  const downloadName = finalAssetDownloadName(asset, item, total > 1 ? position : null);
   const isImage = !drive && (asset.mimeType || '').startsWith('image/');
   const isVideo = !drive && (asset.mimeType || '').startsWith('video/');
 
@@ -205,14 +208,14 @@ const FinalAssetTile = ({
   }, [sourceUrl]);
 
   const download = async () => {
-    if (downloading || !customUrls?.downloadUrl) return;
+    if (downloading || !downloadUrl) return;
     setDownloading(true); setDownloadError('');
     try {
-      const response = await fetch(customUrls.downloadUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
+      const response = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
       if (!response.ok) throw new Error('No pudimos descargar el archivo. Revisa tu acceso e intenta otra vez.');
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement('a');
-      link.href = url; link.download = asset.name || 'entregable';
+      link.href = url; link.download = downloadName;
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) { console.error('[Entregables] No se pudo descargar:', error.message); setDownloadError(error.message); }
@@ -248,7 +251,7 @@ const FinalAssetTile = ({
             allowFullScreen
             loading="lazy"
           />
-        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : onOpenAsset ? (
+        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls controlsList="nodownload" preload="metadata" /> : onOpenAsset ? (
           <button type="button" onClick={() => onOpenAsset(asset)} aria-label={`Ver ${asset.name || 'archivo'}`} className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-sm text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-white/5">
             <FileText className="h-8 w-8" />{asset.mimeType === 'application/pdf' ? 'PDF' : 'Archivo'}
           </button>
@@ -287,7 +290,8 @@ const FinalAssetTile = ({
       )}
 
       <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
-        {customUrls?.downloadUrl && <button type="button" onClick={download} disabled={downloading} aria-label={`Descargar ${asset.name || 'archivo'}`}
+        {/* La descarga nativa del blob usa su UUID. Este botón conserva el nombre subido. */}
+        {downloadUrl && <button type="button" onClick={download} disabled={downloading} aria-label={`Descargar ${downloadName}`} title={`Descargar ${downloadName}`}
           className="grid h-11 w-11 place-items-center rounded-lg bg-zinc-800/80 text-white backdrop-blur-sm transition hover:bg-zinc-900 disabled:opacity-50 dark:bg-zinc-950/80 dark:hover:bg-zinc-900">
           {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
         </button>}
@@ -316,8 +320,8 @@ const FinalAssetTile = ({
         )}
       </div>
 
-      <span className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
-        {asset.name || 'Archivo final'}
+      <span title={downloadName} className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+        {downloadName}
       </span>
       {downloadError && <p role="alert" className="px-2.5 pb-2 text-xs text-destructive">{downloadError}</p>}
     </div>
