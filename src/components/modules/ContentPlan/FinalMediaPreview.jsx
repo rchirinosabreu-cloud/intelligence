@@ -65,7 +65,7 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
       ? 'El navegador no pudo reproducir este vídeo. Puedes reintentar o descargarlo para abrirlo en tu dispositivo.'
       : 'El navegador no pudo mostrar esta imagen. Puedes reintentar o descargarla.' });
   };
-  const feedback = error ? <div role="alert" className="flex min-h-36 flex-col items-center justify-center gap-3 p-5 text-center text-sm text-zinc-700 dark:text-zinc-200">
+  const feedback = error ? <div role="alert" className="flex min-h-36 flex-col items-center justify-center gap-3 p-5 text-center text-sm text-destructive">
     <p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 px-3 font-medium hover:bg-zinc-200 dark:border-zinc-600 dark:hover:bg-zinc-800">Reintentar vista previa</button>
   </div> : loading ? <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-100 p-4 text-center text-sm text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300">
     <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" />{isVideo ? 'Cargando vídeo…' : 'Cargando imagen…'}
