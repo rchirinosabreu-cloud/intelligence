@@ -92,12 +92,18 @@ export function leagueScore({ days = [], kudos = [], meetings = 0, recognitions 
   return Math.round((habits || 0) + team + awards);
 }
 
-/** Shared competition rank: 1, 2, 2, 4. Alphabetical display never breaks a tie. */
+/**
+ * El puesto va por puntaje: los empates lo comparten y el siguiente puntaje distinto es el puesto siguiente (1, 1, 2),
+ * así tras un empate en primero sigue habiendo segundo y tercero (Rodny, 9 de noviembre de 2026, al ver cuatro primeros
+ * y ningún segundo: «¿Por qué no aparecen segundos lugares, o terceros?»). Sustituye al puesto de competición (1, 1, 3).
+ * El orden alfabético nunca rompe un empate.
+ */
 export function leagueRank(score, lanes = []) {
-  return score > 0 ? 1 + lanes.filter(lane => lane.score > score).length : null;
+  if (!(score > 0)) return null;
+  return 1 + new Set(lanes.filter(lane => lane.score > score).map(lane => lane.score)).size;
 }
 
-/** All people occupying ranks 1–3, including ties; zero never creates a podium. */
+/** Los tres primeros puestos por puntaje con todas sus personas, sin recortar empates; cero nunca crea un podio. */
 export function leaguePodiumGroups(lanes = []) {
   const ranked = lanes.filter(lane => isNumber(lane.score) && lane.score > 0)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));

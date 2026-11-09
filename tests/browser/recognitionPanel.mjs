@@ -62,6 +62,12 @@ try {
   assert.equal(await panel.locator('[data-recognition-history] li').count(), 4);
   await shot('logros-claro');
   await tab('Equipo').click();
+  // La clasificación completa del mes va plegada por defecto (Rodny, 9 de noviembre de 2026).
+  const monthRanking = panel.locator('[data-race-month-ranking]');
+  assert.equal(await monthRanking.evaluate(el => el.open), false, 'the month ranking starts folded');
+  assert.equal(await panel.locator('[data-league-member]').first().isVisible(), false);
+  await shot('equipo-plegado-claro');
+  await monthRanking.locator('summary').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
   const weekRanking = panel.locator('[data-race-week-ranking]');
   assert.equal(await weekRanking.locator('[data-league-week-member]').count(), 13, 'everyone with weekly points is in the weekly ranking');
@@ -74,6 +80,8 @@ try {
   assert.ok((await weekPodium.boundingBox()).y < (await weekRanking.locator('[data-league-week-member]').first().boundingBox()).y, 'the week podium comes before the weekly list');
   assert.deepEqual(await weekPodium.locator('[data-podium-rank]').evaluateAll(nodes => nodes.map(n => n.dataset.podiumRank)), ['2', '1', '3']);
   assert.equal(await weekPodium.locator('[data-podium-member]').count(), 4, 'a tie for third shows both people in the same step');
+  const tiedTops = await weekPodium.locator('[data-podium-rank="3"] [data-podium-member]').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
+  assert.ok(Math.abs(tiedTops[0] - tiedTops[1]) < 1, 'tied people sit side by side, two per row');
   const weekPodiumBox = await weekPodium.boundingBox();
   assert.ok(weekPodiumBox.height < 260, `the week podium stays compact even with a tie (${Math.round(weekPodiumBox.height)}px)`);
   assert.match(await weekPodium.innerText(), /Podio de la semana[\s\S]*Puesto compartido/);
@@ -189,6 +197,7 @@ try {
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-race-podium]').count(), 0);
   assert.equal(await panel.locator('[data-race-week-podium]').count(), 0, 'a week at zero has no podium');
+  await panel.locator('[data-race-month-ranking] summary').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
   assert.equal(await panel.locator('[data-league-week-member]').count(), 0, 'a week at zero lists nobody');
   assert.match(await panel.locator('[data-race-week-ranking]').innerText(), /La semana está comenzando/);

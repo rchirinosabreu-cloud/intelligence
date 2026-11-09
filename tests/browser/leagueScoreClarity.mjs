@@ -43,8 +43,12 @@ try {
   const podium = panel.locator('[data-race-podium]');
   await podium.waitFor();
   assert.equal(await podium.locator('[data-podium-member]').count(), 13, 'no tied participant is cut off');
-  assert.deepEqual(await podium.locator('[data-podium-rank]').evaluateAll(nodes => nodes.map(n => n.dataset.podiumRank)), ['1', '3']);
+  assert.deepEqual(await podium.locator('[data-podium-rank]').evaluateAll(nodes => nodes.map(n => n.dataset.podiumRank)), ['2', '1'], 'after a tie for first the next score is second');
   assert.match(await podium.innerText(), /Puesto compartido/);
+  // Un empate se parte de a dos por fila, nunca en una sola columna (Rodny, 9 de noviembre de 2026).
+  const sharedTops = await podium.locator('[data-podium-rank="2"] [data-podium-member]').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
+  assert.ok(Math.abs(sharedTops[0] - sharedTops[1]) < 1 && sharedTops[2] > sharedTops[0], 'tied people sit two per row');
+  assert.equal(await panel.locator('[data-race-month-ranking]').evaluate(el => el.open), false, 'the full month ranking starts folded');
   await panel.screenshot({ path: `${output}/podio-empates-claro.png` });
   await page.setViewportSize({ width: 360, height: 800 });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
