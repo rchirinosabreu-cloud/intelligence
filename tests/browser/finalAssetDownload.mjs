@@ -47,4 +47,3 @@ test('el visor descarga el nombre original, ofrece nombre legible al legado y co
     await page.setViewportSize({width:390,height:844});await page.screenshot({path:'output/final-asset-download/mobile.png',fullPage:true});
   }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 });
-
