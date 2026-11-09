@@ -1,3 +1,4 @@
+import { financialPartyChoices, resolveFinancialParty } from './financialPartySelection.js';
 import { createHash } from 'node:crypto';
 import { financialCents, financialAmountFromCents as amountOf } from '../utils/financialMoney.js';
 import { hasFinancialPermission } from '../utils/financialPermissions.js';
@@ -27,7 +28,13 @@ async function load(tx, { receivableId, paymentId }) {
   const ar = await tx.accountsReceivable.findUnique({ where: { id: payment?.receivableId || receivableId }, include });
   if (!ar || ar.kind !== 'CLIENTE' || !ar.clientId || ar.currency !== 'COP') throw fail('BARTER_SOURCE_INVALID', 'Este recorrido requiere una cuenta de cliente en COP. No convierte monedas ni reclasifica préstamos.');
   const beneficiary = paymentId ? await tx.accountsReceivable.findUnique({ where: { barterPaymentId: paymentId }, include }) : null;
-  if (payment?.detail?.destinationMode === 'BENEFICIARIO' && (!beneficiary || beneficiary.kind !== 'BENEFICIARIO' || financialCents(beneficiary.amount) !== financialCents(payment.amount) || beneficiary.beneficiaryThirdPartyId !== payment.detail.beneficiaryThirdPartyId)) throw fail('BARTER_LINK_INVALID', 'El vínculo del beneficiario requiere revisión. No se modificó el canje.');
+  let beneficiaryIdentity = payment?.detail?.beneficiaryThirdPartyId;
+  if (beneficiaryIdentity && beneficiary && beneficiary.beneficiaryThirdPartyId !== beneficiaryIdentity) {
+    // An explicit, audited merge changes the current reference, not the original destination evidence.
+    const original = await tx.thirdParty.findUnique({ where: { id: beneficiaryIdentity }, select: { mergedIntoId: true } });
+    beneficiaryIdentity = original?.mergedIntoId || beneficiaryIdentity;
+  }
+  if (payment?.detail?.destinationMode === 'BENEFICIARIO' && (!beneficiary || beneficiary.kind !== 'BENEFICIARIO' || financialCents(beneficiary.amount) !== financialCents(payment.amount) || beneficiary.beneficiaryThirdPartyId !== beneficiaryIdentity)) throw fail('BARTER_LINK_INVALID', 'El vínculo del beneficiario requiere revisión. No se modificó el canje.');
   for (const row of [ar, beneficiary].filter(Boolean)) {
     const balance = outstandingCentsOf(row);
     if (isReceivableClosed(row.status) && balance) throw fail('BARTER_BALANCE_INVALID', 'La cuenta figura cerrada pero sus aplicaciones no respaldan el saldo.');
@@ -55,10 +62,10 @@ function request(input) {
   if (!reason || reason.length > 300 || !/^[a-zA-Z0-9-]{10,100}$/.test(requestId) || !text(input.expectedRevision)) throw fail('BARTER_REVIEW_REQUIRED', 'Revisa el canje e indica un motivo de hasta 300 caracteres antes de confirmar.', 400);
   return { reason, requestId };
 }
-async function destination(tx, input) {
+async function destination(tx, input, actor) {
   const mode = input.destinationMode, authorizedBy = text(input.authorizedBy), destination = text(input.destination);
   if (!['AGENCIA', 'BENEFICIARIO', 'OTRO_AUTORIZADO'].includes(mode) || !authorizedBy || authorizedBy.length > 120 || destination.length > 500) throw fail('BARTER_DESTINATION_REQUIRED', 'Selecciona el destino y quién lo autorizó.', 400);
-  const party = mode === 'BENEFICIARIO' ? await tx.thirdParty.findUnique({ where: { id: text(input.beneficiaryThirdPartyId) } }) : null;
+  const party = mode === 'BENEFICIARIO' ? await resolveFinancialParty(tx, input.beneficiaryThirdPartyId, actor) : null;
   if (mode === 'BENEFICIARIO' && !party?.isActive) throw fail('BARTER_BENEFICIARY_REQUIRED', 'Selecciona un beneficiario activo del directorio de Terceros.', 400);
   if (mode !== 'BENEFICIARIO' && !destination) throw fail('BARTER_DESTINATION_REQUIRED', 'Explica el uso o la disposición autorizada del canje.', 400);
   return { destinationMode: mode, authorizedBy, destination: destination || party.name, beneficiaryThirdPartyId: party?.id || null, beneficiaryName: party?.name || null };
@@ -89,7 +96,7 @@ async function createBeneficiary(tx, payment, dest) {
 export async function barterContext(db, ids, actor) {
   return atomic(db, async tx => {
     const user = await authorize(tx, actor, 'read'), ctx = await load(tx, ids);
-    const parties = !ctx.payment?.detail?.destinationMode ? await tx.thirdParty.findMany({ where: { isActive: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, kind: true, documentNumber: true } }) : [];
+    const parties = !ctx.payment?.detail?.destinationMode ? await financialPartyChoices(tx) : [];
     const history = ctx.payment && hasFinancialPermission(user, 'admin') ? await tx.financialAuditEvent.findMany({ where: { entityType: 'AccountsReceivable', entityId: ctx.ar.id, after: { path: ['paymentId'], equals: ctx.payment.id } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }) : [];
     return { ...result(ctx, user), parties, history };
   }, true);
@@ -106,7 +113,7 @@ export async function createBarter(db, receivableId, input, actor) {
     if (before.revision !== input.expectedRevision) throw conflict();
     if (isReceivableClosed(before.ar.status) || value > outstandingCentsOf(before.ar)) throw fail('BARTER_EXCEEDS_BALANCE', 'El valor supera el saldo pendiente del cliente.');
     await periods(tx, before, date);
-    const dest = await destination(tx, input);
+    const dest = await destination(tx, input, user);
     const payment = await tx.receivablePayment.create({ data: { id: `barter:${requestId}`, receivableId, kind: 'CANJE', amount: amountOf(value), paidAt: date, notes: reason, createdById: user.id, detail: { ...dest, goods, actorName: user.name } } });
     await createBeneficiary(tx, payment, dest);
     await tx.accountsReceivable.update({ where: { id: receivableId }, data: { status: receivableStatusAfter({ outstandingCents: outstandingCentsOf(before.ar) - value, payments: [...before.ar.payments, payment], currentStatus: before.ar.status }) } });
@@ -123,7 +130,7 @@ export async function assignBarterDestination(db, paymentId, input, actor) {
     if (previous) return previous;
     if (before.revision !== input.expectedRevision || before.payment.reversedAt || before.payment.detail?.destinationMode || before.beneficiary) throw conflict();
     await periods(tx, before, before.payment.paidAt);
-    const dest = await destination(tx, input);
+    const dest = await destination(tx, input, user);
     const payment = await tx.receivablePayment.update({ where: { id: paymentId }, data: { detail: { ...before.payment.detail, ...dest, legacyDestination: before.payment.detail?.destination || null, legacyAuthorizedBy: before.payment.detail?.authorizedBy || null, destinationReason: reason, destinationActorId: user.id, destinationActorName: user.name, destinationAt: new Date().toISOString() } } });
     await createBeneficiary(tx, payment, dest);
     const after = await load(tx, { paymentId });

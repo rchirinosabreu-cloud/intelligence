@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Select from '@/components/ui/Select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { THIRD_PARTY_KINDS, thirdPartyProblem } from '@/lib/accountsPayable';
+import { THIRD_PARTY_KINDS, thirdPartyProblem, thirdPartyRoles } from '@/lib/accountsPayable';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import DraftNotice from '@/components/ui/DraftNotice';
 
@@ -15,8 +15,8 @@ const ACCOUNT_TYPES = [['', 'Sin definir'], ['AHORROS', 'Ahorros'], ['CORRIENTE'
 
 export const emptyThirdParty = () => ({ kind: 'PROVEEDOR', name: '', legalName: '', documentType: '', documentNumber: '', email: '', phone: '', bankName: '', bankAccountType: '', bankAccountNumber: '', notes: '', isActive: true });
 
-export function ThirdPartyDialog({ open, thirdParty, saving, error, onClose, onSubmit }) {
-  const initial = { ...emptyThirdParty(), ...(thirdParty || {}) };
+export function ThirdPartyDialog({ open, thirdParty, saving, error, onClose, onSubmit, clients = [], team = [] }) {
+  const initial = { ...emptyThirdParty(), ...(thirdParty || {}), roles: [...new Set([...(thirdParty?.clientId ? ['CLIENTE'] : []), ...thirdPartyRoles(thirdParty || emptyThirdParty())])] };
   const scope = thirdParty?.id ? `id:${thirdParty.id}` : thirdParty?.teamMemberId ? `team:${thirdParty.teamMemberId}` : thirdParty?.clientId ? `client:${thirdParty.clientId}` : 'new';
   const [form, setForm, draft] = useFormDraft({ scope: `financial:third-party:${scope}`, open, initial,
     fingerprint: thirdParty ? JSON.stringify(initial) : null });
@@ -36,7 +36,7 @@ export function ThirdPartyDialog({ open, thirdParty, saving, error, onClose, onS
       <DraftNotice draft={draft} disabled={saving} />
       <fieldset disabled={saving || draft.conflict} inert={saving || draft.conflict ? '' : undefined} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-1.5 text-sm"><span className="block">Clase</span><Select required disabled={saving || draft.conflict} className={field} value={form.kind} onChange={(event) => set({ kind: event.target.value })}>{THIRD_PARTY_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
+        <fieldset className="space-y-2"><legend className="text-sm">Clasificaciones</legend><div className="flex flex-wrap gap-3">{THIRD_PARTY_KINDS.map(item => <label key={item.value} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" disabled={item.value === 'CLIENTE' && !!form.clientId} checked={(item.value === 'CLIENTE' && !!form.clientId) || thirdPartyRoles(form).includes(item.value)} onChange={event => { const roles = event.target.checked ? [...thirdPartyRoles(form), item.value] : thirdPartyRoles(form).filter(role => role !== item.value); set({roles, kind:roles[0] || ''}); }} />{item.label}</label>)}</div><p className="text-xs text-zinc-500">Una sola ficha puede tener varias clasificaciones.</p></fieldset>
         <label className="block space-y-1.5 text-sm"><span className="block">Nombre</span><input required className={field} value={form.name} maxLength={120} onChange={(event) => set({ name: event.target.value })} placeholder="Ej.: Papelería El Punto" /></label>
       </div>
       <label className="block space-y-1.5 text-sm"><span className="block">Razón social <span className="text-zinc-400">(opcional)</span></span><input className={field} value={form.legalName || ''} maxLength={160} onChange={(event) => set({ legalName: event.target.value })} /></label>
@@ -53,6 +53,8 @@ export function ThirdPartyDialog({ open, thirdParty, saving, error, onClose, onS
         <label className="block space-y-1.5 text-sm"><span className="block">Tipo de cuenta</span><Select disabled={saving || draft.conflict} className={field} value={form.bankAccountType || ''} onChange={(event) => set({ bankAccountType: event.target.value })}>{ACCOUNT_TYPES.map(([value, label]) => <option key={value || 'none'} value={value}>{label}</option>)}</Select></label>
         <label className="block space-y-1.5 text-sm"><span className="block">Número de cuenta</span><input className={field} value={form.bankAccountNumber || ''} maxLength={40} onChange={(event) => set({ bankAccountNumber: event.target.value })} /></label>
       </div>
+      {clients.length > 0 && <label className="block space-y-1.5 text-sm"><span>Vínculo con cliente existente</span><Select className={field} value={form.clientId || ''} onChange={event => set({clientId:event.target.value || null})}><option value="">Sin vínculo</option>{clients.map(client => <option key={client.clientId} value={client.clientId}>{client.name}</option>)}</Select></label>}
+      {team.length > 0 && <label className="block space-y-1.5 text-sm"><span>Vínculo con persona del equipo</span><Select className={field} value={form.teamMemberId || ''} onChange={event => set({teamMemberId:event.target.value || null})}><option value="">Sin vínculo</option>{team.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</Select></label>}
       <label className="block space-y-1.5 text-sm"><span className="block">Notas <span className="text-zinc-400">(opcional)</span></span><textarea className={field} rows={2} maxLength={500} value={form.notes || ''} onChange={(event) => set({ notes: event.target.value })} /></label>
       {thirdParty?.id && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={form.isActive !== false} onChange={(event) => set({ isActive: event.target.checked })} /><span>Activo. Un tercero desactivado conserva sus cuentas pero no aparece al registrar una nueva.</span></label>}
       {shown && <p role="alert" className="text-sm text-destructive brain-destructive-text">{shown}</p>}

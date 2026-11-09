@@ -12,6 +12,7 @@ import { FINANCIAL_CATEGORY_OPTIONS } from './financialCategories.js';
 // se hace en casa, como la contabilidad), el equipo, el arrendador o un socio. `role` es como se nombra en
 // Terceros, donde la fila ya dice que es de un tercero.
 export const THIRD_PARTY_KINDS = Object.freeze([
+    { value: 'CLIENTE', label: 'Cliente' },
     { value: 'PROVEEDOR', label: 'Proveedor' },
     { value: 'CONTRATISTA', label: 'Contratista' },
     { value: 'OUTSOURCING', label: 'Outsourcing' },
@@ -44,6 +45,7 @@ const text = (value) => String(value ?? '').trim();
 
 export const isThirdPartyKind = (value) => THIRD_PARTY_KINDS.some((item) => item.value === value);
 export const thirdPartyKindLabel = (value) => THIRD_PARTY_KINDS.find((item) => item.value === value)?.label || 'Tercero';
+export const thirdPartyRoles = (party = {}) => [...new Set([party.kind, ...(Array.isArray(party.roles) ? party.roles : [])].filter(isThirdPartyKind))];
 export const payableStatusLabel = (value) => PAYABLE_STATUSES.find((item) => item.value === value)?.label || value;
 export const isPayableCategory = (value) => PAYABLE_CATEGORY_OPTIONS.some(([category]) => category === value);
 export const isPayableClosed = (status) => ['PAGADA', 'SALDADA', 'ANULADA'].includes(status);

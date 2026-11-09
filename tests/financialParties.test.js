@@ -69,7 +69,7 @@ test('contratista y outsourcing son roles propios y cuentan con quienes prestan 
     assert.equal(partyRoleLabel('CONTRATISTA'), 'Contratista');
     assert.equal(partyRoleLabel('OUTSOURCING'), 'Outsourcing');
     // Una sola lista: los roles de Terceros salen de las clases de tercero, más cliente y cliente potencial.
-    assert.deepEqual(PARTY_ROLES.map((role) => role.value), ['CLIENTE', 'CLIENTE_POTENCIAL', ...THIRD_PARTY_KINDS.map((kind) => kind.value)]);
+    assert.deepEqual(PARTY_ROLES.map((role) => role.value), [...new Set(['CLIENTE', 'CLIENTE_POTENCIAL', ...THIRD_PARTY_KINDS.map((kind) => kind.value)])]);
 });
 
 test('se filtra por rol, por estado y por búsqueda, también en la ficha de pago', () => {

@@ -2547,6 +2547,10 @@ model FinancialAccount {
 // aditivas con `scripts/ensure-accounts-payable-schema.js`.
 model ThirdParty {
   id                String            @id @default(uuid())
+  roles             String[]          @default([])
+  mergedIntoId      String?
+  mergedInto        ThirdParty? @relation("PartyMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom        ThirdParty[] @relation("PartyMerge")
   kind              String // PROVEEDOR, CONTRATISTA, OUTSOURCING, COLABORADOR, ARRENDADOR, SOCIO (src/lib/accountsPayable.js)
   name              String
   legalName         String?

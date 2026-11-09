@@ -1,3 +1,4 @@
+import PartyMergeDialog from './PartyMergeDialog';
 import React, { useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useOriginState } from '@/components/layout/BackToOrigin';
@@ -239,7 +240,7 @@ export default function FinancialPartiesDirectory({
                             <DropdownMenuItem onSelect={() => setDialog({ kind: 'client', client: null })}>Cliente</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {/* A quienes se les paga: un cliente potencial nace de una cotización, no se crea aquí. */}
-                            {THIRD_PARTY_KINDS.map((item) => (
+                            {THIRD_PARTY_KINDS.filter(item => item.value !== 'CLIENTE').map((item) => (
                                 <DropdownMenuItem key={item.value} onSelect={() => setDialog({ kind: 'third-party', thirdParty: { kind: item.value } })}>{item.role || item.label}</DropdownMenuItem>
                             ))}
                         </DropdownMenuContent>
@@ -247,6 +248,7 @@ export default function FinancialPartiesDirectory({
                 )}
             </FinancialSectionHeader>
 
+            {canWriteFinancials && <div className="flex justify-end"><button type="button" className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm dark:border-white/10" onClick={() => setDialog({kind:'merge'})}>Revisar fichas duplicadas</button></div>}
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-party-summary>
                 <FinancialSummaryCard label="Total" value={summary.total} hint={summary.unlinked ? `Y ${summary.unlinked} nombre${summary.unlinked === 1 ? '' : 's'} del Excel por vincular` : 'Con ficha'} />
                 <FinancialSummaryCard label="Clientes" value={summary.clients} hint={summary.prospects ? `Y ${summary.prospects} potencial${summary.prospects === 1 ? '' : 'es'}` : 'Se les cobra'} />
@@ -512,12 +514,13 @@ export default function FinancialPartiesDirectory({
                 )}
             </Card>
 
+            {dialog?.kind === 'merge' && <PartyMergeDialog onClose={closeDialog} />}
             {dialog?.kind === 'client' && (
                 <ClientProfileDialog open client={dialog.client} initialName={dialog.initialName} initialProfile={dialog.initialProfile}
                     onClose={closeDialog} onSaved={dialog.prospect ? handleProspectClientSaved : handleClientSaved} />
             )}
             {dialog?.kind === 'third-party' && (
-                <ThirdPartyDialog open thirdParty={dialog.thirdParty} saving={saving} error={dialogError} onClose={closeDialog} onSubmit={saveThirdParty} />
+                <ThirdPartyDialog clients={rows.filter(row => row.clientId)} team={team} open thirdParty={dialog.thirdParty} saving={saving} error={dialogError} onClose={closeDialog} onSubmit={saveThirdParty} />
             )}
         </div>
     );

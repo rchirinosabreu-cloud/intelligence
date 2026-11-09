@@ -1,7 +1,7 @@
 // Las filas de la pestaña Clientes de Financiero (30 de septiembre de 2026): el directorio
 // —todas las fichas, con o sin movimientos, archivadas incluidas— unido a la conciliación
 // —lo que suma cada cliente y las etiquetas que solo existen en el Excel—.
-import { SERVICE_PROVIDER_KINDS, THIRD_PARTY_KINDS } from './accountsPayable.js';
+import { SERVICE_PROVIDER_KINDS, THIRD_PARTY_KINDS, thirdPartyRoles } from './accountsPayable.js';
 
 const normalizeText = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -71,7 +71,7 @@ export const PARTY_ROLES = Object.freeze([
     { value: 'CLIENTE', label: 'Cliente' },
     // Quien recibió una cotización y todavía no tiene ficha de cliente (punto 1 de la solicitud de Elisa).
     { value: 'CLIENTE_POTENCIAL', label: 'Cliente potencial' },
-    ...THIRD_PARTY_KINDS.map((kind) => ({ value: kind.value, label: kind.role || kind.label }))
+    ...THIRD_PARTY_KINDS.filter(kind => kind.value !== 'CLIENTE').map((kind) => ({ value: kind.value, label: kind.role || kind.label }))
 ]);
 export const partyRoleLabel = (value) => PARTY_ROLES.find((role) => role.value === value)?.label || value;
 
@@ -103,10 +103,10 @@ export const buildPartyRows = (clientRows = [], thirdParties = [], commercial = 
             || (documentKey(thirdParty.documentNumber) && byDocument.get(documentKey(thirdParty.documentNumber)));
         if (match && !match.thirdParty) {
             match.thirdParty = thirdParty;
-            match.roles = [...match.roles, thirdParty.kind];
+            match.roles = [...new Set([...match.roles, ...thirdPartyRoles(thirdParty)])];
             continue;
         }
-        rows.push({ sourceId: `tercero:${thirdParty.id}`, clientId: null, name: thirdParty.name, slug: null, profile: null, income: 0, receivable: 0, recordCount: 0, quotations: [], prospect: null, teamMember: null, thirdParty, roles: [thirdParty.kind], unlinked: false });
+        rows.push({ sourceId: `tercero:${thirdParty.id}`, clientId: null, name: thirdParty.name, slug: null, profile: null, income: 0, receivable: 0, recordCount: 0, quotations: [], prospect: null, teamMember: null, thirdParty, roles: thirdPartyRoles(thirdParty), unlinked: false });
     }
     // El equipo (26 de octubre de 2026): cada persona activa de Equipo es un tercero con el rol Colaborador, sin
     // registrarla a mano. Su ficha de pago es la ligada a ella (`teamMemberId`) o, si no hay, una de colaborador sin
