@@ -11,6 +11,8 @@ import ContractContinuityDecision from '@/components/modules/Clients/operations/
 import { noticeResponsePolicy, noticeAllows } from '@/lib/alertResponsePolicy';
 import AnnouncementPreview from './AnnouncementPreview';
 import { announcementRequest, openAnnouncementPreview } from '@/lib/announcementApi';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
+import { bogotaDateKey } from '@/lib/crmNextFollowUp';
 
 // Avisos importantes: tarjeta inferior con halo suave, por encima del menú. Un aviso
 // a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
@@ -58,6 +60,11 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState(null);
   const [reason, setReason] = useState('');
+  const [nextAction, setNextAction] = useState('');
+  const [nextFollowUpAt, setNextFollowUpAt] = useState('');
+  const scheduleRequest = useRef(null);
+  const scheduleRevision = useRef(null);
+  const changeSchedule = (setter, value) => { setter(value); scheduleRequest.current = crypto.randomUUID(); };
   const contentRef = useRef(null);
   const bandRef = useRef(null);
   useEffect(() => {
@@ -79,7 +86,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   useEffect(() => {
     if (previousMode.current === mode) return;
     previousMode.current = mode;
-    const selector = mode === 'base' ? `[data-notice-action="${returnAction.current}"]` : 'button:not([disabled])';
+    const selector = mode === 'base' ? `[data-notice-action="${returnAction.current}"]` : mode === 'schedule' ? 'textarea' : 'button:not([disabled])';
     if (mode !== 'base' || restoreFocus.current) contentRef.current?.querySelector(selector)?.focus({ preventScroll: true });
   }, [mode]);
   const policy = noticeResponsePolicy(notice);
@@ -99,8 +106,21 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   const isPlan = policy?.family === 'PLAN';
   const isAd = policy?.family === 'ADS';
   const isOperational = policy?.family === 'OPERATION';
-  const selectOutcome = value => { setOutcome(value); setReason(''); openOptions('confirm', value === NOTICE_ARCHIVE_OUTCOME ? 'archive' : 'close'); };
-  const needsReason = ['PERDIDO', 'DESCARTADO'].includes(outcome);
+  const selectOutcome = (value, action) => {
+    // Descartar es una decisión directa pedida por Comercial; conserva revisión e historial nativos.
+    if (value === 'DESCARTADO') {
+      decide('close', { outcome: value, confirmed: true, expectedUpdatedAt: notice.sourceRevision }, 'Oportunidad descartada');
+      return;
+    }
+    setOutcome(value); setReason(''); openOptions('confirm', action || (value === NOTICE_ARCHIVE_OUTCOME ? 'archive' : 'close'));
+  };
+  const openSchedule = () => {
+    scheduleRequest.current = crypto.randomUUID();
+    scheduleRevision.current = notice.sourceRevision;
+    setNextAction(notice.followUpPlan?.action || ''); setNextFollowUpAt(notice.followUpPlan?.date || '');
+    openOptions('schedule', 'schedule-follow-up');
+  };
+  const needsReason = outcome === 'PERDIDO';
   const outcomeLabel = outcome === NOTICE_ARCHIVE_OUTCOME ? 'Archivar oportunidad' : REVIEW_OUTCOMES.find(item => item.value === outcome)?.label;
 
   // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
@@ -122,6 +142,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
     if (mode === 'base') return undefined;
     const onKey = (event) => { if (event.key === 'Escape') setMode('base'); };
     const onPointer = (event) => {
+      if (mode === 'schedule' && event.target.closest?.('#brain-datepicker-portal')) return;
       if (!contentRef.current?.contains(event.target)) {
         restoreFocus.current = false; // El clic exterior conserva el foco donde la persona decidió ir.
         setMode('base');
@@ -186,6 +207,18 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
             <p>{outcome === NOTICE_ARCHIVE_OUTCOME ? 'Se archivará la oportunidad, conservando sus datos e historial.' : 'Se guardará este resultado en la oportunidad del CRM para todo el equipo.'}</p>
             {needsReason && <label className="block">Motivo de la decisión<textarea aria-label="Motivo de la decisión" value={reason} onChange={event => setReason(event.target.value)} maxLength={1000} rows={2} disabled={busy} className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm" /></label>}
           </div>}
+          {mode === 'schedule' && <div className="mb-4 space-y-3 text-sm">
+            <p className="font-semibold">Próximo seguimiento</p>
+            <label className="block">¿Qué se hará?<textarea aria-label="Acción del próximo seguimiento" value={nextAction}
+              onChange={event => changeSchedule(setNextAction, event.target.value)} maxLength={1000} rows={2} disabled={busy}
+              placeholder="Por ejemplo: llamar para revisar la propuesta"
+              className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm" /></label>
+            <label className="block" htmlFor="notice-next-follow-up">Fecha del próximo seguimiento</label>
+            <BrainDatePicker id="notice-next-follow-up" ariaLabel="Fecha del próximo seguimiento" value={nextFollowUpAt}
+              onChange={value => changeSchedule(setNextFollowUpAt, value)} disabled={busy}
+              min={bogotaDateKey(new Date(Date.now() + 86400000))} />
+            <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">Se guardará en la oportunidad para el equipo. El aviso volverá ese día a las 8:00 a. m. (Bogotá). Esto no registra una gestión realizada.</p>
+          </div>}
           <div className="flex flex-wrap gap-2" role="group" aria-label={mode === 'base' ? 'Acciones del aviso' : 'Opciones del aviso'} aria-busy={busy}>
             {mode === 'base' && (
               <>
@@ -215,6 +248,8 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
               </NoticeButton>
                 )}
                 {/* El resultado es de la oportunidad, no un cierre genérico de la tarjeta. */}
+                {noticeAllows(notice, 'schedule-follow-up') && <NoticeButton disabled={busy} data-notice-action="schedule-follow-up" onClick={openSchedule}>Próximo seguimiento</NoticeButton>}
+                {isCrm && noticeAllows(notice, 'close') && <NoticeButton disabled={busy || !notice.sourceRevision} data-notice-action="discard" onClick={() => selectOutcome('DESCARTADO', 'discard')}>Descartar</NoticeButton>}
                 {noticeAllows(notice, 'close') && (
                   <NoticeButton disabled={busy} data-notice-action="close" onClick={() => openOptions('close', 'close')}>
                     Resolver oportunidad
@@ -254,6 +289,14 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
               <NoticeButton primary disabled={busy || (needsReason && !reason.trim()) || !notice.sourceRevision}
                 onClick={() => decide('close', { outcome, confirmed: true, reason, expectedUpdatedAt: notice.sourceRevision }, 'Decisión registrada en el CRM')}>Confirmar decisión</NoticeButton>
               {!notice.sourceRevision && <p role="alert" className="text-xs text-destructive">Actualiza el aviso para confirmar sobre la oportunidad vigente.</p>}
+            </>}
+            {mode === 'schedule' && <>
+              <NoticeButton disabled={busy} onClick={() => setMode('base')}>Volver</NoticeButton>
+              <NoticeButton primary disabled={busy || !nextAction.trim() || !nextFollowUpAt || !scheduleRevision.current}
+                onClick={() => decide('schedule-follow-up', { nextAction, nextFollowUpAt, confirmed: true,
+                  expectedUpdatedAt: scheduleRevision.current, requestId: scheduleRequest.current }, 'Próximo seguimiento guardado en el CRM')}>
+                {busy ? 'Programando…' : 'Programar seguimiento'}
+              </NoticeButton>
             </>}
             {mode === 'snooze' && SNOOZE_OPTIONS.map((option) => (
               <NoticeButton key={option.value} disabled={busy} data-notice-snooze={option.value}

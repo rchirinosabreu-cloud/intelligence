@@ -8,10 +8,11 @@ const authHeaders = () => {
 };
 
 /** Every CRM request goes through here so errors carry the server message. */
-export async function crmRequest(path, { method = 'GET', body, params } = {}) {
+export async function crmRequest(path, { method = 'GET', body, params, signal } = {}) {
   const query = params ? new URLSearchParams(activeCrmFilters(params)).toString() : '';
   const url = `${getApiBaseUrl()}/api/crm${path}${query ? `?${query}` : ''}`;
   const response = await fetch(url, {
+    signal,
     method,
     cache: 'no-store',
     headers: { ...authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) },

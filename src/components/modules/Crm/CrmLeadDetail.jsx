@@ -94,7 +94,7 @@ const CrmLeadDetail = () => {
   const confirmLost = async () => {
     try {
       await changeStage.mutateAsync({ id: lead.id, stage: losing.stage, lostReason: losing.lostReason });
-      toast.success('Oportunidad cerrada como perdida');
+      toast.success('Se registró que el cliente no aprobó');
       setLosing(null);
     } catch (mutationError) {
       toast.error(mutationError.message);
@@ -296,7 +296,7 @@ const CrmLeadDetail = () => {
               <Row label="Propuesta enviada">{lead.proposalSentAt ? formatDate(lead.proposalSentAt) : null}</Row>
               <Row label="Última gestión">{lead.lastActivityAt ? formatDateTime(lead.lastActivityAt) : null}</Row>
               <Row label="Cierre">{lead.closedAt ? formatDate(lead.closedAt) : null}</Row>
-              {lead.lostReason && <Row label="Motivo de pérdida">{lead.lostReason}</Row>}
+              {lead.lostReason && <Row label="Motivo de no aprobación">{lead.lostReason}</Row>}
             </dl>
           </Panel>
 
@@ -340,16 +340,16 @@ const CrmLeadDetail = () => {
       <Dialog open={Boolean(losing)} onOpenChange={open => { if (!open) setLosing(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cerrar como perdida</DialogTitle>
-            <DialogDescription>El motivo queda en la bitácora y sirve para medir por qué se pierden oportunidades.</DialogDescription>
+            <DialogTitle>Cliente no aprobó</DialogTitle>
+            <DialogDescription>El motivo queda en la bitácora para conservar por qué el cliente no aprobó la oportunidad.</DialogDescription>
           </DialogHeader>
           <div>
-            <label className={labelClass} htmlFor="crm-lost-reason">Motivo de pérdida</label>
+            <label className={labelClass} htmlFor="crm-lost-reason">Motivo de no aprobación</label>
             <textarea id="crm-lost-reason" rows={3} autoFocus value={losing?.lostReason || ''} onChange={event => setLosing({ ...losing, lostReason: event.target.value })} className={cn(inputClass, 'resize-y')} placeholder="Ej. Eligieron otra agencia por precio." />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setLosing(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmLost} disabled={!losing?.lostReason?.trim() || changeStage.isPending}>Cerrar como perdida</Button>
+            <Button variant="destructive" onClick={confirmLost} disabled={!losing?.lostReason?.trim() || changeStage.isPending}>Confirmar cierre</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

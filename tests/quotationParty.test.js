@@ -14,6 +14,12 @@ import { buildPartyRows, filterPartyRows, isPartyActive, partyContact, summarize
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('cliente no aprobó cierra el prospecto para cotizaciones y el directorio sin confundirlo con un cliente activo', () => {
+    assert.equal(isOpenLead({ stage: 'PERDIDO' }), false);
+    assert.equal(isPartyActive({ prospect: { stage: 'PERDIDO' } }), false);
+    assert.equal(isPartyActive({ clientId: 'client', profile: { isArchived: false }, prospect: { stage: 'PERDIDO' } }), true);
+});
+
 test('what a quotation says about its client, normalized', () => {
     assert.deepEqual(quotationParty({ client_company: ' Titanes S.A.S. ', client_name: 'Juan', client_email: 'JUAN@Titanes.co ', client_phone: '300' }), {
         company: 'Titanes S.A.S.', contactName: 'Juan', email: 'juan@titanes.co', phone: '300', name: 'Titanes S.A.S.', nameKey: 'titanes sas'

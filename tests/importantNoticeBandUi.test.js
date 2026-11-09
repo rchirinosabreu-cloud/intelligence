@@ -31,15 +31,15 @@ test('tarjeta con halo suave, encima del menú y debajo de los diálogos', () =>
 
 test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» siempre al final', () => {
     const base = band.slice(band.indexOf("{mode === 'base' && ("), band.indexOf("{mode === 'channels' && FOLLOW_UP_CHANNELS"));
-    const order = ['data-notice-action="follow-up"', 'data-notice-action="close"', 'data-notice-action="open"', 'data-notice-action="archive"', 'data-notice-action="snooze"']
+    const order = ['data-notice-action="follow-up"', 'data-notice-action="schedule-follow-up"', 'data-notice-action="discard"', 'data-notice-action="close"', 'data-notice-action="open"', 'data-notice-action="archive"', 'data-notice-action="snooze"']
         .map((marker) => base.indexOf(marker));
     assert.ok(order.every((index) => index >= 0));
     assert.deepEqual([...order].sort((a, b) => a - b), order);
     assert.match(base, /<NoticeButton disabled=\{busy\} data-notice-action="open"/, '«Abrir» es un botón como los demás, no un enlace');
     assert.match(band, /aria-label="Motivo de la decisión"/);
-    // En la revisión: «Ya hice seguimiento», «No sigue» y «Recordarme»; sin «Abrir». «Cerrar» se confundía con cerrar el
-    // aviso y «Descartar» elegía de antemano una de las dos etapas.
-    assert.doesNotMatch(band.slice(band.indexOf('isOperational ? (')), /Sigue: ya hice seguimiento|Cerrar como perdida|>\s*Cerrar\s*<|>\s*Descartar\s*</); // Cerrar existe solo en anuncios, no en CRM.
+    // Descartar es ahora un acceso directo pedido por Comercial; conserva motivo y confirmación.
+    assert.doesNotMatch(band.slice(band.indexOf('isOperational ? (')), /Sigue: ya hice seguimiento|Cerrar como perdida|>\s*Cerrar\s*</);
+    assert.match(base, /isCrm && noticeAllows\(notice, 'close'\).*selectOutcome\('DESCARTADO', 'discard'\)/);
     assert.match(base, />\s*Resolver oportunidad\s*</);
     assert.match(band, /¿Qué resultado confirmó el cliente o el equipo\?/);
     assert.match(band, /mode === 'close' && REVIEW_OUTCOMES\.map/);

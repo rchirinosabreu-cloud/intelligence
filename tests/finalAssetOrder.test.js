@@ -120,7 +120,9 @@ test('the route, the card and the publisher agree on the order', () => {
   assert.match(media, /\.animate\(/);
   assert.match(media, /prefers-reduced-motion/);
   // An image is draggable by itself: without this the browser drags the picture, not the thumbnail.
-  assert.match(media, /<img[^>]*draggable=\{false\}/);
+  const preview = readFileSync('src/components/modules/ContentPlan/FinalMediaPreview.jsx', 'utf8');
+  assert.match(media, /<FinalMediaPreview/);
+  assert.match(preview, /<img[^>]*draggable=\{false\}/);
   // Whoever cannot drag moves it with the arrow keys from the position badge.
   assert.match(media, /moveAssetId\(/);
   assert.match(media, /ArrowLeft/);

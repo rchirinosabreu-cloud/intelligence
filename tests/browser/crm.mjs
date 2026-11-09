@@ -19,7 +19,7 @@ const open = async (variant, path) => {
   page.setDefaultNavigationTimeout(60000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(`${preview.origin}${path}${variant.dark ? (path.includes('?') ? '&dark' : '?dark') : ''}`);
+  await page.goto(`${preview.origin}${path}${variant.dark ? (path.includes('?') ? '&dark' : '?dark') : ''}`, { waitUntil: 'domcontentloaded' });
   return { page, errors };
 };
 
@@ -59,7 +59,8 @@ test('desktop: logging a client answer updates the timeline, the next step and t
     // The one calendar of the platform: react-datepicker with the brain skin and the hour column.
     await page.getByLabel('Fecha y hora').click();
     await page.locator('.brain-datepicker [data-brain-time-column]').waitFor();
-    assert.equal(await page.locator('.brain-datepicker .react-datepicker__current-month').innerText(), 'septiembre 2026');
+    const currentMonth = await page.evaluate(() => new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric', timeZone: 'America/Bogota' }).format(new Date()).replace(' de ', ' '));
+    assert.equal(await page.locator('.brain-datepicker .react-datepicker__current-month').innerText(), currentMonth);
     await page.screenshot({ path: 'output/crm/desktop-light-calendario.png' });
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('input[type="date"], input[type="datetime-local"]').count(), 0, 'no native date fields anywhere on the sheet');
@@ -68,7 +69,8 @@ test('desktop: logging a client answer updates the timeline, the next step and t
     await page.getByPlaceholder('Ej. Llamé a Catalina, revisamos el alcance del RFP.').fill('Víctor devolvió la llamada.');
     await page.getByPlaceholder('Ej. Enviará el RFP esta semana.').fill('Aprueba el alcance y pide dos cuotas.');
     await page.getByPlaceholder('Qué toca hacer después').fill('Enviar propuesta ajustada.');
-    await page.getByLabel('Próximo seguimiento').fill('22/09/2026');
+    const nextDay = await page.evaluate(() => new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Bogota' }).format(new Date(Date.now() + 86400000)));
+    await page.getByLabel('Próximo seguimiento').fill(nextDay);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Registrar gestión' }).click();
     await page.getByText('Gestión registrada').waitFor();
@@ -108,14 +110,35 @@ test('desktop: losing a lead asks for the reason and records the stage change', 
   try {
     await page.getByRole('heading', { name: 'Visit Milwaukee' }).waitFor();
     await page.getByRole('combobox', { name: 'Etapa comercial' }).click();
-    await page.getByRole('option', { name: 'Perdido' }).click();
+    await page.getByRole('option', { name: 'Cliente no aprobó' }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByText('Cerrar como perdida').first().waitFor();
+    await dialog.getByText('Cliente no aprobó').first().waitFor();
     await dialog.getByPlaceholder('Ej. Eligieron otra agencia por precio.').fill('No respondieron a la convocatoria.');
-    await dialog.getByRole('button', { name: 'Cerrar como perdida' }).click();
-    await page.getByText('Oportunidad cerrada como perdida').waitFor();
+    await dialog.getByRole('button', { name: 'Confirmar cierre' }).click();
+    await page.getByText('Se registró que el cliente no aprobó').waitFor();
     await page.locator('[data-crm-timeline]').getByText('No respondieron a la convocatoria.').waitFor();
-    assert.match(await page.locator('main').innerText(), /Motivo de pérdida/);
+    assert.match(await page.locator('main').innerText(), /Motivo de no aprobación/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('cliente no aprobó renombra el estado perdido legado sin duplicarlo', async () => {
+  const { page, errors } = await open({ width: 1440, height: 1100 }, '/crm/oportunidades/lead-salsipuedes');
+  try {
+    const selector = page.getByRole('combobox', { name: 'Etapa comercial' });
+    await selector.getByText('Cliente no aprobó', { exact: true }).waitFor();
+    await selector.click();
+    await page.getByRole('option', { name: 'Cliente no aprobó', exact: true }).waitFor();
+    await page.keyboard.press('End');
+    await page.getByRole('option', { name: 'Cliente no aprobó', exact: true }).focus();
+    assert.equal(await page.getByRole('option', { name: 'Cliente no aprobó', exact: true }).count(),1);
+    assert.equal(await page.getByRole('option', { name: 'Perdido', exact: true }).count(),0);
+    await page.screenshot({ path: 'output/crm/cliente-no-aprobo-selector.png', animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await page.getByRole('combobox', { name: 'Etapa comercial' }).getByText('Cliente no aprobó', { exact: true }).waitFor();
+    await page.getByText('Eligieron una agencia local por presupuesto.', { exact: true }).first().waitFor();
+    await page.screenshot({ path: 'output/crm/cliente-no-aprobo-guardado.png' });
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
