@@ -327,3 +327,20 @@ test('las rutas: la verificación de Meta, el aviso firmado sobre los bytes orig
     assert.equal(repository.links.has('u-camila'), false);
   } finally { await close(); }
 });
+
+test('the spend pilot accepts text only from the linked owner', async () => {
+  const { service, conversations, repository, sent } = build({
+    env: { ...ENV, BRIA_SPEND_PILOT: 'true', BRIA_SPEND_PILOT_USER_ID: camila.id },
+    users: { [camila.id]: camila, other: { ...camila, id: 'other' } }
+  });
+  repository.links.set(camila.id, { userId: camila.id, waId: '573001234567', conversationId: null });
+  repository.links.set('other', { userId: 'other', waId: '573009876543', conversationId: null });
+  const blocked = await service.processMessage({ messageId: 'other', from: '573009876543', text: 'Hola' });
+  assert.equal(blocked.outcome, 'not-allowed');
+  assert.match(sent.at(-1).body.text.body, /cuenta autorizada/);
+  const allowed = await service.processMessage({ messageId: 'owner', from: '573001234567', text: 'Hola' });
+  assert.equal(allowed.outcome, 'answered');
+  assert.equal(conversations.calls.length, 1);
+  assert.equal(conversations.calls[0].user.userId, camila.id);
+  assert.equal(conversations.calls[0].session.channel, 'whatsapp');
+});

@@ -132,3 +132,31 @@ test('the source reading day reaches decision tools even when the model omits th
   await service.ask({ user: actor(), question: 'La 2 ya la hice', readingDay: '2026-10-22' });
   assert.equal(seen.dia, '2026-10-22', 'una lectura anterior no se convierte en la última por omitir el modelo el día');
 });
+
+test('the web pilot grants model access only to the configured Intelligence account', async t => {
+  const previous = { enabled: process.env.BRIA_SPEND_PILOT, owner: process.env.BRIA_SPEND_PILOT_USER_ID };
+  t.after(() => {
+    for (const [name, value] of [['BRIA_SPEND_PILOT', previous.enabled], ['BRIA_SPEND_PILOT_USER_ID', previous.owner]]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  process.env.BRIA_SPEND_PILOT = 'true';
+  process.env.BRIA_SPEND_PILOT_USER_ID = 'u';
+  let calls = 0;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async ({ where }) => ({ ...row(), id: where.id }) } },
+    tools: [], mail: null, vault: null,
+    ai: { generate: async (request) => {
+      calls++;
+      assert.equal(request.model, 'gpt-6-luna');
+      assert.equal(request.reasoningEffort, 'low');
+      return { text: 'Hola.' };
+    } }
+  });
+  await assert.rejects(service.ask({ user: { ...actor(), userId: 'other' }, question: 'Hola' }), { code: 'BRIA_PILOT_SCOPE' });
+  assert.equal(calls, 0);
+  const result = await service.ask({ user: actor(), question: 'Hola' });
+  assert.equal(result.answer, 'Hola.');
+  assert.ok(calls > 0);
+});

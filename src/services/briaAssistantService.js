@@ -14,6 +14,7 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { getApplicationKnowledgeService } from './briaKnowledgeApplication.js';
 import { createKnowledgeTools } from './briaKnowledgeTools.js';
 import { searchAgencyMemory, readAgencyMemory } from './briaLivingService.js';
+import { assertBriaPilotOwner } from './briaSpendPilot.js';
 import { createBriaModelRuntime } from './briaModelRuntime.js';
 import { conversationChoiceTool } from './briaConversationTools.js';
 import { createBriaTaskTools } from './briaTaskTools.js';
@@ -109,6 +110,7 @@ export const createBriaAssistantService = ({
       const client = typeof ai === 'function' ? ai() : ai;
       if (!client) throw httpError(503, 'Bria no está disponible en este momento.', 'OPENAI_NOT_AVAILABLE');
       const person = await loadPerson(user);
+      assertBriaPilotOwner(person.userId);
       const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;
       const remembered = typeof knowledge === 'function' ? knowledge() : knowledge;
       const diary = typeof notebook === 'function' ? notebook() : notebook;
@@ -126,7 +128,7 @@ export const createBriaAssistantService = ({
         channel: session?.channel === 'whatsapp' ? 'whatsapp' : 'plataforma',
         // Las manos de la plataforma usan la sesión del navegador: por WhatsApp no la hay y no se ofrecen (22 de octubre de 2026).
         tools: [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
-        ai: createBriaModelRuntime({ ai: client, user }),
+        ai: createBriaModelRuntime({ ai: client, user, pilotChat: { userId: person.userId, channel: session?.channel === 'whatsapp' ? 'whatsapp' : 'web' } }),
         today: bogotaDate(now()),
         logger,
         onEvent,

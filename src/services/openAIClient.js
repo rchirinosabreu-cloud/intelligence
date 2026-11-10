@@ -1,3 +1,4 @@
+import { briaPilotEnabled } from './briaSpendPilot.js';
 import { createGovernedFetch } from './aiEgress.js';
 
 const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
@@ -376,6 +377,7 @@ export const createOpenAIClient = ({
       return payload.text.trim();
     },
     async healthCheck() {
+      if (briaPilotEnabled()) throw new OpenAIRequestError('La prueba de generación está desactivada durante el piloto.', { code: 'BRIA_PILOT_SCOPE', status: 403 });
       const startedAt = Date.now();
       // The only ungoverned probe has fixed content, with no caller-controlled input.
       const { payload, requestId } = await request('/responses', {

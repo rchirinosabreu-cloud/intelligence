@@ -1,3 +1,4 @@
+import { briaPilotEnabled } from './briaSpendPilot.js';
 import aiConfig from '../config/aiConfig.js';
 import { createOpenAIClient } from './openAIClient.js';
 
@@ -32,6 +33,11 @@ export const BrainstudioAI = {
 
         try {
             aiClient = createOpenAIClient({ apiKey: aiConfig.apiKey, models: aiConfig.models });
+            if (briaPilotEnabled()) {
+                // A startup completion has no owner or reservation.
+                this.isReady = true;
+                return aiClient;
+            }
             console.log(`[BrainstudioAI] Verificando OpenAI con el modelo rápido ${aiConfig.models.fast}...`);
             const health = await aiClient.healthCheck();
             if (!health.ok) throw new Error('OpenAI no devolvió contenido en la comprobación.');

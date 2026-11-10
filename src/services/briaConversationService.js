@@ -1,3 +1,4 @@
+import { assertBriaPilotOwner, briaPilotEnabled } from './briaSpendPilot.js';
 import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
@@ -62,6 +63,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
     },
     async transcribe(user, file) {
       await authorizeInput(user);
+      if (briaPilotEnabled()) throw knowledgeError('En este piloto, envía el mensaje como texto.', 403, 'BRIA_PILOT_SCOPE');
       if (!file?.buffer?.length || file.buffer.length > BRIA_AUDIO_MAX_BYTES || !/^(audio\/(webm|ogg|wav|x-wav|mpeg|mp4)|video\/(webm|mp4))(;.*)?$/.test(file.mimetype || '')) throw knowledgeError('Graba un audio compatible de hasta 20 MB.');
       const client = typeof ai === 'function' ? ai() : ai;
       if (!client?.transcribe) throw knowledgeError('La transcripción no está disponible ahora.', 503);
@@ -86,7 +88,9 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
       if (String(question || '').length > MAX_QUESTION_LENGTH) throw knowledgeError('Divide el mensaje en partes de hasta 12.000 caracteres.');
       if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) throw knowledgeError('La revisión de la conversación no es válida.');
       const text = normalizeQuestion(question) || (files.length ? 'Analiza los archivos adjuntos.' : ''); if (!text) throw knowledgeError('Escribe un mensaje.');
-      const actor = await resolveActor(user), key = `${actor.ref}:${id}`;
+      const actor = await resolveActor(user);
+      assertBriaPilotOwner(user?.userId || user?.id);
+      const key = `${actor.ref}:${id}`;
       if (pending.has(key)) throw knowledgeError('Bria está respondiendo en esta conversación.', 409);
       pending.add(key);
       try {

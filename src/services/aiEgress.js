@@ -1,3 +1,4 @@
+import { assertBriaPilotRequest, briaPilotEnabled } from './briaSpendPilot.js';
 import { getGovernanceService } from './aiGovernanceService.js';
 import { governanceError } from '../lib/aiGovernance.js';
 import { currentAiContext } from '../lib/aiRequestContext.js';
@@ -9,7 +10,7 @@ import { buildUsageEvent, extractUsage, getAiUsageLog } from './aiUsageLog.js';
 // 2026), without the content; a failing log never breaks the AI call.
 // A destination outside the inventory is rejected and also leaves its BLOCKED row (12 October 2026): only host
 // and path are kept, never the query, credentials in the URL or the body.
-export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = () => Date.now() } = {}) => async (url, options = {}) => {
+export const createGovernedFetch = ({ fetchImpl, governance, usageLog, env = process.env, clock = () => Date.now() } = {}) => async (url, options = {}) => {
   const { governanceContext, reportsStreamUsage, ...outgoing } = options;
   const context = currentAiContext();
   const startedAt = clock();
@@ -52,6 +53,16 @@ export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = (
     throw error;
   }
   options.signal?.throwIfAborted();
+
+  if (provider === 'openai' && briaPilotEnabled(env)) {
+    try {
+      assertBriaPilotRequest({ env, context, endpoint: target.pathname, body });
+      outgoing.body = JSON.stringify({ ...body, service_tier: 'default' });
+    } catch (error) {
+      log({ outcome: 'BLOCKED', errorCode: error.code || 'BRIA_PILOT_SCOPE' });
+      throw error;
+    }
+  }
 
   let response;
   try {

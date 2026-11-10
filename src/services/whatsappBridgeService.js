@@ -1,3 +1,4 @@
+import { assertBriaPilotOwner } from './briaSpendPilot.js';
 // Bria en WhatsApp (Rodny, 20 de octubre de 2026): el puente entre el número de la agencia y el motor de Bria de
 // siempre. Lo que llega por WhatsApp entra a una conversación de Bria de la persona vinculada —con su identidad,
 // sus permisos y las mismas puertas que el chat de la plataforma— y lo que Bria responde sale como texto por la
@@ -229,6 +230,12 @@ export const createWhatsAppBridgeService = ({
     await repository.markInbound?.(link.userId, now());
     const row = await loadUser(link.userId);
     if (!allowed(row)) { await sendText(replyTo(message), REPLIES.notAllowed); return { outcome: 'not-allowed' }; }
+    try {
+      assertBriaPilotOwner(row.id, env);
+    } catch (failure) {
+      await sendText(replyTo(message), failure.message);
+      return { outcome: 'not-allowed' };
+    }
     const medias = message.medias || (message.media ? [message.media] : []);
     if (!message.text && !medias.length) { await sendText(replyTo(message), message.type === 'unsupported' ? REPLIES.unsupported : REPLIES.onlyText); return { outcome: 'only-text' }; }
     await markRead(message.messageId);
@@ -249,7 +256,7 @@ export const createWhatsAppBridgeService = ({
       try { question = [question, (await conversations().transcribe(user, upload)).text].filter(Boolean).join('\n'); }
       catch (failure) {
         logger.warn?.(`[WhatsApp] Nota de voz sin transcribir: ${failure.code || failure.message}`);
-        await sendText(replyTo(message), REPLIES.noSpeech);
+        await sendText(replyTo(message), failure.code === 'BRIA_PILOT_SCOPE' ? failure.message : REPLIES.noSpeech);
         return { outcome: 'no-speech' };
       }
     }
