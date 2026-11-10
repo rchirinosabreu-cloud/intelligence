@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDecisionBoard, observerCategoryLabel, responseProblem, readingVerdictFor, observerActionFor,
-  laterUntil, DISCARD_REASONS, LATER_OPTIONS, learnedObserverKeys, currentWeekStart, openLabel, ownerRouting, listNames
+  laterUntil, DISCARD_REASONS, LATER_OPTIONS, learnedObserverKeys, currentWeekStart, openLabel, ownerRouting, listNames, meetingDriveUrl
 } from '../src/lib/managerDecisions.js';
 
 const NOW = new Date('2026-11-10T15:00:00.000Z'); // martes 10:00 en Bogotá
@@ -217,4 +217,13 @@ test('lo que la reunión marcó como no accionable no pide decisión', () => {
   const board = buildDecisionBoard({ signals: [signal({ metadata: { actionable: false } })], now: NOW });
   assert.equal(board.pending.length, 0);
   assert.equal(board.counts.notActionable, 1);
+});
+test('«Ver la reunión» abre su resumen en Drive; sin Drive queda Minutas', () => {
+  const url = meetingDriveUrl({ sourceKind: 'MEETING_MINUTE', sourceRecordId: 'm1' }, 'Reunión M&N');
+  assert.equal(url, '/drive?folderId=bria-minutes&open=m1&q=Reuni%C3%B3n+M%26N');
+  assert.equal(openLabel(url), 'Ver la reunión');
+  assert.equal(meetingDriveUrl({ sourceKind: 'TASK_ANALYTICS', sourceRecordId: 'x' }), null);
+  const card = buildDecisionBoard({ signals: [signal({ sourceRecordId: 'm1', metadata: { meetingTitle: 'Comité' } })], now: NOW }).pending[0];
+  assert.equal(card.driveUrl, '/drive?folderId=bria-minutes&open=m1&q=Comit%C3%A9');
+  assert.equal(card.url, '/minutas/m1');
 });

@@ -214,6 +214,14 @@ const readingCard = (decision, { signalsById, entry }) => {
   };
 };
 
+/** El resumen de una reunión en Drive: la carpeta de minutas de Bria, buscada por su título y abierta por su id. */
+export const meetingDriveUrl = (signal, meetingTitle = '') => {
+  if (signal?.sourceKind !== 'MEETING_MINUTE' || !signal.sourceRecordId) return null;
+  const params = new URLSearchParams({ folderId: 'bria-minutes', open: signal.sourceRecordId });
+  if (clean(meetingTitle)) params.set('q', clean(meetingTitle).slice(0, 120));
+  return `/drive?${params.toString()}`;
+};
+
 const SHORT_DATE = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
 const observerCard = (signal, clients) => {
   const severity = OBSERVER_SEVERITY[signal.severity] || 1;
@@ -226,6 +234,8 @@ const observerCard = (signal, clients) => {
   return {
     key: `O:${signal.id}`, source: 'OBSERVER', ref: signal.id, title: clean(signal.title), why: clean(signal.suggestedAction) || null,
     quote: clean(signal.evidence) || null, url: signal.sourceUrl || null, actionable: meta.actionable !== false,
+    // «Ver la reunión» abre su resumen en Drive (Rodny, 10 de noviembre de 2026); Minutas queda para quien no tiene Drive.
+    driveUrl: meetingDriveUrl(signal, meeting),
     ask: `Ayúdame con esto que salió en ${meeting ? `la reunión «${meeting}»` : 'una reunión'}: ${clean(signal.title)}${clean(signal.suggestedAction) ? ` Lo sugerido: ${clean(signal.suggestedAction)}` : ''}`,
     subjectName: clients[signal.clientId] || null, owner: clean(meta.owner) || null, kind: null, kindLabel: null,
     categoryLabel: observerCategoryLabel(signal.category, signal.sourceKind), sourceLabel,
@@ -245,7 +255,8 @@ export const currentWeekStart = (now = new Date()) => {
 /** Qué abre el enlace de una tarjeta, dicho en palabras. */
 export const openLabel = (url) => {
   const path = String(url || '');
-  if (path.startsWith('/minutas')) return 'Ver la reunión';
+  if (path.startsWith('/minutas') || path.includes('folderId=bria-minutes')) return 'Ver la reunión';
+  if (path.startsWith('/drive')) return 'Ver en Drive';
   if (path.startsWith('/gestion')) return 'Ver sus tareas';
   if (path.startsWith('/clientes')) return 'Ver la cuenta';
   if (path.startsWith('/parrillas')) return 'Ver la parrilla';
