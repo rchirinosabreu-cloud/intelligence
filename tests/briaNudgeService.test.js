@@ -45,7 +45,7 @@ test('the service reads people from tasks and work sessions: an open collaborato
   const { nudges } = await service.list(pm);
   assert.deepEqual(nudges.map((n) => n.key), ['SIN_PROCESO:m-mel'], 'Kamila (viewer), Brayan (in progress), Helen (own clock) and Rodny are quiet');
   assert.equal(nudges[0].title, 'Melissa no tiene una tarea en proceso desde las 9:45.');
-  assert.deepEqual(nudges[0].actions.map((a) => a.label), ['Ver sus pendientes', 'Resumir sus pendientes']);
+  assert.deepEqual(nudges[0].actions.map((a) => a.label), ['Ver pendientes de Meli', 'Resumen de Meli']);
 });
 
 test('hiding is per viewer and per key until the day ends; the weekly focus shows up as the first nudge', async () => {

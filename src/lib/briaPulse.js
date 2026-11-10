@@ -189,13 +189,24 @@ export const parsePulse = (rawText) => {
   return JSON.parse(matched ? matched[0] : cleaned);
 };
 
-// Las acciones son las del hecho principal (el primero); si el aviso junta dos hechos, se añade el enlace del segundo.
+// Las acciones de un aviso que junta varios hechos (Rodny, 10 de noviembre de 2026: salían tres «Ver sus pendientes»,
+// dos de Kamila y uno de Mariceth, sin decir de quién): primero un enlace por cada hecho —cada uno dice de quién es—,
+// luego lo que se le puede pedir a Bria del hecho principal, sin repetir destino, pedido ni texto. Como mucho cuatro.
+export const MAX_PULSE_ACTIONS = 4;
+const sameAction = (a, b) => (a.to && a.to === b.to) || (a.ask && a.ask === b.ask) || (a.conversationId && a.conversationId === b.conversationId) || a.label === b.label;
+export const composeActions = (facts = []) => {
+  const actions = [];
+  const add = (action) => { if (action && !actions.some((other) => sameAction(other, action))) actions.push(action); };
+  (facts[0]?.actions || []).forEach(add);
+  facts.slice(1).forEach((fact) => add((fact.actions || []).find((action) => action.to)));
+  return actions.slice(0, MAX_PULSE_ACTIONS);
+};
+
 const compose = (facts, { title, body, urgency, source }) => {
-  const actions = [...(facts[0]?.actions || [])];
-  for (const extra of facts.slice(1)) { const link = (extra.actions || []).find((a) => a.to && !actions.some((b) => b.to === a.to)); if (link) actions.push(link); }
+  const actions = composeActions(facts);
   return {
     kinds: [...new Set(facts.map((f) => f.kind))], factIds: facts.map((f) => f.id), fingerprints: facts.map((f) => f.fingerprint),
-    title, body, url: facts.find((f) => f.url)?.url || null, taskIds: [...new Set(facts.flatMap((f) => f.taskIds || []))], urgency, source, actions: actions.slice(0, 3)
+    title, body, url: facts.find((f) => f.url)?.url || null, taskIds: [...new Set(facts.flatMap((f) => f.taskIds || []))], urgency, source, actions
   };
 };
 

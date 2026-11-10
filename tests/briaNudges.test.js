@@ -45,7 +45,7 @@ test('someone with pending work and nothing in progress for 30 minutes gets a so
   for (const kind of ['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'ENTREGA_EN_RIESGO', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'APROBACIONES_PENDIENTES', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']) {
     for (const action of nudgeActions({ kind, personName: 'Helen Hernández', clientName: 'Corporación Titanes de la Costa', title: 'Reel', url: '/x', taskIds: ['t'] })) assert.ok(action.label.length <= 24, `${kind}: «${action.label}» no cabe en WhatsApp`);
   }
-  assert.deepEqual(nudge.actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa+Castano'], ['Resumir sus pendientes', null]]);
+  assert.deepEqual(nudge.actions.map((a) => [a.label, a.to || null]), [['Ver pendientes de Meli', '/gestion?responsable=Melissa+Castano'], ['Resumen de Meli', null]]);
   assert.equal(nudge.actions[1].ask, 'Resúmeme qué tiene pendiente Melissa hoy y qué le vence pronto.');
   for (const word of ['lento', 'floj', 'mal', 'perezos']) assert.doesNotMatch(`${nudge.title} ${nudge.body} ${nudge.actions[1].ask}`, new RegExp(word, 'i'));
   assert.equal(buildNudges({ people: [{ ...melissa, lastActivityAt: new Date(tuesday1030.getTime() - (IDLE_MINUTES - 1) * MIN) }], now: tuesday1030 }).length, 0, 'under 30 minutes nothing is said');
@@ -73,12 +73,12 @@ test('in the afternoon, tasks due today that have not started are flagged with t
   assert.deepEqual([nudge.kind, nudge.key, nudge.taskIds, nudge.url], ['VENCE_HOY', 'VENCE_HOY:m-bra', ['t1'], '/gestion?taskId=t1']);
   assert.equal(nudge.title, 'A Brayan le vence hoy una tarea que todavía no está en proceso.');
   assert.match(nudge.body, /«Portada de octubre»\. Vale la pena confirmar/);
-  assert.deepEqual(nudge.actions.map((a) => a.label), ['Abrir la tarea', 'Resumir sus pendientes']);
+  assert.deepEqual(nudge.actions.map((a) => a.label), ['Abrir la tarea', 'Resumen de Brayan']);
   const many = buildNudges({ people: [{ ...brayan, dueToday: Array.from({ length: 5 }, (_, i) => ({ id: `d${i}`, title: `Tarea ${i}`, status: 'PENDIENTE' })) }], now: new Date('2026-10-13T19:05:00Z') })[0];
   assert.match(many.title, /vencen hoy 5 tareas/);
   assert.match(many.body, /y 2 más/);
   assert.equal(many.url, '/gestion?responsable=Brayan+Torres');
-  assert.deepEqual(many.actions.map((a) => a.label), ['Ver sus pendientes', 'Resumir sus pendientes']);
+  assert.deepEqual(many.actions.map((a) => a.label), ['Ver pendientes de Brayan', 'Resumen de Brayan']);
 });
 
 test('each kind of fact names its own actions: where to go and what to ask Bria; the weekly focus opens its chat', () => {
@@ -104,4 +104,18 @@ test('the weekly focus comes first, longer idleness before shorter, at most five
   assert.equal(isValidNudgeKey('SIN_PROCESO:m-mel'), true);
   assert.equal(isValidNudgeKey('OTRA:x'), false);
   assert.equal(isValidNudgeKey('SIN_PROCESO:'), false);
+});
+
+// Rodny, 10 de noviembre de 2026: tres «Ver sus pendientes» en un aviso, dos de Kamila y uno de Mariceth, sin nombre.
+test('cada botón dice de quién es, con su apodo, y un aviso que junta personas no repite botones', async () => {
+  const { nickname } = await import('../src/lib/teamNicknames.js');
+  const { composeActions } = await import('../src/lib/briaPulse.js');
+  assert.deepEqual(['Francisco Villa', 'Kamila del Toro', 'Mariceth Peña', 'Jesús Pérez', 'Sara Herrera'].map(nickname), ['Fran', 'Kami', 'Mari', 'Jesu', 'Sara']);
+  const kami = nudgeActions({ kind: 'VENCE_HOY', personName: 'Kamila del Toro', taskIds: ['a', 'b'] });
+  assert.deepEqual(kami.map((a) => a.label), ['Ver pendientes de Kami', 'Resumen de Kami']);
+  const fact = (name) => ({ actions: nudgeActions({ kind: 'VENCE_HOY', personName: name, taskIds: ['a', 'b'] }) });
+  const actions = composeActions([fact('Kamila del Toro'), fact('Kamila del Toro'), fact('Mariceth Peña'), fact('Sara Herrera')]);
+  assert.deepEqual(actions.map((a) => a.label), ['Ver pendientes de Kami', 'Resumen de Kami', 'Ver pendientes de Mari', 'Ver pendientes de Sara']);
+  // Lo que no cabe en una opción de WhatsApp (24) se acorta sin perder el nombre.
+  assert.equal(nudgeActions({ kind: 'SIN_PROCESO', personName: 'Francys Gómez' })[0].label, 'Pendientes de Francys');
 });

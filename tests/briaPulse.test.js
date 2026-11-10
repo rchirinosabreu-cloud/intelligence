@@ -66,7 +66,7 @@ test('facts come from what the platform already computes, most serious first, ea
   assert.match(facts[2].actions[1].ask, /carga de Brayan Torres para el 14 de octubre/);
   assert.deepEqual(facts[3].actions.map((a) => a.label), ['Abrir la parrilla', 'Escribirle a Foobespain']);
   assert.match(facts[3].actions[1].ask, /para Foobespain para que apruebe lo que tiene pendiente, con el enlace del portal/);
-  assert.deepEqual(facts[4].actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa+Castano'], ['Resumir sus pendientes', null]]);
+  assert.deepEqual(facts[4].actions.map((a) => [a.label, a.to || null]), [['Ver pendientes de Meli', '/gestion?responsable=Melissa+Castano'], ['Resumen de Meli', null]]);
   assert.equal(facts[0].fingerprint, fingerprintOf(facts[0]));
   assert.notEqual(facts[0].fingerprint, fingerprintOf({ ...facts[0], text: 'otra cosa' }), 'a changed fact is a new fingerprint');
 });

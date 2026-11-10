@@ -23,13 +23,7 @@ const PERIODS = [7, 30, 90];
 // «Decisiones» reúne la lectura de Bria y el Observer (Rodny, 10 de noviembre de 2026). La bandeja del Observer sigue
 // abriéndose por enlace (?tab=observer) como historial y auditoría, pero ya no es una pestaña.
 const TABS = ['decisiones', 'ritmo', 'memory', 'observer'];
-const TAB_HEADINGS = {
-  // La bandeja ya dice «Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo».
-  decisiones: { title: 'Decisiones', description: 'Lo que Bria necesita que decidas hoy. Cada respuesta le enseña qué te sirve y qué no.' },
-  observer: { title: 'Historial del Observer', description: 'Señales que Bria detecta por su cuenta, cada una con su evidencia.' },
-  ritmo: { title: 'Ritmo del equipo', description: 'Anticipa las entregas de la semana y encuentra dónde repartir el trabajo.' },
-  memory: { title: 'Memoria de Bria', description: 'Centro de conocimiento trazable: convierte documentos y datos autorizados en evidencia recuperable, auditable y lista para Bria.' }
-};
+const MANAGER_HEADING = { title: 'Manager', description: 'Lo que Bria necesita que decidas, el ritmo del equipo y lo que Bria sabe de la agencia.' };
 
 const formatDuration = (milliseconds) => {
   const totalMinutes = Math.max(0, Math.round(Number(milliseconds || 0) / 60_000));
@@ -183,56 +177,16 @@ export default function ManagerTaskAnalytics() {
   return (
     <div data-manager-task-analytics className="min-h-full bg-zinc-50/70 px-4 py-5 dark:bg-zinc-950/40 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        {activeTab !== 'decisiones' && <header className="rounded-3xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">
-                <Activity className="h-4 w-4" />
-                Manager · Bria
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
-                {TAB_HEADINGS[activeTab].title}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                {TAB_HEADINGS[activeTab].description}
-              </p>
-              {activeTab === 'observer' && <div className="mt-4 flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-brand-cyan/10 px-3 py-1.5 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">
-                  <Eye className="h-3.5 w-3.5" />
-                  Observa y explica; no ejecuta acciones
-                </div>
-              </div>}
-            </div>
-            {activeTab === 'ritmo' && <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              {rhythmView === 'history' && <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Periodo del historial">
-                {PERIODS.map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setPeriodDays(days)}
-                    className={cn(
-                      'min-h-11 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                      periodDays === days
-                        ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-white'
-                        : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'
-                    )}
-                  >
-                    {days} días
-                  </button>
-                ))}
-              </div>}
-              <button
-                type="button"
-                onClick={loadAnalytics}
-                disabled={isLoading}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
-              >
-                <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-                Actualizar
-              </button>
-            </div>}
+        {/* Un solo título para todo el módulo, cambie o no la pestaña (Rodny, 10 de noviembre de 2026: «el título debe ser
+            el mismo no importa si la pestaña cambia»). Lo propio de cada pestaña vive dentro de ella. */}
+        <header className="rounded-3xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-7">
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">
+            <Activity className="h-4 w-4" />
+            Manager · Bria
           </div>
-        </header>}
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">{MANAGER_HEADING.title}</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">{MANAGER_HEADING.description}</p>
+        </header>
 
         <nav aria-label="Modos de Bria" className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-zinc-200 dark:border-zinc-800">
           <button
@@ -276,10 +230,41 @@ export default function ManagerTaskAnalytics() {
           </button>
         </nav>
 
-        {activeTab === 'decisiones' ? <ManagerDecisions /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
+        {activeTab === 'decisiones' ? <ManagerDecisions /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <><div className="inline-flex items-center gap-2 rounded-full bg-brand-cyan/10 px-3 py-1.5 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan"><Eye className="h-3.5 w-3.5" />Observa y explica; no ejecuta acciones</div><BriaObserverInbox /></> : <>
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900 w-fit" aria-label="Lectura de Ritmo">
           {[['week', 'Esta semana'], ['history', 'Historial']].map(([value, label]) => <button key={value} type="button" aria-pressed={rhythmView === value} onClick={() => setRhythmView(value)} className={cn('min-h-11 rounded-lg px-4 text-sm font-medium', rhythmView === value ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}
         </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {rhythmView === 'history' && <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Periodo del historial">
+                {PERIODS.map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setPeriodDays(days)}
+                    className={cn(
+                      'min-h-11 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+                      periodDays === days
+                        ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-white'
+                        : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'
+                    )}
+                  >
+                    {days} días
+                  </button>
+                ))}
+              </div>}
+              <button
+                type="button"
+                onClick={loadAnalytics}
+                disabled={isLoading}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
+              >
+                <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+                Actualizar
+              </button>
+            </div>
+        </div>
+
         <TeamRhythmPanel periodDays={periodDays} refreshKey={refreshKey} view={rhythmView} onHistory={() => setRhythmView('history')} />
 
         {rhythmView === 'history' && <h2 className="pt-4 text-base font-semibold text-zinc-950 dark:text-zinc-50">Esfuerzo del equipo</h2>}

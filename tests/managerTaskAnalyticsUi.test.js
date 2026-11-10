@@ -17,8 +17,9 @@ test('Manager route replaces BrainCore with the descriptive task panel', async (
 // una conversación pendiente, no como una calificación; Observer se queda con su bandeja.
 test('each tab explains its purpose; Ritmo reads people without grading them', async () => {
   const panel = await readPanel();
-  assert.match(panel, /Señales que Bria detecta por su cuenta, cada una con su evidencia/);
-  assert.match(panel, /Anticipa las entregas de la semana y encuentra dónde repartir el trabajo/);
+  // Rodny, 10 de noviembre de 2026: un solo título para todo Manager, cambie o no la pestaña.
+  assert.match(panel, /const MANAGER_HEADING = \{ title: 'Manager'/);
+  assert.doesNotMatch(panel, /TAB_HEADINGS/);
   assert.doesNotMatch(panel, /No compara velocidad individual/i);
 });
 
@@ -49,7 +50,7 @@ test('Manager opens on Decisiones; the Observer inbox stays reachable as history
   assert.match(panel, /data-bria-tab="decisiones"/);
   assert.match(panel, /get\('tab'\) : 'decisiones'/);
   assert.match(panel, /<ManagerDecisions \/>/);
-  assert.match(panel, /activeTab === 'observer' \? <BriaObserverInbox \/>/);
+  assert.match(panel, /activeTab === 'observer' \? <>[\s\S]*?<BriaObserverInbox \/>/);
   assert.match(panel, /Observa y explica; no ejecuta acciones/i);
   assert.doesNotMatch(panel, /data-bria-tab="copilot"/);
   assert.doesNotMatch(panel, /data-bria-tab="observer"/);
