@@ -3,7 +3,8 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { finalAssetDownloadName } from '@/lib/finalAssetDownloadName';
-import { Download, ExternalLink, Trash2, Plus, Loader2, Image as ImageIcon, FileText } from '@/components/ui/icons';
+import { Download, Eye, ExternalLink, Trash2, Plus, Loader2, Image as ImageIcon, FileText } from '@/components/ui/icons';
+import FinalMediaPreview from './FinalMediaPreview';
 
 const FIELD_LABEL = 'flex h-5 items-center text-xs font-medium text-zinc-500 dark:text-zinc-400';
 
@@ -171,7 +172,8 @@ const FinalAssetTile = ({
   canDrag = false, isDragged = false, isDragActive = false, isSaving = false,
   onDragStart, onDragOver, onDragEnd, onKeyMove, assetUrls, onOpenAsset
 }) => {
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const eyeRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
@@ -184,28 +186,6 @@ const FinalAssetTile = ({
   const downloadName = finalAssetDownloadName(asset, item, total > 1 ? position : null);
   const isImage = !drive && (asset.mimeType || '').startsWith('image/');
   const isVideo = !drive && (asset.mimeType || '').startsWith('video/');
-
-  useEffect(() => {
-    if (!sourceUrl) return undefined;
-    let objectUrl;
-    let cancelled = false;
-    fetch(sourceUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })
-      .then(response => {
-        if (!response.ok) throw new Error(`Asset request failed with status ${response.status}`);
-        return response.blob();
-      })
-      .then(blob => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
-      })
-      .catch(error => console.error('Final carousel asset preview failed:', error));
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [sourceUrl]);
 
   const download = async () => {
     if (downloading || !downloadUrl) return;
@@ -251,7 +231,8 @@ const FinalAssetTile = ({
             allowFullScreen
             loading="lazy"
           />
-        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls controlsList="nodownload" preload="metadata" /> : onOpenAsset ? (
+        ) : (isImage || isVideo) ? <FinalMediaPreview sourceUrl={sourceUrl} name={downloadName} isVideo={isVideo} open={mediaOpen} onOpenChange={setMediaOpen} triggerRef={eyeRef}
+          onDownload={downloadUrl ? download : undefined} downloading={downloading} downloadError={downloadError} /> : onOpenAsset ? (
           <button type="button" onClick={() => onOpenAsset(asset)} aria-label={`Ver ${asset.name || 'archivo'}`} className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-sm text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-white/5">
             <FileText className="h-8 w-8" />{asset.mimeType === 'application/pdf' ? 'PDF' : 'Archivo'}
           </button>
@@ -290,6 +271,8 @@ const FinalAssetTile = ({
       )}
 
       <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
+        {(isImage || isVideo) && <button ref={eyeRef} type="button" onClick={() => setMediaOpen(true)} aria-label={`Ver ${downloadName}`} title="Ver completo"
+          className="grid h-11 w-11 place-items-center rounded-lg bg-zinc-800/80 text-white backdrop-blur-sm transition hover:bg-zinc-900 dark:bg-zinc-950/80 dark:hover:bg-zinc-900"><Eye className="h-4 w-4" /></button>}
         {/* La descarga nativa del blob usa su UUID. Este botón conserva el nombre subido. */}
         {downloadUrl && <button type="button" onClick={download} disabled={downloading} aria-label={`Descargar ${downloadName}`} title={`Descargar ${downloadName}`}
           className="grid h-11 w-11 place-items-center rounded-lg bg-zinc-800/80 text-white backdrop-blur-sm transition hover:bg-zinc-900 disabled:opacity-50 dark:bg-zinc-950/80 dark:hover:bg-zinc-900">

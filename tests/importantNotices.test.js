@@ -86,7 +86,7 @@ test('el aviso dice quién, cuántos días y qué cotización, sin la orden del 
 
 test('«No sigue» ofrece perder, descartar o marcar ganada; archivar va a la vista, fuera de esa lista', () => {
     assert.deepEqual(REVIEW_OUTCOMES.map((outcome) => [outcome.value, outcome.label]), [
-        ['PERDIDO', 'Perdida'], ['DESCARTADO', 'Descartada'], ['GANADO', 'Ya es cliente']
+        ['PERDIDO', 'Cliente no aprobó'], ['DESCARTADO', 'Descartada'], ['GANADO', 'Ya es cliente']
     ]);
     assert.ok(REVIEW_OUTCOMES.every((outcome) => outcome.done), 'cada salida dice en palabras qué pasó, para el aviso de la pantalla');
     assert.equal(isReviewOutcome(NOTICE_ARCHIVE_OUTCOME), false);

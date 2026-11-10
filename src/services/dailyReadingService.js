@@ -16,7 +16,7 @@ import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock, personBoardUrl } from '../lib/briaNudges.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/agencySnapshot.js';
-import { buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief, visibleReadingDecisions } from '../lib/dailyReading.js';
+import { buildDailyDigest, buildDailyReadingRequest, buildDailyReadingCorrection, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief, visibleReadingDecisions } from '../lib/dailyReading.js';
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
@@ -303,10 +303,24 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
         const digest = buildDailyDigest({ today, baseDay, summary, signals, clients: current.clients, criteria: rules, context });
         digestText = digest.text;
         try {
-          const answer = await generate(buildDailyReadingRequest({ digest, today }));
+          const request = buildDailyReadingRequest({ digest, today });
+          const answer = await generate(request);
           modelName = answer.model || null; usage = answer.usage || null;
-          model = validateDailyReading(parseDailyReading(answer.text), { signals, clients: current.clients, day: today, criteria: rules, context });
-          if (model.diagnostics.rejected.length) logger.warn?.('[DailyReading] BRIA_RECOMMENDATIONS_REJECTED', model.diagnostics);
+          const raw = parseDailyReading(answer.text);
+          const validation = { signals, clients: current.clients, day: today, criteria: rules, context };
+          model = validateDailyReading(raw, validation);
+          if (model.diagnostics.rejected.length) {
+            logger.warn?.('[DailyReading] BRIA_RECOMMENDATIONS_REJECTED', model.diagnostics);
+            // Una sola corrección con los motivos; si no mejora, se queda lo que ya pasó la validación.
+            const correction = buildDailyReadingCorrection({ request, previousText: answer.text, raw, diagnostics: model.diagnostics });
+            try {
+              const retry = await generate(correction);
+              const second = validateDailyReading(parseDailyReading(retry.text), validation);
+              logger.info?.('[DailyReading] BRIA_RECOMMENDATIONS_CORRECTED', { before: model.decisions.length, after: second.decisions.length, rejected: second.diagnostics.rejected });
+              if (second.decisions.length > model.decisions.length) { model = second; modelName = retry.model || modelName; }
+              usage = { first: usage, correction: retry.usage || null };
+            } catch (error) { logger.error('[DailyReading] La corrección no respondió; se conserva la primera respuesta:', error?.message || error); }
+          }
         } catch (error) { logger.error('[DailyReading] El modelo no respondió; Bria lee con las reglas:', error?.message || error); }
       }
       // El libro de decisiones: lo que la dirección descartó tres veces en 30 días no se vuelve a proponer.
@@ -362,6 +376,21 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       if (!verdict) return { saved: false, motivo: 'No me quedó claro si la hiciste, la descartaste o la dejaste para después.' };
       const entry = await repo.recordDecision({ decision, dayKey: reading.day, user: { ref: user.id, name: user.teamMember?.name || user.name || null }, verdict, note: nota ? String(nota).slice(0, 300) : null, decidedAt: now() });
       return { saved: true, decision: decision.title, veredicto: entry.verdict, dia: reading.day };
+    },
+
+    /**
+     * Lo que Manager necesita para su tablero de decisiones: la última lectura con el alcance de la persona, sus
+     * anotaciones en el libro y su marcador. Mismo alcance que el mensaje de la mañana y que `anotar_decision`.
+     */
+    async decisionBoard(user) {
+      let reading = await repo.latestReading();
+      if (!reading) return { reading: null, decisions: [], entries: [], scorecard: scorecard([], { proposed: 0 }) };
+      ({ reading, viewer: user } = await currentView(user, reading));
+      const decisions = visibleReadingDecisions(reading, scopeFor(user, reading));
+      const entries = typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30, userRef: user.id }) : [];
+      const readings = [reading, ...(typeof repo.readingsBefore === 'function' ? await repo.readingsBefore(reading.day, 30) : [])];
+      const proposed = readings.reduce((sum, row) => sum + visibleReadingDecisions(row, scopeFor(user, row)).length, 0);
+      return { reading, decisions, entries, scorecard: scorecard(entries, { proposed }) };
     },
 
     /** Deja la lectura de la mañana en un chat nuevo de la persona y la avisa. Una vez por día y persona. */

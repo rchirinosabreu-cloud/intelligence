@@ -26,6 +26,11 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
 
   router.get('/catalogs', (_req, res) => res.json(service.catalogs()));
 
+  router.get('/activity-suggestions', handle('No pudimos cargar tus frases frecuentes.', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(await service.activityNoteSuggestions(db, req.user));
+  }));
+
   // Los días de las alertas comerciales: los lee quien usa el CRM y solo un administrador los cambia.
   router.get('/follow-up-alerts', handle('No pudimos cargar los días de las alertas.', async (_req, res) => {
     res.json(await followUpAlerts.readFollowUpAlertDays(db));

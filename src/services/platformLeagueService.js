@@ -10,7 +10,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace } from '../lib/leagueDay.js';
-import { KUDOS_WEEKLY, MEETING_POINTS, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
+import { KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
 import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
@@ -254,10 +254,11 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const myDays = daysByMember.get(me.id) || [];
       // Manual meeting awards remain separate from daily snapshots, so a late admin entry counts immediately
       // without rewriting historical habits or adding the award a second time in the month total.
-      const meetingToday = meetings.find(meeting => meeting.day_key === today);
+      // Hasta dos personas por reunión (Rodny, 9 de noviembre de 2026): el extra es de quien figure entre ellas.
+      const meetingsToday = meetings.filter(meeting => meeting.day_key === today);
       const rawToday = todayByMember.get(me.id);
-      const myToday = rawToday ? { ...rawToday, extras: { ...rawToday.extras, PRIMERO_EN_REUNION: meetingToday ? meetingToday.member_id === me.id : null },
-        evidence: { ...rawToday.evidence, PRIMERO_EN_REUNION: meetingToday ? `Registrado por un administrador: ${firstName(nameOf.get(meetingToday.member_id) || '')}.` : 'Pendiente de registro del administrador.' } } : null;
+      const myToday = rawToday ? { ...rawToday, extras: { ...rawToday.extras, PRIMERO_EN_REUNION: meetingsToday.length ? meetingsToday.some(meeting => meeting.member_id === me.id) : null },
+        evidence: { ...rawToday.evidence, PRIMERO_EN_REUNION: meetingsToday.length ? `Registrado por un administrador: ${meetingsToday.map(meeting => firstName(nameOf.get(meeting.member_id) || '')).join(' y ')}.` : 'Pendiente de registro del administrador.' } } : null;
       const todayAwardPoints = awardsOf(me.id).filter(award => bogotaDate(award.occurredAt) === today).length * RECOGNITION_POINTS;
       const todayGiftPoints = kudosScore((receivedBy.get(me.id) || []).filter(gift => bogotaDate(gift.created_at) === today));
       const todaySummary = todayPoints(myToday);
@@ -347,11 +348,17 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(`${day}T12:00:00Z`)) || new Date(`${day}T12:00:00Z`).toISOString().slice(0,10) !== day || day > today || day < start || monthOf(day) !== monthOf(today)) throw fail(400, 'Elige una fecha transcurrida de este mes, desde el inicio de la liga.');
       const receiver = (await activeMembers()).find(member => member.id === memberId);
       if (!receiver) throw fail(404, 'Esa persona no está en el equipo activo.');
+      // Los dos primeros en la reunión reciben los diez puntos (Rodny, 9 de noviembre de 2026): dos personas por semana,
+      // de la misma reunión. La base rechaza a la misma persona dos veces y el repositorio no inserta más allá del cupo.
+      const weekKey = isoWeekKey(day);
+      const existing = await repo.meetingsOfWeek(weekKey);
+      if (existing.length && existing.some(meeting => meeting.day_key !== day)) throw fail(400, `La reunión de esa semana se registró el ${weekdayLabel(existing[0].day_key)}: usa esa fecha.`, 'LEAGUE_MEETING_OTHER_DAY');
       try {
-        const saved = await repo.awardMeeting({ week_key: isoWeekKey(day), day_key: day, member_id: memberId, awarded_by: userId });
+        const saved = await repo.awardMeeting({ week_key: weekKey, day_key: day, member_id: memberId, awarded_by: userId, limit: MEETING_WINNERS_PER_WEEK });
+        if (!saved) throw fail(409, `Esa semana ya tiene a sus ${MEETING_WINNERS_PER_WEEK} primeros en la reunión.`, 'LEAGUE_MEETING_FULL');
         return { id: saved.id, name: firstName(receiver.name), points: MEETING_POINTS };
       } catch (error) {
-        if (error?.code === '23505') throw fail(409, 'Ya hay una persona reconocida en la reunión de esa semana.', 'LEAGUE_MEETING_ALREADY');
+        if (error?.code === '23505') throw fail(409, 'Esa persona ya está reconocida en la reunión de esa semana.', 'LEAGUE_MEETING_ALREADY');
         throw error;
       }
     }

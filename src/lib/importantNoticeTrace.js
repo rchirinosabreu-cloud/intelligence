@@ -10,6 +10,7 @@ export const NOTICE_TRACE_EVENTS = Object.freeze({
     COLLECTION_ALERTS_SENT: 'COLLECTION_ALERTS_SENT',
     SHOWN: 'IMPORTANT_NOTICE_SHOWN',
     FOLLOWED_UP: 'IMPORTANT_NOTICE_FOLLOWED_UP',
+    SCHEDULED: 'IMPORTANT_NOTICE_SCHEDULED',
     SNOOZED: 'IMPORTANT_NOTICE_SNOOZED',
     CLOSED: 'IMPORTANT_NOTICE_CLOSED',
     CLEARED: 'IMPORTANT_NOTICE_CLEARED'
@@ -27,6 +28,7 @@ export const NOTICE_TRACE_LABELS = Object.freeze({
     [NOTICE_TRACE_EVENTS.COLLECTION_ALERTS_SENT]: 'Avisos de cartera',
     [NOTICE_TRACE_EVENTS.SHOWN]: 'Aviso en la banda',
     [NOTICE_TRACE_EVENTS.FOLLOWED_UP]: 'Ya hice seguimiento',
+    [NOTICE_TRACE_EVENTS.SCHEDULED]: 'Próximo seguimiento',
     [NOTICE_TRACE_EVENTS.SNOOZED]: 'Recordarme',
     [NOTICE_TRACE_EVENTS.CLOSED]: 'No sigue',
     [NOTICE_TRACE_EVENTS.CLEARED]: 'Aviso atendido'
@@ -104,8 +106,10 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
             return meta.channel === 'RESPUESTA_CLIENTE'
                 ? `${actor} anotó desde el aviso que ${who} respondió.`
                 : `${actor} registró un seguimiento${CHANNEL_PHRASES[meta.channel] ? ` ${CHANNEL_PHRASES[meta.channel]}` : ''} desde el aviso de ${who}.`;
+        case NOTICE_TRACE_EVENTS.SCHEDULED: return `${actor} programó el próximo seguimiento de ${who} para ${meta.nextFollowUpAt}: ${meta.nextAction}.`;
         case NOTICE_TRACE_EVENTS.SNOOZED: return `${actor} pospuso el aviso de ${who} ${SNOOZE_PHRASES[meta.option] || 'para más tarde'}.`;
         case NOTICE_TRACE_EVENTS.CLOSED:
+            if (meta.outcome === 'PERDIDO') return `${actor} registró que el cliente no aprobó la oportunidad ${who}.`;
             if (meta.outcome === 'RECIBIDO') return `${actor} confirmó que recibió el aviso operativo de ${who}.`;
             if (meta.outcome === 'ARCHIVAR') return `${actor} archivó ${who} desde el aviso.`;
             return `${actor} marcó ${who} como ${OUTCOME_PHRASES[meta.outcome] || 'cerrada'} desde el aviso de revisión${meta.outcome === 'GANADO' ? ': ya es cliente' : ''}.`;

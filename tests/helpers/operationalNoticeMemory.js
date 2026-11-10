@@ -12,7 +12,7 @@ export function operationalNoticeMemory() {
         if (value && typeof value==='object' && !(value instanceof Date)) {
             if ('in' in value) return value.in.includes(row[key]);
             if ('notIn' in value) return !value.notIn.includes(row[key]);
-            if ('not' in value) return row[key] !== value.not;
+            if ('not' in value) return value.not && typeof value.not==='object' ? !match(row,{[key]:value.not}) : row[key] !== value.not;
             if ('startsWith' in value) return String(row[key]||'').startsWith(value.startsWith);
             if ('is' in value) return match(row[key]||{},value.is);
             if ('gte' in value) return row[key]>=value.gte;
@@ -25,8 +25,8 @@ export function operationalNoticeMemory() {
     const db={}; let sequence=0;
     for (const model of Object.keys(data)) {
         const findMany = async ({where,orderBy}={}) => {
-            const rows=data[model].filter(row=>match(row,where));
-            if(orderBy) { const [field,direction]=Object.entries(orderBy)[0];rows.sort((a,b)=>(a[field]>b[field]?1:a[field]<b[field]?-1:0)*(direction==='desc'?-1:1)); }
+            const rows=data[model].filter(row=>match(model==='crmActivity'?{...row,lead:data.crmLead.find(lead=>lead.id===row.leadId)}:row,where));
+            if(orderBy) for(const order of (Array.isArray(orderBy)?[...orderBy].reverse():[orderBy])) { const [field,direction]=Object.entries(order)[0];rows.sort((a,b)=>(a[field]>b[field]?1:a[field]<b[field]?-1:0)*(direction==='desc'?-1:1)); }
             return rows;
         };
         db[model]={findMany, findUnique:async args=>(await findMany(args))[0]||null, findFirst:async args=>(await findMany(args))[0]||null,

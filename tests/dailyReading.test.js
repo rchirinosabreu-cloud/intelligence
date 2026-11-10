@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildDailyReadingCorrection,
   buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, fallbackDailyReading, composeReading,
   buildMorningBrief, codeOverview, visibleReadingDecisions, DAILY_READING_USE_CASE
 } from '../src/lib/dailyReading.js';
@@ -285,4 +286,27 @@ test('saved mixed proposals require access to every source, including people and
   assert.deepEqual(visibleReadingDecisions({ signals: SIGNALS, decisions: [validLegacy] }, { clientIds: new Set(['c1']), people: false }), [validLegacy]);
   const privateBrief = buildMorningBrief({ recipientName: 'Camila', reading: { ...READING, decisions: [crossClient] }, scope: { clientIds: new Set(['c1']), people: false } });
   assert.doesNotMatch(privateBrief.text, /1\. \*\*Revisar/);
+});
+
+// 10 de noviembre de 2026: «12 cuentas en rojo» son una decisión; el límite de 4 señales lo impedía.
+test('a decision may gather up to 15 signals of the same problem, but only 4 when they mix problems', () => {
+  const red = Array.from({ length: 12 }, (_, i) => ({ id: `ROJO_SOSTENIDO:r${i}`, kind: 'ROJO_SOSTENIDO', subjectType: 'CLIENT', subjectId: `r${i}`, subjectName: `Cuenta ${i}`, severity: 3, direction: 'peor', text: 't' }));
+  const late = Array.from({ length: 2 }, (_, i) => ({ id: `VENCIDAS_SUBEN:p${i}`, kind: 'VENCIDAS_SUBEN', subjectType: 'PERSON', subjectId: `p${i}`, subjectName: `Persona ${i}`, severity: 2, direction: 'peor', text: 't' }));
+  const decision = (evidencia) => ({ titulo: 'Cerrar octubre en las cuentas en rojo', porque: 'Llevan días en rojo.', tipo: 'VIGILAR', evidencia, memoria: [], pedido: null, regla: null });
+  const grouped = validateDailyReading({ resumen: '', cuentas: [], decisiones: [decision(red.map((s) => s.id))] }, { signals: [...red, ...late], clients: [], day: DAY });
+  assert.equal(grouped.decisions.length, 1);
+  assert.equal(grouped.decisions[0].evidence.length, 12);
+  const mixed = validateDailyReading({ resumen: '', cuentas: [], decisiones: [decision([...red.slice(0, 3), ...late].map((s) => s.id))] }, { signals: [...red, ...late], clients: [], day: DAY });
+  assert.deepEqual(mixed.diagnostics.rejected, [{ index: 0, code: 'EVIDENCE_LIMIT' }]);
+});
+
+test('the one-time correction names each rejected proposal and why, and asks for the whole reading again', () => {
+  const request = { model: 'm', prompt: 'DATOS' };
+  const raw = { decisiones: [{ titulo: 'Revisar Aristea' }, { titulo: 'Cerrar octubre' }] };
+  const correction = buildDailyReadingCorrection({ request, previousText: '{"decisiones":[]}', raw, diagnostics: { rejected: [{ index: 0, code: 'CONTEXT_NOT_SUPPORTED' }, { index: 1, code: 'EVIDENCE_LIMIT' }] } });
+  assert.equal(correction.model, 'm');
+  assert.match(correction.prompt, /^DATOS[\s\S]*=== TU RESPUESTA ANTERIOR ===/);
+  assert.match(correction.prompt, /«Revisar Aristea»: es sobre una cuenta que tiene memoria guardada/);
+  assert.match(correction.prompt, /«Cerrar octubre»: junta más señales de las permitidas/);
+  assert.equal(buildDailyReadingCorrection({ request, previousText: '', raw, diagnostics: { rejected: [] } }), null);
 });

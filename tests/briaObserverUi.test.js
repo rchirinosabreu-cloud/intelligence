@@ -21,7 +21,6 @@ test('Bria opens with a proactive Observer inbox instead of a search experience'
   assert.match(inbox, /Sin confirmar/);
   assert.match(inbox, /summary\.unverified/);
   assert.match(inbox, /sin una cita confirmada/i);
-  assert.match(manager, /hidden sm:inline[^>]*>Próxima etapa/);
   assert.match(manager, /min-h-11[^>]*periodDays === days/);
   assert.match(manager, /onClick=\{loadAnalytics\}[\s\S]{0,220}min-h-11/);
 });

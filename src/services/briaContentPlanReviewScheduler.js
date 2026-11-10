@@ -36,7 +36,7 @@ export const runContentPlanReviewJob = async ({
     if (error.code !== 'BRIA_REVIEW_SUPERSEDED') {
       logger.error('[BriaContentReview] Review failed:', error.response?.data || error.message || error);
     }
-    await failContentPlanReview(execution, error, { db, now: now() });
+    await failContentPlanReview(execution, error, { db, now: now(), retryAutomatically: trigger === 'AUTOMATIC' });
     return { planId, status: error.code === 'BRIA_REVIEW_SUPERSEDED' ? 'SUPERSEDED' : 'FAILED', error };
   } finally {
     clearTimeout(timer);
@@ -87,7 +87,8 @@ export const reconcilePendingContentPlanReviews = async ({
 };
 
 export function initBriaContentPlanReviewScheduler({
-  reconcile = reconcilePendingContentPlanReviews,
+  db = prisma,
+  reconcile = () => archiveStaleContentPlanReviews({ db }),
   setTimeoutFn = setTimeout,
   setIntervalFn = setInterval,
   logger = console
@@ -99,7 +100,7 @@ export function initBriaContentPlanReviewScheduler({
     try {
       return await reconcile();
     } catch (error) {
-      logger.error('[BriaContentReview] Falló el ciclo automático:', error.response?.data || error.message || error);
+      logger.error('[BriaContentReview] Falló el archivo de revisiones anteriores:', error.response?.data || error.message || error);
       return { error: error.message };
     } finally {
       running = false;
@@ -109,6 +110,6 @@ export function initBriaContentPlanReviewScheduler({
   startupTimer.unref?.();
   const intervalTimer = setIntervalFn(run, BRIA_CONTENT_PLAN_REVIEW_INTERVAL_MS);
   intervalTimer.unref?.();
-  logger.info('[BriaContentReview] Revisión automática configurada cada minuto con 45 segundos de espera tras cambios.');
+  logger.info('[BriaContentReview] Archivo de hallazgos anteriores configurado. Las revisiones se solicitan manualmente.');
   return { startupTimer, intervalTimer, run };
 }

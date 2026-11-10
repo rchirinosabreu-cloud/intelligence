@@ -40,7 +40,7 @@ test('los 13 avisos tienen respuestas propias; confirmar persiste en su origen s
     }
     await select('crm');
     await card.getByRole('button',{name:'Resolver oportunidad',exact:true}).click();
-    await card.getByRole('button',{name:'Perdida',exact:true}).click();
+    await card.getByRole('button',{name:'Cliente no aprobó',exact:true}).click();
     assert.ok(await card.getByRole('button',{name:'Confirmar decisión',exact:true}).isDisabled());
     await card.getByLabel('Motivo de la decisión',{exact:true}).fill('El cliente confirmó que no continuará con la propuesta.');
     await page.screenshot({path:`${out}/confirmar-resultado-crm.png`,animations:'disabled'});

@@ -147,7 +147,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
             <CrmStatCard tone="hero" icon={Users} label="Total de leads" value={total} detail={`LinkedIn ${metrics.linkedin} · Brain Studio ${metrics.brainStudio}`} />
             <CrmStatCard icon={Target} label="Oportunidades abiertas" value={metrics.open} detail={`${moneyValues(metrics, 'quotedOpenValue').map(value => value.text).join(' · ')} cotizado en pipeline`} onClick={() => onShowTab?.('oportunidades')} />
             <CrmStatCard tone="positive" icon={CheckCircle2} label="Aprobadas por formalizar" value={metrics.approved} detail="Contrato, pago inicial y onboarding pendientes" />
-            <CrmStatCard tone="magenta" icon={Trophy} label="Ganadas" value={metrics.won} detail={`${moneyValues(metrics, 'wonValue').map(value => value.text).join(' · ')} · ${metrics.lost} perdidas o descartadas`} />
+            <CrmStatCard tone="magenta" icon={Trophy} label="Ganadas" value={metrics.won} detail={`${moneyValues(metrics, 'wonValue').map(value => value.text).join(' · ')} · ${metrics.lost} no aprobadas o descartadas`} />
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Semáforo y seguimientos">

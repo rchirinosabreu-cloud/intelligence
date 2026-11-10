@@ -43,6 +43,7 @@ const eventConfig = {
   COLLECTION_ALERTS_SENT: { label: 'Avisos de cartera', icon: Bell, tone: TONES.coral },
   IMPORTANT_NOTICE_SHOWN: { label: 'Aviso en la banda', icon: Eye, tone: TONES.coral },
   IMPORTANT_NOTICE_FOLLOWED_UP: { label: 'Ya hice seguimiento', icon: CheckCircle2, tone: TONES.green },
+  IMPORTANT_NOTICE_SCHEDULED: { label: 'Próximo seguimiento', icon: Clock, tone: TONES.cyan },
   IMPORTANT_NOTICE_SNOOZED: { label: 'Recordarme', icon: Clock, tone: TONES.yellow },
   IMPORTANT_NOTICE_CLOSED: { label: 'No sigue', icon: X, tone: TONES.magenta },
   IMPORTANT_NOTICE_CLEARED: { label: 'Aviso atendido', icon: Archive, tone: TONES.cyan }

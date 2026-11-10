@@ -16,6 +16,7 @@ import * as managerTaskAnalyticsController from '../controllers/managerTaskAnaly
 import * as teamRhythmController from '../controllers/teamRhythmController.js';
 import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import * as briaObserverController from '../controllers/briaObserverController.js';
+import * as managerDecisionController from '../controllers/managerDecisionController.js';
 import * as commercialRequestController from '../controllers/commercialRequestController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import { isMfaRequiredForRole } from '../lib/mfaPolicy.js';
@@ -258,6 +259,25 @@ router.patch(
     requireModulePermission('manager'),
     requireManagerRole,
     briaObserverController.transition
+);
+// El tablero de decisiones: lectura de la mañana + Observer, con respuestas que aprenden.
+router.get(
+    '/manager/decisions',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    managerDecisionController.board
+);
+router.get(
+    '/manager/decisions/pulse',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    managerDecisionController.pulse
+);
+router.post(
+    '/manager/decisions/respond',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    managerDecisionController.respond
 );
 
 // Tasks

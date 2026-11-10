@@ -11,6 +11,10 @@ const NOW = day('2026-09-18');
 
 test('stages are a closed catalog grouped into open, approved, won and closed', () => {
   assert.equal(CRM_STAGES.length, 12);
+  assert.equal(CRM_STAGES.find(stage => stage.value === 'PERDIDO').label, 'Cliente no aprobó');
+  assert.equal(stageGroup('CLIENTE_NO_APROBO'), null, 'el cambio es de nombre, no crea otro estado');
+  assert.equal(deriveOutcome('PERDIDO'), 'PERDIDO');
+  assert.equal(followUpBucket({stage:'PERDIDO'}, NOW), null);
   assert.equal(stageGroup('POR_GESTIONAR'), 'ABIERTO');
   assert.equal(stageGroup('SIN_RESPUESTA'), 'ABIERTO');
   assert.equal(stageGroup('APROBADA'), 'APROBADO');

@@ -93,12 +93,11 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
     loadReview();
   }, [loadReview, planUpdatedAt]);
 
-  const hasVerifyingFindings = result?.review?.findings?.some(finding => finding.status === 'VERIFYING');
   useEffect(() => {
-    if (!['PENDING', 'RUNNING'].includes(result?.meta?.state) && !hasVerifyingFindings) return undefined;
+    if (result?.meta?.state !== 'RUNNING') return undefined;
     const timer = window.setInterval(() => loadReview({ silent: true }), 5000);
     return () => window.clearInterval(timer);
-  }, [loadReview, result?.meta?.state, hasVerifyingFindings]);
+  }, [loadReview, result?.meta?.state]);
 
   const evidenceById = useMemo(
     () => new Map((result?.evidence || []).map((evidence) => [evidence.id, evidence])),
@@ -216,7 +215,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
       setIsExpanded(true);
     } catch (requestError) {
       console.error('Bria content-plan review failed:', requestError.response?.data || requestError);
-      setError(humanizeReviewRequestError(requestError.response?.data, 'Bria no pudo completar la revisión en este intento. El motivo queda registrado abajo y lo volverá a intentar automáticamente.'));
+      setError(humanizeReviewRequestError(requestError.response?.data, 'Bria no pudo completar la revisión en este intento. El motivo quedó registrado. Puedes solicitar otra revisión.'));
       setIsExpanded(true);
       // The attempt was recorded server-side: show its state and cause instead of a bare error.
       await loadReview({ silent: true });
@@ -328,7 +327,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
               <span>
                 {result?.meta?.state === 'RUNNING'
                   ? 'Bria está actualizando la revisión compartida.'
-                  : 'Hay cambios recientes. Bria actualizará esta revisión automáticamente en aproximadamente un minuto.'}
+                  : 'Hay cambios pendientes de revisión. Pulsa «Revisar parrilla» cuando quieras que Bria los analice.'}
                 {coverageUi.progress && <span className="mt-1 block">{coverageUi.progress}</span>}
               </span>
             </div>
@@ -338,7 +337,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
             <div role="alert" className="brain-alert-surface flex items-start gap-3 rounded-2xl p-4 text-sm">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <span>
-                {result.meta.error || 'No se pudo completar el último análisis automático. Puedes intentarlo de nuevo.'}
+                {result.meta.error || 'No se pudo completar el último análisis. Puedes intentarlo de nuevo.'}
                 {coverageUi.progress && <span className="mt-1 block">{coverageUi.progress}</span>}
                 {Array.isArray(result.meta.diagnostics) && result.meta.diagnostics.length > 0 && (
                   <span data-bria-review-diagnostic className="mt-1 block text-xs opacity-80">
@@ -467,8 +466,8 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
                                 Ver pieza
                               </button>
                             )}
-                            <button type="button" disabled={actingId === finding.id || verificationUi.busy} onClick={() => applyFindingAction(finding, 'MARK_CORRECTED')} className={`min-h-11 rounded-xl bg-cyan-100 px-3 text-xs font-semibold text-cyan-800 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-950/50 dark:text-cyan-100 dark:hover:bg-cyan-900 ${finding.itemId ? '' : 'sm:col-span-2'}`}>
-                              {verificationUi.busy ? verificationUi.label : verificationUi.canRetry ? 'Reintentar verificación' : 'Corregido'}
+                            <button type="button" disabled={actingId === finding.id || verificationUi.busy || isReviewing} onClick={() => finding.status === 'VERIFYING' ? runReview() : applyFindingAction(finding, 'MARK_CORRECTED')} className={`min-h-11 rounded-xl bg-cyan-100 px-3 text-xs font-semibold text-cyan-800 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-950/50 dark:text-cyan-100 dark:hover:bg-cyan-900 ${finding.itemId ? '' : 'sm:col-span-2'}`}>
+                              {verificationUi.busy ? verificationUi.label : verificationUi.canRetry ? (result?.meta?.state === 'PENDING' ? 'Solicitar verificación' : 'Reintentar verificación') : 'Corregido'}
                             </button>
                             {verificationUi.canUndo && (
                               <button type="button" disabled={actingId === finding.id} onClick={() => applyFindingAction(finding, 'UNDO_CORRECTION')} className="min-h-11 rounded-xl px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-60 sm:col-span-2 dark:text-zinc-300 dark:hover:bg-zinc-800">

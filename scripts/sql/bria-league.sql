@@ -124,5 +124,19 @@ CREATE TABLE IF NOT EXISTS bria_memory.league_meeting_awards (
   member_id TEXT NOT NULL,
   awarded_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (run_id, week_key)
+  CONSTRAINT league_meeting_awards_week_member_key UNIQUE (run_id, week_key, member_id)
 );
+-- Los dos primeros en la reunión de tráfico reciben diez puntos cada uno (Rodny, 9 de noviembre de 2026):
+-- la semana deja de admitir una sola persona y pasa a rechazar solo a la misma persona dos veces. El tope de dos
+-- lo pone el repositorio al insertar. Aditivo: conserva los premios ya registrados.
+DO $$ DECLARE old_constraint TEXT; BEGIN
+  SELECT conname INTO old_constraint FROM pg_constraint
+    WHERE conrelid = 'bria_memory.league_meeting_awards'::regclass AND contype = 'u'
+      AND pg_get_constraintdef(oid) = 'UNIQUE (run_id, week_key)';
+  IF old_constraint IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE bria_memory.league_meeting_awards DROP CONSTRAINT %I', old_constraint);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'bria_memory.league_meeting_awards'::regclass AND conname = 'league_meeting_awards_week_member_key') THEN
+    ALTER TABLE bria_memory.league_meeting_awards ADD CONSTRAINT league_meeting_awards_week_member_key UNIQUE (run_id, week_key, member_id);
+  END IF;
+END $$;

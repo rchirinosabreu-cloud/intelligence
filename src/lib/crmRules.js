@@ -21,7 +21,7 @@ export const CRM_STAGES = Object.freeze([
   { value: 'SIN_RESPUESTA', label: 'Sin respuesta', group: 'ABIERTO', order: 7 },
   { value: 'APROBADA', label: 'Aprobada · por formalizar', group: 'APROBADO', order: 8 },
   { value: 'GANADO', label: 'Ganado / contratado', group: 'GANADO', order: 9 },
-  { value: 'PERDIDO', label: 'Perdido', group: 'CERRADO', order: 10 },
+  { value: 'PERDIDO', label: 'Cliente no aprobó', group: 'CERRADO', order: 10 },
   { value: 'DESCARTADO', label: 'Descartado', group: 'CERRADO', order: 11 }
 ]);
 
@@ -51,7 +51,7 @@ export const CRM_PRIORITIES = Object.freeze([
 export const CRM_TRAFFIC_LIGHTS = Object.freeze([
   { value: 'VERDE', label: 'Verde', description: 'Avanza: hay respuesta o movimiento real.' },
   { value: 'AMARILLO', label: 'Amarillo', description: 'Viva, pero necesita seguimiento o espera decisión.' },
-  { value: 'ROJO', label: 'Rojo', description: 'Estancada, sin respuesta, perdida o en riesgo.' }
+  { value: 'ROJO', label: 'Rojo', description: 'Estancada, sin respuesta, no aprobada o en riesgo.' }
 ]);
 
 // direction: OUT = we reached out, IN = the client answered, NONE = internal record.
