@@ -20,6 +20,9 @@ test('each tab explains its purpose; Ritmo reads people without grading them', a
   // Rodny, 10 de noviembre de 2026: un solo título para todo Manager, cambie o no la pestaña.
   assert.match(panel, /const MANAGER_HEADING = \{ title: 'Manager'/);
   assert.doesNotMatch(panel, /TAB_HEADINGS/);
+  // Y con el encabezado de toda la plataforma, sin tarjeta ni etiqueta propia encima.
+  assert.match(panel, /<PageHeader title=\{MANAGER_HEADING\.title\} subtitle=\{MANAGER_HEADING\.description\} \/>/);
+  assert.doesNotMatch(panel, /Manager · Bria/);
   assert.doesNotMatch(panel, /No compara velocidad individual/i);
 });
 
