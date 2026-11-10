@@ -11,12 +11,14 @@ const loadMap = readFileSync('src/components/modules/TeamLoadMap.jsx', 'utf8');
 const routes = readFileSync('src/routes/index.js', 'utf8');
 const server = readFileSync('server.js', 'utf8');
 
-test('Ritmo opens with the week; the reading is compact and the delivery-day map is optional', () => {
-  const week = readFileSync('src/components/modules/TeamWeekOverview.jsx', 'utf8');
-  assert.match(panel, /view === 'week'.*<TeamWeekOverview/);
-  assert.ok(week.indexOf('aria-label="Resumen de la semana"') < week.indexOf('<WeeklyReadingCard'));
-  assert.match(week, /<WeeklyReadingCard refreshKey=\{refreshKey\} compact/);
-  assert.match(week, /mapOpen &&[\s\S]*<TeamLoadMap/);
+// Rodny, 10 de noviembre de 2026: la semana pasó a gráficos con lo que es seguro; las decisiones de Bria viven en
+// Manager → Decisiones.
+test('Ritmo opens with the week as charts of registered data', () => {
+  const charts = readFileSync('src/components/modules/TeamWeekCharts.jsx', 'utf8');
+  assert.match(panel, /view === 'week'.*<TeamWeekCharts/);
+  assert.match(charts, /buildWeekCharts/);
+  assert.match(charts, /\/api\/manager\/rhythm\/load\?window=week/);
+  assert.match(charts, /data-week-chart=\{testId\}/);
 });
 
 test('the reading is a Bria surface: gradient header with the mascot, decisions with evidence, server-first toasts', () => {
