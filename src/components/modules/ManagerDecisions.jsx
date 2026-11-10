@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  AlertCircle, ArrowUpRight, CheckCircle2, ChevronDown, ExternalLink, Lightbulb, Loader2, RefreshCw, X
+  AlertCircle, ArrowUpRight, CheckCircle2, ChevronDown, ExternalLink, Loader2, RefreshCw, X
 } from '@/components/ui/icons';
 import BriaPortrait from '@/components/bria/BriaPortrait';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
@@ -9,9 +9,12 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { askBria } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
 import { LATER_OPTIONS, DISCARD_REASONS, MAX_DECISIONS_PER_WEEK, NOTE_MAX, openLabel, responseProblem } from '@/lib/managerDecisions';
+import { decisionFingerprint, markSeen } from '@/lib/managerDecisionsSeen';
+import { useAuth } from '@/context/AuthContext';
 
 // Las decisiones de Manager (Rodny, 10 de noviembre de 2026): una sola lista con lo que Bria propone y lo que el
-// Observer detectó esta semana, agrupado y repartido por dueño. Se ven como mucho cinco; el resto, al desplegar.
+// Observer detectó esta semana, agrupado y repartido por dueño. Siempre las seis primeras: al responder una, entra la
+// siguiente. No hay «ver las demás».
 const TOP = MAX_DECISIONS_PER_WEEK;
 
 const LEVEL = {
@@ -185,13 +188,13 @@ const Section = ({ title, count, children, defaultOpen = false, testId }) => (
 
 const answerLine = (card) => [card.answer?.label, card.answer?.note].filter(Boolean).join(' · ');
 
-export default function ManagerDecisions({ onOpenHistory } = {}) {
+export default function ManagerDecisions() {
   const request = useRequest();
+  const { currentUser } = useAuth();
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyKey, setBusyKey] = useState('');
-  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,6 +210,10 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
   }, [request]);
 
   useEffect(() => { load(); }, [load]);
+  // Lo que está a la vista deja de ser «nuevo» para el punto del menú.
+  useEffect(() => {
+    if (board?.pending) markSeen(currentUser?.id, board.pending.slice(0, TOP).map(decisionFingerprint));
+  }, [board, currentUser?.id]);
 
   const respond = useCallback(async (card, body) => {
     setBusyKey(card.key);
@@ -236,9 +243,9 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
     );
   }
 
-  const { pending = [], taken = [], answered = [], avoid = [], delegated = [], learned = [], counts = {}, scorecard, readingDay } = board || {};
+  const { pending = [], taken = [], answered = [], avoid = [], delegated = [], learned = [], counts = {}, readingDay } = board || {};
   const top = pending.slice(0, TOP);
-  const rest = pending.slice(TOP);
+  const waiting = pending.length - top.length;
   const inCourse = [...answered.filter((card) => card.answer?.respuesta === 'HACER'), ...taken];
   const closedToday = answered.filter((card) => card.answer?.respuesta !== 'HACER');
 
@@ -274,16 +281,11 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Mañana a las 7:30 te traigo la lectura nueva.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {(showAll ? pending : top).map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} />)}
+            {top.map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} />)}
           </div>
-          {rest.length > 0 && (
-            <button type="button" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)} className={cn(outline, 'w-full')}>
-              <ChevronDown className={cn('h-4 w-4 transition-transform', showAll && 'rotate-180')} />
-              {showAll ? `Ver solo las ${TOP} primeras` : `Ver las demás (${rest.length})`}
-            </button>
-          )}
+          {waiting > 0 && <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">Hay {plural(waiting, 'otra', 'otras')} en espera: entran a medida que respondes.</p>}
         </div>
       )}
       {delegated.length > 0 && (
@@ -304,7 +306,8 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
         </section>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      {/* items-start: abrir una sección no estira a la de al lado. */}
+      <div className="grid items-start gap-3 lg:grid-cols-2">
         {inCourse.length > 0 && (
           <Section title="Te encargas tú" count={inCourse.length} testId="taken">
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
@@ -350,19 +353,6 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
           </Section>
         )}
       </div>
-
-      {scorecard?.lectura && (
-        <div className="flex items-start gap-3 rounded-2xl border border-brand-cyan/20 bg-brand-cyan/[0.04] px-4 py-3 dark:border-brand-cyan/25 dark:bg-brand-cyan/[0.07]">
-          <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" />
-          <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300"><strong className="font-semibold text-zinc-900 dark:text-zinc-100">Cómo me va contigo:</strong> {scorecard.anotadas ? scorecard.lectura : 'todavía no has respondido ninguna decisión. Con cada respuesta empiezo a medir qué te sirve y qué no.'}</p>
-        </div>
-      )}
-
-      {onOpenHistory && (
-        <div className="flex justify-center">
-          <button type="button" onClick={onOpenHistory} className={link}>{counts.outsideWeek ? `Lo de semanas anteriores (${counts.outsideWeek}) está en el historial del Observer` : 'Ver el historial del Observer'}</button>
-        </div>
-      )}
     </div>
   );
 }

@@ -25,5 +25,14 @@ export const createRespondHandler = (service = getManagerDecisionService) => asy
   }
 };
 
+export const createPulseHandler = (service = getManagerDecisionService) => async (req, res) => {
+  try {
+    return res.json(await service().pulse(req.user));
+  } catch (error) {
+    return sendError(res, error, 'No pude saber si hay decisiones nuevas.');
+  }
+};
+
 export const board = createBoardHandler();
+export const pulse = createPulseHandler();
 export const respond = createRespondHandler();

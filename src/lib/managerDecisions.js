@@ -257,7 +257,8 @@ const byScore = (a, b) => b.score - a.score || String(b.detectedAt || '').locale
 
 // Rodny, 10 de noviembre de 2026: «no lo veo práctico». Doce cuentas que «llevan 23 días en rojo» no son doce
 // decisiones: son una. Lo mismo en varias cuentas o personas se agrupa en una sola tarjeta, con lo que Bria haría.
-export const MAX_DECISIONS_PER_WEEK = 5;
+// A la vista siempre las seis primeras; al responder una, entra la siguiente (Rodny, 10 de noviembre de 2026).
+export const MAX_DECISIONS_PER_WEEK = 6;
 const GROUP_OF = Object.freeze({ VENCIDAS_SOSTENIDAS: 'VENCIDAS', VENCIDAS_SUBEN: 'VENCIDAS' });
 const ACCOUNTS = '/clientes?tab=operacion';
 const GROUPS = Object.freeze({

@@ -267,6 +267,12 @@ router.get(
     requireManagerRole,
     managerDecisionController.board
 );
+router.get(
+    '/manager/decisions/pulse',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    managerDecisionController.pulse
+);
 router.post(
     '/manager/decisions/respond',
     requireModulePermission('manager'),

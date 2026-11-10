@@ -26,7 +26,7 @@ test('el éxito se dice después de la respuesta del servidor y el error queda j
   assert.match(view, /role="alert"/);
 });
 
-test('primero las tres más urgentes en una fila; el resto al desplegar', () => {
+test('siempre seis a la vista; al responder una entra la siguiente, sin «ver las demás»', () => {
   assert.match(view, /const TOP = MAX_DECISIONS_PER_WEEK;/);
   assert.match(view, /Hazlo, Bria/);
   assert.match(view, /if \(await send\(\{ respuesta: 'HACER' \}\)\) askBria\(card\.ask\)/, 'Bria se abre solo después de guardar la respuesta');
@@ -35,8 +35,9 @@ test('primero las tres más urgentes en una fila; el resto al desplegar', () => 
   assert.match(view, /xl:grid-cols-3/);
   assert.match(view, /openLabel\(card\.url\)/, 'el enlace dice a dónde lleva');
   assert.doesNotMatch(view, /bg-zinc-900 px-4/, 'ningún botón negro: el principal es el cian de la plataforma');
-  assert.match(view, /Ver las demás/);
-  assert.match(view, /aria-expanded=\{showAll\}/);
+  assert.doesNotMatch(view, /Ver las demás|showAll/);
+  assert.match(view, /items-start gap-3 lg:grid-cols-2/, 'abrir una sección no estira a la de al lado');
+  assert.match(view, /markSeen\(currentUser\?\.id/, 'lo que está a la vista deja de ser nuevo para el menú');
 });
 
 test('Bria está presente: su retrato, su lectura y «Pedírselo a Bria»', () => {
@@ -44,7 +45,7 @@ test('Bria está presente: su retrato, su lectura y «Pedírselo a Bria»', () =
   assert.match(view, /brain-ai-header/);
   assert.match(view, /askBria\(/);
   assert.match(view, /Lo que aprendí a no mostrarte/);
-  assert.match(view, /Cómo me va contigo/);
+  assert.doesNotMatch(view, /Cómo me va contigo|semanas anteriores/, 'Rodny los quitó el 10 de noviembre de 2026');
 });
 
 test('controles táctiles de 44 px, colores de la marca y modo oscuro', () => {

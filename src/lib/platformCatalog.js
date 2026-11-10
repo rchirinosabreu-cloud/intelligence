@@ -111,6 +111,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /manager/observer-signals/sync': { que: 'Vuelve a escanear las fuentes.' },
   'PATCH /manager/observer-signals/:id': { que: 'Resuelve, descarta o archiva una señal.', campos: 'status, note' },
   'GET /manager/decisions': { que: 'Las decisiones de la semana en Manager: lo que propuso la lectura de la mañana y lo que detectó el Observer esta semana, por urgencia, con lo ya respondido y lo que Bria aprendió a no mostrar.' },
+  'GET /manager/decisions/pulse': { que: 'Si hay decisiones de Manager esperando respuesta (solo sus huellas, para el aviso del menú).' },
   'POST /manager/decisions/respond': { que: 'Responde una decisión de Manager: me encargo, descartar (con motivo) o más tarde (mañana, en 3 días o la próxima semana).', campos: 'source (LECTURA u OBSERVER), id, respuesta (HACER, DESCARTAR, MAS_TARDE), motivo (ESPERA_CLIENTE, YA_RESUELTO, NO_PRIORIDAD, INFO_INCORRECTA, OTRO), nota, hasta (MANANA, TRES_DIAS, PROXIMA_SEMANA)' },
   'GET /metrics/quality-streak': { que: 'La racha de calidad del equipo.' },
   // Gestión (tareas)

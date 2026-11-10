@@ -106,6 +106,7 @@ export async function createManagerPreview({ port = 3120 } = {}) {
   const api = express();
   api.use(express.json());
   api.get('/api/manager/decisions', async (_req, res) => res.json(await service.board(viewer)));
+  api.get('/api/manager/decisions/pulse', async (_req, res) => res.json(await service.pulse(viewer)));
   api.post('/api/manager/decisions/respond', async (req, res) => {
     try { res.json(await service.respond(viewer, req.body || {})); }
     catch (error) { res.status(error.status || 500).json({ error: 'MANAGER_DECISION_REJECTED', message: error.message }); }

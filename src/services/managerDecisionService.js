@@ -4,7 +4,8 @@
 // `src/lib/managerDecisions.js`; aquí solo se lee y se escribe.
 
 import prisma from '../lib/prisma.js';
-import { buildDecisionBoard, responseProblem, readingVerdictFor, observerActionFor, LEARN_DAYS } from '../lib/managerDecisions.js';
+import { decisionFingerprint } from '../lib/managerDecisionsSeen.js';
+import { buildDecisionBoard, responseProblem, readingVerdictFor, observerActionFor, LEARN_DAYS, MAX_DECISIONS_PER_WEEK } from '../lib/managerDecisions.js';
 import { transitionObserverSignal } from './briaObserverService.js';
 import { getDailyReadingService } from './dailyReadingService.js';
 
@@ -65,6 +66,11 @@ export const createManagerDecisionService = ({ db = prisma, reading = getDailyRe
 
   return {
     board,
+    /** Lo que el punto del menú necesita saber: las huellas de lo que espera decisión, sin contenido. */
+    async pulse(user) {
+      const current = await board(user);
+      return { keys: current.pending.slice(0, MAX_DECISIONS_PER_WEEK).map(decisionFingerprint) };
+    },
     async respond(user, body = {}) {
       const problem = responseProblem(body);
       if (problem) throw fail(problem, 400);

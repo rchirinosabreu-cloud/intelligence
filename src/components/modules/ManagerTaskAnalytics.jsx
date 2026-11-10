@@ -276,7 +276,7 @@ export default function ManagerTaskAnalytics() {
           </button>
         </nav>
 
-        {activeTab === 'decisiones' ? <ManagerDecisions onOpenHistory={() => setActiveTab('observer')} /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
+        {activeTab === 'decisiones' ? <ManagerDecisions /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
         <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900 w-fit" aria-label="Lectura de Ritmo">
           {[['week', 'Esta semana'], ['history', 'Historial']].map(([value, label]) => <button key={value} type="button" aria-pressed={rhythmView === value} onClick={() => setRhythmView(value)} className={cn('min-h-11 rounded-lg px-4 text-sm font-medium', rhythmView === value ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}
         </div>

@@ -48,7 +48,7 @@ test('Manager opens on Decisiones; the Observer inbox stays reachable as history
   const panel = await readPanel();
   assert.match(panel, /data-bria-tab="decisiones"/);
   assert.match(panel, /get\('tab'\) : 'decisiones'/);
-  assert.match(panel, /<ManagerDecisions onOpenHistory=\{\(\) => setActiveTab\('observer'\)\} \/>/);
+  assert.match(panel, /<ManagerDecisions \/>/);
   assert.match(panel, /activeTab === 'observer' \? <BriaObserverInbox \/>/);
   assert.match(panel, /Observa y explica; no ejecuta acciones/i);
   assert.doesNotMatch(panel, /data-bria-tab="copilot"/);
