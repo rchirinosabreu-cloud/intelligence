@@ -24,6 +24,7 @@ window.fetch=(url,options)=>{
  else if(path==='/api/user/onboarding')data={user,autoOnboarding:false,progress:{welcome:true,cotizaciones:true}};
  else if(path.includes('/notifications'))data={items:[],unreadCount:0};
  else if(path.includes('/important-notices'))data={notices:[]};
+ else if(path==='/api/manager/decisions/pulse')data={keys:[]};
  return Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}}));
 };
 const request=axios.getAdapter('xhr');
