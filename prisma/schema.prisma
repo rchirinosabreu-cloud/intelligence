@@ -2572,6 +2572,8 @@ model ThirdParty {
   updatedAt         DateTime          @updatedAt
   payables          AccountsPayable[]
   barterReceivables AccountsReceivable[] @relation("BarterBeneficiary")
+  collaborators FinancialCollaborator[]
+  receivables AccountsReceivable[] @relation("ReceivableParty")
 
   @@index([kind, isActive])
   @@index([name])
@@ -2805,6 +2807,8 @@ model PayrollPosition {
 
 model FinancialCollaborator {
   id             String                 @id @default(uuid())
+  thirdPartyId   String?
+  thirdParty     ThirdParty? @relation(fields: [thirdPartyId], references: [id], onDelete: Restrict)
   displayName    String
   normalizedName String                 @unique
   userId         String?
@@ -2819,6 +2823,7 @@ model FinancialCollaborator {
 
   @@index([userId])
   @@index([isActive])
+  @@index([thirdPartyId])
 }
 
 model FinancialImportAlias {
@@ -2972,6 +2977,8 @@ enum ReceivableStatus {
 
 model AccountsReceivable {
   id            String                @id @default(uuid())
+  thirdPartyId String?
+  thirdParty ThirdParty? @relation("ReceivableParty", fields: [thirdPartyId], references: [id], onDelete: Restrict)
   barterPaymentId String? @unique
   barterPayment ReceivablePayment? @relation("BarterOrigin", fields: [barterPaymentId], references: [id], onDelete: Restrict)
   beneficiaryThirdPartyId String?
@@ -3035,6 +3042,7 @@ model AccountsReceivable {
   payments      ReceivablePayment[]
 
   @@index([loanCollaboratorId])
+  @@index([thirdPartyId])
   @@index([beneficiaryThirdPartyId])
   @@index([clientId])
   @@index([period])

@@ -23,6 +23,26 @@ export const payrollPeriodsOverlap = (start, end, otherStart, otherEnd) => payro
 export function payrollMonthRange(year, month) {
   return { start: new Date(Date.UTC(year, month - 1, 1, 12)).toISOString().slice(0, 10), end: new Date(Date.UTC(year, month, 0, 12)).toISOString().slice(0, 10) };
 }
+// A contract for exactly one monthly cycle has an unambiguous full monthly amount,
+// including a cycle crossing calendar months. Shorter tranches still need review.
+export function payrollGenerationRange(contract,year,month) {
+  const calendar=payrollMonthRange(year,month);
+  const start=String(contract.startDate instanceof Date?contract.startDate.toISOString():contract.startDate).slice(0,10);
+  const end=contract.endDate?String(contract.endDate instanceof Date?contract.endDate.toISOString():contract.endDate).slice(0,10):null;
+  if(start<=calendar.start&&(!end||end>=calendar.end))return calendar;
+  if(!end||end.slice(0,7)!==calendar.start.slice(0,7))return null;
+  const date=new Date(`${start}T12:00:00Z`),day=date.getUTCDate();
+  const last=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+2,0)).getUTCDate();
+  const next=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,Math.min(day,last),12));next.setUTCDate(next.getUTCDate()-1);
+  return next.toISOString().slice(0,10)===end?{start,end}:null;
+}
+export function payrollUnknownMayOverlap(row,start,end,contractId) {
+  if(payrollServiceRange(row)||row.voidedAt)return false;
+  if(row.contractId===contractId||!row.contract?.startDate)return true;
+  const first=String(row.contract.startDate instanceof Date?row.contract.startDate.toISOString():row.contract.startDate).slice(0,10);
+  const last=row.contract.endDate?String(row.contract.endDate instanceof Date?row.contract.endDate.toISOString():row.contract.endDate).slice(0,10):null;
+  return !(first>end || (last&&last<start));
+}
 // A projection of the original monthly generation, never a backfill of service dates.
 // The current contract cannot establish the scope of a historical payroll.
 export function recordedMonthlyBasis(row, events) {

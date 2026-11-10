@@ -31,6 +31,7 @@ export default function ReceivableLoanDialog({ open, clients = [], accounts = []
       headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
     })).data
   });
+  const {data:people}=useQuery({queryKey:['financial-party-choices'],enabled:open,queryFn:async()=>(await axios.get(`${getApiBaseUrl()}/api/financials/third-parties`,{params:{selection:true},headers:{Authorization:`Bearer ${localStorage.getItem('authToken')}`}})).data});
   const selectRecord = id => {
     const record = candidates?.items?.find(item => item.id === id);
     set(record ? { financialRecordId: id, amount: String(record.amount), lentAt: record.date.slice(0, 10), accountId: record.accountId || '' } : { financialRecordId: '' });
@@ -45,15 +46,15 @@ export default function ReceivableLoanDialog({ open, clients = [], accounts = []
   };
   const shown = problem || error;
   return <Dialog open={open} onOpenChange={next => !next && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900" onOpenAutoFocus={event => { event.preventDefault(); event.currentTarget.focus(); }}>
-    <DialogHeader><DialogTitle>Registrar préstamo</DialogTitle><DialogDescription>Queda en Cuentas por cobrar, aparte de lo de los clientes. El egreso sale de la cuenta que elijas y la devolución se registra como reintegro, no como venta.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Registrar préstamo</DialogTitle><DialogDescription>Queda en la ficha de la persona, dentro de Cuentas por cobrar. El egreso sale de la cuenta que elijas y la devolución se registra como reintegro, no como venta.</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4">
       <DraftNotice draft={draft} disabled={saving} />
       <fieldset disabled={saving || draft.conflict} inert={saving || draft.conflict ? '' : undefined} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-1.5 text-sm"><span className="block">A quién se le presta</span><Select required disabled={saving || draft.conflict} className={field} value={form.counterpartyType} onChange={event => set({ counterpartyType: event.target.value, counterpartyName: '', clientId: '' })}>{LOAN_COUNTERPARTY_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
+        <label className="block space-y-1.5 text-sm"><span className="block">A quién se le presta</span><Select required disabled={saving || draft.conflict} className={field} value={form.counterpartyType} onChange={event => set({ counterpartyType: event.target.value, counterpartyName: '', clientId: '', partySelection: '' })}>{LOAN_COUNTERPARTY_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
         {form.counterpartyType === 'CLIENTE'
           ? <label className="block space-y-1.5 text-sm"><span className="block">Cliente</span><Select required disabled={saving || draft.conflict} className={field} value={form.clientId} onChange={event => set({ clientId: event.target.value })}><option value="">Seleccionar…</option>{clients.map(client => <option key={client.id} value={client.id}>{client.label || client.name}</option>)}</Select></label>
-          : <label className="block space-y-1.5 text-sm"><span className="block">Nombre</span><input required className={field} value={form.counterpartyName} onChange={event => set({ counterpartyName: event.target.value })} placeholder="Ej.: Melissa Ruiz" maxLength={120} /></label>}
+          : <label className="block space-y-1.5 text-sm"><span className="block">Persona de Terceros</span><Select required className={field} value={form.partySelection||''} onChange={event=>{const person=people?.thirdParties.find(p=>p.id===event.target.value);set({partySelection:event.target.value,counterpartyName:person?.name||''});}}><option value="">Seleccionar persona…</option>{people?.thirdParties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></label>}
       </div>
       <label className="block space-y-1.5 text-sm"><span className="block">El dinero</span><Select disabled={saving || draft.conflict} className={field} value={form.source} onChange={event => set({ source: event.target.value, financialRecordId: '', amount: '', accountId: '' })}><option value="NEW">Registrar el egreso ahora</option><option value="EXISTING">El egreso ya está en Movimientos</option></Select></label>
       {existing && <label className="block space-y-1.5 text-sm"><span className="block">Egreso de préstamo registrado</span><Select required className={field} value={form.financialRecordId} onChange={event => selectRecord(event.target.value)} disabled={isLoading || saving || draft.conflict}><option value="">{isLoading ? 'Consultando…' : 'Seleccionar egreso…'}</option>{candidates?.items?.map(record => <option key={record.id} value={record.id}>{record.date.slice(0, 10)} · {record.description || 'Préstamo'} · {money(record.amount)}</option>)}</Select>{!isLoading && existing && !candidates?.items?.length && <span className="block text-xs text-zinc-500">No hay egresos de categoría Préstamo sin ligar a un préstamo.</span>}</label>}

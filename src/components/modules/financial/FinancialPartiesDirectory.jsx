@@ -1,3 +1,5 @@
+import FinancialPersonSummary from './FinancialPersonSummary';
+import FinancialPersonDialog from './FinancialPersonDialog';
 import PartyMergeDialog from './PartyMergeDialog';
 import React, { useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -153,7 +155,7 @@ export default function FinancialPartiesDirectory({
     });
     const team = useMemo(() => (Array.isArray(teamData?.team) ? teamData.team : []), [teamData]);
 
-    const rows = useMemo(() => buildPartyRows(buildClientDirectoryRows(directory, reconciliation?.clients || []), thirdParties, commercial, team), [directory, reconciliation, thirdParties, commercial, team]);
+    const rows = useMemo(() => buildPartyRows(buildClientDirectoryRows(directory, reconciliation?.clients || []), thirdParties, commercial, team, thirdPartiesData?.collaborators || []), [directory, reconciliation, thirdParties, commercial, team, thirdPartiesData]);
     const summary = useMemo(() => summarizeParties(rows), [rows]);
     const visible = useMemo(() => filterPartyRows(rows, { search, role, status }), [rows, search, role, status]);
 
@@ -324,6 +326,7 @@ export default function FinancialPartiesDirectory({
                                     </button>
                                     {isOpen && (
                                         <div className="grid gap-4 border-t border-zinc-200 bg-zinc-50/60 px-4 py-4 dark:border-white/10 dark:bg-white/5 lg:grid-cols-2">
+                                            {thirdParty && <FinancialPersonSummary party={thirdParty} />}
                                             {/* La ficha de cliente: lo que va en la cuenta de cobro. */}
                                             {(row.clientId || row.unlinked) && (
                                                 <section className="min-w-0 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900" data-client-profile-card>
@@ -361,12 +364,12 @@ export default function FinancialPartiesDirectory({
                                                             )}
                                                         </div>
                                                     )}
-                                                    <div className="grid grid-cols-3 gap-3 border-t border-zinc-100 pt-3 text-xs dark:border-white/5">
+                                                    {!thirdParty && <div className="grid grid-cols-3 gap-3 border-t border-zinc-100 pt-3 text-xs dark:border-white/5">
                                                         <p className="text-zinc-500">Ingresos <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.income || 0)}</span></p>
                                                         <p className="text-zinc-500">Por cobrar <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.receivable || 0)}</span></p>
                                                         <p className="text-zinc-500">Registros <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{row.recordCount}</span></p>
-                                                    </div>
-                                                    {row.clientId && (
+                                                    </div>}
+                                                    {row.clientId && !thirdParty && (
                                                         <button type="button" className="min-h-11 text-sm font-medium text-primary underline underline-offset-2"
                                                             onClick={() => onOpenStatement({ id: row.clientId, name: row.name })}>
                                                             Ver estado de cuenta
@@ -472,6 +475,7 @@ export default function FinancialPartiesDirectory({
                                                 </section>
                                             )}
 
+                                            {(thirdParty || row.collaborator) && <section className="space-y-2 lg:col-span-2 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><h3 className="text-sm font-semibold">Identidad y registros relacionados</h3><p className="text-xs text-zinc-500">Una persona con sus roles, préstamos y contratos.</p>{thirdParty?.collaborators?.map(c=><p className="text-sm" key={c.id}>Nómina · {c.displayName}</p>)}{canWriteFinancials && <button className="min-h-11 text-sm font-semibold text-primary" onClick={()=>setDialog({kind:'person',party:thirdParty,collaborator:row.collaborator})}>Relacionar registros de esta persona</button>}</section>}
                                             {row.quotations?.length > 0 && <PartyQuotations quotations={row.quotations} originState={originState} />}
 
                                             {/* La vinculación de siempre: pasar movimientos y cartera a otra ficha. */}
@@ -514,6 +518,7 @@ export default function FinancialPartiesDirectory({
                 )}
             </Card>
 
+            {dialog?.kind === 'person' && <FinancialPersonDialog party={dialog.party} collaborator={dialog.collaborator} parties={thirdParties} onClose={closeDialog} onSaved={()=>afterSave(null,'Vínculos guardados. Pagos e historial conservados.')} />}
             {dialog?.kind === 'merge' && <PartyMergeDialog onClose={closeDialog} />}
             {dialog?.kind === 'client' && (
                 <ClientProfileDialog open client={dialog.client} initialName={dialog.initialName} initialProfile={dialog.initialProfile}

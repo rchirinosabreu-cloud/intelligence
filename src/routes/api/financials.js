@@ -1,3 +1,4 @@
+import { personReviewHandler, personLinkHandler, personReverseHandler, personCreateHandler } from '../../controllers/financialPersonController.js';
 import { barterOptionsHandler, readBarterHandler, assignBarterHandler, reverseBarterHandler } from '../../controllers/financialBarterController.js';
 import express from 'express';
 import { payrollPeriodHandler } from '../../controllers/payrollPeriodController.js';
@@ -301,6 +302,10 @@ router.get('/third-parties/:id/merge-review', requireFinancialAccess, reviewPart
 router.post('/third-parties/:id/merge', requireFinancialWrite, mergePartiesHandler);
 router.get('/party-merges/:id', requireFinancialAccess, readPartyMergeHandler);
 router.post('/party-merges/:id/reverse', requireFinancialWrite, reversePartyMergeHandler);
+router.get('/third-parties/:id/person', requireFinancialAccess, personReviewHandler);
+router.post('/third-parties/:id/person', requireFinancialWrite, personLinkHandler);
+router.post('/person-links/:id/reverse', requireFinancialWrite, personReverseHandler);
+router.post('/parties/profile', requireFinancialWrite, personCreateHandler);
 router.get('/third-parties', requireFinancialAccess, listThirdPartiesHandler);
 router.get('/parties/commercial', requireFinancialAccess, listPartyCommercialHandler);
 router.get('/parties/team', requireFinancialAccess, listPartyTeamHandler);

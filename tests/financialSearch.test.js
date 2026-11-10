@@ -38,7 +38,7 @@ function fixture() {
         findMany: async args => { calls.push({ name, args }); const found = rows.filter(row => matches(row, args.where)); return found.slice(args.skip || 0, args.take ? (args.skip || 0) + args.take : undefined); },
         count: async args => rows.filter(row => matches(row, args.where)).length
     }; }
-    return { calls, prismaClient: { financialRecord: model('records', records), accountsReceivable: model('debts', debts), payrollTransaction: model('payroll', []), payrollContract: model('contracts', contracts), client: model('clients', []) } };
+    return { calls, prismaClient: { thirdParty: model('parties', []), financialRecord: model('records', records), accountsReceivable: model('debts', debts), payrollTransaction: model('payroll', []), payrollContract: model('contracts', contracts), client: model('clients', []) } };
 }
 const filters = { year: '2026', scenario: 'ACTUAL', month: '9', q: '  RoDnY  ', scope: 'active', status: 'POSTED' };
 

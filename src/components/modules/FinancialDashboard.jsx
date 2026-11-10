@@ -1,3 +1,5 @@
+import { payrollMonthRange } from '@/lib/payrollPeriods';
+import { groupPayrollPeople } from '@/lib/payrollPeople';
 import LegacyOffsetDialog from './financial/LegacyOffsetDialog';
 import FinancialBarterDialog from './financial/FinancialBarterDialog';
 import Select from '@/components/ui/Select';
@@ -314,6 +316,7 @@ const FinancialDashboard = () => {
         enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payables', 'payroll'].includes(activeTab))
     });
 
+    const { data: payrollPartyChoices } = useQuery({ queryKey: ['financial-party-choices'], enabled: isPayrollContractEditorOpen, queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/third-parties`, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }, params: { selection: true } })).data });
     const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
         queryKey: ['financials-payroll-ledger', filterQuery],
         queryFn: async () => {
@@ -1122,11 +1125,7 @@ await invalidateFinancialQueries(queryClient);
         (!receivableKind || receivableKind === (item.kind || 'CLIENTE'))
         && (!receivableBucket || agingBucketOf(item) === receivableBucket)
     ))), [receivablesLedger?.items, receivableKind, receivableBucket]);
-    const receivableSections = useMemo(() => [
-        { key: 'CLIENTE', title: 'Clientes', groups: receivablesByClient.filter((group) => group.kind === 'CLIENTE') },
-        { key: 'BENEFICIARIO', title: 'Beneficiarios de canjes', groups: receivablesByClient.filter(group => group.kind === 'BENEFICIARIO') },
-        { key: 'PRESTAMO', title: 'Préstamos a terceros', groups: receivablesByClient.filter((group) => group.kind === 'PRESTAMO') }
-    ].filter((section) => section.groups.length > 0), [receivablesByClient]);
+    const receivableSections = useMemo(() => [{ key: 'PERSONAS', title: 'Cuentas por cobrar por tercero', groups: receivablesByClient }], [receivablesByClient]);
     const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser, canFormalize }), [isAdminUser, canFormalize]);
     const activeFinancialTab = financialTabOfView(activeTab);
     const activeTabViews = financialTabs.find((group) => group.key === activeFinancialTab)?.views || [];
@@ -1141,9 +1140,12 @@ await invalidateFinancialQueries(queryClient);
         return data?.payroll?.collaborators || [];
     }, [data?.payroll?.collaborators, payrollLedger?.items, payrollMonth, selectedYear]);
 
+    const payrollPeople = useMemo(() => groupPayrollPeople(payrollRows), [payrollRows,selectedYear,payrollMonth]);
+    const [expandedPayrollPeople, setExpandedPayrollPeople] = useState({});
+
     const editablePayrollTotal = useMemo(() => (
-        [...new Map(payrollRows.map(item => [item.id || item.contractId, item])).values()].reduce((sum, item) => sum + (Number(item.monthlyTotal ?? item.totalPaid) || 0), 0)
-    ), [payrollRows]);
+        [...new Map(payrollRows.filter(item => String(item.startDate || '').slice(0,10) <= payrollMonthRange(selectedYear,payrollMonth).end && (!item.endDate || String(item.endDate).slice(0,10) >= payrollMonthRange(selectedYear,payrollMonth).start)).map(item => [item.id || item.contractId, item])).values()].reduce((sum, item) => sum + (Number(item.monthlyTotal ?? item.totalPaid) || 0), 0)
+    ), [payrollRows,selectedYear,payrollMonth]);
 
     // 2. Route Guard Security Check (After ALL Hook Declarations)
     if (!currentUser || !canAccessFinancials) {
@@ -1406,7 +1408,7 @@ await invalidateFinancialQueries(queryClient);
                                 views={[{ key: 'ALL', label: 'Todas' }, { key: 'CLIENTE', label: 'Clientes' }, { key: 'PRESTAMO', label: 'Préstamos a terceros' }, { key: 'BENEFICIARIO', label: 'Beneficiarios de canjes' }]} />
                             <DebtAgingSummary data-receivable-summary totalLabel="Total por cobrar" formatCurrency={formatCurrency}
                                 items={(receivablesLedger?.items || []).filter((item) => !receivableKind || receivableKind === (item.kind || 'CLIENTE'))}
-                                partyOf={(item) => item.kind === 'BENEFICIARIO' ? `beneficiary:${item.beneficiaryThirdPartyId || item.id}` : `${item.kind === 'PRESTAMO' ? 'loan:' : ''}${item.clientId || item.clientName || item.id}`}
+                                partyOf={(item) => item.partyId ? `party:${item.partyId}` : item.clientId ? item.clientId : item.kind === 'BENEFICIARIO' ? `beneficiary:${item.beneficiaryThirdPartyId || item.id}` : `${item.kind === 'PRESTAMO' ? 'loan:' : ''}${item.clientId || item.clientName || item.id}`}
                                 bucket={receivableBucket} onBucketChange={setReceivableBucket} />
                         </>}
 
@@ -1443,7 +1445,7 @@ await invalidateFinancialQueries(queryClient);
                                                             {client.client.name}
                                                         </h4>
                                                         <p className="text-xs text-zinc-500">
-                                                            {client.kind === 'PRESTAMO' ? `Préstamo · ${loanCounterpartyLabel(client.counterpartyType)}` : `${client.debts?.length} cuenta${client.debts?.length === 1 ? '' : 's'}`}
+                                                            {client.debts.length} obligaciones · {client.kinds.map(kind => kind === 'PRESTAMO' ? 'Préstamos' : kind === 'BENEFICIARIO' ? 'Canjes' : 'Servicios').join(' · ')}
                                                             {client.oldestBucket && <span data-receivable-oldest={client.oldestBucket} className={cn('ml-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium', agingBucketTone(client.oldestBucket) === 'danger' ? 'bg-destructive/10 text-destructive brain-destructive-text' : agingBucketTone(client.oldestBucket) === 'warning' ? 'bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow' : 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300')}>{agingBucketLabel(client.oldestBucket)}</span>}
                                                         </p>
                                                     </div>
@@ -1468,22 +1470,23 @@ await invalidateFinancialQueries(queryClient);
                                                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                                                         <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Obligaciones y abonos</p>
                                                         {/* El documento de seguimiento del cliente, desde la propia cartera (20 de octubre de 2026). */}
-                                                        {client.clientId && !String(client.clientId).includes(':') && (
-                                                            <button type="button" data-receivable-statement onClick={() => setStatementClient({ id: client.clientId, name: client.client.name })}
+                                                        {client.customerId && (
+                                                            <button type="button" data-receivable-statement onClick={() => setStatementClient({ id: client.customerId, name: client.client.name })}
                                                                 className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/5">
                                                                 <FileText className="h-3.5 w-3.5" />Estado de cuenta
                                                             </button>
                                                         )}
                                                     </div>
-                                                    {client.kind !== 'PRESTAMO' && client.clientId && !String(client.clientId).includes(':') && (
-                                                        <CollectionActivityPanel clientId={client.clientId} items={collectionActivities.byClient.get(client.clientId)} history={collectionActivities} canWrite={canWriteFinancials} />
+                                                    {client.customerId && (
+                                                        <CollectionActivityPanel clientId={client.customerId} items={collectionActivities.byClient.get(client.customerId)} history={collectionActivities} canWrite={canWriteFinancials} />
                                                     )}
+                                                    <div className="mb-4 flex flex-wrap gap-3">{client.kinds.map(kind=><div key={kind} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"><span className="text-zinc-500">{kind==='PRESTAMO'?'Préstamos':kind==='BENEFICIARIO'?'Canjes':'Servicios'}</span><strong className="ml-3 tabular-nums">{formatCurrency(client.debts.filter(d=>(d.kind||'CLIENTE')===kind&&!d.balanceReviewRequired).reduce((sum,d)=>sum+Number(d.outstanding||0),0))}</strong></div>)}</div>
                                                     <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} data-receivable={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                                                                        {isLoanReceivable(debt) ? <span data-receivable-loan>Préstamo a {loanCounterpartyLabel(debt.counterpartyType).toLowerCase()} · {formatFinancialPeriod(debt.period)}</span> : <>Periodo: {formatFinancialPeriod(debt.period)}</>}
+                                                                        {isLoanReceivable(debt) ? <span data-receivable-loan>Préstamo a {loanCounterpartyLabel(debt.counterpartyType).toLowerCase()} · {formatFinancialPeriod(debt.period)}</span> : <>{debt.kind === 'BENEFICIARIO' ? 'Canje' : 'Servicio'} · {formatFinancialPeriod(debt.period)}</>}
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
                                                                 </div>
@@ -1759,7 +1762,15 @@ await invalidateFinancialQueries(queryClient);
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {payrollRows.map((collab) => {
+                                            {payrollPeople.map(person => <React.Fragment key={person.id}>
+                                                <tr data-payroll-person={person.id} className="bg-white dark:bg-zinc-900"><td colSpan={6} className="p-4"><button type="button" className="flex min-h-11 w-full items-center gap-3 text-left" aria-expanded={!!expandedPayrollPeople[person.id]} onClick={() => setExpandedPayrollPeople(current => ({...current,[person.id]:!current[person.id]}))}>
+                                                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{person.name.slice(0,2).toUpperCase()}</span>
+                                                    <span className="flex-1"><span className="block text-sm font-semibold">{person.name}</span><span className="text-xs text-zinc-500">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {person.rows.filter(r=>r.transaction).length} período{person.rows.filter(r=>r.transaction).length===1?'':'s'} en el mes</span></span>
+                                                    <span className="text-xs font-semibold text-primary">{expandedPayrollPeople[person.id] ? 'Ocultar' : 'Ver períodos'}</span>{expandedPayrollPeople[person.id] ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
+                                                </button></td></tr>
+                                                {expandedPayrollPeople[person.id] && <>
+                                                <tr><td colSpan={6} className="bg-zinc-50/60 px-5 py-3 dark:bg-white/[0.02]"><div className="space-y-3">{person.contracts.map(contract=><div key={contract.id} className="flex flex-wrap items-center justify-between gap-3 text-xs"><div><p className="font-semibold">Contrato · {new Date(contract.startDate).toLocaleDateString('es-CO',{timeZone:'UTC'})} – {contract.endDate ? new Date(contract.endDate).toLocaleDateString('es-CO',{timeZone:'UTC'}) : 'Sin terminación'}</p><p className="mt-1 text-zinc-500">Mensual: {formatCurrency(Number(contract.baseSalary)+Number(contract.socialSecurity))}</p></div><div className="flex flex-wrap items-center gap-4"><button className="min-h-11 font-semibold text-primary" onClick={()=>setPayrollPeriods(contract)}>Períodos e historial</button>{canWriteFinancials && <button className="min-h-11 font-semibold text-primary" onClick={()=>openPayrollContractEditor(contract)}>Editar contrato</button>}</div></div>)}</div></td></tr>
+                                                {person.rows.filter(row=>row.transaction || (String(row.startDate||'').slice(0,10)<=payrollMonthRange(selectedYear,payrollMonth).end && (!row.endDate || String(row.endDate).slice(0,10)>=payrollMonthRange(selectedYear,payrollMonth).start))).map((collab) => {
                                                 const transaction = collab.transaction;
                                                 const netAmount = transaction?.netAmount;
                                                 const draftChanged = payrollDraftNeedsContract(transaction, collab);
@@ -1767,22 +1778,8 @@ await invalidateFinancialQueries(queryClient);
                                                 <React.Fragment key={transaction?.id || collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name}>
                                                 <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
                                                     <td className="p-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-brand-cyan/10 flex items-center justify-center text-brand-cyan-deep font-bold text-[11px]">
-                                                                {collab.name.substring(0, 2).toUpperCase()}
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-bold text-zinc-900 dark:text-white">{collab.name}</p>
-                                                                <p className="text-[10px] text-zinc-500">{collab.position || collab.email || 'Sin cargo'}</p>
-                                                                <p className="mt-1 text-xs text-zinc-500">Contrato: {collab.startDate ? new Date(collab.startDate).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Sin fecha'} – {collab.endDate ? new Date(collab.endDate).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Sin terminación'}</p>
-                                                                <p className="text-xs text-zinc-500">Mensual vigente: {formatCurrency(Number(collab.baseSalary || 0) + Number(collab.socialSecurity || 0))}</p>
-                                                                <p className="mt-1 text-xs">{transaction?.serviceStart ? `Servicio: ${new Date(transaction.serviceStart).toLocaleDateString('es-CO', { timeZone: 'UTC' })} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : transaction?.monthlyBasis ? `Mensual registrado · ${FINANCIAL_MONTHS[transaction.month - 1]} ${transaction.year}` : transaction ? 'Servicio por identificar en el historial' : 'Sin liquidación para este mes'}</p>
-                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                                                                    <button type="button" aria-label={`Períodos de ${collab.name}`} onClick={() => setPayrollPeriods(collab)} className="min-h-9 text-xs font-semibold text-primary hover:underline">Liquidación e historial</button>
-                                                                    {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor(collab)} className="min-h-9 text-xs font-semibold text-primary hover:underline">Editar contrato</button>}
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                        <p className="font-medium">{transaction?.serviceStart ? `${new Date(transaction.serviceStart).toLocaleDateString('es-CO',{timeZone:'UTC'})} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO',{timeZone:'UTC'})}` : transaction?.monthlyBasis ? `Mensual registrado · ${FINANCIAL_MONTHS[transaction.month-1]} ${transaction.year}` : transaction ? 'Servicio por identificar en el historial' : 'Sin liquidación para este mes'}</p>
+                                                        {!transaction && canWriteFinancials && <button className="mt-2 min-h-11 font-semibold text-primary" onClick={()=>setPayrollPeriods(collab)}>Preparar período</button>}
                                                     </td>
                                                     <td className="p-4 font-medium tabular-nums">{transaction ? formatCurrency(transaction.baseSalary) : '—'}</td>
                                                     <td className="p-4 text-zinc-500 tabular-nums">{transaction ? formatCurrency(transaction.socialSecurity) : '—'}</td>
@@ -1822,7 +1819,7 @@ await invalidateFinancialQueries(queryClient);
                                                     </td>
                                                     <td className="p-4 text-right">
                                                         <div className="flex items-center justify-end gap-2 whitespace-nowrap" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
-                                                            {transaction && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Descuentos</button>}
+                                                            {transaction && (transaction.status !== 'PAID' || transaction.loanDeductions?.length > 0) && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Descuentos</button>}
                                                             {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10">Revisar importe</button>}
                                                             {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
                                                             {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-xs font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
@@ -1841,7 +1838,8 @@ await invalidateFinancialQueries(queryClient);
                                                 )}
                                                 </React.Fragment>
                                                 );
-                                            })}
+                                            })}</>}
+                                            </React.Fragment>)}
                                         </tbody>
                                     </table>
                                 </div>
@@ -2259,7 +2257,8 @@ await invalidateFinancialQueries(queryClient);
                     <form onSubmit={handleSavePayrollContract} className="space-y-4">
                         {noticeError && <p role="alert" className="text-sm text-destructive brain-destructive-text">{noticeError}</p>}
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Colaborador<input required value={payrollContractForm.name} onChange={(event) => setPayrollContractForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            {!editingPayrollContract && <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Persona de Terceros<select required aria-label="Persona del contrato" className="w-full min-h-11 rounded-lg border border-zinc-200 px-3 dark:bg-zinc-950" value={payrollContractForm.partySelection || ''} onChange={event => { const choice=payrollPartyChoices?.thirdParties.find(p=>p.id===event.target.value); setPayrollContractForm(current=>({...current,partySelection:event.target.value,name:choice?.name||''})); }}><option value="">Selecciona la persona</option>{payrollPartyChoices?.thirdParties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-xs text-zinc-500">Si es una persona nueva, crea primero su ficha en Terceros.</p></label>}
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Colaborador<input required readOnly={!editingPayrollContract || !!editingPayrollContract?.partyId} value={payrollContractForm.name} onChange={(event) => setPayrollContractForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cargo<input value={payrollContractForm.position} onChange={(event) => setPayrollContractForm((current) => ({ ...current, position: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Inicio</span><BrainDatePicker ariaLabel="Inicio del contrato" value={payrollContractForm.startDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, startDate: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Terminación</span><BrainDatePicker ariaLabel="Terminación del contrato" isClearable placeholder="Contrato activo" value={payrollContractForm.endDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, endDate: value }))} className="rounded-lg py-2.5" /></label>

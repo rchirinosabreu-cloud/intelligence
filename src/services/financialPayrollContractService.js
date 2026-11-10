@@ -1,3 +1,6 @@
+import { thirdPartyRoles } from '../lib/accountsPayable.js';
+import { resolveFinancialParty } from './financialPartySelection.js';
+import { randomUUID } from 'node:crypto';
 import { FinancialDomainError, parseFinancialDateInput } from './financialRecordService.js';
 
 const normalizeName = (value) => String(value || '')
@@ -50,11 +53,17 @@ export const createPayrollContract = async (prismaClient, input = {}, actor) => 
     const actorId = actor?.id || actor?.userId || null;
 
     return prismaClient.$transaction(async (tx) => {
-        const collaborator = await tx.financialCollaborator.upsert({
+        const party = input.partySelection ? await resolveFinancialParty(tx,input.partySelection,actor) : null;
+        if(party && !thirdPartyRoles(party).includes('COLABORADOR')){
+          const updated=await tx.thirdParty.update({where:{id:party.id},data:{roles:[...thirdPartyRoles(party),'COLABORADOR']}});
+          await tx.financialAuditEvent.create({data:{entityType:'ThirdParty',entityId:party.id,action:'UPDATE',actorId,before:cloneForAudit(party),after:cloneForAudit(updated)}});
+        }
+        const linked = party ? await tx.financialCollaborator.findFirst({where:{thirdPartyId:party.id,isActive:true},orderBy:{createdAt:'asc'}}) : null;
+        const collaborator = linked || (party ? await tx.financialCollaborator.create({data:{displayName:party.name,normalizedName:`party-${party.id}-${randomUUID()}`,thirdPartyId:party.id}}) : await tx.financialCollaborator.upsert({
             where: { normalizedName },
             update: { displayName: name, isActive: true },
             create: { displayName: name, normalizedName, isActive: true, metadata: { createdBy: actorId, origin: 'PLATFORM' } }
-        });
+        }));
         const position = await upsertPosition(tx, input.position);
         const contract = await tx.payrollContract.create({
             data: {
@@ -74,7 +83,7 @@ export const createPayrollContract = async (prismaClient, input = {}, actor) => 
             data: { entityType: 'PayrollContract', entityId: contract.id, action: 'CREATE', after: cloneForAudit(contract), actorId }
         });
         return contract;
-    });
+    }, { isolationLevel: 'Serializable' });
 };
 
 export const updatePayrollContract = async (prismaClient, contractId, input = {}, actor) => {
@@ -88,7 +97,7 @@ export const updatePayrollContract = async (prismaClient, contractId, input = {}
 
         const name = input.name === undefined ? null : String(input.name || '').trim();
         if (input.name !== undefined && !name) throw new FinancialDomainError('PAYROLL_COLLABORATOR_NAME_REQUIRED', 'El nombre del colaborador es obligatorio.');
-        if (name && existing.collaboratorId) {
+        if (name && existing.collaboratorId && !existing.collaborator?.thirdPartyId) {
             await tx.financialCollaborator.update({
                 where: { id: existing.collaboratorId },
                 data: { displayName: name, normalizedName: normalizeName(name) }
@@ -126,5 +135,5 @@ export const updatePayrollContract = async (prismaClient, contractId, input = {}
             data: { entityType: 'PayrollContract', entityId: contractId, action: 'UPDATE', before: cloneForAudit(existing), after: cloneForAudit(contract), actorId }
         });
         return contract;
-    });
+    }, { isolationLevel: 'Serializable' });
 };

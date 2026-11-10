@@ -78,17 +78,19 @@ test('el resumen suma en centavos por tramo y cuenta los terceros con saldo', ()
     assert.equal(oldestAgingBucket([open({ issuedAt: '2026-10-20' }), open({ issuedAt: '2026-05-01' })], today), 'MAS_DE_60');
 });
 
-test('un préstamo va en su propio grupo, aunque el tercero también sea cliente', () => {
+test('un préstamo conserva su naturaleza dentro de la misma ficha del cliente', () => {
     const groups = groupFinancialReceivables([
         open({ id: 'factura', clientId: 'iris', clientName: 'La Sazón de Iris', issuedAt: '2026-10-20' }),
         open({ id: 'prestamo', clientId: 'iris', clientName: 'La Sazón de Iris', kind: 'PRESTAMO', counterpartyType: 'CLIENTE', outstanding: 1060000, period: '2026-06-01' })
     ], today);
-    assert.equal(groups.length, 2);
-    const loan = groups.find((group) => group.kind === 'PRESTAMO');
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0].totalOutstanding, 1160000);
+    assert.deepEqual(groups[0].kinds, ['CLIENTE','PRESTAMO']);
+    const loan = groups[0].debts.find(debt => debt.kind === 'PRESTAMO');
     assert.equal(loan.counterpartyType, 'CLIENTE');
-    assert.equal(loan.totalOutstanding, 1060000);
-    assert.equal(loan.oldestBucket, 'MAS_DE_60');
-    assert.equal(groups.find((group) => group.kind === 'CLIENTE').oldestBucket, 'DE_0_A_30');
+    assert.equal(loan.outstanding, 1060000);
+    assert.equal(agingBucketOf(loan,today), 'MAS_DE_60');
+    assert.equal(agingBucketOf(groups[0].debts[0],today), 'DE_0_A_30');
 });
 
 const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url), 'utf8');

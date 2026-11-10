@@ -2,7 +2,7 @@ import { assertOpenFinancialPeriod, parseFinancialDateInput } from './financialR
 import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { atomic, authorize, audit, clone, hash, fail, conflict, request, payroll, payrollBalance, openPayrollPeriod, cents, money } from './payrollPeriodShared.js';
 
-const includeLoan = { payments: { orderBy: { id: 'asc' } } };
+const includeLoan = { loanCollaborator: { select: { thirdPartyId: true } }, payments: { orderBy: { id: 'asc' } } };
 function loanBalance(loan) {
   const applied = loan.payments.filter(p => !p.reversedAt).reduce((total, p) => total + cents(p.amount), 0), amount = cents(loan.amount);
   if (!Number.isSafeInteger(applied) || applied > amount || (isReceivableClosed(loan.status) && applied !== amount)) throw fail('PAYROLL_LOAN_REVIEW', 'El préstamo tiene un saldo histórico por verificar. Revísalo en Cartera.');
@@ -10,7 +10,7 @@ function loanBalance(loan) {
 }
 async function load(tx, id) {
   const row = await payroll(tx, id);
-  const loans = await tx.accountsReceivable.findMany({ where: { kind: 'PRESTAMO', OR: [{ loanCollaboratorId: row.contract.collaboratorId || '__none__' }, { loanCollaboratorId: null, counterpartyType: 'COLABORADOR' }] }, include: includeLoan, orderBy: { id: 'asc' } });
+  const loans = await tx.accountsReceivable.findMany({ where: { kind: 'PRESTAMO', OR: [{ loanCollaboratorId: row.contract.collaboratorId || '__none__' }, ...(row.contract.collaborator?.thirdPartyId ? [{thirdPartyId:row.contract.collaborator.thirdPartyId},{loanCollaborator:{thirdPartyId:row.contract.collaborator.thirdPartyId}}] : []), { thirdPartyId:null, loanCollaboratorId: null, counterpartyType: 'COLABORADOR' }] }, include: includeLoan, orderBy: { id: 'asc' } });
   return { row, loans, revision: hash({ row, loans }) };
 }
 function view(ctx) {
@@ -18,7 +18,7 @@ function view(ctx) {
   for (const loan of ctx.loans) {
     try {
       const outstanding = loanBalance(loan);
-      if (outstanding > 0 && loan.currency === 'COP') options.push({ id: loan.id, name: loan.counterpartyName, amount: money(cents(loan.amount)), outstanding: money(outstanding), linked: Boolean(loan.loanCollaboratorId) });
+      if (outstanding > 0 && loan.currency === 'COP') options.push({ id: loan.id, name: loan.counterpartyName, amount: money(cents(loan.amount)), outstanding: money(outstanding), linked: Boolean(loan.loanCollaboratorId || loan.thirdPartyId) });
     } catch (error) { unavailable.push({ id: loan.id, name: loan.counterpartyName, reason: error.message }); }
   }
   const deductions = ctx.row.adjustments.filter(a => a.receivablePaymentId).map(item => {
@@ -59,14 +59,14 @@ export async function createPayrollDeduction(db, id, input, actor) {
     if (!row.contract.collaboratorId || !row.contract.collaborator?.isActive) throw fail('PAYROLL_BORROWER_REQUIRED', 'El contrato debe estar vinculado a un colaborador activo.');
     const loan = ctx.loans.find(l => l.id === input.receivableId);
     if (!loan || loan.currency !== 'COP') throw fail('PAYROLL_LOAN_UNAVAILABLE', 'Selecciona un préstamo en COP de esta persona.');
-    if (!loan.loanCollaboratorId && input.confirmBorrower !== true) throw fail('PAYROLL_BORROWER_CONFIRMATION', 'Confirma expresamente a quién pertenece este préstamo antes de vincularlo.');
+    if (!loan.loanCollaboratorId && !loan.thirdPartyId && input.confirmBorrower !== true) throw fail('PAYROLL_BORROWER_CONFIRMATION', 'Confirma expresamente a quién pertenece este préstamo antes de vincularlo.');
     const beforeLoan = loanBalance(loan);
     if (amount > beforeLoan) throw fail('PAYROLL_LOAN_EXCEEDS', 'El descuento supera el saldo del préstamo.');
     const update = changedPayroll(row, amount);
     await checkPeriods(tx, row, loan, date);
     const payment = await tx.receivablePayment.create({ data: { receivableId: loan.id, kind: 'COMPENSACION', amount: money(amount), paidAt: date.date, notes: reason, createdById: user.id, detail: clone({ payrollTransactionId: id, authorizedBy, offsetAgainst: `Nómina ${row.year}-${row.month}`, requestId, actorName: user.name }) } });
-    const adjustment = await tx.payrollAdjustment.create({ data: { transactionId: id, type: 'DEDUCTION', amount: money(amount), description: reason, receivablePaymentId: payment.id, requestId, detail: clone({ fingerprint, actorId: user.id, actorName: user.name, authorizedBy, receivableId: loan.id, loanName: loan.counterpartyName, settledAt: date.date, borrowerConfirmed: !loan.loanCollaboratorId, beforeNet: row.netAmount, beforeLoan: money(beforeLoan) }) } });
-    const afterLoan = await tx.accountsReceivable.update({ where: { id: loan.id }, data: { loanCollaboratorId: row.contract.collaboratorId, status: receivableStatusAfter({ outstandingCents: beforeLoan - amount, payments: [...loan.payments, payment], currentStatus: loan.status }) } });
+    const adjustment = await tx.payrollAdjustment.create({ data: { transactionId: id, type: 'DEDUCTION', amount: money(amount), description: reason, receivablePaymentId: payment.id, requestId, detail: clone({ fingerprint, actorId: user.id, actorName: user.name, authorizedBy, receivableId: loan.id, loanName: loan.counterpartyName, settledAt: date.date, borrowerConfirmed: !loan.loanCollaboratorId && !loan.thirdPartyId, beforeNet: row.netAmount, beforeLoan: money(beforeLoan) }) } });
+    const afterLoan = await tx.accountsReceivable.update({ where: { id: loan.id }, data: { loanCollaboratorId: loan.loanCollaboratorId || row.contract.collaboratorId, thirdPartyId: loan.thirdPartyId || row.contract.collaborator?.thirdPartyId || null, status: receivableStatusAfter({ outstandingCents: beforeLoan - amount, payments: [...loan.payments, payment], currentStatus: loan.status }) } });
     const transaction = await tx.payrollTransaction.update({ where: { id }, data: update });
     await audit(tx, 'PayrollTransaction', id, row, { operation: 'LOAN_DEDUCTION', transaction, adjustment, reason }, user);
     await audit(tx, 'AccountsReceivable', loan.id, loan, { operation: 'PAYROLL_DEDUCTION', receivable: afterLoan, payment, reason }, user);
@@ -88,7 +88,7 @@ export async function reversePayrollDeduction(db, adjustmentId, input, actor) {
     if (ctx.revision !== input.expectedRevision) throw conflict();
     if (row.voidedAt || payment.reversedAt || payment.detail?.payrollTransactionId !== row.id || cents(payment.amount) !== cents(adjustment.amount) || payment.financialRecordId || payment.accountId) throw fail('PAYROLL_DEDUCTION_INCONSISTENT', 'El vínculo del descuento requiere revisión antes de revertirlo.');
     const loan = await tx.accountsReceivable.findUnique({ where: { id: payment.receivableId }, include: includeLoan });
-    if (!loan || loan.loanCollaboratorId !== row.contract.collaboratorId) throw fail('PAYROLL_DEDUCTION_INCONSISTENT', 'El préstamo ya no corresponde al colaborador de esta liquidación.');
+    if (!loan || (loan.loanCollaboratorId !== row.contract.collaboratorId && !(row.contract.collaborator?.thirdPartyId && (loan.thirdPartyId === row.contract.collaborator.thirdPartyId || loan.loanCollaborator?.thirdPartyId === row.contract.collaborator.thirdPartyId)))) throw fail('PAYROLL_DEDUCTION_INCONSISTENT', 'El préstamo ya no corresponde al colaborador de esta liquidación.');
     const beforeLoan = loanBalance(loan), amount = cents(adjustment.amount), update = changedPayroll(row, -amount);
     const originalDate = parseFinancialDateInput(new Date(payment.paidAt).toISOString().slice(0, 10));
     await checkPeriods(tx, row, loan, originalDate);

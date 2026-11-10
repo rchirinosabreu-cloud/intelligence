@@ -24,7 +24,7 @@ const datePartsOf = (record) => {
  * nazca igual venga de donde venga.
  */
 export const createLoanReceivableFor = async (tx, {
-    financialRecord, counterpartyType, counterpartyName, clientId = null, dueDate = null, notes = null, actorId = null, metadata = {}
+    financialRecord, counterpartyType, counterpartyName, clientId = null, thirdPartyId = null, dueDate = null, notes = null, actorId = null, metadata = {}
 }) => {
     const amountCents = financialCents(financialRecord.amount);
     const { date, year, month } = datePartsOf(financialRecord);
@@ -32,6 +32,7 @@ export const createLoanReceivableFor = async (tx, {
         data: {
             kind: LOAN_KIND,
             clientId,
+            thirdPartyId,
             counterpartyType,
             counterpartyName,
             loanRecordId: financialRecord.id,

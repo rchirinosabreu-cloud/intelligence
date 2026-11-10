@@ -1,5 +1,6 @@
+import { relatedPayrollWhere } from './financialPersonService.js';
 import { randomUUID } from 'node:crypto';
-import { calculatePayrollPeriod, payrollDay, payrollPeriodsOverlap, unknownPayrollPeriods, payrollServiceRange, payrollMonthRange } from '../lib/payrollPeriods.js';
+import { calculatePayrollPeriod, payrollDay, payrollPeriodsOverlap, unknownPayrollPeriods, payrollServiceRange, payrollMonthRange, payrollUnknownMayOverlap } from '../lib/payrollPeriods.js';
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { withPayrollMonthlyBasis } from './payrollMonthlyBasis.js';
 import { assertOpenFinancialPeriod } from './financialRecordService.js';
@@ -9,17 +10,17 @@ export { readPayrollDeductions, createPayrollDeduction, reversePayrollDeduction 
 async function load(tx, contractId) {
   const contract = await tx.payrollContract.findUnique({ where: { id: contractId }, include: { collaborator: true } });
   if (!contract) throw fail('PAYROLL_CONTRACT_NOT_FOUND', 'El contrato no existe.', 404);
-  const rows = await tx.payrollTransaction.findMany({ where: contract.collaboratorId ? { contract: { collaboratorId: contract.collaboratorId, importBatchId: null } } : { contractId }, include: includePayroll, orderBy: [{ year: 'asc' }, { month: 'asc' }, { id: 'asc' }] });
+  const rows = await tx.payrollTransaction.findMany({ where: await relatedPayrollWhere(tx,contract), include: includePayroll, orderBy: [{ year: 'asc' }, { month: 'asc' }, { id: 'asc' }] });
   const projected = await withPayrollMonthlyBasis(tx, rows);
   return { contract, rows: projected, revision: hash({ contract, rows: projected }) };
 }
 function checkRange(ctx, start, end, excludeId) {
   const live = ctx.rows.filter(row => !row.voidedAt && row.id !== excludeId);
-  const unknown = unknownPayrollPeriods(live);
+  const unknown = unknownPayrollPeriods(live.filter(row=>payrollUnknownMayOverlap(row,start,end,ctx.contract.id)));
   if (unknown.length) throw fail('PAYROLL_LEGACY_PERIOD_UNKNOWN', `Faltan las fechas de ${unknown.map(row => `${row.month}/${row.year} (${row.status === 'DRAFT' ? 'borrador' : 'liquidación'})`).join(', ')}. En «Liquidación e historial», precisa sus fechas o revisa la reversión si el registro sobra. Sus pagos se conservan.`);
   if (live.some(row => { const range = payrollServiceRange(row); return range && payrollPeriodsOverlap(start, end, range.start, range.end); })) throw fail('PAYROLL_PERIOD_OVERLAP', 'Estas fechas se superponen con una liquidación vigente. Revisa los períodos antes de continuar.');
 }
-const result = ctx => ({ ...ctx, transactions: ctx.rows.map(row => ({ ...row, contract: undefined })) });
+const result = ctx => ({ ...ctx, transactions: ctx.rows.map(row => ({ ...row, contract: row.contract ? { id: row.contract.id, startDate: row.contract.startDate, endDate: row.contract.endDate } : undefined })) });
 export const readPayrollPeriods = (db, contractId, actor) => db.$transaction(async tx => { await authorize(tx, actor, 'read'); return result(await load(tx, contractId)); }, { isolationLevel: 'RepeatableRead' });
 
 export async function syncPayrollPeriod(db, id, input, actor) {
