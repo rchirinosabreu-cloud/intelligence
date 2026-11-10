@@ -28,7 +28,8 @@ test('el éxito se dice después de la respuesta del servidor y el error queda j
 
 test('siempre seis a la vista; al responder una entra la siguiente, sin «ver las demás»', () => {
   assert.match(view, /const TOP = MAX_DECISIONS_PER_WEEK;/);
-  assert.match(view, /Hazlo, Bria/);
+  assert.match(view, /'Pedir a Bria'/);
+  assert.doesNotMatch(view, /Hazlo, Bria/);
   assert.match(view, /if \(await send\(\{ respuesta: 'HACER' \}\)\) askBria\(card\.ask\)/, 'Bria se abre solo después de guardar la respuesta');
   assert.match(view, /ids: card\.refs/, 'una tarjeta agrupada responde por todas');
   assert.match(view, /Quedó a cargo de otras personas/);

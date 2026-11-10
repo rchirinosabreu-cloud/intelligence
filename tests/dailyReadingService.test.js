@@ -529,6 +529,33 @@ test('if the model fails, Bria reads with the platform’s rules instead of goin
   assert.equal(reading.decisions[0].kind, 'VIGILAR');
 });
 
+// 10 de noviembre de 2026: el modelo respondía bien pero el validador descartaba todo y la lectura salía de las reglas.
+test('a rejected proposal goes back to the model once, with the reason; if it improves, Bria writes the reading', async () => {
+  const prompts = [];
+  const answer = (evidence) => ({ text: JSON.stringify({ resumen: 'Foobespain se puso en rojo.', decisiones: [
+    { titulo: 'Revisar Foobespain hoy', porque: 'Pasó de verde a rojo.', tipo: 'HACER', evidencia: [evidence], memoria: [], pedido: null, regla: null }
+  ], cuentas: [] }), model: 'gpt-test', usage: { total_tokens: 100 } });
+  const generate = async (request) => { prompts.push(request.prompt); return answer(prompts.length === 1 ? 'NO_EXISTE:x' : 'CUENTA_EMPEORO:c1'); };
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY }, generate });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  assert.equal(prompts.length, 2, 'exactly one correction');
+  assert.match(prompts[1], /=== CORRIGE ===[\s\S]*«Revisar Foobespain hoy»: cita en «evidencia» ids que no están en DATOS/);
+  const reading = repository.readings.get('2026-10-20');
+  assert.equal(reading.source, 'MODELO');
+  assert.equal(reading.decisions[0].title, 'Revisar Foobespain hoy');
+});
+
+test('if the correction is not better, the first validated answer stands and there is no third call', async () => {
+  let calls = 0;
+  const generate = async () => { calls += 1; return { text: JSON.stringify({ resumen: 'r', decisiones: [{ titulo: 'Inventada', porque: 'x', tipo: 'HACER', evidencia: ['NO_EXISTE:x'], memoria: [], pedido: null, regla: null }], cuentas: [] }) }; };
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY }, generate });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  assert.equal(calls, 2);
+  assert.equal(repository.readings.get('2026-10-20').source, 'REGLA');
+});
+
 test('in the chat, Bria reads the day and a history, inside the same scope as the morning message', async () => {
   const { service, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
   setClock(at('06:40'));
