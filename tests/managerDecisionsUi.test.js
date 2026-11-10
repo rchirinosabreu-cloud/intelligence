@@ -27,7 +27,11 @@ test('el éxito se dice después de la respuesta del servidor y el error queda j
 });
 
 test('primero las tres más urgentes en una fila; el resto al desplegar', () => {
-  assert.match(view, /const TOP = 3;/);
+  assert.match(view, /const TOP = MAX_DECISIONS_PER_WEEK;/);
+  assert.match(view, /Hazlo, Bria/);
+  assert.match(view, /if \(await send\(\{ respuesta: 'HACER' \}\)\) askBria\(card\.ask\)/, 'Bria se abre solo después de guardar la respuesta');
+  assert.match(view, /ids: card\.refs/, 'una tarjeta agrupada responde por todas');
+  assert.match(view, /Quedó a cargo de otras personas/);
   assert.match(view, /xl:grid-cols-3/);
   assert.match(view, /openLabel\(card\.url\)/, 'el enlace dice a dónde lleva');
   assert.doesNotMatch(view, /bg-zinc-900 px-4/, 'ningún botón negro: el principal es el cian de la plataforma');

@@ -18,8 +18,8 @@ export const createBoardHandler = (service = getManagerDecisionService) => async
 
 export const createRespondHandler = (service = getManagerDecisionService) => async (req, res) => {
   try {
-    const { source, id, respuesta, motivo, nota, hasta } = req.body || {};
-    return res.json(await service().respond(req.user, { source, id, respuesta, motivo, nota, hasta }));
+    const { source, id, ids, respuesta, motivo, nota, hasta } = req.body || {};
+    return res.json(await service().respond(req.user, { source, id, ids, respuesta, motivo, nota, hasta }));
   } catch (error) {
     return sendError(res, error, 'No pude guardar tu respuesta.');
   }

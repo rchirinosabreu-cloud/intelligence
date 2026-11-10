@@ -30,7 +30,8 @@ const fakeDb = (signal) => {
       async findUnique() { return signal; },
       async updateMany(args) { updates.push(args); return { count: args.where.updatedAt === signal.updatedAt ? 1 : 0 }; }
     },
-    client: { async findMany() { return [{ id: 'c1', name: 'Verona' }]; } }
+    client: { async findMany() { return [{ id: 'c1', name: 'Verona' }]; } },
+    teamMember: { async findMany() { return [{ name: 'Rodny Chirinos' }, { name: 'Kamila del Toro' }]; } }
   };
 };
 
@@ -92,4 +93,12 @@ test('una respuesta incompleta se rechaza antes de tocar nada', async () => {
   const service = createManagerDecisionService({ db, reading: fakeReading(), now: () => NOW, logger: quiet });
   await assert.rejects(service.respond(user, { source: 'OBSERVER', id: 's1', respuesta: 'DESCARTAR' }), (error) => error.status === 400 && /motivo/.test(error.message));
   assert.equal(db.updates.length, 0);
+});
+
+test('una tarjeta agrupada anota cada decisión que reúne', async () => {
+  const reading = fakeReading();
+  const service = createManagerDecisionService({ db: fakeDb(signal), reading, now: () => NOW, logger: quiet });
+  await service.respond(user, { source: 'LECTURA', id: '2026-11-10:1', ids: ['2026-11-10:1', '2026-11-10:2', '2026-11-10:1'], respuesta: 'HACER' });
+  assert.deepEqual(reading.calls.map(call => call.ref), ['2026-11-10:1', '2026-11-10:2']);
+  await assert.rejects(service.respond(user, { source: 'OBSERVER', id: 's1', ids: ['s1', 's2'], respuesta: 'HACER' }), (error) => error.status === 400);
 });

@@ -8,12 +8,11 @@ import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { askBria } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
-import { LATER_OPTIONS, DISCARD_REASONS, NOTE_MAX, openLabel, responseProblem } from '@/lib/managerDecisions';
+import { LATER_OPTIONS, DISCARD_REASONS, MAX_DECISIONS_PER_WEEK, NOTE_MAX, openLabel, responseProblem } from '@/lib/managerDecisions';
 
 // Las decisiones de Manager (Rodny, 10 de noviembre de 2026): una sola lista con lo que Bria propone y lo que el
-// Observer detectó, y tres respuestas que llegan al libro de decisiones o a la señal. Lo primero son las tres más
-// urgentes; el resto, al desplegar.
-const TOP = 3;
+// Observer detectó esta semana, agrupado y repartido por dueño. Se ven como mucho cinco; el resto, al desplegar.
+const TOP = MAX_DECISIONS_PER_WEEK;
 
 const LEVEL = {
   alta: { label: 'Urgente', dot: 'bg-brand-coral', chip: 'bg-brand-coral/10 text-brand-coral-deep dark:text-brand-coral' },
@@ -56,13 +55,16 @@ function DecisionCard({ card, onRespond, busy }) {
   const back = () => { setMode(null); setError(''); };
 
   const send = async (payload) => {
-    const body = { source: card.source, id: card.ref, ...payload };
+    const body = { source: card.source, id: card.ref, ...(card.refs?.length > 1 ? { ids: card.refs } : {}), ...payload };
     const problem = responseProblem(body);
-    if (problem) { setError(problem); return; }
+    if (problem) { setError(problem); return false; }
     setError('');
     const failure = await onRespond(card, body);
     if (failure) setError(failure);
+    return !failure;
   };
+  // «Hazlo, Bria»: se anota primero; con la respuesta guardada, Bria abre con el pedido escrito para que lo envíes.
+  const delegateToBria = async () => { if (await send({ respuesta: 'HACER' })) askBria(card.ask); };
 
   return (
     <article data-decision-card={card.key} className="flex h-full flex-col rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
@@ -73,8 +75,18 @@ function DecisionCard({ card, onRespond, busy }) {
         {card.subjectName && <span className="rounded-full bg-zinc-100 px-2.5 py-1 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">{card.subjectName}</span>}
       </div>
       {tag && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{tag}</p>}
-      <h3 className="mt-2 text-base font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{card.title}</h3>
-      {card.why && <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{card.why}</p>}
+      <h3 title={card.title} className="mt-2 line-clamp-3 text-base font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{card.title}</h3>
+      {card.why && <p className="mt-1.5 line-clamp-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{card.why}</p>}
+      {card.items?.length > 0 && (
+        <details className="group mt-2">
+          <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />Ver el detalle de cada una
+          </summary>
+          <ul className="mt-1 space-y-1.5 rounded-xl bg-zinc-50 px-3 py-2 text-sm leading-5 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            {card.items.map((item) => <li key={item.name}><span className="font-medium text-zinc-900 dark:text-zinc-100">{item.name}</span>{item.text ? `: ${item.text}` : ''}</li>)}
+          </ul>
+        </details>
+      )}
       {card.owner && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Quedó a cargo de <span className="font-medium text-zinc-700 dark:text-zinc-200">{card.owner}</span></p>}
       {card.quote && (
         <details className="group mt-2">
@@ -89,15 +101,15 @@ function DecisionCard({ card, onRespond, busy }) {
         {!mode && (
           <>
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" disabled={busy} onClick={() => send({ respuesta: 'HACER' })} className={primary}>
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Me encargo
+              <button type="button" disabled={busy} onClick={card.ask ? delegateToBria : () => send({ respuesta: 'HACER' })} className={primary}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{card.ask ? 'Hazlo, Bria' : 'Me encargo'}
               </button>
               <button type="button" disabled={busy} onClick={() => setMode('discard')} className={outline}>Descartar</button>
               <button type="button" disabled={busy} onClick={() => setMode('later')} className={outline}>Más tarde</button>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-1">
               {card.url && <button type="button" onClick={() => navigateFrom(card.url, { label: 'Manager' })} className={link}>{openLabel(card.url)}<ExternalLink className="h-3.5 w-3.5" /></button>}
-              <button type="button" onClick={() => askBria(card.ask || `Ayúdame con esto: ${card.title}${card.subjectName ? ` (${card.subjectName})` : ''}`)} className={link}>Pedírselo a Bria<ArrowUpRight className="h-3.5 w-3.5" /></button>
+              {card.ask && <button type="button" disabled={busy} onClick={() => send({ respuesta: 'HACER' })} className={link}>Lo hago yo</button>}
             </div>
           </>
         )}
@@ -224,7 +236,7 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
     );
   }
 
-  const { pending = [], taken = [], answered = [], avoid = [], learned = [], counts = {}, scorecard, readingDay } = board || {};
+  const { pending = [], taken = [], answered = [], avoid = [], delegated = [], learned = [], counts = {}, scorecard, readingDay } = board || {};
   const top = pending.slice(0, TOP);
   const rest = pending.slice(TOP);
   const inCourse = [...answered.filter((card) => card.answer?.respuesta === 'HACER'), ...taken];
@@ -237,7 +249,7 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/95"><BriaPortrait className="h-12 w-12 object-contain" /></span>
           <div className="min-w-0">
             <h2 className="text-lg font-semibold sm:text-xl">
-              {pending.length ? `Hoy necesito tu decisión en ${plural(pending.length, 'cosa', 'cosas')}` : 'Hoy no hay nada esperando tu decisión'}
+              {pending.length ? `Esta semana necesito tu decisión en ${plural(pending.length, 'cosa', 'cosas')}` : 'Esta semana no hay nada esperando tu decisión'}
             </h2>
             <p className="mt-0.5 text-sm text-white/90">
               {readingDay ? `Junté la lectura del ${dayWords(readingDay)} con lo que vi esta semana en reuniones y tareas.` : 'Todavía no hay lectura de la mañana; te muestro lo que vi esta semana en reuniones y tareas.'}
@@ -248,10 +260,10 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
           </button>
         </div>
         <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-5">
-          <Stat value={counts.pending || 0} label="Esperan tu decisión" />
+          <Stat value={counts.pending || 0} label="Para decidir" />
           <Stat value={counts.high || 0} label="Urgentes" tone={counts.high ? 'text-brand-coral-deep dark:text-brand-coral' : undefined} />
-          <Stat value={counts.taken || 0} label="Te encargas tú" tone="text-brand-cyan-deep dark:text-brand-cyan" />
-          <Stat value={counts.later || 0} label="Para más tarde" />
+          <Stat value={counts.taken || 0} label="En marcha" tone="text-brand-cyan-deep dark:text-brand-cyan" />
+          <Stat value={counts.delegated || 0} label="Son de otras personas" />
         </div>
       </section>
 
@@ -269,11 +281,29 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
           {rest.length > 0 && (
             <button type="button" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)} className={cn(outline, 'w-full')}>
               <ChevronDown className={cn('h-4 w-4 transition-transform', showAll && 'rotate-180')} />
-              {showAll ? 'Ver solo las tres primeras' : `Ver las demás (${rest.length})`}
+              {showAll ? `Ver solo las ${TOP} primeras` : `Ver las demás (${rest.length})`}
             </button>
           )}
         </div>
       )}
+      {delegated.length > 0 && (
+        <section data-decision-section="delegated" className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Quedó a cargo de otras personas</h3>
+          <p className="mt-0.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Salió en las reuniones de esta semana. No es para que lo decidas tú: si quieres, Bria se lo prepara como pendiente a cada quien.</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {delegated.map((person) => (
+              <div key={person.name} className="flex flex-col rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{person.name} <span className="font-normal text-zinc-500 dark:text-zinc-400">· {person.count}</span></p>
+                <ul className="mt-1.5 space-y-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">
+                  {person.cards.map((card) => <li key={card.key} className="line-clamp-2">{card.title}</li>)}
+                </ul>
+                <button type="button" onClick={() => askBria(person.ask)} className={cn(link, 'mt-auto self-start')}>Que Bria se lo prepare<ArrowUpRight className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-3 lg:grid-cols-2">
         {inCourse.length > 0 && (
           <Section title="Te encargas tú" count={inCourse.length} testId="taken">

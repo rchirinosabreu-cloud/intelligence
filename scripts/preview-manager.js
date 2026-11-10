@@ -98,7 +98,8 @@ export async function createManagerPreview({ port = 3120 } = {}) {
       async count() { return 0; }
     },
     briaObserverDetectorState: { async findFirst() { return null; } },
-    client: { async findMany({ where }) { return (data.clients || []).filter((row) => where.id.in.includes(row.id)); } }
+    client: { async findMany({ where }) { return (data.clients || []).filter((row) => where.id.in.includes(row.id)); } },
+    teamMember: { async findMany() { return (data.team || [{ name: 'Rodny Chirinos' }, { name: 'Ana Ejemplo' }]).map((row) => ({ name: row.name })); } }
   };
   const service = createManagerDecisionService({ db, reading: readingService, now: NOW, logger: { info: (line) => console.log(line), error: console.error } });
 

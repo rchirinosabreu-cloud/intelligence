@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDecisionBoard, observerCategoryLabel, responseProblem, readingVerdictFor, observerActionFor,
-  laterUntil, DISCARD_REASONS, LATER_OPTIONS, learnedObserverKeys, currentWeekStart, openLabel
+  laterUntil, DISCARD_REASONS, LATER_OPTIONS, learnedObserverKeys, currentWeekStart, openLabel, ownerRouting, listNames
 } from '../src/lib/managerDecisions.js';
 
 const NOW = new Date('2026-11-10T15:00:00.000Z'); // martes 10:00 en Bogotá
@@ -179,4 +179,42 @@ test('«más tarde» cae en un día hábil, a las 8:00 de Bogotá', () => {
   assert.equal(laterUntil('PROXIMA_SEMANA', NOW), '2026-11-17T13:00:00.000Z');
   assert.equal(laterUntil('PROXIMA_SEMANA', new Date('2026-11-18T15:00:00.000Z')), '2026-11-23T13:00:00.000Z');
   assert.equal(laterUntil('NUNCA', NOW), null);
+});
+
+test('lo mismo en varias cuentas es una sola decisión, con lo que Bria haría', () => {
+  const red = ['Aristea', 'Multik', 'Verona', 'Villa Montaña'].map((name, i) => ({ id: `ROJO_SOSTENIDO:r${i}`, kind: 'ROJO_SOSTENIDO', subjectType: 'CLIENT', subjectId: `r${i}`, subjectName: name, severity: 3, text: `${name} lleva 23 días en rojo: Octubre: faltan ${i + 1} piezas.` }));
+  const many = red.map((s, i) => ({ id: `2026-11-10:${i + 1}`, kind: 'VIGILAR', title: `Revisar el compromiso de ${s.subjectName}`, needsContextReview: true, evidence: [s.id], subjectType: 'CLIENT', subjectId: s.subjectId, subjectName: s.subjectName }));
+  const board = buildDecisionBoard({ reading: { day: '2026-11-10', signals: red }, decisions: many, now: NOW });
+  assert.equal(board.pending.length, 1);
+  const [group] = board.pending;
+  assert.equal(group.title, '4 cuentas siguen en rojo desde hace 23 días');
+  assert.equal(group.why, 'Aristea, Multik, Verona y Villa Montaña');
+  assert.deepEqual(group.refs, ['2026-11-10:1', '2026-11-10:2', '2026-11-10:3', '2026-11-10:4']);
+  assert.deepEqual(group.items[0], { name: 'Aristea', text: 'Octubre: faltan 1 piezas.' });
+  assert.match(group.ask, /^Revisa por qué Aristea, Multik, Verona y Villa Montaña siguen en rojo/);
+  assert.equal(group.url, '/clientes?tab=operacion');
+  // Una sola no se agrupa, pero recibe lo que Bria haría.
+  const single = buildDecisionBoard({ reading: { day: '2026-11-10', signals: red }, decisions: [many[0]], now: NOW }).pending[0];
+  assert.equal(single.key, 'L:2026-11-10:1');
+  assert.match(single.ask, /^Revisa por qué Aristea siguen en rojo|^Revisa por qué Aristea/);
+  assert.equal(listNames(['A', 'B', 'C', 'D', 'E'], 3), 'A, B, C y 2 más');
+});
+
+test('lo que quedó a cargo de otra persona del equipo le toca a ella, no a quien mira', () => {
+  const team = ['Rodny Chirinos', 'Kamila del Toro', 'Francisco Villa'];
+  assert.deepEqual(ownerRouting('Kamila del Toro', { team, viewerName: 'Rodny Chirinos' }), { mine: false, people: ['Kamila del Toro'] });
+  assert.deepEqual(ownerRouting('Rodny y Kamila', { team, viewerName: 'Rodny Chirinos' }), { mine: true, people: ['Kamila del Toro'] });
+  assert.deepEqual(ownerRouting('Social Brain Studio', { team, viewerName: 'Rodny Chirinos' }), { mine: true, people: [] });
+  assert.deepEqual(ownerRouting('', { team, viewerName: 'Rodny Chirinos' }), { mine: true, people: [] });
+  const board = buildDecisionBoard({ signals: [signal({ metadata: { owner: 'Kamila del Toro' } }), signal({ id: 's2', metadata: { owner: 'Rodny Chirinos' } })], team, viewerName: 'Rodny Chirinos', now: NOW });
+  assert.deepEqual(board.pending.map(card => card.key), ['O:s2']);
+  assert.equal(board.delegated[0].name, 'Kamila del Toro');
+  assert.equal(board.delegated[0].count, 1);
+  assert.match(board.delegated[0].ask, /^Prepara como pendientes para Kamila del Toro/);
+});
+
+test('lo que la reunión marcó como no accionable no pide decisión', () => {
+  const board = buildDecisionBoard({ signals: [signal({ metadata: { actionable: false } })], now: NOW });
+  assert.equal(board.pending.length, 0);
+  assert.equal(board.counts.notActionable, 1);
 });

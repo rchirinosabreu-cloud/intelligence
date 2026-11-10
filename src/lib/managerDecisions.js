@@ -133,9 +133,11 @@ const reasonOf = (value) => DISCARD_REASONS.find((reason) => reason.value === va
 const laterOf = (value) => LATER_OPTIONS.find((option) => option.value === value) || null;
 
 /** Por qué no se puede guardar una respuesta; `null` si se puede. Lo comparten la pantalla y el servidor. */
-export const responseProblem = ({ source, id, respuesta, motivo, nota, hasta } = {}) => {
+export const responseProblem = ({ source, id, ids, respuesta, motivo, nota, hasta } = {}) => {
   if (!SOURCES.includes(source)) return 'No reconozco el origen de esta decisión.';
   if (typeof id !== 'string' || !id.trim() || id.length > 200) return 'No sé cuál decisión estás respondiendo.';
+  // Una tarjeta agrupada responde por todas las decisiones que reúne; solo las de la lectura se agrupan.
+  if (ids != null && (source !== 'LECTURA' || !Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some((value) => typeof value !== 'string' || !value.trim() || value.length > 200))) return 'No sé cuáles decisiones estás respondiendo.';
   if (!RESPONSES.includes(respuesta)) return 'Elige «Me encargo», «Descartar» o «Más tarde».';
   if (nota != null && typeof nota !== 'string') return 'La nota no es válida.';
   if (clean(nota).length > NOTE_MAX) return `La nota puede tener hasta ${NOTE_MAX} caracteres.`;
@@ -201,7 +203,8 @@ const readingCard = (decision, { signalsById, entry }) => {
   const title = head ? clean(head) : clean(decision.title);
   const why = head ? clean(tail.join(':')) || null : facts || reason || null;
   return {
-    key: `L:${decision.id}`, source: 'LECTURA', ref: decision.id, title, why,
+    key: `L:${decision.id}`, source: 'LECTURA', ref: decision.id, refs: [decision.id], title, why,
+    signalKind: signalsById.get(decision.evidence?.[0])?.kind || null, subjectType: decision.subjectType || null,
     quote: facts && reason && reason !== facts ? reason : null,
     ask: clean(decision.ask) || null, url: decision.url || null, subjectName: decision.subjectName || null,
     kind: decision.kind, kindLabel: KIND_LABELS[decision.kind] || null, categoryLabel: null, sourceLabel: 'Lectura de la mañana',
@@ -222,7 +225,8 @@ const observerCard = (signal, clients) => {
     : SOURCE_LABELS[signal.sourceKind] || 'Observer';
   return {
     key: `O:${signal.id}`, source: 'OBSERVER', ref: signal.id, title: clean(signal.title), why: clean(signal.suggestedAction) || null,
-    quote: clean(signal.evidence) || null, ask: null, url: signal.sourceUrl || null,
+    quote: clean(signal.evidence) || null, url: signal.sourceUrl || null, actionable: meta.actionable !== false,
+    ask: `Ayúdame con esto que salió en ${meeting ? `la reunión «${meeting}»` : 'una reunión'}: ${clean(signal.title)}${clean(signal.suggestedAction) ? ` Lo sugerido: ${clean(signal.suggestedAction)}` : ''}`,
     subjectName: clients[signal.clientId] || null, owner: clean(meta.owner) || null, kind: null, kindLabel: null,
     categoryLabel: observerCategoryLabel(signal.category, signal.sourceKind), sourceLabel,
     severity, level: OBSERVER_LEVEL[signal.severity] || 'baja', score: severity * 10 + 1.5, detectedAt: meetingAt || signal.lastDetectedAt || null,
@@ -251,12 +255,82 @@ export const openLabel = (url) => {
 
 const byScore = (a, b) => b.score - a.score || String(b.detectedAt || '').localeCompare(String(a.detectedAt || '')) || a.key.localeCompare(b.key);
 
+// Rodny, 10 de noviembre de 2026: «no lo veo práctico». Doce cuentas que «llevan 23 días en rojo» no son doce
+// decisiones: son una. Lo mismo en varias cuentas o personas se agrupa en una sola tarjeta, con lo que Bria haría.
+export const MAX_DECISIONS_PER_WEEK = 5;
+const GROUP_OF = Object.freeze({ VENCIDAS_SOSTENIDAS: 'VENCIDAS', VENCIDAS_SUBEN: 'VENCIDAS' });
+const ACCOUNTS = '/clientes?tab=operacion';
+const GROUPS = Object.freeze({
+  ROJO_SOSTENIDO: { title: (n, days) => `${n} cuentas siguen en rojo${days ? ` desde hace ${days} días` : ''}`, url: ACCOUNTS,
+    ask: (names) => `Revisa por qué ${names} siguen en rojo y dime qué cerrar o mover para sacarlas.` },
+  CUENTA_EMPEORO: { title: (n) => `${n} cuentas empeoraron desde la última lectura`, url: ACCOUNTS,
+    ask: (names) => `¿Qué cambió en ${names}? Dime qué harías con cada una.` },
+  APROBACION_DETENIDA: { title: (n) => `${n} cuentas tienen piezas esperando la aprobación del cliente`, url: ACCOUNTS,
+    ask: (names) => `Prepara el mensaje para pedir las aprobaciones pendientes a ${names}.` },
+  SIN_MOVIMIENTO: { title: (n) => `${n} cuentas llevan días sin trabajo registrado`, url: ACCOUNTS,
+    ask: (names) => `¿Qué está pasando con ${names}? Nadie ha registrado trabajo en días.` },
+  FUERA_DE_ALCANCE: { title: (n) => `${n} cuentas tienen más piezas de las contratadas`, url: ACCOUNTS,
+    ask: (names) => `Muéstrame qué piezas de ${names} superan lo contratado y qué propones.` },
+  VENCIDAS: { title: (n) => `${n} personas tienen tareas vencidas`, url: '/gestion',
+    ask: (names) => `Resúmeme las tareas vencidas de ${names} y propón qué mover o reasignar.` }
+});
+
+/** «Aristea, Multik, Verona y 9 más». */
+export const listNames = (names = [], max = 3) => {
+  const unique = [...new Set(names.filter(Boolean))];
+  if (unique.length <= max) return unique.length > 1 ? `${unique.slice(0, -1).join(', ')} y ${unique.at(-1)}` : unique[0] || '';
+  return `${unique.slice(0, max).join(', ')} y ${unique.length - max} más`;
+};
+
+const groupReadingCards = (cards) => {
+  const buckets = new Map();
+  for (const card of cards) {
+    const kind = GROUP_OF[card.signalKind] || card.signalKind;
+    const key = kind && GROUPS[kind] ? kind : card.key;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(card);
+  }
+  return [...buckets.entries()].map(([kind, members]) => {
+    const spec = GROUPS[kind];
+    if (members.length === 1) return spec && !members[0].ask ? { ...members[0], ask: spec.ask(members[0].subjectName) } : members[0];
+    const names = members.map((card) => card.subjectName);
+    const days = [...new Set(members.map((card) => card.title.match(/lleva (\d+) días/)?.[1]))];
+    const top = members.reduce((best, card) => (card.score > best.score ? card : best));
+    return {
+      key: `G:${kind}`, source: 'LECTURA', ref: members[0].ref, refs: members.map((card) => card.ref),
+      title: spec.title(members.length, days.length === 1 ? days[0] : null), why: listNames(names, 4),
+      items: members.map((card) => ({ name: card.subjectName, text: card.title.startsWith(card.subjectName || '\u0000') ? card.why : [card.title, card.why].filter(Boolean).join(': ') })),
+      ask: spec.ask(listNames(names, 6)), url: spec.url, subjectName: null, kind: top.kind, kindLabel: null, categoryLabel: null,
+      sourceLabel: 'Lectura de la mañana', severity: top.severity, level: top.level, score: top.score + 1, detectedAt: null,
+      needsContextReview: false, answer: null
+    };
+  });
+};
+
+const nameKey = (name) => fold(name).split(/\s+/)[0] || '';
+const mentions = (text, name) => {
+  const first = nameKey(name);
+  return first.length >= 3 && new RegExp(`(^|[^A-Z])${first}([^A-Z]|$)`).test(fold(text));
+};
+
+/**
+ * De quién es lo que salió en una reunión. Lo que quedó a cargo de otra persona del equipo le toca a ella, no a quien
+ * mira; lo que nombra a quien mira, o no nombra a nadie del equipo, sí le toca.
+ */
+export const ownerRouting = (owner, { team = [], viewerName = '' } = {}) => {
+  if (!clean(owner)) return { mine: true, people: [] };
+  const people = team.filter((name) => mentions(owner, name));
+  const others = people.filter((name) => nameKey(name) !== nameKey(viewerName));
+  return { mine: !people.length || others.length < people.length, people: others };
+};
+
 /**
  * El tablero de decisiones de una persona. `decisions` ya viene filtrada por su alcance (`visibleReadingDecisions`);
  * `entries` son sus anotaciones en el libro; `signals` las señales vivas del Observer con cita comprobada; `dismissed`
- * lo descartado en los últimos 30 días; `clients` un mapa id → nombre.
+ * lo descartado en los últimos 30 días; `clients` un mapa id → nombre; `team` los nombres del equipo activo y
+ * `viewerName` el de quien mira.
  */
-export const buildDecisionBoard = ({ reading = null, decisions = [], entries = [], signals = [], dismissed = [], clients = {}, now = new Date() } = {}) => {
+export const buildDecisionBoard = ({ reading = null, decisions = [], entries = [], signals = [], dismissed = [], clients = {}, team = [], viewerName = '', now = new Date() } = {}) => {
   const signalsById = new Map((reading?.signals || []).map((row) => [row.id, row]));
   const today = reading?.day || null;
   const noted = new Map(entries.filter((entry) => entry.dayKey === today).map((entry) => [entry.decisionId, entry]));
@@ -267,14 +341,25 @@ export const buildDecisionBoard = ({ reading = null, decisions = [], entries = [
   const learned = learnedObserverKeys(dismissed, { now });
   const learnedGroups = new Map();
   const live = [], taken = [];
+  const others = new Map();
   const weekStart = new Date(currentWeekStart(now)).getTime();
-  let later = 0, outsideWeek = 0;
+  let later = 0, outsideWeek = 0, notActionable = 0;
   for (const signal of signals) {
     if (signal.status === 'SNOOZED' && new Date(signal.snoozedUntil).getTime() > now.getTime()) { later += 1; continue; }
     const card = observerCard(signal, clients);
     // Rodny, 10 de noviembre de 2026: «deja solo las que tengan que ver con la semana vigente; si ya pasó la semana,
     // desaparece». Lo de semanas anteriores sigue en el historial del Observer y se archiva solo al mes.
     if (card.detectedAt && new Date(card.detectedAt).getTime() < weekStart) { outsideWeek += 1; continue; }
+    // Lo que el análisis de la reunión marcó como no accionable (un rumor, una reunión cortada) no pide decisión.
+    if (!card.actionable) { notActionable += 1; continue; }
+    const route = ownerRouting(card.owner, { team, viewerName });
+    if (!route.mine) {
+      for (const name of route.people) {
+        if (!others.has(name)) others.set(name, []);
+        others.get(name).push(card);
+      }
+      continue;
+    }
     if (signal.status === 'REVIEWED') { taken.push({ ...card, answer: { respuesta: 'HACER', label: RESPONSE_LABELS.HACER, at: signal.reviewedAt || null } }); continue; }
     const key = learnKey(signal.category, signal.clientId);
     if (learned.has(key) && signal.severity !== 'critical') {
@@ -287,11 +372,16 @@ export const buildDecisionBoard = ({ reading = null, decisions = [], entries = [
     live.push(card);
   }
 
-  const pending = [...actionable.filter((card) => !card.answer), ...live].sort(byScore);
+  const pending = [...groupReadingCards(actionable.filter((card) => !card.answer)), ...live].sort(byScore);
   const answered = actionable.filter((card) => card.answer);
   later += answered.filter((card) => card.answer.respuesta === 'MAS_TARDE').length;
+  const delegated = [...others.entries()].map(([name, cards]) => ({
+    name, count: cards.length,
+    cards: cards.sort(byScore).map((card) => ({ key: card.key, title: card.title, why: card.why, sourceLabel: card.sourceLabel, url: card.url })),
+    ask: `Prepara como pendientes para ${name} lo que quedó a su cargo en las reuniones de esta semana: ${cards.map((card) => card.title).join(' · ')}`
+  })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   return {
-    day: today, weekStart: currentWeekStart(now), pending, taken: taken.sort(byScore), answered, avoid, learned: [...learnedGroups.values()],
-    counts: { pending: pending.length, high: pending.filter((card) => card.level === 'alta').length, taken: taken.length + answered.filter((card) => card.answer.respuesta === 'HACER').length, later, answered: answered.length, outsideWeek }
+    day: today, weekStart: currentWeekStart(now), pending, taken: taken.sort(byScore), answered, avoid, delegated, learned: [...learnedGroups.values()],
+    counts: { pending: pending.length, high: pending.filter((card) => card.level === 'alta').length, taken: taken.length + answered.filter((card) => card.answer.respuesta === 'HACER').length, later, answered: answered.length, outsideWeek, notActionable, delegated: delegated.reduce((sum, row) => sum + row.count, 0) }
   };
 };
