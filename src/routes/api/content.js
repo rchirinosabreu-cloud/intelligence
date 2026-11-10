@@ -139,7 +139,7 @@ router.get('/plans/:id/bria-review', async (req, res) => {
 const REVIEW_OUTCOME_CODES = new Set(['BRIA_REVIEW_INCOMPLETE_BATCH', 'BRIA_REVIEW_CONTEXT_TOO_LARGE', 'BRIA_REVIEW_TIMEOUT']);
 const reviewOutcomeMessage = error => error.code === 'BRIA_REVIEW_CONTEXT_TOO_LARGE'
   ? error.message
-  : 'Bria no pudo completar la revisión en este intento. El motivo queda registrado y lo volverá a intentar automáticamente.';
+  : 'Bria no pudo completar la revisión en este intento. El motivo quedó registrado. Puedes solicitar otra revisión.';
 
 router.post('/plans/:id/bria-review', async (req, res) => {
   try {

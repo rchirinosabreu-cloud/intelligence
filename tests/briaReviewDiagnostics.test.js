@@ -134,3 +134,13 @@ test('the technical cause is shown in one short line the team can read', () => {
   assert.equal(formatReviewDiagnostic(null), '');
   assert.match(formatReviewDiagnostic({ attempt: 1, at: 'not-a-date', code: null, status: null, message: '' }), /Intento 1/);
 });
+
+test('a manual provider failure remains visible without a scheduled retry', async () => {
+  const db = fakeDb();
+  const error = Object.assign(new Error('Quota exhausted'), { status: 429, code: 'insufficient_quota' });
+  await state.failContentPlanReview(lease, error, { db, now, retryAutomatically: false });
+  const { data } = db.calls.updateMany[0];
+  assert.equal(data.briaReviewState, 'FAILED');
+  assert.equal(data.briaReviewNextAttemptAt, null);
+  assert.equal(data.briaReviewDiagnostics[0].retry, false);
+});

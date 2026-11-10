@@ -97,14 +97,11 @@ try {
     assert.ok(layout.body <= layout.width, `${name}: horizontal document overflow`);
     assert.ok(layout.targets.every(target => target.height >= 44 && target.width >= 44));
     assert.equal(await retry.isEnabled(), true);
-    rejectAction = true;
+    const previousRequests = rerunCount;
     await retry.click();
-    await page.getByText('Fallo de prueba: no se guardó la acción.').waitFor();
-    assert.equal(await page.getByText('No se pudo verificar', { exact: true }).count(), 1);
-    rejectAction = false;
-    await retry.click();
-    await page.getByRole('button', { name: 'En espera', exact: true }).waitFor();
-    assert.equal(await page.getByRole('button', { name: 'En espera', exact: true }).isDisabled(), true);
+    await page.waitForFunction(() => document.querySelector('[role=alert]'));
+    assert.equal(rerunCount, previousRequests + 1);
+    assert.equal(actionCount, 0);
     const undo = page.getByRole('button', { name: 'Deshacer «corregido»', exact: true });
     rejectAction = true;
     await undo.click();
@@ -114,7 +111,7 @@ try {
     await undo.click();
     await page.getByRole('button', { name: 'Corregido', exact: true }).waitFor();
     assert.equal(await undo.count(), 0);
-    assert.equal(actionCount, 4);
+    assert.equal(actionCount, 2);
     result.meta.state = 'RUNNING';
     result.meta.progress = { completedBatches: 1, totalBatches: 2, reviewedItems: 12, totalItems: 13 };
     await page.reload();

@@ -32,7 +32,7 @@ export const buildContentPlanReviewPendingData = (requestedAt = new Date()) => (
 });
 
 export const supersededReviewError = () => Object.assign(
-  new Error('La parrilla cambió o la revisión fue reemplazada; se verificará la versión actual.'),
+  new Error('La parrilla cambió o la revisión fue reemplazada; puedes solicitar una revisión de la versión actual.'),
   { code: 'BRIA_REVIEW_SUPERSEDED' }
 );
 
@@ -101,8 +101,8 @@ export const saveContentPlanReviewCheckpoint = async (db, lease, checkpoint, now
   if (!saved.count) throw supersededReviewError();
 };
 
-export const failContentPlanReview = async (lease, error, { db = prisma, now = new Date() } = {}) => {
-  // A superseded review is not a failure: the plan changed and will be reviewed again.
+export const failContentPlanReview = async (lease, error, { db = prisma, now = new Date(), retryAutomatically = true } = {}) => {
+  // A superseded review leaves the new plan version available for review.
   if (error.code === 'BRIA_REVIEW_SUPERSEDED') {
     return db.contentPlan.updateMany({ where: leaseWhere(lease), data: buildContentPlanReviewPendingData(now) });
   }
@@ -111,7 +111,7 @@ export const failContentPlanReview = async (lease, error, { db = prisma, now = n
   // back and wait, instead of burning the budget against a wall.
   const providerUnavailable = isProviderUnavailable(error);
   const permanent = !providerUnavailable && status >= 400 && status < 500 && ![408, 429].includes(status);
-  const retry = providerUnavailable || (!permanent && lease.attempts < BRIA_REVIEW_MAX_ATTEMPTS);
+  const retry = retryAutomatically && (providerUnavailable || (!permanent && lease.attempts < BRIA_REVIEW_MAX_ATTEMPTS));
   // The human message stays short; the technical cause of every attempt is kept beside it.
   const current = await db.contentPlan.findUnique({ where: { id: lease.planId }, select: { briaReviewDiagnostics: true } });
   const previous = Array.isArray(current?.briaReviewDiagnostics) ? current.briaReviewDiagnostics : [];
@@ -121,7 +121,9 @@ export const failContentPlanReview = async (lease, error, { db = prisma, now = n
     ...(providerUnavailable ? { briaReviewAttempts: Math.max(0, Number(lease.attempts || 1) - 1) } : {}),
     briaReviewNextAttemptAt: !retry ? null
       : new Date(now.getTime() + (providerUnavailable ? BRIA_REVIEW_PROVIDER_RETRY_MS : 60000 * (2 ** (lease.attempts - 1)))),
-    briaReviewError: providerUnavailable ? 'El servicio de IA no está disponible en este momento. Bria lo reintentará sin gastar intentos.'
+    briaReviewError: providerUnavailable ? (retry
+      ? 'El servicio de IA no está disponible en este momento. Bria lo reintentará sin gastar intentos.'
+      : 'El servicio de IA no está disponible en este momento. Puedes solicitar otra revisión más tarde.')
       : error.code === 'BRIA_REVIEW_CONTEXT_TOO_LARGE' ? error.message
         : retry ? 'Bria reintentará la revisión automáticamente.' : 'No se pudo completar la revisión. Puedes revisar nuevamente.',
     briaReviewDiagnostics
@@ -130,8 +132,7 @@ export const failContentPlanReview = async (lease, error, { db = prisma, now = n
 
 // Finalized or deleted plans are no longer reviewed automatically: their open
 // findings become STALE and a pending review stops looking like queued work.
-// Corrections the team asked to verify (VERIFYING) are kept; the scheduler
-// still serves those plans.
+// Keep corrections marked VERIFYING for the next requested review.
 export const archiveStaleContentPlanReviews = async ({ db = prisma, now = new Date() } = {}) => {
   const findings = await db.contentPlanReviewFinding.updateMany({
     where: { status: 'OPEN', plan: { OR: [{ status: 'FINALIZADO' }, { deletedAt: { not: null } }] } },

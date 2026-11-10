@@ -127,3 +127,23 @@ test('discard reason and explanation use block layout so vertical field spacing 
   }
   assert.match(dialog, /space-y-5 p-6/);
 });
+
+test('the scheduled review cycle only archives stale findings and never scans the AI queue', async () => {
+  const { initBriaContentPlanReviewScheduler } = await import('../src/services/briaContentPlanReviewScheduler.js');
+  const calls = [];
+  const db = {
+    contentPlan: {
+      findMany: async () => { throw new Error('The scheduler must not scan reviews'); },
+      updateMany: async () => { calls.push('plans'); return { count: 1 }; }
+    },
+    contentPlanReviewFinding: {
+      updateMany: async () => { calls.push('findings'); return { count: 1 }; }
+    }
+  };
+  const timer = () => ({ unref() {} });
+  const scheduler = initBriaContentPlanReviewScheduler({
+    db, setTimeoutFn: timer, setIntervalFn: timer, logger: { info() {}, error() {} }
+  });
+  assert.deepEqual(await scheduler.run(), { findings: 1, plans: 1 });
+  assert.deepEqual(calls, ['findings', 'plans']);
+});
