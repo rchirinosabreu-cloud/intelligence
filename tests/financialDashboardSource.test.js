@@ -17,6 +17,7 @@ const makeResponse = () => ({
 
 test('un descuento de préstamo reduce el neto, pero no el costo del servicio ni inventa efectivo', async () => {
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         financialRecord: { findMany: async () => [] }, accountsReceivable: { findMany: async () => [] }, payrollContract: { findMany: async () => [] },
         payrollTransaction: { findMany: async ({ where }) => {
             assert.equal(where.voidedAt, null);
@@ -38,6 +39,7 @@ test('un descuento de préstamo reduce el neto, pero no el costo del servicio ni
 test('getFinancialDashboard uses posted actual records as the only source of truth', async () => {
     const calls = [];
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         financialRecord: {
             findMany: async (args) => {
                 calls.push(['financialRecord.findMany', args]);
@@ -98,6 +100,7 @@ test('getFinancialDashboard uses posted actual records as the only source of tru
 test('getFinancialDashboard filters by accounting year and month, never by calendar date', async () => {
     const calls = [];
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         financialRecord: {
             findMany: async (args) => {
                 calls.push(args);
@@ -118,6 +121,7 @@ test('getFinancialDashboard filters by accounting year and month, never by calen
 
 test('getFinancialDashboard keeps payroll transactions without platform users separated by collaborator', async () => {
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         financialRecord: { findMany: async () => [] },
         accountsReceivable: { findMany: async () => [] },
         payrollContract: { findMany: async () => [] },

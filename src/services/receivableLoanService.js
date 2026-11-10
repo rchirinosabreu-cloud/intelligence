@@ -1,3 +1,4 @@
+import { resolveFinancialParty } from './financialPartySelection.js';
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { assertOpenFinancialPeriod, FinancialDomainError, parseFinancialDateInput } from './financialRecordService.js';
 import { loanProblem } from '../lib/receivableLoans.js';
@@ -51,7 +52,9 @@ export const createLoan = async (prismaClient, input = {}, actor) => {
                 client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
                 if (!client) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'El cliente seleccionado no existe.', 404);
             }
-            const counterpartyName = client ? client.name : text(input.counterpartyName);
+            const party = input.partySelection ? await resolveFinancialParty(tx,input.partySelection,actor) : null;
+            if(party && clientId && party.clientId !== clientId) throw new FinancialDomainError('LOAN_PERSON_CHANGED','El cliente no corresponde a la persona seleccionada.',409);
+            const counterpartyName = party?.name || (client ? client.name : text(input.counterpartyName));
 
             let financialRecord;
             if (financialRecordId) {
@@ -103,7 +106,7 @@ export const createLoan = async (prismaClient, input = {}, actor) => {
             // nace igual venga de donde venga.
             const receivable = await createLoanReceivableFor(tx, {
                 financialRecord: { ...financialRecord, amount, date: lentAt, year, month },
-                counterpartyType, counterpartyName, clientId, dueDate, notes, actorId
+                counterpartyType, counterpartyName, clientId, thirdPartyId: party?.id || null, dueDate, notes, actorId
             });
             return { receivable, financialRecord, linkedExistingRecord: Boolean(financialRecordId) };
         }, { isolationLevel: 'Serializable' });

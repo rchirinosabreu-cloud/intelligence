@@ -84,7 +84,7 @@ const CLOSED_PROSPECT_STAGES = new Set(['PERDIDO', 'DESCARTADO']);
  * `commercial` es lo que entrega /financials/parties/commercial: los clientes potenciales (una fila cada uno)
  * y las cotizaciones de cada cliente, que se cuelgan de su fila.
  */
-export const buildPartyRows = (clientRows = [], thirdParties = [], commercial = {}, team = []) => {
+export const buildPartyRows = (clientRows = [], thirdParties = [], commercial = {}, team = [], collaborators = []) => {
     const quotationsByClient = commercial?.quotationsByClient || {};
     const rows = clientRows.map((row) => ({
         ...row,
@@ -121,6 +121,10 @@ export const buildPartyRows = (clientRows = [], thirdParties = [], commercial = 
             continue;
         }
         rows.push({ sourceId: `equipo:${member.id}`, clientId: null, name: member.name, slug: null, profile: null, income: 0, receivable: 0, recordCount: 0, quotations: [], prospect: null, teamMember: member, thirdParty: null, roles: ['COLABORADOR'], unlinked: false });
+    }
+    for (const collaborator of collaborators) {
+        if (collaborator.thirdPartyId && rows.some(row => row.thirdParty?.id === collaborator.thirdPartyId)) continue;
+        rows.push({ sourceId: `payroll:${collaborator.id}`, name: collaborator.displayName, clientId: null, profile: null, collaborator, roles: ['COLABORADOR'], income: 0, receivable: 0, recordCount: 0, quotations: [], unlinked: false });
     }
     for (const prospect of commercial?.prospects || []) {
         rows.push({

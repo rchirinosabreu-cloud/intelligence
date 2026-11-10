@@ -7,6 +7,7 @@ const client = { id: 'client-a', name: 'Cliente de prueba', slug: 'cliente-a' };
 function database({ records = [], debts = [] } = {}) {
   const calls = {};
   return { calls, prismaClient: {
+    thirdParty: { findMany: async () => [] },
     financialRecord: { findMany: async args => { calls.records = args; return records; } },
     accountsReceivable: { findMany: async args => { calls.debts = args; return debts; } },
     client: { findMany: async () => [client] },

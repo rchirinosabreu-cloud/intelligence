@@ -13,5 +13,5 @@ export const invalidateFinancialQueries = (queryClient) => Promise.all([
   // Clientes potenciales y cotizaciones de cada tercero (23 de octubre de 2026).
   'financial-party-commercial',
   // El equipo como terceros (26 de octubre de 2026).
-  'financial-party-team', 'financial-barter', 'financial-offset', 'legacy-offset', 'party-merge-choices'
+  'financial-person-summary', 'financial-party-choices', 'financial-party-team', 'financial-barter', 'financial-offset', 'legacy-offset', 'party-merge-choices'
 ].map(key => queryClient.invalidateQueries({ queryKey: [key] })));

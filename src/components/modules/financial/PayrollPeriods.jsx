@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { calculatePayrollPeriod, unknownPayrollPeriods, payrollMonthRange, payrollDraftNeedsContract } from '@/lib/payrollPeriods';
+import { calculatePayrollPeriod, unknownPayrollPeriods, payrollMonthRange, payrollDraftNeedsContract, payrollGenerationRange, payrollUnknownMayOverlap } from '@/lib/payrollPeriods';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -73,13 +73,13 @@ export function PayrollPeriodsDialog({ collaborator, year, month, canWrite, canA
     const row = context.data.transactions.find(item => item.year === year && item.month === month && payrollDraftNeedsContract(item, context.data.contract));
     if (row && canWrite) setAction({ type: 'sync', row });
   }, [context.data, collaborator.reviewContractChange, year, month, canWrite]);
-  const blockers = unknownPayrollPeriods(context.data?.transactions || []);
   const contract = context.data?.contract || collaborator;
-  const monthRange = payrollMonthRange(year, month);
+  const monthRange = payrollGenerationRange(contract,year,month) || payrollMonthRange(year, month);
   const start = dateValue(contract.startDate) > monthRange.start ? dateValue(contract.startDate) : monthRange.start;
   const end = contract.endDate && dateValue(contract.endDate) < monthRange.end ? dateValue(contract.endDate) : monthRange.end;
   const fullMonth = start === monthRange.start && end === monthRange.end;
   const initial = action && { start: action.type === 'create' && start <= end ? start : dateValue(action.row?.serviceStart || action.row?.monthlyBasis?.start), end: action.type === 'create' && start <= end ? end : dateValue(action.row?.serviceEnd || action.row?.monthlyBasis?.end), baseSalary: fullMonth ? String(contract.baseSalary) : '', socialSecurity: fullMonth ? String(contract.socialSecurity) : '0', mode: 'AGREED', year, month, reason: action.type === 'sync' ? `Actualizar el borrador de ${month}/${year} con el contrato vigente.` : '', reviewContractId: collaborator.id };
+  const blockers = unknownPayrollPeriods((context.data?.transactions || []).filter(row=>payrollUnknownMayOverlap(row,start,end,contract.id)));
   const displayedRows = (context.data?.transactions || []).filter(row => showHistory || (row.year === year && row.month === month));
 
   return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}><DialogContent data-payroll-periods className="max-h-[90vh] overflow-y-auto sm:max-w-3xl dark:bg-zinc-900" onInteractOutside={event => event.preventDefault()}>

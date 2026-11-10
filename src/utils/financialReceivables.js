@@ -18,17 +18,18 @@ export function formatFinancialPeriod(value) {
   const date = civilDate(value);
   return date ? new Date(`${date}T12:00:00Z`).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', timeZone: 'UTC' }) : 'Sin periodo';
 }
-// Un préstamo es otra clase de cuenta por cobrar (Elisa, 23 de octubre de 2026: «se desprenden las cuentas
-// por cobrar ya sea a clientes, a empleados por concepto de préstamos u otro tipo de tercero»): va en su
-// propio grupo aunque el tercero también sea cliente, para que lo prestado no se sume a lo facturado.
+// Una ficha por identidad explícita. El tipo pertenece a cada obligación; agrupar saldos
+// no convierte préstamos o canjes en facturación ni altera sus aplicaciones.
 export function groupFinancialReceivables(items = [], asOf = today()) {
   const groups = new Map();
   for (const item of items) {
     const isLoan = item.kind === 'PRESTAMO';
     const base = item.clientId || `unlinked:${item.sourceLabel || item.clientName || item.id}`;
-    const id = item.kind === 'BENEFICIARIO' ? `beneficiary:${item.beneficiaryThirdPartyId || item.id}` : isLoan ? `loan:${base}` : base;
-    if (!groups.has(id)) groups.set(id, { clientId: id, kind: item.kind || 'CLIENTE', counterpartyType: isLoan ? item.counterpartyType || null : null, client: { name: item.clientName || 'Cliente sin nombre', slug: item.clientSlug }, totalOutstanding: 0, overdue: 0, unknownDue: 0, reviewCount: 0, oldestBucket: null, debts: [] });
+    const id = item.partyId ? `party:${item.partyId}` : item.clientId ? item.clientId : item.kind === 'BENEFICIARIO' ? `beneficiary:${item.beneficiaryThirdPartyId || item.id}` : isLoan ? `loan:${base}` : base;
+    if (!groups.has(id)) groups.set(id, { clientId: id, customerId: item.clientId || null, partyId: item.partyId, kinds: [], kind: item.kind || 'CLIENTE', counterpartyType: isLoan ? item.counterpartyType || null : null, client: { name: item.partyName || item.clientName || 'Tercero sin nombre', slug: item.clientSlug }, totalOutstanding: 0, overdue: 0, unknownDue: 0, reviewCount: 0, oldestBucket: null, debts: [] });
     const row = groups.get(id), remaining = Math.max(round(item.outstanding), 0);
+    if (item.clientId && !row.customerId) row.customerId = item.clientId;
+    if (!row.kinds.includes(item.kind || 'CLIENTE')) row.kinds.push(item.kind || 'CLIENTE');
     if (item.balanceReviewRequired) {
       row.reviewCount += 1;
       row.debts.push(item);

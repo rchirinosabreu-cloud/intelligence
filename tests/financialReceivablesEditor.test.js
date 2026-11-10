@@ -37,6 +37,7 @@ const makeResponse = () => ({
 
 test('getFinancialReceivablesLedger returns editable receivable rows of the year, imported history included', async () => {
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         accountsReceivable: {
             findMany: async (args) => {
                 assert.deepEqual(args.where, { year: 2026 });
@@ -147,6 +148,7 @@ test('getFinancialReceivablesLedger returns editable receivable rows of the year
 // cobro» o muestra su número (Elisa, reunión del 21 de septiembre de 2026).
 test('una obligación ya emitida llega con su número, su periodo y sus conceptos', async () => {
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         accountsReceivable: {
             findMany: async (args) => {
                 assert.ok(args.include.items, 'sin los conceptos la pantalla no puede mostrar el documento');
@@ -179,6 +181,7 @@ test('una obligación ya emitida llega con su número, su periodo y sus concepto
 // Un abono revertido sigue visible en la cartera como evidencia, pero no descuenta saldo.
 test('getFinancialReceivablesLedger shows a reversed payment without letting it reduce the debt', async () => {
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         accountsReceivable: {
             findMany: async () => [{
                 id: 'debt-1',

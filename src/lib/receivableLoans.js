@@ -70,6 +70,7 @@ export const loanFromRecord = (record) => {
 // movimiento: corregirlo o anularlo en Movimientos la corrige o la quita. Con un reintegro vigente
 // o cerrado, el egreso queda bloqueado y se gestiona desde Cartera.
 export const isLoanUntouched = (loan) => Boolean(loan)
+    && !loan.thirdPartyId
     && !loan.loanCollaboratorId
     && (loan.status || 'DEBE') === 'DEBE'
     && !(loan.payments || []).some((payment) => !payment.reversedAt);

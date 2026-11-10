@@ -95,6 +95,7 @@ export const createGroundedAnswersFixture = (ai, { initialTurns = [], maxCalls =
       const selected = cash.filter(row => matches(row, where));
       return record('cash-totals', where, ['INCOME', 'EXPENSE'].map(type => ({ type, _sum: { amount: selected.filter(row => row.type === type).reduce((sum, row) => sum + row.amount, 0) } })));
     } },
+    thirdParty: records([], 'third-party'),
     accountsReceivable: records(ledger.items, 'receivable'), accountsPayable: records(suppliers, 'payable'),
     payrollTransaction: records([], 'payroll-transaction'), payrollContract: records([], 'payroll-contract')
   };

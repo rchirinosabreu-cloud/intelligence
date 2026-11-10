@@ -1,3 +1,4 @@
+import { withReceivablePeople } from '../services/financialPersonService.js';
 import prisma from '../lib/prisma.js';
 import { withPayrollMonthlyBasis } from '../services/payrollMonthlyBasis.js';
 import { withFinancialSearch, financialMonthFilter, ACTIVE_RECEIVABLE_PAYMENT, LIVE_PAYROLL_CONTRACT } from '../services/financialQueryFilters.js';
@@ -66,6 +67,7 @@ const serializeReceivable = (receivable) => {
 
     return {
         id: receivable.id,
+        ...(receivable.partyId ? {partyId:receivable.partyId,partyName:receivable.partyName} : {}),
         clientId: receivable.clientId || receivable.client?.id || null,
         clientName: receivable.client?.name || receivable.counterpartyName || receivable.sourceLabel || 'Cliente sin nombre',
         clientSlug: receivable.client?.slug || null,
@@ -406,7 +408,7 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                 { period: 'desc' }
             ]
         });
-        const items = receivables.map(serializeReceivable);
+        const items = (await withReceivablePeople(prismaClient, receivables)).map(serializeReceivable);
 
         return res.json({
             year,
@@ -501,8 +503,9 @@ const serializePayrollPayments = (transaction) => {
 const serializePayrollContract = (contract) => ({
     id: contract.id,
     collaboratorId: contract.collaboratorId,
+    ...(contract.collaborator?.thirdPartyId ? {partyId:contract.collaborator.thirdPartyId} : {}),
     userId: contract.userId,
-    name: contract.collaborator?.displayName || contract.user?.name || contract.sourceLabel || 'Colaborador',
+    name: contract.collaborator?.thirdParty?.name || contract.collaborator?.displayName || contract.user?.name || contract.sourceLabel || 'Colaborador',
     position: contract.position?.title || '',
     baseSalary: toNum(contract.baseSalary),
     socialSecurity: toNum(contract.socialSecurity),
@@ -524,7 +527,7 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
             include: {
                 collaborator: {
                     select: {
-                        displayName: true
+                        displayName: true, thirdPartyId: true, thirdParty: { select: { name: true } }
                     }
                 },
                 user: {
@@ -739,10 +742,10 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         // Group outstanding debts by client
         const clientReceivableMap = {};
 
-        for (const rec of receivables) {
+        for (const rec of await withReceivablePeople(prismaClient, receivables)) {
             // Un préstamo a un colaborador no tiene cliente: se agrupa por el nombre del tercero.
-            const clientId = rec.kind === 'BENEFICIARIO' ? `beneficiary:${rec.beneficiaryThirdPartyId || rec.id}` : rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
-            const clientName = rec.client?.name || rec.counterpartyName || 'Cliente Desconocido';
+            const clientId = rec.partyId ? `party:${rec.partyId}` : rec.kind === 'BENEFICIARIO' ? `beneficiary:${rec.beneficiaryThirdPartyId || rec.id}` : rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
+            const clientName = rec.partyName || rec.client?.name || rec.counterpartyName || 'Cliente Desconocido';
             const clientSlug = rec.client?.slug || 'cliente-desconocido';
             const paidAmount = (rec.payments || []).reduce((sum, payment) => sum + toNum(payment.amount), 0);
             const amount = roundFloat(Math.max(toNum(rec.amount) - paidAmount, 0));
@@ -824,7 +827,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                     include: {
                         collaborator: {
                             select: {
-                                displayName: true
+                                displayName: true, thirdPartyId: true, thirdParty: {select:{name:true}}
                             }
                         },
                         position: {
@@ -842,9 +845,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         let totalPayrollCost = 0;
 
         for (const tx of payrollTransactions) {
-            const collaboratorKey = tx.contract?.collaboratorId || tx.userId || tx.contractId;
+            const collaboratorKey = tx.contract?.collaborator?.thirdPartyId ? `party:${tx.contract.collaborator.thirdPartyId}` : tx.contract?.collaboratorId || tx.userId || tx.contractId;
             const userId = tx.userId || null;
-            const userName = tx.contract?.collaborator?.displayName || tx.user?.name || tx.contract?.sourceLabel || 'Colaborador';
+            const userName = tx.contract?.collaborator?.thirdParty?.name || tx.contract?.collaborator?.displayName || tx.user?.name || tx.contract?.sourceLabel || 'Colaborador';
             const userEmail = tx.user?.email || '';
 
             const baseSalary = tx.baseSalary == null ? toNum(tx.contract?.baseSalary) : toNum(tx.baseSalary);

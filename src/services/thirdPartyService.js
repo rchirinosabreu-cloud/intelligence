@@ -65,8 +65,9 @@ export const listThirdParties = async (prismaClient, filters = {}) => {
         ...(kind ? { AND: [{ OR: [{ kind }, { roles: { has: kind } }] }] } : {}),
         ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { legalName: { contains: q, mode: 'insensitive' } }, { documentNumber: { contains: q } }] } : {})
     };
-    const thirdParties = await prismaClient.thirdParty.findMany({ where, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] });
-    return { thirdParties };
+    const thirdParties = await prismaClient.thirdParty.findMany({ where, include: { collaborators: { select: { id: true, displayName: true } } }, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] });
+    const collaborators = await prismaClient.financialCollaborator.findMany({where:{isActive:true},select:{id:true,displayName:true,thirdPartyId:true}});
+    return { thirdParties, collaborators };
 };
 
 export const createThirdParty = async (prismaClient, input = {}, actor) => {

@@ -1,3 +1,4 @@
+import { relatedPayrollWhere } from './financialPersonService.js';
 import { randomUUID } from 'node:crypto';
 import {
   assertOpenFinancialPeriod,
@@ -6,7 +7,7 @@ import {
 } from './financialRecordService.js';
 import { financialAmountFromCents, financialCents } from '../utils/financialMoney.js';
 import { LIVE_PAYROLL_CONTRACT } from './financialQueryFilters.js';
-import { payrollDay, payrollPeriodsOverlap, payrollServiceRange } from '../lib/payrollPeriods.js';
+import { payrollDay, payrollPeriodsOverlap, payrollServiceRange, payrollGenerationRange, payrollUnknownMayOverlap } from '../lib/payrollPeriods.js';
 import { withPayrollMonthlyBasis } from './payrollMonthlyBasis.js';
 
 const toNumber = (value) => {
@@ -52,17 +53,19 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
     let existingCount = 0;
     for (const contract of contracts) {
       const existingPeriods = await tx.payrollTransaction.findMany({ where: { contractId: contract.id, month, year } });
-      const related = await withPayrollMonthlyBasis(tx, await tx.payrollTransaction.findMany({ where: { voidedAt: null, ...(contract.collaboratorId ? { contract: { collaboratorId: contract.collaboratorId, importBatchId: null } } : { contractId: contract.id }) } }));
+      const related = await withPayrollMonthlyBasis(tx, await tx.payrollTransaction.findMany({ where: { voidedAt: null, ...await relatedPayrollWhere(tx,contract) }, include:{contract:true} }));
       const live = related.filter(row => !row.voidedAt);
-      const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === payrollDay(periodStart) && range.end === payrollDay(periodEnd); });
+      const intended = payrollGenerationRange(contract,year,month);
+      const serviceStart = intended ? new Date(`${intended.start}T12:00:00Z`) : periodStart, serviceEnd = intended ? new Date(`${intended.end}T12:00:00Z`) : periodEnd;
+      const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === payrollDay(serviceStart) && range.end === payrollDay(serviceEnd); });
       if (covered) { transactions.push(covered); existingCount++; continue; }
-      if (payrollDay(contract.startDate) > payrollDay(periodStart) || (contract.endDate && payrollDay(contract.endDate) < payrollDay(periodEnd))) {
+      if (!intended) {
         requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'El contrato cubre solo una parte del mes. Define sus fechas e importe en «Liquidación e historial».' }); continue;
       }
-      if (live.some(row => !payrollServiceRange(row))) {
+      if (live.some(row => payrollUnknownMayOverlap(row,intended.start,intended.end,contract.id))) {
         requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
       }
-      if (live.some(row => { const range = payrollServiceRange(row); return range && payrollPeriodsOverlap(periodStart, periodEnd, range.start, range.end); })) {
+      if (live.some(row => { const range = payrollServiceRange(row); return range && payrollPeriodsOverlap(serviceStart, serviceEnd, range.start, range.end); })) {
         requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Ya hay días de este mes incluidos en otro período. Revisa las liquidaciones antes de crear otra.' }); continue;
       }
       const baseSalary = toNumber(contract.baseSalary);
@@ -79,8 +82,8 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
           month,
           year,
           periodKey,
-          serviceStart: periodStart,
-          serviceEnd: periodEnd,
+          serviceStart,
+          serviceEnd,
           baseSalary,
           socialSecurity,
           grossAmount,
