@@ -5,7 +5,10 @@ import { readFile } from 'node:fs/promises';
 
 test('verification states distinguish waiting, active, failed and orphaned work', () => {
   const finding = { status: 'VERIFYING' };
-  assert.equal(getFindingVerificationUi(finding, { state: 'PENDING' }).label, 'En espera');
+  const pending = getFindingVerificationUi(finding, { state: 'PENDING' });
+  assert.equal(pending.label, 'Por verificar');
+  assert.equal(pending.busy, false);
+  assert.equal(pending.canRetry, true);
   assert.equal(getFindingVerificationUi(finding, { state: 'RUNNING' }).label, 'Verificando');
   for (const state of ['FAILED', 'CURRENT', 'IDLE']) {
     const view = getFindingVerificationUi(finding, { state });
@@ -25,12 +28,13 @@ test('an inconclusive check remains actionable and exposes its explanation', () 
   assert.equal(view.canUndo, false);
 });
 
-test('a timed-out running verification offers recovery and polling includes pending findings', async () => {
+test('a timed-out running verification offers recovery and only active reviews poll', async () => {
   const view = getFindingVerificationUi({ status: 'VERIFYING' }, { state: 'RUNNING', startedAt: '2026-09-05T15:00:00Z' }, Date.parse('2026-09-05T15:06:00Z'));
   assert.equal(view.canRetry, true);
   const panel = await readFile(new URL('../src/components/modules/ContentPlan/BriaContentPlanReview.jsx', import.meta.url), 'utf8');
   assert.match(panel, /UNDO_CORRECTION/);
   assert.match(panel, /Deshacer/);
   assert.match(panel, /getFindingVerificationUi/);
-  assert.match(panel, /hasVerifyingFindings/);
+  assert.ok(panel.includes("result?.meta?.state !== 'RUNNING'"));
+  assert.ok(panel.includes("finding.status === 'VERIFYING' ? runReview()"));
 });
