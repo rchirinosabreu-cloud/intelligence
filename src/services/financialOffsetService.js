@@ -188,7 +188,9 @@ export async function readOffset(db, id, actor) {
     const user = await authorize(tx, actor, 'read');
     const { ctx, payment, payablePayment } = await loadOffset(tx, id);
     const history = hasFinancialPermission(user, 'admin') ? await tx.financialAuditEvent.findMany({ where: { entityType: 'AccountsReceivable', entityId: ctx.ar.id, after: { path: ['paymentId'], equals: id } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }) : [];
-    return { ...summary(ctx), payment, payablePayment, canReverse: !payment.reversedAt && hasFinancialPermission(user, 'write'), history };
+    const authorIds = [...new Set([payment.createdById, ...history.map(event => event.actorId)].filter(Boolean))];
+    const names = new Map((authorIds.length ? await tx.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true } }) : []).map(author => [author.id, author.name]));
+    return { ...summary(ctx), payment: { ...payment, createdByName: names.get(payment.createdById) || null }, payablePayment, canReverse: !payment.reversedAt && hasFinancialPermission(user, 'write'), history: history.map(event => ({ ...event, actorName: names.get(event.actorId) || null })) };
   }, { isolationLevel: 'RepeatableRead' });
 }
 export async function reverseOffset(db, id, input, actor) {
