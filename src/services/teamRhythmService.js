@@ -98,18 +98,21 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
       orderBy: { startedAt: 'desc' }, take: 10001
     }) : [];
     const workerIds = [...new Set([...sessions.map((s) => s.workerId), ...periodSessions.map(s => s.workerId), ...tasks.map((t) => t.assigneeId)].filter(Boolean))];
-    const members = workerIds.length ? await db.teamMember.findMany({ where: { id: { in: workerIds } }, select: { id: true, name: true, avatarUrl: true } }) : [];
+    const members = workerIds.length ? await db.teamMember.findMany({ where: { id: { in: workerIds } }, select: { id: true, name: true, avatarUrl: true, isActive: true } }) : [];
     const records = buildRhythmRecords({ tasks, sessions, members });
     const analysis = analyzeTeamRhythm({ tasks: records });
     const photos = new Map(members.map((member) => [member.id, member.avatarUrl || null]));
+    // Las cifras del equipo cuentan todo lo cerrado en el periodo; la lectura por persona, solo a quien sigue en Equipo
+    // (Rodny, 10 de noviembre de 2026: «¿por qué Jarlan sigue apareciendo en las lecturas?»). Su trabajo no se borra.
+    const gone = new Set(members.filter((member) => member.isActive === false).map((member) => member.id));
+    const closed = analysis.people.reduce((sum, person) => sum + person.closed, 0);
+    const measured = analysis.people.reduce((sum, person) => sum + person.measured, 0);
+    const declared = analysis.people.reduce((sum, person) => sum + (person.declared || 0), 0);
     // El cierre no dice cuándo se trabajó; una categoría tampoco garantiza cliente/complejidad iguales.
-    const people = analysis.people.map((person) => ({ ...person, avatarUrl: photos.get(person.personId) || null,
+    const people = analysis.people.filter((person) => !gone.has(person.personId)).map((person) => ({ ...person, avatarUrl: photos.get(person.personId) || null,
       findings: person.findings.filter(f => !['HEAVY_DAY','LONG_DAY','SLOWER_THAN_TEAM','FASTER_THAN_TEAM'].includes(f.kind)),
       byType: person.byType.map(({ teamMedianMs: _teamMedianMs, ...type }) => type) }));
     const { types } = analysis;
-    const closed = people.reduce((sum, person) => sum + person.closed, 0);
-    const measured = people.reduce((sum, person) => sum + person.measured, 0);
-    const declared = people.reduce((sum, person) => sum + (person.declared || 0), 0);
     // Lo que respalda cada hallazgo, para que la pantalla y Bria nombren las tareas.
     const wanted = new Set(people.flatMap((person) => person.findings.flatMap((finding) => finding.taskIds)));
     const taskMap = {};

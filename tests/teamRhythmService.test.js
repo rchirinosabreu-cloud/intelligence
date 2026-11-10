@@ -78,3 +78,19 @@ test('the service reads one period, answers with people, types and the tasks beh
   assert.equal(out.people[0].byType[0].teamMedianMs, undefined);
   assert.equal((await service.get({ days: 45 })).period.days, 30, 'only the periods the screen offers');
 });
+
+// Rodny, 10 de noviembre de 2026: «¿por qué Jarlan sigue apareciendo en las lecturas?». Quien ya no está en Equipo no
+// sale en la lectura por persona; su trabajo sigue contando en las cifras del equipo.
+test('someone no longer in Equipo is left out of the per-person reading, not out of the team figures', async () => {
+  const db = {
+    task: { findMany: async () => [
+      { id: 't1', title: 'Diseño A', completedAt: at('2026-10-06T15:00:00Z'), assigneeId: 'm-b', assignee: { id: 'm-b', name: 'Brayan' }, accumulatedWorkMs: 0 },
+      { id: 't2', title: 'Diseño B', completedAt: at('2026-10-06T16:00:00Z'), assigneeId: 'm-j', assignee: { id: 'm-j', name: 'Jarlan' }, accumulatedWorkMs: 0 }
+    ] },
+    taskWorkSession: { findMany: async () => [{ taskId: 't1', workerId: 'm-b', isCollaborator: false, durationMs: H, cycle: { kind: 'INITIAL' } }] },
+    teamMember: { findMany: async () => [{ id: 'm-b', name: 'Brayan', isActive: true }, { id: 'm-j', name: 'Jarlan', isActive: false }] }
+  };
+  const out = await createTeamRhythmService({ db, now: () => at('2026-10-09T15:00:00Z') }).get({ days: 30 });
+  assert.deepEqual(out.people.map((p) => p.personName), ['Brayan']);
+  assert.equal(out.team.closed, 2);
+});
