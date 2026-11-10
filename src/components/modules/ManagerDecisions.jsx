@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  AlertCircle, ArrowUpRight, CheckCircle2, ChevronDown, Clock, ExternalLink, Lightbulb, Loader2, RefreshCw, X
+  AlertCircle, ArrowUpRight, CheckCircle2, ChevronDown, ExternalLink, Lightbulb, Loader2, RefreshCw, X
 } from '@/components/ui/icons';
 import BriaPortrait from '@/components/bria/BriaPortrait';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { askBria } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
-import { LATER_OPTIONS, NOT_APPLICABLE_REASONS, NOTE_MAX, responseProblem } from '@/lib/managerDecisions';
+import { LATER_OPTIONS, DISCARD_REASONS, NOTE_MAX, openLabel, responseProblem } from '@/lib/managerDecisions';
 
 // Las decisiones de Manager (Rodny, 10 de noviembre de 2026): una sola lista con lo que Bria propone y lo que el
 // Observer detectó, y tres respuestas que llegan al libro de decisiones o a la señal. Lo primero son las tres más
@@ -25,9 +25,10 @@ const DAY = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', 
 const dayWords = (day) => (day ? DAY.format(new Date(`${day}T12:00:00Z`)).replace(',', '') : '');
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 
-const outline = 'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3.5 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800';
-const chip = (active) => cn('inline-flex min-h-11 items-center rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan',
-  active ? 'border-brand-cyan bg-brand-cyan/10 font-medium text-brand-cyan-deep dark:text-brand-cyan' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800');
+const outline = 'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800';
+const chip = 'inline-flex min-h-11 items-center rounded-full border border-zinc-200 bg-white px-3.5 text-sm text-zinc-700 transition-colors hover:border-brand-cyan hover:bg-brand-cyan/10 hover:text-brand-cyan-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:text-brand-cyan';
+const primary = 'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-brand-cyan-deep px-3.5 text-sm font-semibold text-white transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 disabled:opacity-60 dark:focus-visible:ring-offset-zinc-950';
+const iconButton = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800';
 const link = 'inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-cyan';
 
 const useRequest = () => useCallback(async (path, options = {}) => {
@@ -45,14 +46,14 @@ const useRequest = () => useCallback(async (path, options = {}) => {
   return data;
 }, []);
 
-function DecisionCard({ card, onRespond, busy, featured }) {
+function DecisionCard({ card, onRespond, busy }) {
   const navigateFrom = useNavigateFrom();
-  const [mode, setMode] = useState(null); // null | 'no' | 'later'
-  const [motivo, setMotivo] = useState('');
+  const [mode, setMode] = useState(null); // null | 'discard' | 'other' | 'later'
   const [nota, setNota] = useState('');
   const [error, setError] = useState('');
   const level = LEVEL[card.level] || LEVEL.baja;
   const tag = [card.sourceLabel, card.kindLabel || card.categoryLabel].filter(Boolean).join(' · ');
+  const back = () => { setMode(null); setError(''); };
 
   const send = async (payload) => {
     const body = { source: card.source, id: card.ref, ...payload };
@@ -64,17 +65,17 @@ function DecisionCard({ card, onRespond, busy, featured }) {
   };
 
   return (
-    <article data-decision-card={card.key} className={cn('rounded-2xl border bg-white p-4 dark:bg-zinc-950 sm:p-5', featured ? 'border-zinc-200 dark:border-zinc-800' : 'border-zinc-200/80 dark:border-zinc-800/80')}>
+    <article data-decision-card={card.key} className="flex h-full flex-col rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold', level.chip)}>
           <span className={cn('h-2 w-2 rounded-full', level.dot)} aria-hidden="true" />{level.label}
         </span>
         {card.subjectName && <span className="rounded-full bg-zinc-100 px-2.5 py-1 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">{card.subjectName}</span>}
-        {tag && <span className="text-zinc-500 dark:text-zinc-400">{tag}</span>}
       </div>
-      {card.owner && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Quedó a cargo de <span className="font-medium text-zinc-700 dark:text-zinc-200">{card.owner}</span></p>}
-      <h3 className={cn('mt-3 font-semibold text-zinc-950 dark:text-zinc-50', featured ? 'text-base sm:text-lg' : 'text-sm sm:text-base')}>{card.title}</h3>
+      {tag && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{tag}</p>}
+      <h3 className="mt-2 text-base font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{card.title}</h3>
       {card.why && <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{card.why}</p>}
+      {card.owner && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Quedó a cargo de <span className="font-medium text-zinc-700 dark:text-zinc-200">{card.owner}</span></p>}
       {card.quote && (
         <details className="group mt-2">
           <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
@@ -83,61 +84,76 @@ function DecisionCard({ card, onRespond, busy, featured }) {
           <blockquote className="mt-1 rounded-xl bg-zinc-50 px-3 py-2 text-sm leading-6 text-zinc-700 [overflow-wrap:anywhere] dark:bg-zinc-900 dark:text-zinc-300">{card.source === 'OBSERVER' ? `«${card.quote}»` : card.quote}</blockquote>
         </details>
       )}
-      {card.needsContextReview && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">El contexto de esta cuenta cambió desde la lectura: revísalo antes de actuar.</p>}
 
-      {!mode && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button type="button" disabled={busy} onClick={() => send({ respuesta: 'HACER' })}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-brand-cyan-deep px-4 text-sm font-semibold text-white transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 disabled:opacity-60 dark:focus-visible:ring-offset-zinc-950">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Me encargo
-          </button>
-          <button type="button" disabled={busy} onClick={() => setMode('no')} className={outline}>No aplica</button>
-          <button type="button" disabled={busy} onClick={() => setMode('later')} className={outline}><Clock className="h-4 w-4" />Más tarde</button>
-          <span className="flex-1" />
-          {card.url && <button type="button" onClick={() => navigateFrom(card.url, { label: 'Manager' })} className={link}>Abrir<ExternalLink className="h-3.5 w-3.5" /></button>}
-          <button type="button" onClick={() => askBria(card.ask || `Ayúdame con esto: ${card.title}${card.subjectName ? ` (${card.subjectName})` : ''}`)} className={link}>Pedírselo a Bria<ArrowUpRight className="h-3.5 w-3.5" /></button>
-        </div>
-      )}
+      <div className="mt-auto pt-4">
+        {!mode && (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" disabled={busy} onClick={() => send({ respuesta: 'HACER' })} className={primary}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Me encargo
+              </button>
+              <button type="button" disabled={busy} onClick={() => setMode('discard')} className={outline}>Descartar</button>
+              <button type="button" disabled={busy} onClick={() => setMode('later')} className={outline}>Más tarde</button>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-1">
+              {card.url && <button type="button" onClick={() => navigateFrom(card.url, { label: 'Manager' })} className={link}>{openLabel(card.url)}<ExternalLink className="h-3.5 w-3.5" /></button>}
+              <button type="button" onClick={() => askBria(card.ask || `Ayúdame con esto: ${card.title}${card.subjectName ? ` (${card.subjectName})` : ''}`)} className={link}>Pedírselo a Bria<ArrowUpRight className="h-3.5 w-3.5" /></button>
+            </div>
+          </>
+        )}
 
-      {mode === 'no' && (
-        <div className="mt-4 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">¿Por qué no aplica?</p>
-            <button type="button" aria-label="Volver" onClick={() => { setMode(null); setError(''); }} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+        {mode === 'discard' && (
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">¿Por qué la descartas?</p>
+              <button type="button" aria-label="Volver" onClick={back} className={iconButton}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2" aria-label="Motivo">
+              {DISCARD_REASONS.map((reason) => (
+                <button key={reason.value} type="button" disabled={busy}
+                  onClick={() => (reason.value === 'OTRO' ? setMode('other') : send({ respuesta: 'DESCARTAR', motivo: reason.value }))}
+                  className={chip}>{reason.label}</button>
+              ))}
+            </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Motivo">
-            {NOT_APPLICABLE_REASONS.map((reason) => (
-              <button key={reason.value} type="button" role="radio" aria-checked={motivo === reason.value} onClick={() => setMotivo(reason.value)} className={chip(motivo === reason.value)}>{reason.label}</button>
-            ))}
-          </div>
-          <label className="mt-3 block text-xs font-medium text-zinc-600 dark:text-zinc-300" htmlFor={`nota-${card.key}`}>{motivo === 'OTRO' ? 'Cuéntame por qué' : 'Nota (opcional)'}</label>
-          <textarea id={`nota-${card.key}`} value={nota} maxLength={NOTE_MAX} rows={2} onChange={(event) => setNota(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-cyan focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Con tu motivo, Bria aprende: si algo así no te sirve tres veces, deja de proponértelo.</p>
-          <div className="mt-3 flex justify-end">
-            <button type="button" disabled={busy || !motivo} onClick={() => send({ respuesta: 'NO_APLICA', motivo, nota })}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900">
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />}Guardar
-            </button>
-          </div>
-        </div>
-      )}
+        )}
 
-      {mode === 'later' && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">¿Cuándo te lo muestro?</span>
-          {LATER_OPTIONS.map((option) => (
-            <button key={option.value} type="button" disabled={busy} onClick={() => send({ respuesta: 'MAS_TARDE', hasta: option.value })} className={chip(false)}>{option.label}</button>
-          ))}
-          <button type="button" aria-label="Volver" onClick={() => { setMode(null); setError(''); }} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
-        </div>
-      )}
+        {mode === 'other' && (
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100" htmlFor={`motivo-${card.key}`}>¿Por qué la descartas?</label>
+              <button type="button" aria-label="Volver" onClick={() => { setMode('discard'); setError(''); }} className={iconButton}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input id={`motivo-${card.key}`} value={nota} maxLength={NOTE_MAX} autoFocus onChange={(event) => setNota(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') send({ respuesta: 'DESCARTAR', motivo: 'OTRO', nota }); }}
+                className="min-h-11 min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:border-brand-cyan focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <button type="button" disabled={busy || !nota.trim()} onClick={() => send({ respuesta: 'DESCARTAR', motivo: 'OTRO', nota })} className={primary}>
+                {busy && <Loader2 className="h-4 w-4 animate-spin" />}Guardar
+              </button>
+            </div>
+          </div>
+        )}
 
-      {error && <p role="alert" className="mt-3 flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
+        {mode === 'later' && (
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">¿Cuándo te la muestro?</p>
+              <button type="button" aria-label="Volver" onClick={back} className={iconButton}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LATER_OPTIONS.map((option) => (
+                <button key={option.value} type="button" disabled={busy} onClick={() => send({ respuesta: 'MAS_TARDE', hasta: option.value })} className={chip}>{option.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && <p role="alert" className="mt-3 flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
+      </div>
     </article>
   );
 }
-
 const Stat = ({ value, label, tone }) => (
   <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
     <p className={cn('text-2xl font-semibold tabular-nums', tone || 'text-zinc-950 dark:text-zinc-50')}>{value}</p>
@@ -185,7 +201,7 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
     try {
       const next = await request('/api/manager/decisions/respond', { method: 'POST', body: JSON.stringify(body) });
       setBoard(next);
-      toast.success(body.respuesta === 'HACER' ? 'Anotado: te encargas tú' : body.respuesta === 'NO_APLICA' ? 'Anotado: no aplica' : 'Te lo vuelvo a mostrar más adelante');
+      toast.success(body.respuesta === 'HACER' ? 'Anotado: te encargas tú' : body.respuesta === 'DESCARTAR' ? 'Descartada. Lo tendré en cuenta' : 'Te lo vuelvo a mostrar más adelante');
       return null;
     } catch (requestError) {
       console.error('[ManagerDecisions] Error guardando respuesta:', requestError.response?.data || requestError.message);
@@ -208,7 +224,7 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
     );
   }
 
-  const { pending = [], older = [], taken = [], answered = [], avoid = [], learned = [], counts = {}, scorecard, readingDay } = board || {};
+  const { pending = [], taken = [], answered = [], avoid = [], learned = [], counts = {}, scorecard, readingDay } = board || {};
   const top = pending.slice(0, TOP);
   const rest = pending.slice(TOP);
   const inCourse = [...answered.filter((card) => card.answer?.respuesta === 'HACER'), ...taken];
@@ -224,7 +240,7 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
               {pending.length ? `Hoy necesito tu decisión en ${plural(pending.length, 'cosa', 'cosas')}` : 'Hoy no hay nada esperando tu decisión'}
             </h2>
             <p className="mt-0.5 text-sm text-white/90">
-              {readingDay ? `Junté la lectura del ${dayWords(readingDay)} con lo que vi en reuniones y tareas.` : 'Todavía no hay lectura de la mañana; te muestro lo que vi en reuniones y tareas.'}
+              {readingDay ? `Junté la lectura del ${dayWords(readingDay)} con lo que vi esta semana en reuniones y tareas.` : 'Todavía no hay lectura de la mañana; te muestro lo que vi esta semana en reuniones y tareas.'}
             </p>
           </div>
           <button type="button" onClick={load} disabled={loading} aria-label="Actualizar" className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25 disabled:opacity-60">
@@ -247,28 +263,17 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
         </div>
       ) : (
         <div className="space-y-3">
-          {top.map((card) => <DecisionCard key={card.key} card={card} featured busy={busyKey === card.key} onRespond={respond} />)}
+          <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {(showAll ? pending : top).map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} />)}
+          </div>
           {rest.length > 0 && (
-            <>
-              <button type="button" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)} className={cn(outline, 'w-full')}>
-                <ChevronDown className={cn('h-4 w-4 transition-transform', showAll && 'rotate-180')} />
-                {showAll ? 'Ocultar las demás' : `Ver las demás (${rest.length})`}
-              </button>
-              {showAll && rest.map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} />)}
-            </>
+            <button type="button" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)} className={cn(outline, 'w-full')}>
+              <ChevronDown className={cn('h-4 w-4 transition-transform', showAll && 'rotate-180')} />
+              {showAll ? 'Ver solo las tres primeras' : `Ver las demás (${rest.length})`}
+            </button>
           )}
         </div>
       )}
-
-      {older.length > 0 && (
-        <Section title="De reuniones de hace más de dos semanas" count={older.length} testId="older">
-          <p className="mb-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Siguen abiertas, pero no compiten con lo de hoy. Si ya no aplican, dímelo y dejo de mostrarlas.</p>
-          <div className="space-y-3">
-            {older.map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} />)}
-          </div>
-        </Section>
-      )}
-
       <div className="grid gap-3 lg:grid-cols-2">
         {inCourse.length > 0 && (
           <Section title="Te encargas tú" count={inCourse.length} testId="taken">
@@ -319,13 +324,13 @@ export default function ManagerDecisions({ onOpenHistory } = {}) {
       {scorecard?.lectura && (
         <div className="flex items-start gap-3 rounded-2xl border border-brand-cyan/20 bg-brand-cyan/[0.04] px-4 py-3 dark:border-brand-cyan/25 dark:bg-brand-cyan/[0.07]">
           <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" />
-          <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300"><strong className="font-semibold text-zinc-900 dark:text-zinc-100">Cómo me va contigo:</strong> {scorecard.lectura}</p>
+          <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300"><strong className="font-semibold text-zinc-900 dark:text-zinc-100">Cómo me va contigo:</strong> {scorecard.anotadas ? scorecard.lectura : 'todavía no has respondido ninguna decisión. Con cada respuesta empiezo a medir qué te sirve y qué no.'}</p>
         </div>
       )}
 
       {onOpenHistory && (
         <div className="flex justify-center">
-          <button type="button" onClick={onOpenHistory} className={link}>Ver todo lo que detectó el Observer, con su historial</button>
+          <button type="button" onClick={onOpenHistory} className={link}>{counts.outsideWeek ? `Lo de semanas anteriores (${counts.outsideWeek}) está en el historial del Observer` : 'Ver el historial del Observer'}</button>
         </div>
       )}
     </div>

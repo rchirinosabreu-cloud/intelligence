@@ -9,9 +9,11 @@ const view = readFileSync('src/components/modules/ManagerDecisions.jsx', 'utf8')
 
 test('tres respuestas con el mismo vocabulario del servidor', () => {
   assert.match(view, /Me encargo/);
-  assert.match(view, /No aplica/);
+  assert.match(view, />Descartar</);
+  assert.doesNotMatch(view, /No aplica|<textarea/, 'Descartar no pide nota; solo «Otro motivo» abre un campo');
+  assert.match(view, /reason\.value === 'OTRO' \? setMode\('other'\) : send\(\{ respuesta: 'DESCARTAR', motivo: reason\.value \}\)/, 'elegir el motivo ya guarda');
   assert.match(view, /Más tarde/);
-  assert.match(view, /NOT_APPLICABLE_REASONS/);
+  assert.match(view, /DISCARD_REASONS/);
   assert.match(view, /LATER_OPTIONS/);
   assert.match(view, /responseProblem\(body\)/, 'la pantalla frena con la misma regla que el servidor');
   assert.match(view, /\/api\/manager\/decisions\/respond/);
@@ -24,8 +26,11 @@ test('el éxito se dice después de la respuesta del servidor y el error queda j
   assert.match(view, /role="alert"/);
 });
 
-test('primero las tres más urgentes; el resto al desplegar', () => {
+test('primero las tres más urgentes en una fila; el resto al desplegar', () => {
   assert.match(view, /const TOP = 3;/);
+  assert.match(view, /xl:grid-cols-3/);
+  assert.match(view, /openLabel\(card\.url\)/, 'el enlace dice a dónde lleva');
+  assert.doesNotMatch(view, /bg-zinc-900 px-4/, 'ningún botón negro: el principal es el cian de la plataforma');
   assert.match(view, /Ver las demás/);
   assert.match(view, /aria-expanded=\{showAll\}/);
 });

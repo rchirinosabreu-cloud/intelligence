@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDecisionBoard, observerCategoryLabel, responseProblem, readingVerdictFor, observerActionFor,
-  laterUntil, NOT_APPLICABLE_REASONS, LATER_OPTIONS, learnedObserverKeys
+  laterUntil, DISCARD_REASONS, LATER_OPTIONS, learnedObserverKeys, currentWeekStart, openLabel
 } from '../src/lib/managerDecisions.js';
 
 const NOW = new Date('2026-11-10T15:00:00.000Z'); // martes 10:00 en Bogotá
@@ -53,8 +53,8 @@ test('el tablero junta la lectura y el Observer, ordenado por lo más urgente', 
   assert.equal(first.subjectName, 'Verona');
   assert.equal(second.categoryLabel, 'Falta registrar algo');
   assert.equal(second.sourceLabel, 'Reunión');
-  const fromMeeting = buildDecisionBoard({ signals: [signal({ metadata: { meetingTitle: 'Reunión M&N', meetingAt: '2026-11-05T16:00:00.000Z', owner: 'Camila' } })], now: NOW }).pending[0];
-  assert.equal(fromMeeting.sourceLabel, 'Reunión «Reunión M&N», 5 nov');
+  const fromMeeting = buildDecisionBoard({ signals: [signal({ metadata: { meetingTitle: 'Reunión M&N', meetingAt: '2026-11-09T16:00:00.000Z', owner: 'Camila' } })], now: NOW }).pending[0];
+  assert.equal(fromMeeting.sourceLabel, 'Reunión «Reunión M&N», 9 nov');
   assert.equal(fromMeeting.owner, 'Camila');
   assert.equal(second.quote, 'Hay que subir el contrato firmado de Verona');
   assert.equal(second.subjectName, 'Verona');
@@ -64,10 +64,10 @@ test('el tablero junta la lectura y el Observer, ordenado por lo más urgente', 
 });
 
 test('lo ya respondido sale de los pendientes y queda con su respuesta', () => {
-  const entries = [{ decisionId: '2026-11-10:2', dayKey: '2026-11-10', verdict: 'NO', note: 'No aplica: Espera al cliente.', decidedAt: '2026-11-10T14:00:00.000Z' }];
+  const entries = [{ decisionId: '2026-11-10:2', dayKey: '2026-11-10', verdict: 'NO', note: 'Descartada: Espera al cliente.', decidedAt: '2026-11-10T14:00:00.000Z' }];
   const board = buildDecisionBoard({ reading, decisions, entries, signals: [signal({ status: 'REVIEWED' })], dismissed: [], clients: {}, now: NOW });
   assert.deepEqual(board.pending.map(card => card.key), ['L:2026-11-10:1']);
-  assert.deepEqual(board.answered.map(card => [card.key, card.answer.label]), [['L:2026-11-10:2', 'No aplica']]);
+  assert.deepEqual(board.answered.map(card => [card.key, card.answer.label]), [['L:2026-11-10:2', 'Descartada']]);
   assert.deepEqual(board.taken.map(card => card.key), ['O:s1']);
 });
 
@@ -77,7 +77,7 @@ test('una respuesta de otro día no tapa la decisión de hoy', () => {
   assert.ok(board.pending.some(card => card.key === 'L:2026-11-10:2'));
 });
 
-test('tres «no aplica» del mismo tipo y cliente en 30 días: Bria aprende y lo agrupa aparte', () => {
+test('tres descartes del mismo tipo y cliente en 30 días: Bria aprende y lo agrupa aparte', () => {
   const dismissed = ['2026-10-20', '2026-10-28', '2026-11-05'].map((day, i) => ({ id: `d${i}`, category: 'PENDING_REGISTRATION', clientId: 'c1', dismissedAt: `${day}T15:00:00.000Z`, metadata: { dismissal: { reason: 'NO_PRIORIDAD' } } }));
   assert.deepEqual([...learnedObserverKeys(dismissed, { now: NOW })], ['Falta registrar algo|c1']);
   const board = buildDecisionBoard({ reading, decisions, entries: [], signals: [signal()], dismissed, clients: { c1: 'Verona' }, now: NOW });
@@ -98,14 +98,33 @@ test('una señal crítica nunca se calla aunque se haya descartado antes', () =>
   assert.deepEqual(board.pending.map(card => card.key), ['O:s1']);
 });
 
-test('una señal de una reunión de hace más de dos semanas va aparte, no compite con lo de hoy', () => {
-  const old = signal({ id: 's-old', metadata: { meetingTitle: 'Comité', meetingAt: '2026-10-01T15:00:00.000Z' } });
-  const board = buildDecisionBoard({ reading, decisions, entries: [], signals: [signal(), old], dismissed: [], clients: {}, now: NOW });
+test('solo cuenta la semana vigente: lo de semanas anteriores desaparece del tablero', () => {
+  assert.equal(currentWeekStart(NOW), '2026-11-09T05:00:00.000Z');
+  assert.equal(currentWeekStart(new Date('2026-11-16T04:00:00.000Z')), '2026-11-09T05:00:00.000Z'); // domingo 23:00 en Bogotá
+  const lastWeek = signal({ id: 's-old', metadata: { meetingTitle: 'Comité', meetingAt: '2026-11-06T15:00:00.000Z' } });
+  const takenLastWeek = signal({ id: 's-taken', status: 'REVIEWED', metadata: { meetingAt: '2026-11-05T15:00:00.000Z' } });
+  const board = buildDecisionBoard({ reading, decisions, entries: [], signals: [signal(), lastWeek, takenLastWeek], dismissed: [], clients: {}, now: NOW });
   assert.ok(!board.pending.some(card => card.key === 'O:s-old'));
-  assert.deepEqual(board.older.map(card => card.key), ['O:s-old']);
-  assert.equal(board.counts.older, 1);
+  assert.equal(board.taken.length, 0);
+  assert.equal(board.counts.outsideWeek, 2);
+  assert.ok(board.pending.some(card => card.key === 'O:s1'));
 });
 
+test('la revisión genérica de las reglas se muestra con el hecho como título', () => {
+  const generic = { id: '2026-11-10:7', kind: 'VIGILAR', title: 'Revisar el compromiso de Verona', why: 'Hay una señal registrada. Falta contrastar el compromiso…', needsContextReview: true, evidence: ['ROJO_SOSTENIDO:c1'], subjectType: 'CLIENT', subjectId: 'c1', subjectName: 'Verona' };
+  const withDetail = { ...reading, signals: [{ ...reading.signals[0], text: 'Verona lleva 23 días en rojo: Octubre: 10 de 12 publicadas; faltan 2 piezas.' }] };
+  const [card] = buildDecisionBoard({ reading: withDetail, decisions: [generic], now: NOW }).pending;
+  assert.equal(card.title, 'Verona lleva 23 días en rojo');
+  assert.equal(card.why, 'Octubre: 10 de 12 publicadas; faltan 2 piezas.');
+  assert.doesNotMatch(JSON.stringify(card), /Falta contrastar el compromiso/);
+});
+
+test('cada enlace dice a dónde lleva', () => {
+  assert.equal(openLabel('/minutas?minute=1'), 'Ver la reunión');
+  assert.equal(openLabel('/gestion?responsable=Ana'), 'Ver sus tareas');
+  assert.equal(openLabel('/clientes/operacion/verona'), 'Ver la cuenta');
+  assert.equal(openLabel('/otra'), 'Ver el detalle');
+});
 test('una decisión grave de la lectura va antes que una señal «crítica» de una reunión', () => {
   const board = buildDecisionBoard({ reading, decisions: [decisions[0], { ...decisions[0], id: '2026-11-10:9', kind: 'VIGILAR', evidence: ['ROJO_SOSTENIDO:c1'] }], entries: [], signals: [signal({ severity: 'critical' })], dismissed: [], clients: {}, now: NOW });
   assert.deepEqual(board.pending.map(card => card.key), ['L:2026-11-10:9', 'O:s1', 'L:2026-11-10:1']);
@@ -122,30 +141,31 @@ test('las respuestas se validan en un solo sitio', () => {
   assert.equal(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'HACER' }), null);
   assert.match(responseProblem({ source: 'OTRA', id: 'x', respuesta: 'HACER' }), /origen/);
   assert.match(responseProblem({ source: 'LECTURA', id: '', respuesta: 'HACER' }), /cuál/);
-  assert.match(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'NO_APLICA' }), /motivo/);
-  assert.match(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'NO_APLICA', motivo: 'OTRO' }), /cuéntame/i);
-  assert.equal(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'NO_APLICA', motivo: 'OTRO', nota: 'Lo maneja MIO' }), null);
+  assert.match(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'DESCARTAR' }), /motivo/);
+  assert.match(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'DESCARTAR', motivo: 'OTRO' }), /cuéntame/i);
+  assert.equal(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'DESCARTAR', motivo: 'OTRO', nota: 'Lo maneja MIO' }), null);
   assert.match(responseProblem({ source: 'OBSERVER', id: 'x', respuesta: 'MAS_TARDE' }), /cuándo/);
   assert.equal(responseProblem({ source: 'OBSERVER', id: 'x', respuesta: 'MAS_TARDE', hasta: 'MANANA' }), null);
-  assert.match(responseProblem({ source: 'OBSERVER', id: 'x', respuesta: 'NO_APLICA', motivo: 'X' }), /motivo/);
+  assert.match(responseProblem({ source: 'OBSERVER', id: 'x', respuesta: 'DESCARTAR', motivo: 'X' }), /motivo/);
   assert.match(responseProblem({ source: 'LECTURA', id: 'x', respuesta: 'HACER', nota: 'a'.repeat(301) }), /300/);
-  assert.equal(NOT_APPLICABLE_REASONS.length, 5);
+  assert.equal(DISCARD_REASONS.length, 5);
   assert.equal(LATER_OPTIONS.length, 3);
 });
 
 test('cada botón llega al libro de decisiones con un veredicto real', () => {
   assert.deepEqual(readingVerdictFor({ respuesta: 'HACER' }), { veredicto: 'HECHO', nota: null });
-  assert.deepEqual(readingVerdictFor({ respuesta: 'NO_APLICA', motivo: 'ESPERA_CLIENTE', nota: 'Gema no responde' }), { veredicto: 'NO', nota: 'No aplica: Espera al cliente. Gema no responde' });
+  assert.deepEqual(readingVerdictFor({ respuesta: 'DESCARTAR', motivo: 'ESPERA_CLIENTE', nota: 'Gema no responde' }), { veredicto: 'NO', nota: 'Descartada: Espera al cliente. Gema no responde' });
+  assert.deepEqual(readingVerdictFor({ respuesta: 'DESCARTAR', motivo: 'OTRO', nota: 'La maneja MIO' }), { veredicto: 'NO', nota: 'Descartada: La maneja MIO' });
   assert.deepEqual(readingVerdictFor({ respuesta: 'MAS_TARDE', hasta: 'PROXIMA_SEMANA' }, { now: NOW }), { veredicto: 'DESPUES', nota: 'Más tarde: la próxima semana (martes 17 de noviembre).' });
 });
 
 test('en el Observer, cada botón cambia el estado y deja el motivo para aprender', () => {
   assert.deepEqual(observerActionFor({ respuesta: 'HACER' }, { now: NOW }), { action: 'REVIEW' });
-  const dismiss = observerActionFor({ respuesta: 'NO_APLICA', motivo: 'NO_PRIORIDAD', nota: '' }, { now: NOW });
+  const dismiss = observerActionFor({ respuesta: 'DESCARTAR', motivo: 'NO_PRIORIDAD', nota: '' }, { now: NOW });
   assert.equal(dismiss.action, 'DISMISS');
   assert.deepEqual(dismiss.dismissal, { reason: 'NO_PRIORIDAD', label: 'No es prioridad ahora', note: null });
   // «Ya está resuelto» es resolver, no descartar.
-  assert.equal(observerActionFor({ respuesta: 'NO_APLICA', motivo: 'YA_RESUELTO' }, { now: NOW }).action, 'RESOLVE');
+  assert.equal(observerActionFor({ respuesta: 'DESCARTAR', motivo: 'YA_RESUELTO' }, { now: NOW }).action, 'RESOLVE');
   const later = observerActionFor({ respuesta: 'MAS_TARDE', hasta: 'MANANA' }, { now: NOW });
   assert.equal(later.action, 'SNOOZE');
   assert.equal(later.snoozedUntil, '2026-11-11T13:00:00.000Z');

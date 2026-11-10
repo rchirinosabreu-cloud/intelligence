@@ -4,7 +4,7 @@
 // tres respuestas que sí llegan a algún lado:
 //   «Me encargo»  → lectura: HECHO en el libro de decisiones (se mide su desenlace). Observer: REVIEWED, queda en curso
 //                   hasta que la fuente deje de detectarlo.
-//   «No aplica»   → con su motivo. Lectura: NO (tres días distintos sobre el mismo problema y Bria deja de proponerlo).
+//   «Descartar»   → con su motivo. Lectura: NO (tres días distintos sobre el mismo problema y Bria deja de proponerlo).
 //                   Observer: DISMISSED con el motivo guardado; tres del mismo tipo y cliente en 30 días y Bria lo agrupa
 //                   aparte («ya aprendí que esto no te sirve»). «Ya está resuelto» resuelve, no descarta.
 //   «Más tarde»   → lectura: DESPUES con la fecha. Observer: SNOOZED hasta un día hábil a las 8:00 de Bogotá.
@@ -12,15 +12,14 @@
 
 import { addBusinessDays, bogotaDate, isBusinessDay } from './colombiaBusinessDays.js';
 
-export const RESPONSES = Object.freeze(['HACER', 'NO_APLICA', 'MAS_TARDE']);
+export const RESPONSES = Object.freeze(['HACER', 'DESCARTAR', 'MAS_TARDE']);
 export const SOURCES = Object.freeze(['LECTURA', 'OBSERVER']);
 export const NOTE_MAX = 300;
 export const LEARN_AFTER = 3;
 export const LEARN_DAYS = 30;
-// Una señal de una reunión de hace más de dos semanas no compite con lo de hoy: va aparte, con los mismos botones.
-export const STALE_DAYS = 14;
 
-export const NOT_APPLICABLE_REASONS = Object.freeze([
+
+export const DISCARD_REASONS = Object.freeze([
   { value: 'ESPERA_CLIENTE', label: 'Espera al cliente' },
   { value: 'YA_RESUELTO', label: 'Ya está resuelto' },
   { value: 'NO_PRIORIDAD', label: 'No es prioridad ahora' },
@@ -34,7 +33,7 @@ export const LATER_OPTIONS = Object.freeze([
   { value: 'PROXIMA_SEMANA', label: 'La próxima semana' }
 ]);
 
-export const RESPONSE_LABELS = Object.freeze({ HACER: 'Me encargo', NO_APLICA: 'No aplica', MAS_TARDE: 'Más tarde' });
+export const RESPONSE_LABELS = Object.freeze({ HACER: 'Me encargo', DESCARTAR: 'Descartada', MAS_TARDE: 'Más tarde' });
 
 // Lo que el Observer y las minutas escriben como categoría. Cada código que aparezca se traduce aquí; uno nuevo sin
 // traducir nunca se muestra crudo (cae al origen de la señal).
@@ -130,19 +129,19 @@ export const laterUntil = (option, now = new Date()) => {
   return day ? at8(day) : null;
 };
 
-const reasonOf = (value) => NOT_APPLICABLE_REASONS.find((reason) => reason.value === value) || null;
+const reasonOf = (value) => DISCARD_REASONS.find((reason) => reason.value === value) || null;
 const laterOf = (value) => LATER_OPTIONS.find((option) => option.value === value) || null;
 
 /** Por qué no se puede guardar una respuesta; `null` si se puede. Lo comparten la pantalla y el servidor. */
 export const responseProblem = ({ source, id, respuesta, motivo, nota, hasta } = {}) => {
   if (!SOURCES.includes(source)) return 'No reconozco el origen de esta decisión.';
   if (typeof id !== 'string' || !id.trim() || id.length > 200) return 'No sé cuál decisión estás respondiendo.';
-  if (!RESPONSES.includes(respuesta)) return 'Elige «Me encargo», «No aplica» o «Más tarde».';
+  if (!RESPONSES.includes(respuesta)) return 'Elige «Me encargo», «Descartar» o «Más tarde».';
   if (nota != null && typeof nota !== 'string') return 'La nota no es válida.';
   if (clean(nota).length > NOTE_MAX) return `La nota puede tener hasta ${NOTE_MAX} caracteres.`;
-  if (respuesta === 'NO_APLICA') {
-    if (!reasonOf(motivo)) return 'Elige el motivo por el que no aplica.';
-    if (motivo === 'OTRO' && !clean(nota)) return 'Cuéntame en pocas palabras por qué no aplica.';
+  if (respuesta === 'DESCARTAR') {
+    if (!reasonOf(motivo)) return 'Elige el motivo para descartarla.';
+    if (motivo === 'OTRO' && !clean(nota)) return 'Cuéntame en pocas palabras por qué la descartas.';
   }
   if (respuesta === 'MAS_TARDE' && !laterOf(hasta)) return 'Elige cuándo te lo vuelvo a mostrar.';
   return null;
@@ -152,7 +151,7 @@ export const responseProblem = ({ source, id, respuesta, motivo, nota, hasta } =
 export const readingVerdictFor = ({ respuesta, motivo, nota, hasta }, { now = new Date() } = {}) => {
   const extra = clean(nota);
   if (respuesta === 'HACER') return { veredicto: 'HECHO', nota: extra || null };
-  if (respuesta === 'NO_APLICA') return { veredicto: 'NO', nota: `No aplica: ${reasonOf(motivo).label}.${extra ? ` ${extra}` : ''}`.slice(0, NOTE_MAX) };
+  if (respuesta === 'DESCARTAR') return { veredicto: 'NO', nota: (motivo === 'OTRO' ? `Descartada: ${extra}` : `Descartada: ${reasonOf(motivo).label}.${extra ? ` ${extra}` : ''}`).slice(0, NOTE_MAX) };
   const day = laterDay(hasta, now);
   return { veredicto: 'DESPUES', nota: `Más tarde: ${laterOf(hasta).label.toLowerCase()} (${dayWords(day)}).${extra ? ` ${extra}` : ''}`.slice(0, NOTE_MAX) };
 };
@@ -187,7 +186,7 @@ export const learnedObserverKeys = (dismissed = [], { now = new Date() } = {}) =
   return new Set([...days].filter(([, set]) => set.size >= LEARN_AFTER).map(([key]) => key));
 };
 
-const ANSWER_FROM_VERDICT = Object.freeze({ HECHO: 'HACER', NO: 'NO_APLICA', DESPUES: 'MAS_TARDE' });
+const ANSWER_FROM_VERDICT = Object.freeze({ HECHO: 'HACER', NO: 'DESCARTAR', DESPUES: 'MAS_TARDE' });
 
 const readingCard = (decision, { signalsById, entry }) => {
   const severity = Math.max(0, ...(decision.evidence || []).map((id) => Number(signalsById.get(id)?.severity) || 0));
@@ -196,8 +195,13 @@ const readingCard = (decision, { signalsById, entry }) => {
   // decisión acompaña, salvo cuando es la nota genérica de contexto cambiado, que ya dice su propia línea.
   const facts = (decision.evidence || []).map((id) => clean(signalsById.get(id)?.text)).filter(Boolean).join(' ');
   const reason = decision.needsContextReview ? '' : clean(decision.why);
+  // Cuando la decisión es la revisión genérica que ponen las reglas («Revisar el compromiso de X»), el título es el hecho
+  // mismo: «Aristea lleva 23 días en rojo», y el detalle lo que sigue a los dos puntos.
+  const [head, ...tail] = decision.needsContextReview && facts ? facts.split(':') : [];
+  const title = head ? clean(head) : clean(decision.title);
+  const why = head ? clean(tail.join(':')) || null : facts || reason || null;
   return {
-    key: `L:${decision.id}`, source: 'LECTURA', ref: decision.id, title: clean(decision.title), why: facts || reason || null,
+    key: `L:${decision.id}`, source: 'LECTURA', ref: decision.id, title, why,
     quote: facts && reason && reason !== facts ? reason : null,
     ask: clean(decision.ask) || null, url: decision.url || null, subjectName: decision.subjectName || null,
     kind: decision.kind, kindLabel: KIND_LABELS[decision.kind] || null, categoryLabel: null, sourceLabel: 'Lectura de la mañana',
@@ -226,6 +230,25 @@ const observerCard = (signal, clients) => {
   };
 };
 
+/** El lunes de la semana en curso, a las 0:00 de Bogotá. */
+export const currentWeekStart = (now = new Date()) => {
+  const today = bogotaDate(now);
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  const monday = new Date(Date.parse(`${today}T12:00:00Z`) - ((weekday + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+  return `${monday}T05:00:00.000Z`;
+};
+
+/** Qué abre el enlace de una tarjeta, dicho en palabras. */
+export const openLabel = (url) => {
+  const path = String(url || '');
+  if (path.startsWith('/minutas')) return 'Ver la reunión';
+  if (path.startsWith('/gestion')) return 'Ver sus tareas';
+  if (path.startsWith('/clientes')) return 'Ver la cuenta';
+  if (path.startsWith('/parrillas')) return 'Ver la parrilla';
+  if (path.startsWith('/financiero')) return 'Ver en Financiero';
+  return 'Ver el detalle';
+};
+
 const byScore = (a, b) => b.score - a.score || String(b.detectedAt || '').localeCompare(String(a.detectedAt || '')) || a.key.localeCompare(b.key);
 
 /**
@@ -243,12 +266,15 @@ export const buildDecisionBoard = ({ reading = null, decisions = [], entries = [
 
   const learned = learnedObserverKeys(dismissed, { now });
   const learnedGroups = new Map();
-  const live = [], taken = [], older = [];
-  const staleBefore = now.getTime() - STALE_DAYS * 86_400_000;
-  let later = 0;
+  const live = [], taken = [];
+  const weekStart = new Date(currentWeekStart(now)).getTime();
+  let later = 0, outsideWeek = 0;
   for (const signal of signals) {
     if (signal.status === 'SNOOZED' && new Date(signal.snoozedUntil).getTime() > now.getTime()) { later += 1; continue; }
     const card = observerCard(signal, clients);
+    // Rodny, 10 de noviembre de 2026: «deja solo las que tengan que ver con la semana vigente; si ya pasó la semana,
+    // desaparece». Lo de semanas anteriores sigue en el historial del Observer y se archiva solo al mes.
+    if (card.detectedAt && new Date(card.detectedAt).getTime() < weekStart) { outsideWeek += 1; continue; }
     if (signal.status === 'REVIEWED') { taken.push({ ...card, answer: { respuesta: 'HACER', label: RESPONSE_LABELS.HACER, at: signal.reviewedAt || null } }); continue; }
     const key = learnKey(signal.category, signal.clientId);
     if (learned.has(key) && signal.severity !== 'critical') {
@@ -258,14 +284,14 @@ export const buildDecisionBoard = ({ reading = null, decisions = [], entries = [
       learnedGroups.set(key, group);
       continue;
     }
-    if (card.detectedAt && new Date(card.detectedAt).getTime() < staleBefore) older.push(card); else live.push(card);
+    live.push(card);
   }
 
   const pending = [...actionable.filter((card) => !card.answer), ...live].sort(byScore);
   const answered = actionable.filter((card) => card.answer);
   later += answered.filter((card) => card.answer.respuesta === 'MAS_TARDE').length;
   return {
-    day: today, pending, older: older.sort(byScore), taken: taken.sort(byScore), answered, avoid, learned: [...learnedGroups.values()],
-    counts: { pending: pending.length, high: pending.filter((card) => card.level === 'alta').length, taken: taken.length + answered.filter((card) => card.answer.respuesta === 'HACER').length, later, answered: answered.length, older: older.length }
+    day: today, weekStart: currentWeekStart(now), pending, taken: taken.sort(byScore), answered, avoid, learned: [...learnedGroups.values()],
+    counts: { pending: pending.length, high: pending.filter((card) => card.level === 'alta').length, taken: taken.length + answered.filter((card) => card.answer.respuesta === 'HACER').length, later, answered: answered.length, outsideWeek }
   };
 };

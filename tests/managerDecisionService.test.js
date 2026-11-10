@@ -48,8 +48,8 @@ test('el tablero junta la lectura y el Observer con los nombres de los clientes'
 test('responder a la lectura escribe en el libro de decisiones el día de esa decisión', async () => {
   const reading = fakeReading();
   const service = createManagerDecisionService({ db: fakeDb(signal), reading, now: () => NOW, logger: quiet });
-  await service.respond(user, { source: 'LECTURA', id: '2026-11-10:1', respuesta: 'NO_APLICA', motivo: 'ESPERA_CLIENTE' });
-  assert.deepEqual(reading.calls, [{ user, ref: '2026-11-10:1', veredicto: 'NO', nota: 'No aplica: Espera al cliente.', dia: '2026-11-10' }]);
+  await service.respond(user, { source: 'LECTURA', id: '2026-11-10:1', respuesta: 'DESCARTAR', motivo: 'ESPERA_CLIENTE' });
+  assert.deepEqual(reading.calls, [{ user, ref: '2026-11-10:1', veredicto: 'NO', nota: 'Descartada: Espera al cliente.', dia: '2026-11-10' }]);
 });
 
 test('si el libro no la encuentra, se dice el motivo y no se finge el éxito', async () => {
@@ -58,10 +58,10 @@ test('si el libro no la encuentra, se dice el motivo y no se finge el éxito', a
   await assert.rejects(service.respond(user, { source: 'LECTURA', id: '2026-11-10:9', respuesta: 'HACER' }), (error) => error.status === 409 && /No sé a cuál/.test(error.message));
 });
 
-test('«no aplica» en el Observer guarda el motivo sin perder el resto de la señal', async () => {
+test('descartar en el Observer guarda el motivo sin perder el resto de la señal', async () => {
   const db = fakeDb(signal);
   const service = createManagerDecisionService({ db, reading: fakeReading(), now: () => NOW, logger: quiet });
-  await service.respond(user, { source: 'OBSERVER', id: 's1', respuesta: 'NO_APLICA', motivo: 'NO_PRIORIDAD', nota: 'Lo vemos en enero' });
+  await service.respond(user, { source: 'OBSERVER', id: 's1', respuesta: 'DESCARTAR', motivo: 'NO_PRIORIDAD', nota: 'Lo vemos en enero' });
   const [update] = db.updates;
   assert.deepEqual(update.where, { id: 's1', status: 'OPEN', updatedAt: signal.updatedAt });
   assert.equal(update.data.status, 'DISMISSED');
@@ -90,6 +90,6 @@ test('una señal ya cerrada o cambiada por otra persona no se pisa', async () =>
 test('una respuesta incompleta se rechaza antes de tocar nada', async () => {
   const db = fakeDb(signal);
   const service = createManagerDecisionService({ db, reading: fakeReading(), now: () => NOW, logger: quiet });
-  await assert.rejects(service.respond(user, { source: 'OBSERVER', id: 's1', respuesta: 'NO_APLICA' }), (error) => error.status === 400 && /motivo/.test(error.message));
+  await assert.rejects(service.respond(user, { source: 'OBSERVER', id: 's1', respuesta: 'DESCARTAR' }), (error) => error.status === 400 && /motivo/.test(error.message));
   assert.equal(db.updates.length, 0);
 });
