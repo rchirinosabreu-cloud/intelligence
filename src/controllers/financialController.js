@@ -500,11 +500,21 @@ const serializePayrollPayments = (transaction) => {
     };
 };
 
+const payrollAvatarSelection = { id: true, name: true, avatarUrl: true };
+const payrollUserSelection = { ...payrollAvatarSelection, teamMember: { select: payrollAvatarSelection } };
+const payrollAvatar = (contract, members) => {
+    const teamId = contract.collaborator?.thirdParty?.teamMemberId;
+    // A canonical link takes precedence. Never substitute a homonymous person.
+    if (teamId) return members.get(teamId);
+    const user = contract.collaborator?.user || contract.user;
+    return user?.teamMember || (user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl } : undefined);
+};
 const serializePayrollContract = (contract) => ({
     id: contract.id,
     collaboratorId: contract.collaboratorId,
     ...(contract.collaborator?.thirdPartyId ? {partyId:contract.collaborator.thirdPartyId} : {}),
     userId: contract.userId,
+    ...(contract.avatar ? { avatar: contract.avatar } : {}),
     name: contract.collaborator?.thirdParty?.name || contract.collaborator?.displayName || contract.user?.name || contract.sourceLabel || 'Colaborador',
     position: contract.position?.title || '',
     baseSalary: toNum(contract.baseSalary),
@@ -527,13 +537,13 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
             include: {
                 collaborator: {
                     select: {
-                        displayName: true, thirdPartyId: true, thirdParty: { select: { name: true } }
+                        displayName: true, thirdPartyId: true,
+                        thirdParty: { select: { name: true, teamMemberId: true } },
+                        user: { select: payrollUserSelection }
                     }
                 },
                 user: {
-                    select: {
-                        name: true
-                    }
+                    select: payrollUserSelection
                 },
                 position: {
                     select: {
@@ -566,9 +576,11 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
             }
         });
 
+        const teamIds = [...new Set(contracts.map(contract => contract.collaborator?.thirdParty?.teamMemberId).filter(Boolean))];
+        const members = new Map((teamIds.length ? await prismaClient.teamMember.findMany({ where: { id: { in: teamIds } }, select: payrollAvatarSelection }) : []).map(member => [member.id, member]));
         const projected = await withPayrollMonthlyBasis(prismaClient, contracts.flatMap(contract => contract.transactions || []));
         const byId = new Map(projected.map(row => [row.id, row]));
-        return res.json({ year, items: contracts.map(contract => serializePayrollContract({ ...contract, transactions: (contract.transactions || []).map(row => byId.get(row.id)) })) });
+        return res.json({ year, items: contracts.map(contract => serializePayrollContract({ ...contract, avatar: payrollAvatar(contract, members), transactions: (contract.transactions || []).map(row => byId.get(row.id)) })) });
     } catch (error) {
         console.error('[Financials API] Payroll ledger failed:', error.response?.data || error);
         return res.status(error.statusCode || 500).json({

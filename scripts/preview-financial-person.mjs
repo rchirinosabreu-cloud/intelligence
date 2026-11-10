@@ -4,6 +4,7 @@ import { createPayrollContract, updatePayrollContract } from '../src/services/fi
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import fs from 'node:fs';
 import { financialPersonSnapshot } from '../tests/support/financialPersonSnapshot.js';
 import * as people from '../src/services/financialPersonService.js';
 import * as parties from '../src/services/thirdPartyService.js';
@@ -13,13 +14,30 @@ import { getFinancialDashboard, getFinancialPayrollLedger, getFinancialReceivabl
 import { listFinancialAccounts } from '../src/services/financialAccountService.js';
 
 process.env.TEST_DATABASE_URL ||= 'postgresql://recognition_test@127.0.0.1:55448/recognition_test';
-const fixture = await financialPersonSnapshot();
+const fixture = await financialPersonSnapshot(process.env.PERSON_SNAPSHOT_FILE);
 const { db, actor } = fixture;
+// Optional inspection-only export of a real historical offset. Never sends mutations to production.
+const offsetSnapshot = process.env.OFFSET_HISTORY_SNAPSHOT ? JSON.parse(fs.readFileSync(process.env.OFFSET_HISTORY_SNAPSHOT, 'utf8')) : null;
 const app = express(); app.use(express.json());
+// Preserve the same image URLs as the platform; only allow photos in this private snapshot.
+app.get('/api/talent-radar/member/:memberId/avatar-image', async (req, res) => {
+  const member = fixture.snapshot.team.find(row => row.id === req.params.memberId);
+  if (!member?.avatarUrl?.startsWith(`/api/talent-radar/member/${member.id}/avatar-image?`)) return res.sendStatus(404);
+  try {
+    const response = await fetch(new URL(member.avatarUrl, 'https://labs.brainstudioagencia.com'), { signal: AbortSignal.timeout(15000) });
+    if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) return res.sendStatus(404);
+    res.type(response.headers.get('content-type')).send(Buffer.from(await response.arrayBuffer()));
+  } catch { res.sendStatus(502); }
+});
 app.get('/', (_req, res) => res.redirect('/financiero?year=2026&month=11&tab=nomina'));
 app.use('/preview-api', async (req, res) => {
   try {
     const route = req.path, method = req.method;
+    if (offsetSnapshot && route === '/payables-ledger' && method === 'GET') return res.json(offsetSnapshot.ledger);
+    if (offsetSnapshot && route.startsWith(`/offsets/${offsetSnapshot.context.payment.id}`)) {
+      if (method === 'GET' && route === `/offsets/${offsetSnapshot.context.payment.id}`) return res.json(offsetSnapshot.context);
+      return res.status(409).json({ message: 'Esta copia del cruce permite revisar la reversión, pero no confirmarla. No modifica datos reales.' });
+    }
     const person=route.match(/^\/third-parties\/([^/]+)\/person$/);
     if(person)return res.json(await(method==='GET'?people.reviewPersonLinks(db,person[1],actor):people.savePersonLinks(db,person[1],req.body,actor)));
     const undo=route.match(/^\/person-links\/([^/]+)\/reverse$/);

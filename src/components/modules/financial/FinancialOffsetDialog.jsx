@@ -10,6 +10,7 @@ import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { financialCents, financialAmountFromCents } from '@/utils/financialMoney';
 import RecordDocumentsInline from './RecordDocumentsInline';
 import { useFormDraft } from '@/hooks/useFormDraft';
+import { offsetHistoryEntry } from '@/lib/financialOffsetHistory';
 import DraftNotice from '@/components/ui/DraftNotice';
 import { uploadReceivablePaymentDocument, fetchReceivablePaymentDocumentBlob } from '@/lib/financialDocumentsClient';
 
@@ -93,10 +94,20 @@ export default function FinancialOffsetDialog({ receivableId, paymentId, onClose
       <div className="flex flex-wrap justify-end gap-2"><button disabled={saving} className={secondary} onClick={() => { setReview(null); setError(''); }}>{savedId ? 'Volver' : 'Editar revisión'}</button><button data-offset-confirm disabled={saving || conflict} className={primary} onClick={confirm}>{saving ? 'Guardando…' : savedId ? 'Confirmar reversión' : 'Confirmar cruce'}</button></div>
     </div> : savedId && context ? <div className="space-y-4">
       <Balances context={context} />
-      <div className="rounded-xl border border-zinc-200 p-4 text-sm dark:border-white/10"><p><strong>{money(context.payment.amount)}</strong> · {reversed ? 'Compensación revertida' : 'Compensación vigente'} · {day(context.payment.paidAt)}</p><p className="mt-1">Autorizó: {context.payment.detail?.authorizedBy} · Registró: {context.payment.detail?.actorName || context.payment.createdById}</p><p className="mt-2 break-words">{context.payment.notes}</p>{reversed && <p className="mt-2">Revertido el {when(context.payment.reversedAt)}: {context.payment.reversalReason}</p>}
+      <div className="rounded-xl border border-zinc-200 p-4 text-sm dark:border-white/10"><p><strong>{money(context.payment.amount)}</strong> · {reversed ? 'Compensación revertida' : 'Compensación vigente'} · {day(context.payment.paidAt)}</p><p className="mt-1">Autorizó: {context.payment.detail?.authorizedBy} · Registró: {context.payment.detail?.actorName || context.payment.createdByName || 'Autor no disponible'}</p><p className="mt-2 break-words">{context.payment.notes}</p>{reversed && <p className="mt-2">Revertido el {when(context.payment.reversedAt)}: {context.payment.reversalReason}</p>}
         <RecordDocumentsInline className="mt-3" recordId={savedId} documents={context.payment.documents || []} api={documentsApi} canWrite={context.canReverse} onChanged={async () => { await query.refetch(); await invalidateFinancialQueries(queryClient); }} onError={setError} />
       </div>
-      {context.history?.length > 0 && <details className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-white/10" data-offset-history><summary className="min-h-11 cursor-pointer font-medium">Historial del cruce ({context.history.length})</summary><ol className="space-y-3">{context.history.map(event => <li key={event.id} className="border-t border-zinc-200 pt-3 dark:border-white/10"><p>{event.after.operation === 'OFFSET_REVERSE' ? 'Reversión' : 'Registro'} · {when(event.createdAt)} · {event.after.actorName}</p><p className="mt-1 break-words text-zinc-500 dark:text-zinc-400">{event.after.reason}</p><p className="mt-1">Nos deben: {money(event.before.receivable.outstanding)} → {money(event.after.receivable.outstanding)}<br />Debemos: {money(event.before.payable.outstanding)} → {money(event.after.payable.outstanding)}</p></li>)}</ol></details>}
+      {context.history?.length > 0 && <details className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-white/10" data-offset-history>
+        <summary className="min-h-11 cursor-pointer font-medium">Historial del cruce ({context.history.length})</summary>
+        <ol className="space-y-3">{context.history.map(event => {
+          const entry = offsetHistoryEntry(event);
+          return <li key={event.id} className="border-t border-zinc-200 pt-3 dark:border-white/10">
+            <p>{entry.title} · {when(event.createdAt)}{entry.actor ? ` · ${entry.actor}` : ''}</p>
+            {entry.reason && <p className="mt-1 break-words text-zinc-500 dark:text-zinc-400">{entry.reason}</p>}
+            {entry.balances.map(row => <p key={row.label} className="mt-1">{row.label}: {row.before === null ? 'Saldo no registrado' : money(row.before)} → {row.after === null ? 'Saldo no registrado' : money(row.after)}</p>)}
+          </li>;
+        })}</ol>
+      </details>}
       {context.canReverse && <form onSubmit={prepare} className="space-y-3"><label className="block space-y-1 text-sm"><span>Motivo de reversión</span><textarea className={field} required maxLength={300} rows={2} value={reason} onChange={event => setReason(event.target.value)} /></label><div className="flex justify-end"><button className={secondary} type="submit" disabled={draft.conflict}>Revisar reversión</button></div></form>}
     </div> : !query.isLoading && !query.error && <form onSubmit={prepare} className="space-y-4">
       <label className="block space-y-1 text-sm"><span>Cuenta por pagar del mismo tercero</span><Select className={field} required value={payableId} onChange={event => { setPayableId(event.target.value); const selected = query.data?.options.find(row => row.id === event.target.value); setAmount(selected ? String(Math.min(Number(selected.receivable.outstanding), Number(selected.payable.outstanding))) : ''); }}><option value="">Selecciona la obligación</option>{query.data?.options?.map(row => <option key={row.id} value={row.id}>{row.payable.label} · {row.payable.number || 'Sin número'} · {money(row.payable.outstanding)}</option>)}</Select></label>

@@ -38,7 +38,7 @@ test('vincular una compensación histórica no vuelve a descontar Cartera', { sk
   const c = await db.client.create({ data: { name: 'Brieva muestra', slug: randomUUID() } });
   const p = await db.thirdParty.create({ data: { name: c.name, kind: 'ARRENDADOR', clientId: c.id } });
   const ar = await db.accountsReceivable.create({ data: { clientId: c.id, amount: 960000, status: 'SALDADO', period: new Date('2026-10-01'), year: 2026, month: 10 } });
-  const payment = await db.receivablePayment.create({ data: { receivableId: ar.id, kind: 'COMPENSACION', amount: 960000, paidAt: new Date('2026-10-31T12:00:00Z'), detail: { offsetAgainst: 'Arriendo', authorizedBy: 'Elisa' } } });
+  const payment = await db.receivablePayment.create({ data: { receivableId: ar.id, kind: 'COMPENSACION', amount: 960000, createdById: actor.id, paidAt: new Date('2026-10-31T12:00:00Z'), detail: { offsetAgainst: 'Arriendo', authorizedBy: 'Elisa' } } });
   const ap = await db.accountsPayable.create({ data: { thirdPartyId: p.id, concept: 'Arriendo', amount: 1000000, category: 'OPERATIVO', receivedAt: new Date('2026-10-01'), year: 2026, month: 10 } });
   const review = await offsets.legacyOffsetOptions(db, payment.id, actor);
   assert.equal(review.options[0].receivable.outstanding, 0);
@@ -59,6 +59,7 @@ test('vincular una compensación histórica no vuelve a descontar Cartera', { sk
   await assert.rejects(parties.updateThirdParty(db, p.id, { clientId: null }, actor), { code: 'THIRD_PARTY_OFFSET_LINK_LOCKED' });
   assert.equal((await db.thirdParty.findUnique({ where: { id: p.id } })).clientId, c.id);
   const current = await offsets.readOffset(db, payment.id, actor);
+  assert.equal(current.payment.createdByName, actor.name);
   await offsets.reverseOffset(db, payment.id, { expectedRevision: current.revision, reason: 'Deshacer el acuerdo completo', requestId: randomUUID() }, actor);
   assert.equal((await offsets.readOffset(db, payment.id, actor)).receivable.outstanding, 960000);
 });

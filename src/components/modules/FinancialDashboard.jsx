@@ -1,5 +1,6 @@
 import { payrollMonthRange } from '@/lib/payrollPeriods';
 import { groupPayrollPeople } from '@/lib/payrollPeople';
+import TeamAvatar from '@/components/ui/TeamAvatar';
 import LegacyOffsetDialog from './financial/LegacyOffsetDialog';
 import FinancialBarterDialog from './financial/FinancialBarterDialog';
 import Select from '@/components/ui/Select';
@@ -1764,7 +1765,7 @@ await invalidateFinancialQueries(queryClient);
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
                                             {payrollPeople.map(person => <React.Fragment key={person.id}>
                                                 <tr data-payroll-person={person.id} className="bg-white dark:bg-zinc-900"><td colSpan={6} className="p-4"><button type="button" className="flex min-h-11 w-full items-center gap-3 text-left" aria-expanded={!!expandedPayrollPeople[person.id]} onClick={() => setExpandedPayrollPeople(current => ({...current,[person.id]:!current[person.id]}))}>
-                                                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{person.name.slice(0,2).toUpperCase()}</span>
+                                                    <TeamAvatar member={person.avatar || { name: person.name }} size={36} className="h-9 w-9" />
                                                     <span className="flex-1"><span className="block text-sm font-semibold">{person.name}</span><span className="text-xs text-zinc-500">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {person.rows.filter(r=>r.transaction).length} período{person.rows.filter(r=>r.transaction).length===1?'':'s'} en el mes</span></span>
                                                     <span className="text-xs font-semibold text-primary">{expandedPayrollPeople[person.id] ? 'Ocultar' : 'Ver períodos'}</span>{expandedPayrollPeople[person.id] ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
                                                 </button></td></tr>
