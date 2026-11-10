@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
   AlertCircle,
   CheckCircle2,
   Clock,
@@ -12,6 +11,7 @@ import {
 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
+import PageHeader from '@/components/ui/PageHeader';
 import BriaMemoryPanel from './BriaMemoryPanel';
 import BriaObserverInbox from './BriaObserverInbox';
 import ManagerDecisions from './ManagerDecisions';
@@ -175,18 +175,11 @@ export default function ManagerTaskAnalytics() {
   }, [overview]);
 
   return (
-    <div data-manager-task-analytics className="min-h-full bg-zinc-50/70 px-4 py-5 dark:bg-zinc-950/40 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* Un solo título para todo el módulo, cambie o no la pestaña (Rodny, 10 de noviembre de 2026: «el título debe ser
-            el mismo no importa si la pestaña cambia»). Lo propio de cada pestaña vive dentro de ella. */}
-        <header className="rounded-3xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-7">
-          <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">
-            <Activity className="h-4 w-4" />
-            Manager · Bria
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">{MANAGER_HEADING.title}</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">{MANAGER_HEADING.description}</p>
-        </header>
+    <div data-manager-task-analytics className="mx-auto w-full max-w-7xl pb-10">
+      <div className="space-y-6">
+        {/* Un solo título para todo el módulo, cambie o no la pestaña, y el mismo encabezado del resto de la plataforma
+            (Rodny, 10 de noviembre de 2026: «el título debe ser el mismo no importa si la pestaña cambia»). */}
+        <PageHeader title={MANAGER_HEADING.title} subtitle={MANAGER_HEADING.description} />
 
         <nav aria-label="Modos de Bria" className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-zinc-200 dark:border-zinc-800">
           <button
