@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { LATER_OPTIONS, DISCARD_REASONS, MAX_DECISIONS_PER_WEEK, NOTE_MAX, openLabel, responseProblem } from '@/lib/managerDecisions';
 import { decisionFingerprint, markSeen } from '@/lib/managerDecisionsSeen';
 import { useAuth } from '@/context/AuthContext';
+import { hasModuleAccess } from '@/lib/platformModules';
 
 // Las decisiones de Manager (Rodny, 10 de noviembre de 2026): una sola lista con lo que Bria propone y lo que el
 // Observer detectó esta semana, agrupado y repartido por dueño. Siempre las seis primeras: al responder una, entra la
@@ -48,7 +49,7 @@ const useRequest = () => useCallback(async (path, options = {}) => {
   return data;
 }, []);
 
-function DecisionCard({ card, onRespond, busy }) {
+function DecisionCard({ card, onRespond, busy, canDrive }) {
   const navigateFrom = useNavigateFrom();
   const [mode, setMode] = useState(null); // null | 'discard' | 'other' | 'later'
   const [nota, setNota] = useState('');
@@ -56,6 +57,7 @@ function DecisionCard({ card, onRespond, busy }) {
   const level = LEVEL[card.level] || LEVEL.baja;
   const tag = [card.sourceLabel, card.kindLabel || card.categoryLabel].filter(Boolean).join(' · ');
   const back = () => { setMode(null); setError(''); };
+  const target = (canDrive && card.driveUrl) || card.url;
 
   const send = async (payload) => {
     const body = { source: card.source, id: card.ref, ...(card.refs?.length > 1 ? { ids: card.refs } : {}), ...payload };
@@ -111,7 +113,7 @@ function DecisionCard({ card, onRespond, busy }) {
               <button type="button" disabled={busy} onClick={() => setMode('later')} className={outline}>Más tarde</button>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-1">
-              {card.url && <button type="button" onClick={() => navigateFrom(card.url, { label: 'Manager' })} className={link}>{openLabel(card.url)}<ExternalLink className="h-3.5 w-3.5" /></button>}
+              {target && <button type="button" onClick={() => navigateFrom(target, { label: 'Manager' })} className={link}>{openLabel(target)}<ExternalLink className="h-3.5 w-3.5" /></button>}
               {card.ask && <button type="button" disabled={busy} onClick={() => send({ respuesta: 'HACER' })} className={link}>Lo hago yo</button>}
             </div>
           </>
@@ -191,6 +193,7 @@ const answerLine = (card) => [card.answer?.label, card.answer?.note].filter(Bool
 export default function ManagerDecisions() {
   const request = useRequest();
   const { currentUser } = useAuth();
+  const canDrive = hasModuleAccess(currentUser, 'drive');
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -283,7 +286,7 @@ export default function ManagerDecisions() {
       ) : (
         <div className="space-y-2">
           <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {top.map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} />)}
+            {top.map((card) => <DecisionCard key={card.key} card={card} busy={busyKey === card.key} onRespond={respond} canDrive={canDrive} />)}
           </div>
           {waiting > 0 && <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">Hay {plural(waiting, 'otra', 'otras')} en espera: entran a medida que respondes.</p>}
         </div>

@@ -34,7 +34,7 @@ test('siempre seis a la vista; al responder una entra la siguiente, sin «ver la
   assert.match(view, /ids: card\.refs/, 'una tarjeta agrupada responde por todas');
   assert.match(view, /Quedó a cargo de otras personas/);
   assert.match(view, /xl:grid-cols-3/);
-  assert.match(view, /openLabel\(card\.url\)/, 'el enlace dice a dónde lleva');
+  assert.match(view, /openLabel\(target\)/, 'el enlace dice a dónde lleva');
   assert.doesNotMatch(view, /bg-zinc-900 px-4/, 'ningún botón negro: el principal es el cian de la plataforma');
   assert.doesNotMatch(view, /Ver las demás|showAll/);
   assert.match(view, /items-start gap-3 lg:grid-cols-2/, 'abrir una sección no estira a la de al lado');
@@ -54,4 +54,12 @@ test('controles táctiles de 44 px, colores de la marca y modo oscuro', () => {
   assert.match(view, /dark:bg-zinc-950/);
   assert.doesNotMatch(view, /\b(?:purple|violet|indigo|fuchsia|sky|teal|emerald|red|rose)-\d/);
   assert.doesNotMatch(view, /#[0-9a-fA-F]{6}\b/);
+});
+
+test('el enlace de una reunión va a Drive solo si la persona tiene Drive', () => {
+  assert.match(view, /const target = \(canDrive && card\.driveUrl\) \|\| card\.url;/);
+  assert.match(view, /hasModuleAccess\(currentUser, 'drive'\)/);
+  const drive = readFileSync('src/components/modules/Drive/DriveLayout.jsx', 'utf8');
+  assert.match(drive, /searchParams\.get\('open'\)/);
+  assert.match(drive, /\['SUMMARY_PDF', 'ANALYSIS_PDF', 'MINUTE'\]/);
 });

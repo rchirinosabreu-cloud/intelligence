@@ -336,6 +336,19 @@ const DriveLayout = () => {
     }
   };
 
+  // «Ver la reunión» desde Manager (Rodny, 10 de noviembre de 2026) llega con `?open=<id de la reunión>` y abre su
+  // resumen; si no tiene, el análisis y luego la minuta. Una sola vez, y el parámetro se quita para que recargar no la reabra.
+  const requestedMeetingId = searchParams.get('open');
+  useEffect(() => {
+    if (!requestedMeetingId || loading || !isBriaFolder) return;
+    const files = contents.files.filter(file => file.meetingId === requestedMeetingId);
+    const target = ['SUMMARY_PDF', 'ANALYSIS_PDF', 'MINUTE'].map(kind => files.find(file => file.kind === kind)).find(Boolean);
+    updateView({ open: null });
+    if (target) openPreview(target);
+    else toast.error('Esta reunión todavía no tiene resumen en Drive.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedMeetingId, loading, isBriaFolder, contents.files]);
+
   const downloadFile = async file => {
     try {
       let blob;
