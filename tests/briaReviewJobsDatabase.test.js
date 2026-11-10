@@ -407,7 +407,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'OPEN' } }), 0);
       assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'STALE' } }), 41);
     });
-    await t.test('an outage of the provider parks the review without spending an attempt', async () => {
+    await t.test('a provider outage leaves the manual review recoverable without scheduling a retry', async () => {
       const plan = await fixture();
       const config = { ...options(plan.id), logger: { error() {} } };
       config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('You have no credits remaining.'), { status: 429, code: 'credit_balance_exhausted' }); };
@@ -416,7 +416,9 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
         assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
       }
       const parked = await db.contentPlan.findUnique({ where: { id: plan.id } });
-      assert.equal(parked.briaReviewState, 'PENDING', 'an outage never leaves the plan permanently failed');
+      assert.equal(parked.briaReviewState, 'FAILED');
+      assert.equal(parked.briaReviewNextAttemptAt, null);
+      assert.equal(parked.briaReviewDiagnostics.at(-1).retry, false);
       assert.equal(parked.briaReviewAttempts, 0);
       assert.equal(parked.briaReviewDiagnostics.at(-1).providerUnavailable, true);
       // Once the provider is back, the plan still has its full budget.
