@@ -41,13 +41,18 @@ test('panel fetches the authenticated Manager analytics endpoint', async () => {
   assert.match(panel, /authToken/);
 });
 
-test('Manager presents Bria with Observer and Copilot tabs while keeping Observer passive', async () => {
+// Rodny, 10 de noviembre de 2026: «el observer … sigue siendo muy confuso». Manager abre en Decisiones, que junta la
+// lectura de Bria con el Observer; la bandeja del Observer queda como historial por enlace y Copilot (un botón que
+// no hacía nada) se retiró.
+test('Manager opens on Decisiones; the Observer inbox stays reachable as history, without a dead Copilot tab', async () => {
   const panel = await readPanel();
-  assert.match(panel, /Bria/);
-  assert.match(panel, /data-bria-tab="observer"/);
-  assert.match(panel, /data-bria-tab="copilot"/);
+  assert.match(panel, /data-bria-tab="decisiones"/);
+  assert.match(panel, /get\('tab'\) : 'decisiones'/);
+  assert.match(panel, /<ManagerDecisions \/>/);
+  assert.match(panel, /activeTab === 'observer' \? <BriaObserverInbox \/>/);
   assert.match(panel, /Observa y explica; no ejecuta acciones/i);
-  assert.match(panel, /Copilot[\s\S]*Pr[oó]xima etapa/i);
+  assert.doesNotMatch(panel, /data-bria-tab="copilot"/);
+  assert.doesNotMatch(panel, /data-bria-tab="observer"/);
 });
 
 test('Bria exposes a real Memory tab with coverage, sources and traceable retrieval', async () => {

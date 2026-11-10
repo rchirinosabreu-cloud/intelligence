@@ -216,6 +216,15 @@ export const reconcileObserverDetections = async ({ detectorKey, detections = []
   };
 };
 
+// Rodny, 10 de noviembre de 2026: «archiva solas las de más de un mes». Una señal que nadie atendió en un mes deja la
+// bandeja: queda ARCHIVED con su motivo (nunca se borra) y, como toda archivada, no vuelve aunque se relea la fuente.
+export const OBSERVER_STALE_DAYS = 30;
+export const OBSERVER_STALE_REASON = 'Más de un mes sin atender';
+export const archiveStaleObserverSignals = ({ db = prisma, now = new Date() } = {}) => db.briaObserverSignal.updateMany({
+  where: { status: { in: ACTIVE_STATUSES }, firstDetectedAt: { lt: new Date(now.getTime() - OBSERVER_STALE_DAYS * 86_400_000) } },
+  data: { status: 'ARCHIVED', archivedAt: now, archiveReason: OBSERVER_STALE_REASON, snoozedUntil: null }
+});
+
 export const reconcileBriaObserver = async ({ db = prisma, now = new Date(), logger = console } = {}) => {
   const baselineRepository = createPrismaObserverBaselineRepository(db);
   const minuteBaseline = await initializeObserverDetectorBaseline({
@@ -247,11 +256,13 @@ export const reconcileBriaObserver = async ({ db = prisma, now = new Date(), log
     now
   });
   await baselineRepository.markScanned('MINUTE_SIGNAL', now);
+  const stale = await archiveStaleObserverSignals({ db, now });
   const result = {
     scannedAt: now,
     detectors: [taskResult, minuteResult],
     detected: taskResult.detected + minuteResult.detected,
-    historicalArchived: minuteBaseline.archived
+    historicalArchived: minuteBaseline.archived,
+    staleArchived: Number(stale?.count || 0)
   };
   logger.info(`[BriaObserver] Escaneo completado: ${result.detected} señales activas detectadas.`);
   return result;

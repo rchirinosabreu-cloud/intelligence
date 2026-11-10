@@ -11,6 +11,8 @@ import { NavLink } from 'react-router-dom';
 import ChaosMeter from './ChaosMeter';
 import SidebarProfile from './SidebarProfile';
 import ServiceHealthIcon from './ServiceHealthIcon';
+import ManagerDecisionsBadge from './ManagerDecisionsBadge';
+import { isManagerRole } from '@/lib/taskEditPermissions';
 
 /**
  * Menú lateral. En escritorio se puede **recoger a una franja estrecha** (`collapsed`): la barra no desaparece,
@@ -131,12 +133,12 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
                   )}
 
                   <span className={cn("relative z-10 flex items-center gap-3 w-full", collapsed && "lg:w-auto lg:gap-0")}>
-                    {item.id === 'operational-health' ? <ServiceHealthIcon isAdmin={currentUser?.role === 'ADMIN'} /> : <Icon className={cn(
+                    {item.id === 'operational-health' ? <ServiceHealthIcon isAdmin={currentUser?.role === 'ADMIN'} /> : <span className="relative flex shrink-0"><Icon className={cn(
                       "w-5 h-5 shrink-0 transition-colors duration-300",
                       isActive
                         ? "text-primary dark:text-primary-foreground drop-shadow-sm"
                         : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
-                    )} />}
+                    )} />{item.id === 'brain-core' && <ManagerDecisionsBadge userId={currentUser?.id} enabled={isManagerRole(currentUser?.role)} />}</span>}
                     <span className={cn(collapsed && "lg:sr-only")}>{item.label}</span>
                   </span>
 

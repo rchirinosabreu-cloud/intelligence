@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertCircle,
-  Bot,
   CheckCircle2,
   Clock,
   Database,
@@ -15,15 +14,19 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import BriaMemoryPanel from './BriaMemoryPanel';
 import BriaObserverInbox from './BriaObserverInbox';
+import ManagerDecisions from './ManagerDecisions';
 import TeamRhythmPanel from './TeamRhythmPanel';
 import { useNavigationSelection } from '@/hooks/useNavigationSelection';
 import { usePageLabel } from '@/components/layout/BackToOrigin';
 
 const PERIODS = [7, 30, 90];
-const TABS = ['observer', 'ritmo', 'memory'];
+// «Decisiones» reúne la lectura de Bria y el Observer (Rodny, 10 de noviembre de 2026). La bandeja del Observer sigue
+// abriéndose por enlace (?tab=observer) como historial y auditoría, pero ya no es una pestaña.
+const TABS = ['decisiones', 'ritmo', 'memory', 'observer'];
 const TAB_HEADINGS = {
   // La bandeja ya dice «Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo».
-  observer: { title: 'Observer', description: 'Señales que Bria detecta por su cuenta, cada una con su evidencia.' },
+  decisiones: { title: 'Decisiones', description: 'Lo que Bria necesita que decidas hoy. Cada respuesta le enseña qué te sirve y qué no.' },
+  observer: { title: 'Historial del Observer', description: 'Señales que Bria detecta por su cuenta, cada una con su evidencia.' },
   ritmo: { title: 'Ritmo del equipo', description: 'Anticipa las entregas de la semana y encuentra dónde repartir el trabajo.' },
   memory: { title: 'Memoria de Bria', description: 'Centro de conocimiento trazable: convierte documentos y datos autorizados en evidencia recuperable, auditable y lista para Bria.' }
 };
@@ -125,13 +128,13 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
 
 export default function ManagerTaskAnalytics() {
   const [navigation, updateNavigation] = useNavigationSelection();
-  const activeTab = TABS.includes(navigation.get('tab')) ? navigation.get('tab') : 'observer';
+  const activeTab = TABS.includes(navigation.get('tab')) ? navigation.get('tab') : 'decisiones';
   const rhythmView = navigation.get('rhythmView') === 'history' ? 'history' : 'week';
   const periodDays = PERIODS.includes(Number(navigation.get('days'))) ? Number(navigation.get('days')) : 30;
   const setActiveTab = tab => updateNavigation({ tab });
   const setRhythmView = rhythmView => updateNavigation({ rhythmView });
   const setPeriodDays = days => updateNavigation({ days });
-  usePageLabel(activeTab === 'ritmo' ? 'Manager · Ritmo' : 'Manager');
+  usePageLabel(activeTab === 'ritmo' ? 'Manager · Ritmo' : activeTab === 'decisiones' ? 'Manager · Decisiones' : 'Manager');
   const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -180,7 +183,7 @@ export default function ManagerTaskAnalytics() {
   return (
     <div data-manager-task-analytics className="min-h-full bg-zinc-50/70 px-4 py-5 dark:bg-zinc-950/40 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="rounded-3xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-7">
+        {activeTab !== 'decisiones' && <header className="rounded-3xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">
@@ -229,21 +232,21 @@ export default function ManagerTaskAnalytics() {
               </button>
             </div>}
           </div>
-        </header>
+        </header>}
 
         <nav aria-label="Modos de Bria" className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-zinc-200 dark:border-zinc-800">
           <button
-            data-bria-tab="observer"
+            data-bria-tab="decisiones"
             type="button"
-            onClick={() => setActiveTab('observer')}
-            aria-current={activeTab === 'observer' ? 'page' : undefined}
+            onClick={() => setActiveTab('decisiones')}
+            aria-current={activeTab === 'decisiones' ? 'page' : undefined}
             className={cn(
-              'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
-              activeTab === 'observer' ? 'border-brand-cyan text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+              'inline-flex min-h-11 items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
+              activeTab === 'decisiones' ? 'border-brand-cyan text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
             )}
           >
-            <Eye className="h-4 w-4" />
-            Observer
+            <CheckCircle2 className="h-4 w-4" />
+            Decisiones
           </button>
           <button
             data-bria-tab="ritmo"
@@ -271,20 +274,9 @@ export default function ManagerTaskAnalytics() {
             <Database className="h-4 w-4" />
             Memoria
           </button>
-          <button
-            data-bria-tab="copilot"
-            type="button"
-            disabled
-            title="Copilot será la próxima etapa de Bria"
-            className="inline-flex cursor-not-allowed items-center gap-2 px-3 py-3 text-sm font-medium text-zinc-400 dark:text-zinc-600"
-          >
-            <Bot className="h-4 w-4" />
-            Copilot
-            <span className="hidden sm:inline rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500">Próxima etapa</span>
-          </button>
         </nav>
 
-        {activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
+        {activeTab === 'decisiones' ? <ManagerDecisions /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
         <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900 w-fit" aria-label="Lectura de Ritmo">
           {[['week', 'Esta semana'], ['history', 'Historial']].map(([value, label]) => <button key={value} type="button" aria-pressed={rhythmView === value} onClick={() => setRhythmView(value)} className={cn('min-h-11 rounded-lg px-4 text-sm font-medium', rhythmView === value ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}
         </div>
