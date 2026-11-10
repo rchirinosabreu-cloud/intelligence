@@ -107,7 +107,7 @@ function DecisionCard({ card, onRespond, busy }) {
               <button type="button" disabled={busy} onClick={card.ask ? delegateToBria : () => send({ respuesta: 'HACER' })} className={primary}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{card.ask ? 'Hazlo, Bria' : 'Me encargo'}
               </button>
-              <button type="button" disabled={busy} onClick={() => setMode('discard')} className={outline}>Descartar</button>
+              <button type="button" disabled={busy} onClick={() => setMode('discard')} className={cn(outline, 'hover:border-destructive/40 hover:text-destructive dark:hover:text-destructive')}>Descartar</button>
               <button type="button" disabled={busy} onClick={() => setMode('later')} className={outline}>Más tarde</button>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-1">
