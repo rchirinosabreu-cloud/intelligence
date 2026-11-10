@@ -3,7 +3,7 @@ import { AlertCircle, ChevronDown, Clock, Eye, Users } from '@/components/ui/ico
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
-import TeamWeekOverview from './TeamWeekOverview';
+import TeamWeekCharts from './TeamWeekCharts';
 import WorkProfileExplorer from './WorkProfileExplorer';
 
 // La semana es la entrada; el historial se abre por elección. Antes de leer tiempos individuales siempre se
@@ -124,7 +124,8 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0, view 
 
   const people = useMemo(() => [...(data?.people || [])].sort((a, b) => warningCount(b) - warningCount(a) || a.personName.localeCompare(b.personName, 'es')), [data]);
 
-  if (view === 'week') return <TeamWeekOverview refreshKey={refreshKey} onHistory={onHistory} />;
+  // Rodny, 10 de noviembre de 2026: la semana se lee en gráficos con lo que es seguro, no con estimaciones.
+  if (view === 'week') return <TeamWeekCharts refreshKey={refreshKey} />;
 
   if (error) {
     return (

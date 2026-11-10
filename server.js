@@ -17,7 +17,6 @@ import { initBriaObserverScheduler } from './src/services/briaObserverScheduler.
 import { initBriaContentPlanReviewScheduler } from './src/services/briaContentPlanReviewScheduler.js';
 import { initSocialPublishingScheduler } from './src/services/socialPublishingScheduler.js';
 import { initServiceHealthScheduler } from './src/services/serviceHealthScheduler.js';
-import { initWeeklyReadingScheduler } from './src/services/weeklyReadingService.js';
 import { initWeeklyFocusScheduler } from './src/services/weeklyFocusService.js';
 import { initBriaPulseScheduler } from './src/services/briaPulseService.js';
 import { initDailyCloseScheduler } from './src/services/dailyCloseService.js';
@@ -236,7 +235,7 @@ async function bootstrap() {
         initBriaContentPlanReviewScheduler();
         initSocialPublishingScheduler();
         initServiceHealthScheduler();
-        initWeeklyReadingScheduler();
+        // La lectura semanal de Ritmo ya no tiene tarjeta (10-nov-2026): sus decisiones viven en Manager → Decisiones.
         initWeeklyFocusScheduler();
         initBriaPulseScheduler();
         initDailyCloseScheduler();

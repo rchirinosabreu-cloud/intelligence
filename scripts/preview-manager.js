@@ -116,7 +116,14 @@ export async function createManagerPreview({ port = 3120 } = {}) {
   api.get('/api/auth/me', (_req, res) => res.json(user));
   api.get('/api/user/profile', (_req, res) => res.json(user));
   api.get('/api/notifications', (_req, res) => res.json([]));
-  api.all('/api/*', (req, res) => res.status(404).json({ error: 'NO_DISPONIBLE', message: `Esta muestra local solo trae Decisiones (${req.path}).` }));
+  // Ritmo en gráficos: la copia trae lo que devolvieron el mapa de carga y el ritmo de 90 días; sin copia, unas cifras inventadas.
+  const ritmo = data.ritmo || {
+    load: { days: [], forecast: { people: [{ personId: 'a', personName: 'Ana Ejemplo', recordedWeekMs: 6 * 3600000, dueCount: 3, overdueCount: 1, tasks: [] }] } },
+    rhythm: { team: { closed: 20, measured: 15, coverage: 0.75 }, people: [], hours: [] }
+  };
+  api.get('/api/manager/rhythm/load', (_req, res) => res.json(ritmo.load));
+  api.get('/api/manager/rhythm', (req, res) => res.json(req.query.days === '30' && ritmo.recent ? ritmo.recent : ritmo.rhythm));
+  api.all('/api/*', (req, res) => res.status(404).json({ error: 'NO_DISPONIBLE', message: `Esta muestra local solo trae Decisiones y Ritmo (${req.path}).` }));
 
   const server = await createServer({
     configFile: false,

@@ -9,6 +9,7 @@
 // qué pedirle a Bria; nunca un «Ver en Gestión» genérico que aterriza en el tablero sin más.
 
 import { isBusinessDay } from './colombiaBusinessDays.js';
+import { nickname } from './teamNicknames.js';
 
 const H = 3_600_000, MIN = 60_000;
 export const WORK_HOURS = Object.freeze({ start: 8, end: 18 }); // Reloj de Bogotá, días hábiles de Colombia.
@@ -57,6 +58,7 @@ export const personBoardUrl = (personName) => {
 
 // Los textos de las acciones caben enteros en una opción de WhatsApp (24 caracteres; Rodny, 23 de octubre de 2026: la
 // opción salía cortada y repetida debajo). La tarjeta de la plataforma usa los mismos.
+const fitChoice = (label, shorter) => (label.length <= 24 ? label : shorter);
 const clientChoice = (verb, clientName) => (clientName && `${verb} ${clientName}`.length <= 24 ? `${verb} ${clientName}` : `${verb} al cliente`);
 
 /**
@@ -66,15 +68,19 @@ const clientChoice = (verb, clientName) => (clientName && `${verb} ${clientName}
  */
 export const nudgeActions = ({ kind, personName = null, clientName = null, title = null, day = null, url = null, taskIds = [], conversationId = null, messageId = null } = {}) => {
   const name = firstName(personName);
-  const summary = { label: 'Resumir sus pendientes', ask: `Resúmeme qué tiene pendiente ${name} hoy y qué le vence pronto.` };
+  // Cada botón dice de quién es (Rodny, 10 de noviembre de 2026: «debería ser ‘ver pendientes de Kamila’»), con el
+  // apodo que usa el equipo y sin pasar de 24 caracteres, que es lo que cabe en una opción de WhatsApp.
+  const nick = nickname(personName) || name;
+  const board = { label: fitChoice(`Ver pendientes de ${nick}`, `Pendientes de ${nick}`), to: personBoardUrl(personName) };
+  const summary = { label: fitChoice(`Resumen de ${nick}`, 'Resumir pendientes'), ask: `Resúmeme qué tiene pendiente ${name} hoy y qué le vence pronto.` };
   switch (kind) {
     // Correo importante (11 de octubre de 2026). Sin enlace al correo (Rodny: «no siempre la plataforma está abierta
     // desde el navegador de social o de contacto, entonces el link no llevaría a ese correo»): lo que importa es el
     // aviso, que ya lo pone en el radar. Bria sí puede resumirlo, porque lo lee por IMAP y no por el navegador; propone
     // la respuesta y la persona la envía desde su correo. Bria nunca manda correos.
     case 'CORREO_IMPORTANTE': return [{ label: 'Resumir y responder', ask: `Resume el correo «${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'}) y propón una respuesta breve y amable que yo pueda enviar.` }];
-    case 'SIN_PROCESO': return [{ label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
-    case 'VENCE_HOY': return [taskIds.length === 1 && url ? { label: 'Abrir la tarea', to: url } : { label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
+    case 'SIN_PROCESO': return [board, summary];
+    case 'VENCE_HOY': return [taskIds.length === 1 && url ? { label: 'Abrir la tarea', to: url } : board, summary];
     case 'CARGA_MANANA': return [{ label: 'Abrir el mapa de carga', to: '/manager?tab=ritmo' }, { label: 'Qué se puede mover', ask: `Revisa la carga de ${personName || name} para ${day ? `el ${day}` : 'mañana'} y propón qué tarea se mueve o se reparte.` }];
     case 'ENTREGA_EN_RIESGO': return [{ label: 'Abrir la tarea', to: url }, { label: 'Ver alternativas', ask: `Revisa el margen de entrega de «${title || 'esta tarea'}» de ${personName || name}, considerando cliente, complejidad y compromisos anteriores. Propón qué mover o repartir, con la evidencia disponible.` }];
     case 'OPERACION_ROJA': return [{ label: 'Abrir operación', to: url }, { label: 'Qué le falta', ask: `¿Qué le falta a ${clientName || 'este cliente'} para salir del rojo en Operación este mes?` }];
