@@ -14,6 +14,7 @@ const makeResponse = () => ({ statusCode: 200, status(code) { this.statusCode = 
 test('cada abono de la cartera trae su ingreso y sus comprobantes vigentes', async () => {
     let includeArgs;
     const prismaClient = {
+        thirdParty: { findMany: async () => [] },
         accountsReceivable: {
             findMany: async (args) => {
                 includeArgs = args.include;
