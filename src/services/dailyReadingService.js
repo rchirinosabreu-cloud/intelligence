@@ -364,6 +364,21 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       return { saved: true, decision: decision.title, veredicto: entry.verdict, dia: reading.day };
     },
 
+    /**
+     * Lo que Manager necesita para su tablero de decisiones: la última lectura con el alcance de la persona, sus
+     * anotaciones en el libro y su marcador. Mismo alcance que el mensaje de la mañana y que `anotar_decision`.
+     */
+    async decisionBoard(user) {
+      let reading = await repo.latestReading();
+      if (!reading) return { reading: null, decisions: [], entries: [], scorecard: scorecard([], { proposed: 0 }) };
+      ({ reading, viewer: user } = await currentView(user, reading));
+      const decisions = visibleReadingDecisions(reading, scopeFor(user, reading));
+      const entries = typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30, userRef: user.id }) : [];
+      const readings = [reading, ...(typeof repo.readingsBefore === 'function' ? await repo.readingsBefore(reading.day, 30) : [])];
+      const proposed = readings.reduce((sum, row) => sum + visibleReadingDecisions(row, scopeFor(user, row)).length, 0);
+      return { reading, decisions, entries, scorecard: scorecard(entries, { proposed }) };
+    },
+
     /** Deja la lectura de la mañana en un chat nuevo de la persona y la avisa. Una vez por día y persona. */
     async deliver(user, reading) {
       const existing = await deliveries.morningBriefDelivery(reading.day, user.id);
