@@ -66,7 +66,7 @@ function DecisionCard({ card, onRespond, busy }) {
     if (failure) setError(failure);
     return !failure;
   };
-  // «Hazlo, Bria»: se anota primero; con la respuesta guardada, Bria abre con el pedido escrito para que lo envíes.
+  // «Pedir a Bria»: se anota primero; con la respuesta guardada, Bria abre con el pedido escrito para que lo envíes.
   const delegateToBria = async () => { if (await send({ respuesta: 'HACER' })) askBria(card.ask); };
 
   return (
@@ -105,7 +105,7 @@ function DecisionCard({ card, onRespond, busy }) {
           <>
             <div className="flex flex-wrap gap-1.5">
               <button type="button" disabled={busy} onClick={card.ask ? delegateToBria : () => send({ respuesta: 'HACER' })} className={primary}>
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{card.ask ? 'Hazlo, Bria' : 'Me encargo'}
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : !card.ask && <CheckCircle2 className="h-4 w-4" />}{card.ask ? 'Pedir a Bria' : 'Me encargo'}
               </button>
               <button type="button" disabled={busy} onClick={() => setMode('discard')} className={cn(outline, 'hover:border-destructive/40 hover:text-destructive dark:hover:text-destructive')}>Descartar</button>
               <button type="button" disabled={busy} onClick={() => setMode('later')} className={outline}>Más tarde</button>
