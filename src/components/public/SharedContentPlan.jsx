@@ -84,7 +84,7 @@ const FinalAssetThumb = ({ item }) => {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-100 dark:bg-white/5">
         <FormatIcon format={item.format} className="h-7 w-7 text-zinc-300 dark:text-zinc-600" />
-        <span className="text-[11px] font-medium text-zinc-400">Pieza en preparación</span>
+        <span className="text-xs font-medium text-zinc-400">Pieza en preparación</span>
       </div>
     );
   }
@@ -145,7 +145,7 @@ const FinalAssetPreview = ({ assets = [], format }) => {
             <>
               <button type="button" onClick={() => setActiveIndex(index => (index - 1 + assets.length) % assets.length)} className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow-lg backdrop-blur transition hover:bg-white dark:bg-zinc-900/90 dark:text-white" aria-label="Ver lámina anterior"><ChevronLeft className="h-5 w-5" /></button>
               <button type="button" onClick={() => setActiveIndex(index => (index + 1) % assets.length)} className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow-lg backdrop-blur transition hover:bg-white dark:bg-zinc-900/90 dark:text-white" aria-label="Ver lámina siguiente"><ChevronRight className="h-5 w-5" /></button>
-              <span className="absolute right-4 top-4 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">{activeIndex + 1} / {assets.length}</span>
+              <span className="absolute right-4 top-4 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-white">{activeIndex + 1} / {assets.length}</span>
             </>
           )}
         </div>
@@ -180,7 +180,7 @@ const PieceCard = ({ item, index, onOpen }) => (
   >
     <div className="relative aspect-[4/5] overflow-hidden bg-zinc-100 dark:bg-white/5">
       <FinalAssetThumb item={item} />
-      <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur">
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
         <FormatIcon format={item.format} className="h-3 w-3" /> {item.format}
       </span>
       {/* Un punto pequeño, no un botón (Rodny, 25 de septiembre de 2026). El disco oscuro es lo que lo
@@ -193,7 +193,7 @@ const PieceCard = ({ item, index, onOpen }) => (
       </span>
     </div>
     <div className="flex flex-col gap-1.5 p-4">
-      <span className="text-[11px] font-bold text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
+      <span className="text-xs font-bold text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
       <h3 className="line-clamp-2 text-sm font-bold leading-snug text-zinc-900 dark:text-zinc-50">{item.objective}</h3>
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -248,7 +248,7 @@ const PieceDetail = ({
 
       <article className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
         <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 px-6 py-4 dark:border-white/5">
-          <span className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-600 dark:bg-white/5 dark:text-zinc-300">
+          <span className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:bg-white/5 dark:text-zinc-300">
             <FormatIcon format={item.format} className="h-3.5 w-3.5" /> {item.format}
           </span>
           <span className="inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -270,28 +270,28 @@ const PieceDetail = ({
 
           <div className="flex flex-col gap-6 p-6 lg:col-span-5 lg:p-8">
             <div className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Idea</p>
+              <p className="text-xs font-medium text-zinc-400">Idea</p>
               <h2 className="text-xl font-bold leading-snug tracking-tight text-zinc-900 dark:text-zinc-50">{item.objective}</h2>
             </div>
 
             {item.copyText?.trim() && (
               <div className="space-y-3" data-portal-script>
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Guion</p>
-                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-700 [overflow-wrap:anywhere] dark:text-zinc-300">{item.copyText}</p>
+                <p className="text-xs font-medium text-zinc-400">Guion</p>
+                <p className="whitespace-pre-wrap text-base leading-relaxed text-zinc-700 [overflow-wrap:anywhere] dark:text-zinc-300">{item.copyText}</p>
               </div>
             )}
 
             <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Texto de la publicación</p>
+              <p className="text-xs font-medium text-zinc-400">Texto de la publicación</p>
               {body ? (
-                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">{body}</p>
+                <p className="whitespace-pre-wrap text-base leading-relaxed text-zinc-700 dark:text-zinc-300">{body}</p>
               ) : (
                 <p className="text-sm italic text-zinc-400">Todavía sin texto.</p>
               )}
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {tags.map((tag, i) => (
-                    <span key={`${item.id}-tag-${i}`} className="rounded-lg bg-zinc-100 px-2.5 py-1 text-[13px] text-zinc-600 dark:bg-white/5 dark:text-zinc-400">{tag}</span>
+                    <span key={`${item.id}-tag-${i}`} className="rounded-lg bg-zinc-100 px-2.5 py-1 text-sm text-zinc-600 dark:bg-white/5 dark:text-zinc-400">{tag}</span>
                   ))}
                 </div>
               )}
@@ -299,7 +299,7 @@ const PieceDetail = ({
 
             {item.mediaUrl?.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Referencias</p>
+                <p className="text-xs font-medium text-zinc-400">Referencias</p>
                 <div className="flex flex-col gap-2">
                   {item.mediaUrl.map((link, i) => (
                     <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="flex w-fit items-center gap-2 text-sm font-bold text-zinc-600 transition-colors hover:text-brand-cyan-deep dark:text-zinc-400 dark:hover:text-brand-cyan">
@@ -430,7 +430,7 @@ const PieceDetail = ({
 
             {item.comments && (
               <div className="space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Lo que pediste antes</p>
+                <p className="text-xs font-medium text-zinc-400">Lo que pediste antes</p>
                 <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
                   {item.comments.split('\n\n').filter(Boolean).map((comment, i) => (
                     <p key={`${item.id}-comment-${i}`} className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs italic leading-relaxed text-zinc-500 dark:border-white/5 dark:bg-white/5 dark:text-zinc-400">
@@ -593,7 +593,7 @@ const SharedContentPlan = () => {
         <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
           <AlertCircle className="h-10 w-10 text-destructive" />
         </div>
-        <h1 className="mb-2 text-2xl font-black text-zinc-900 dark:text-white">Parrilla no encontrada</h1>
+        <h1 className="mb-2 text-2xl font-semibold text-zinc-900 dark:text-white">Parrilla no encontrada</h1>
         <p className="max-w-sm text-zinc-500">El enlace es inválido o ha expirado. Por favor, solicita uno nuevo a tu ejecutivo de cuenta.</p>
       </div>
     );
@@ -660,7 +660,7 @@ const SharedContentPlan = () => {
             {plan.strategicObjectives?.trim() && (
               <section className="rounded-[2rem] border border-zinc-200 bg-white p-7 dark:border-white/10 dark:bg-zinc-900 lg:p-8">
                 <div className="max-w-3xl space-y-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-cyan-deep dark:text-brand-cyan">
+                  <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">
                     Objetivos estratégicos
                   </p>
                   <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 lg:text-base">

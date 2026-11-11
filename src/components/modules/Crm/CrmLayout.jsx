@@ -77,7 +77,7 @@ const CrmLayout = () => {
           <TabsTrigger value="seguimientos" className="flex flex-1 items-center gap-2 rounded-xl py-2"><CalendarClock className="h-4 w-4" /> Seguimientos</TabsTrigger>
           <TabsTrigger value="reportes" disabled title="Reportes llegan en la fase 2" className="flex flex-1 items-center gap-2 rounded-xl py-2">
             <BarChart3 className="h-4 w-4" /> Reportes
-            <span className="hidden rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300 sm:inline">Fase 2</span>
+            <span className="hidden rounded-full bg-zinc-200 px-1.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300 sm:inline">Fase 2</span>
           </TabsTrigger>
         </TabsList>
 

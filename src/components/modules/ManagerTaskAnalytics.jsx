@@ -94,7 +94,7 @@ const Distribution = ({ title, description, items = [], emptyLabel }) => {
                   style={{ width: `${maximum > 0 ? Math.max(4, (item.workMs / maximum) * 100) : 0}%` }}
                 />
               </div>
-              <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                 {item.tasks} {item.tasks === 1 ? 'tarea' : 'tareas'} · {item.sessions} {item.sessions === 1 ? 'sesión' : 'sesiones'}
               </p>
             </div>

@@ -87,7 +87,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
-              <tr className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+              <tr className="text-xs font-medium text-zinc-500">
                 <th className="w-10 px-4 py-3">
                   {selectable.length > 0 && <input type="checkbox" className={checkboxClass} checked={allSelected} onChange={toggleAll} aria-label="Seleccionar todas las oportunidades visibles" />}
                 </th>

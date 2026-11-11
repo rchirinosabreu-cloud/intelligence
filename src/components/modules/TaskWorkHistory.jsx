@@ -151,16 +151,16 @@ export default function TaskWorkHistory({ taskId, participantMemberId = null, pa
     <section className="border-y border-zinc-200/70 py-3 dark:border-zinc-800/70" data-task-work-history>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Tiempo de trabajo</p>
+          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">Tiempo de trabajo</p>
           <p className="mt-0.5 font-mono text-base font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatElapsedTime(totalMs)}</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             {loading ? 'Consultando sesiones…' : `${sessionCount} ${sessionCount === 1 ? 'sesión registrada' : 'sesiones registradas'}`}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="px-1 py-1 text-[11px] font-medium text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400"
+          className="px-1 py-1 text-xs font-medium text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400"
           aria-expanded={expanded}
         >
           {expanded ? 'Ocultar detalle' : 'Ver sesiones'}
@@ -182,12 +182,12 @@ export default function TaskWorkHistory({ taskId, participantMemberId = null, pa
             <div key={cycle.id} className="rounded-lg bg-zinc-100/60 p-3 dark:bg-zinc-900/60">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">Ciclo {cycle.sequence} · {cycleLabels[cycle.kind] || cycle.kind}</p>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{cycle.closedAt ? closeLabels[cycle.closeReason] || 'Cerrado' : 'Abierto'}</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">{cycle.closedAt ? closeLabels[cycle.closeReason] || 'Cerrado' : 'Abierto'}</span>
               </div>
-              {cycle.reason && <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{reasonLabels[cycle.reason] || cycle.reason}</p>}
+              {cycle.reason && <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{reasonLabels[cycle.reason] || cycle.reason}</p>}
               <div className="mt-2 space-y-2">
                 {cycle.sessions.map((session, index) => (
-                  <div key={session.id} className="grid grid-cols-[1fr_auto] gap-3 text-[11px]" data-work-session={session.id}>
+                  <div key={session.id} className="grid grid-cols-[1fr_auto] gap-3 text-xs" data-work-session={session.id}>
                     <div className="min-w-0 text-zinc-500 dark:text-zinc-400">
                       <p className="truncate">Sesión {index + 1} · {formatMoment(session.startedAt)} → {formatMoment(session.endedAt)}</p>
                       <p>{session.endedAt ? closeLabels[session.closeReason] || 'Cerrada' : 'Activa'}{session.isRework ? ' · Retrabajo' : ''}{session.isOverlapping ? ' · Simultánea' : ''}{session.isCollaborator ? ' · Colaborador' : ''}</p>
@@ -200,7 +200,7 @@ export default function TaskWorkHistory({ taskId, participantMemberId = null, pa
                     <div className="flex flex-col items-end gap-1">
                       <span className="font-mono font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatElapsedTime(sessionElapsed(session, now))}</span>
                       {canCorrect && (
-                        <button type="button" className="min-h-8 px-1 text-[11px] font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan" onClick={() => setCorrecting(session)} data-work-session-correct>
+                        <button type="button" className="min-h-8 px-1 text-xs font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan" onClick={() => setCorrecting(session)} data-work-session-correct>
                           Corregir
                         </button>
                       )}

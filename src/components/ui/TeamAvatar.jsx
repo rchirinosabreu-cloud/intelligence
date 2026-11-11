@@ -86,7 +86,7 @@ export default function TeamAvatar({ member, className, size = 32, showTitle = t
         )}
         title={showTitle ? name : undefined}
       >
-        <span className="text-[10px] font-black text-white tracking-tighter">
+        <span className="text-xs font-semibold text-white tracking-tighter">
           {initials}
         </span>
       </div>

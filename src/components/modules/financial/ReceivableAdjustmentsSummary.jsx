@@ -43,22 +43,22 @@ export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = tr
           {/* Lo retenido por los clientes, con su desglose por tipo: lo que Francisco descuenta en su
               declaración y para lo que hay que pedir certificados (22 de octubre de 2026). */}
           <div data-adjustment-retention className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-white/5">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Retenciones de clientes</p>
+            <p className="text-xs font-medium text-zinc-400">Retenciones de clientes</p>
             <p className="mt-1 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan">{money(summary?.retention?.total)}</p>
-            <p className="text-[10px] text-zinc-500">{RETENTION_TYPES.filter(type => summary?.retention?.byType?.[type.value]?.count).map(type => `${type.short} ${money(summary.retention.byType[type.value].total)}`).join(' · ') || 'Sin retenciones'}</p>
+            <p className="text-xs text-zinc-500">{RETENTION_TYPES.filter(type => summary?.retention?.byType?.[type.value]?.count).map(type => `${type.short} ${money(summary.retention.byType[type.value].total)}`).join(' · ') || 'Sin retenciones'}</p>
           </div>
           {SETTLEMENT_KINDS.filter(kind => kind.value !== RETENTION_KIND).map(kind => {
             const bucket = summary?.byKind?.[kind.value] || { total: 0, count: 0 };
             return <div key={kind.value} data-adjustment-kind={kind.value} className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-white/5">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{kind.label}</p>
+              <p className="text-xs font-medium text-zinc-400">{kind.label}</p>
               <p className="mt-1 text-sm font-semibold text-brand-magenta-deep dark:text-brand-magenta">{money(bucket.total)}</p>
-              <p className="text-[10px] text-zinc-500">{bucket.count === 1 ? '1 cuenta' : `${bucket.count} cuentas`}</p>
+              <p className="text-xs text-zinc-500">{bucket.count === 1 ? '1 cuenta' : `${bucket.count} cuentas`}</p>
             </div>;
           })}
           <div data-adjustment-exchange className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-white/5">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Diferencia en cambio</p>
+            <p className="text-xs font-medium text-zinc-400">Diferencia en cambio</p>
             <p className="mt-1 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan">{summary?.exchange?.net >= 0 ? '+' : '−'}{money(Math.abs(summary?.exchange?.net || 0))}</p>
-            <p className="text-[10px] text-zinc-500">{summary?.exchange?.count === 1 ? '1 pago en dólares' : `${summary?.exchange?.count || 0} pagos en dólares`}</p>
+            <p className="text-xs text-zinc-500">{summary?.exchange?.count === 1 ? '1 pago en dólares' : `${summary?.exchange?.count || 0} pagos en dólares`}</p>
           </div>
         </div>
         {open && <div className="mt-4 space-y-3">

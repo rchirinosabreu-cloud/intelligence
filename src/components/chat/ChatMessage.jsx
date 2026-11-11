@@ -89,7 +89,7 @@ function Attachment({ file, messageId, client }) {
           onClick={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); if (media.current) media.current.playbackRate = next; }}>
           {speed}×
         </button>
-        <span className="min-w-0 flex-1 text-[11px] text-muted-foreground" role={loading ? "status" : undefined}>
+        <span className="min-w-0 flex-1 text-xs text-muted-foreground" role={loading ? "status" : undefined}>
           {loading ? "Cargando audio…" : formatChatFileSize(file.size)}
         </span>
         <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-50"
@@ -281,7 +281,7 @@ export default function ChatMessage({
             {message.author.name}
           </span>
           <time
-            className="shrink-0 text-[11px] text-muted-foreground"
+            className="shrink-0 text-xs text-muted-foreground"
             dateTime={message.createdAt}
           >
             {new Date(message.createdAt).toLocaleTimeString("es-CO", {
@@ -291,7 +291,7 @@ export default function ChatMessage({
             })}
           </time>
           {message.editedAt && !message.deletedAt && (
-            <span className="text-[10px] text-muted-foreground">editado</span>
+            <span className="text-xs text-muted-foreground">editado</span>
           )}
         </div>
         {message.deletedAt ? (
@@ -301,7 +301,7 @@ export default function ChatMessage({
         ) : (
           <>
             {message.forwarded && (
-              <span className="text-[11px] italic text-muted-foreground">
+              <span className="text-xs italic text-muted-foreground">
                 Reenviado
               </span>
             )}

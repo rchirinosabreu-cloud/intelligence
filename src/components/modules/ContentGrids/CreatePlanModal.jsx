@@ -96,7 +96,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Cliente</label>
+              <label className="text-xs font-medium text-zinc-500">Cliente</label>
               <Select
                 value={formData.clientId}
                 onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
@@ -112,7 +112,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Mes</label>
+                <label className="text-xs font-medium text-zinc-500">Mes</label>
                 <Select
                   value={formData.month}
                   onChange={(e) => setFormData({ ...formData, month: parseInt(e.target.value) })}
@@ -125,7 +125,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Año</label>
+                <label className="text-xs font-medium text-zinc-500">Año</label>
                 <input
                   type="number"
                   value={formData.year}

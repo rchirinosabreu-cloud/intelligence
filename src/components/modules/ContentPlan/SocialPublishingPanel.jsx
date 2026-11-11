@@ -46,7 +46,7 @@ const STATUS_CLASS = {
   CANCELLED: 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400'
 };
 
-const ACTION_CLASS = 'text-[12px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50';
+const ACTION_CLASS = 'text-xs font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50';
 /** Lo que ya salió o está por salir se sigue mostrando aunque la pieza deje esa cuenta: es su historial. */
 const KEPT_STATUSES = ['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'FAILED'];
 
@@ -91,7 +91,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   if (!connected.length) {
     return (
       <div className="border-t border-zinc-100 px-6 py-4 dark:border-white/5" data-social-publishing-panel>
-        <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Publicación en redes:</span> este cliente no tiene Instagram ni Facebook conectados. Se conectan desde la ficha del cliente.
         </p>
       </div>
@@ -103,7 +103,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Publicación en redes</span>
-          <span className="text-[13px] text-zinc-700 dark:text-zinc-300">
+          <span className="text-sm text-zinc-700 dark:text-zinc-300">
             {publishAt ? <>Sale el <strong>{bogotaStamp(publishAt)}</strong> (hora de Bogotá).</> : 'Elige la hora en la ficha para poder programarla.'}
           </span>
         </div>
@@ -112,7 +112,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
             type="button"
             onClick={() => onSchedule(item.id, targets.map((account) => account.id))}
             disabled={isBusy || !targets.length || problems.length > 0}
-            className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-[13px] font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-sm font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             Programar
@@ -153,7 +153,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
 
       {/* Ninguna cuenta viene marcada: hasta que la persona marque una, la pieza no va a ningún lado. */}
       {canChoosePages && chosenPageIds.length === 0 && (
-        <p className="mt-3 flex items-start gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300" data-social-choose-account>
+        <p className="mt-3 flex items-start gap-1.5 text-xs text-zinc-600 dark:text-zinc-300" data-social-choose-account>
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden="true" />
           <span>Marca a qué cuenta va esta pieza para poder programarla.</span>
         </p>
@@ -171,7 +171,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
             : row ? STATUS_TEXT[row.status]?.(row) : 'Sin programar';
           const tone = disconnected ? STATUS_CLASS.FAILED : (row ? STATUS_CLASS[row.status] : STATUS_CLASS.CANCELLED);
           return (
-            <li key={account.id} className={`flex min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-[13px] ${tone}`} data-social-platform={account.platform} data-social-account={account.id}>
+            <li key={account.id} className={`flex min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-sm ${tone}`} data-social-platform={account.platform} data-social-account={account.id}>
               {canChoose ? (
                 <input
                   type="checkbox"
@@ -214,7 +214,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
       </ul>
 
       {(problems.length > 0 || serverProblems.length > 0) && (
-        <ul className="mt-3 space-y-1 text-[12px] text-zinc-600 dark:text-zinc-300" data-social-problems>
+        <ul className="mt-3 space-y-1 text-xs text-zinc-600 dark:text-zinc-300" data-social-problems>
           {[...new Set([...problems, ...serverProblems])].map((problem) => (
             <li key={problem} className="flex items-start gap-1.5">
               {/* Son avisos de qué falta, no errores: icono informativo, sin el color destructivo. */}
@@ -227,7 +227,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
 
       {/* Avisos que no bloquean: se puede programar, pero la persona sabe antes qué sale distinto. */}
       {notices.length > 0 && (
-        <ul className="mt-3 space-y-1 text-[12px] text-zinc-600 dark:text-zinc-300" data-social-notices>
+        <ul className="mt-3 space-y-1 text-xs text-zinc-600 dark:text-zinc-300" data-social-notices>
           {notices.map((notice) => (
             <li key={notice} className="flex items-start gap-1.5">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" aria-hidden="true" />

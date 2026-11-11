@@ -272,13 +272,13 @@ const QuotationList = () => {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800">
                             <tr>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500">Consecutivo</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500">Fecha</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500">Cliente / Empresa</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500">Emisor</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500">Total</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500">Estado</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-zinc-500 text-right">Acciones</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500">Consecutivo</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500">Fecha</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500">Cliente / Empresa</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500">Emisor</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500">Total</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500">Estado</th>
+                                <th className="px-6 py-4 font-medium text-xs text-zinc-500 text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -305,12 +305,12 @@ const QuotationList = () => {
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
                                                 <span className="font-bold">{q.client_company || q.client_name}</span>
-                                                {q.client_company && <span className="text-[10px] text-zinc-500 uppercase">{q.client_name}</span>}
+                                                {q.client_company && <span className="text-xs text-zinc-500">{q.client_name}</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={cn(
-                                                "px-2 py-1 rounded-full text-[10px] font-bold uppercase border",
+                                                "px-2 py-1 rounded-full text-xs font-medium border",
                                                 q.emisor_type === 'BRAIN_STUDIO'
                                                     ? "bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800"
                                                     : "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
@@ -324,7 +324,7 @@ const QuotationList = () => {
                                                     ? `${new Set(q.items.map((item) => item.scenarioId).filter(Boolean)).size} escenarios`
                                                     : formatCurrency(q.total_amount, q.currency)}</span>
                                                 {q.status === 'APROBADA' && q.items?.find((item) => item.selectedScenario)?.scenarioName && (
-                                                    <span className="mt-1 text-[10px] font-semibold text-[#00859C]">{q.items.find((item) => item.selectedScenario).scenarioName}</span>
+                                                    <span className="mt-1 text-xs font-semibold text-[#00859C]">{q.items.find((item) => item.selectedScenario).scenarioName}</span>
                                                 )}
                                             </div>
                                         </td>

@@ -47,7 +47,7 @@ const plainTextSnippet = (value) => String(value || '')
 /** Un dato de la tarea cerrada. Se omite solo si no hay nada que mostrar. */
 const CompletedTaskFact = ({ label, value }) => (value ? (
   <div className="min-w-0">
-    <dt className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">{label}</dt>
+    <dt className="text-xs font-medium text-zinc-400 dark:text-zinc-500">{label}</dt>
     <dd className="truncate text-zinc-700 dark:text-zinc-200" title={value}>{value}</dd>
   </div>
 ) : null);
@@ -428,7 +428,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                                 />
                                             ) : (
                                                 <div className="border-y border-zinc-200/70 py-3 dark:border-zinc-800/70">
-                                                    <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Tiempo de trabajo</p>
+                                                    <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">Tiempo de trabajo</p>
                                                     <p className="mt-0.5 font-mono text-base font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatElapsedTime(task.accumulatedWorkMs)}</p>
                                                 </div>
                                             )}
@@ -450,7 +450,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
 
                                             {plainTextSnippet(task.comments) && (
                                                 <div>
-                                                    <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Descripción</p>
+                                                    <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">Descripción</p>
                                                     <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{plainTextSnippet(task.comments)}</p>
                                                 </div>
                                             )}

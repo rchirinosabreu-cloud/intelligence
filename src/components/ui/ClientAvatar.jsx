@@ -64,7 +64,7 @@ const ClientAvatar = ({ client, className, variant = "md", size: customSize }) =
             data-entity-type="client"
         >
             <span
-                className="text-white font-black tracking-tighter select-none font-sans"
+                className="text-white font-semibold tracking-tighter select-none font-sans"
                 style={{ fontSize: Math.max(size * 0.38, 11) }}
             >
                 {avatarData.initials || <User size={size * 0.5} strokeWidth={2.5} />}

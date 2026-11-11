@@ -108,38 +108,38 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
                     {formError && (
                         <div className="bg-destructive/5 dark:bg-destructive/10 border border-destructive/20 dark:border-destructive/30 p-3 rounded-xl flex items-start gap-2">
                             <Tag className="w-4 h-4 text-destructive brain-destructive-text shrink-0 mt-0.5" />
-                            <div><p className="text-xs font-bold text-destructive brain-destructive-text">Error de guardado</p><p className="text-[10px] text-destructive brain-destructive-text">{formError}</p></div>
+                            <div><p className="text-xs font-bold text-destructive brain-destructive-text">Error de guardado</p><p className="text-xs text-destructive brain-destructive-text">{formError}</p></div>
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-zinc-500">Nombre del Servicio</label>
+                            <label className="text-xs font-medium text-zinc-500">Nombre del Servicio</label>
                             <input required autoFocus className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.name} onChange={(e) => updateField('name', e.target.value)} placeholder="Ej: Auditoría de marca" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-zinc-500">Categoría</label>
+                            <label className="text-xs font-medium text-zinc-500">Categoría</label>
                             <Select disabled={mutation.isPending || draft.conflict} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none" value={formData.category} onChange={(e) => updateField('category', e.target.value)}>
                                 {SERVICE_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-zinc-500">Costo real estimado</label>
+                            <label className="text-xs font-medium text-zinc-500">Costo real estimado</label>
                             <MoneyInput required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.costo_real_estimado} onChange={(value) => updateField('costo_real_estimado', value)} placeholder="220.000" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-zinc-500">Precio actual</label>
+                            <label className="text-xs font-medium text-zinc-500">Precio actual</label>
                             <MoneyInput required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.valor_neto_actual} onChange={(value) => updateField('valor_neto_actual', value)} placeholder="350.000" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-zinc-500">Precio final</label>
+                            <label className="text-xs font-medium text-zinc-500">Precio final</label>
                             <MoneyInput required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.valor_neto} onChange={(value) => updateField('valor_neto', value)} placeholder="730.000" />
                         </div>
                         <div className="col-span-2 grid grid-cols-2 gap-4 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4">
-                            <div><p className="text-[10px] font-bold uppercase text-zinc-400">Ganancia</p><p className={cn('mt-1 text-base font-bold', economics.profit >= 0 ? 'text-brand-green-deep dark:text-brand-green' : 'text-destructive brain-destructive-text')}>{formatCurrency(economics.profit)}</p></div>
-                            <div className="text-right"><p className="text-[10px] font-bold uppercase text-zinc-400">Margen estimado</p><p className="mt-1 text-base font-bold text-zinc-800 dark:text-zinc-100">{economics.margin.toFixed(1)}%</p></div>
+                            <div><p className="text-xs font-medium text-zinc-400">Ganancia</p><p className={cn('mt-1 text-base font-bold', economics.profit >= 0 ? 'text-brand-green-deep dark:text-brand-green' : 'text-destructive brain-destructive-text')}>{formatCurrency(economics.profit)}</p></div>
+                            <div className="text-right"><p className="text-xs font-medium text-zinc-400">Margen estimado</p><p className="mt-1 text-base font-bold text-zinc-800 dark:text-zinc-100">{economics.margin.toFixed(1)}%</p></div>
                         </div>
                         <div className="col-span-2 space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-zinc-500">Descripción Comercial</label>
+                            <label className="text-xs font-medium text-zinc-500">Descripción Comercial</label>
                             {/* Same simplified format bar as the team chat: bold, italic, underline, highlight and bullets. */}
                             <RichTextEditor
                                 value={formData.descriptionHtml}
@@ -149,7 +149,7 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
                                 placeholder="Concepto, qué incluye y qué no incluye…"
                                 className="px-4 py-3 text-sm !break-words"
                             />
-                            <p className="text-[10px] text-zinc-400">Negrilla, viñetas y saltos de línea llegan tal cual a la cotización.</p>
+                            <p className="text-xs text-zinc-400">Negrilla, viñetas y saltos de línea llegan tal cual a la cotización.</p>
                         </div>
                     </div>
                     </fieldset>

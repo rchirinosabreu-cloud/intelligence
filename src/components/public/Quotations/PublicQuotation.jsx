@@ -130,7 +130,7 @@ const PublicQuotation = () => {
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
                         <Clock className="h-7 w-7" />
                     </div>
-                    <p className="mt-5 text-xs font-bold uppercase text-amber-600 dark:text-amber-400">Vigencia finalizada</p>
+                    <p className="mt-5 text-xs font-medium text-amber-600 dark:text-amber-400">Vigencia finalizada</p>
                     <h1 className="mt-2 text-2xl font-bold text-zinc-950 dark:text-white">Esta propuesta debe actualizarse</h1>
                     <p className="mx-auto mt-3 max-w-md text-base leading-7 text-zinc-600 dark:text-zinc-300">
                         La propuesta superó sus 15 días de vigencia. Escríbenos para confirmar valores y disponibilidad.
@@ -190,7 +190,7 @@ const PublicQuotation = () => {
                         </div>
                     </div>
                     <div className="text-right">
-                        <p className="text-xs font-semibold uppercase text-zinc-400">Propuesta</p>
+                        <p className="text-xs font-medium text-zinc-400">Propuesta</p>
                         <p className="mt-0.5 text-sm font-bold text-violet-700 dark:text-violet-300">{quotation.consecutive_formatted}</p>
                     </div>
                 </div>
@@ -218,15 +218,15 @@ const PublicQuotation = () => {
 
                         <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-l-0 border-zinc-200 lg:grid-cols-1 lg:border-l lg:pl-8 dark:border-zinc-800">
                             <div>
-                                <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Calendar className="h-4 w-4" /> Emisión</dt>
+                                <dt className="flex items-center gap-2 text-xs font-medium text-zinc-400"><Calendar className="h-4 w-4" /> Emisión</dt>
                                 <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.issued_at || quotation.created_at)}</dd>
                             </div>
                             <div>
-                                <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Clock className="h-4 w-4" /> Vigencia</dt>
+                                <dt className="flex items-center gap-2 text-xs font-medium text-zinc-400"><Clock className="h-4 w-4" /> Vigencia</dt>
                                 <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.expires_at)}</dd>
                             </div>
-                            {details?.execution && <div><dt className="text-xs font-semibold uppercase text-zinc-400">Ejecución estimada</dt><dd className="mt-1.5 text-sm font-semibold">{formatExecution(details.execution)}</dd></div>}
-                            {(quotation.items || []).some(item => item.billingType !== 'ONE_TIME') && <div><dt className="text-xs font-semibold uppercase text-zinc-400">Periodo de servicios recurrentes</dt><dd className="mt-1.5 text-sm font-semibold">{quotation.duration_months || 1} meses</dd></div>}
+                            {details?.execution && <div><dt className="text-xs font-medium text-zinc-400">Ejecución estimada</dt><dd className="mt-1.5 text-sm font-semibold">{formatExecution(details.execution)}</dd></div>}
+                            {(quotation.items || []).some(item => item.billingType !== 'ONE_TIME') && <div><dt className="text-xs font-medium text-zinc-400">Periodo de servicios recurrentes</dt><dd className="mt-1.5 text-sm font-semibold">{quotation.duration_months || 1} meses</dd></div>}
                         </dl>
                     </div>
                 </section>
@@ -235,7 +235,7 @@ const PublicQuotation = () => {
                     <div className="mx-auto max-w-6xl">
                         <div className="space-y-8">
                             <div>
-                                <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Alcance</p>
+                                <p className="text-xs font-medium text-violet-700 dark:text-violet-300">Alcance</p>
                                 <h2 className="mt-2 text-2xl font-bold">{scenarios.length > 0 ? (isApproved ? 'Escenario seleccionado' : 'Escenarios disponibles') : 'Servicios incluidos'}</h2>
                             </div>
                             {scenarios.length > 0 ? (
@@ -249,11 +249,11 @@ const PublicQuotation = () => {
                                         const isSelected = selectedScenarioId === scenario.id || scenario.selected;
                                         return (
                                             <article key={scenario.id} className={`flex flex-col rounded-2xl border-2 p-6 transition-all ${isSelected ? 'border-[#00859C] bg-cyan-50/40 shadow-lg dark:bg-cyan-950/10' : 'border-zinc-200 dark:border-zinc-800'}`}>
-                                                <p className="text-xs font-bold uppercase text-[#00859C]">Opción {scenario.order + 1}</p>
+                                                <p className="text-xs font-medium text-[#00859C]">Opción {scenario.order + 1}</p>
                                                 <h3 className="mt-2 text-xl font-bold">{scenario.name}</h3>
                                                 {scenario.description && <p className="mt-3 text-sm leading-6 text-zinc-500">{scenario.description}</p>}
                                                 <div className="mt-5 space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
-                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><div className="flex items-start justify-between gap-3"><p className="min-w-0 text-sm font-bold leading-5">{item.name}</p><span className="shrink-0 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</span></div>{item.group && <p className="my-2 text-xs font-semibold">{item.group}</p>}{item.descriptionHtml ? <ProposalRichText html={item.descriptionHtml} /> : item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}{item.execution && <p className="mt-2 text-xs text-primary">Ejecución: {formatExecution(item.execution)}</p>}{item.note && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{item.note}</p>}</div>)}
+                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><div className="flex items-start justify-between gap-3"><p className="min-w-0 text-sm font-bold leading-5">{item.name}</p><span className="shrink-0 text-xs font-medium text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</span></div>{item.group && <p className="my-2 text-xs font-semibold">{item.group}</p>}{item.descriptionHtml ? <ProposalRichText html={item.descriptionHtml} /> : item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}{item.execution && <p className="mt-2 text-xs text-primary">Ejecución: {formatExecution(item.execution)}</p>}{item.note && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{item.note}</p>}</div>)}
                                                 </div>
                                                 <div className="mt-auto pt-6">
                                                     <div className="space-y-1.5 border-t border-zinc-200 pt-3 text-xs dark:border-zinc-800">
@@ -264,8 +264,8 @@ const PublicQuotation = () => {
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 rounded-md bg-emerald-100 px-3 py-2 font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"><span>Ahorro · {scenario.discountLabel || 'Descuento'}</span><span>-{formatCurrency(amounts.discountAmount)}</span></div>}
                                                     </div>
                                                     <div className="mt-4 pt-4">
-                                                        <p className="text-xs font-bold uppercase text-zinc-400">{amounts.discountAmount > 0 ? 'Valor final con descuento' : 'Valor de esta opción'}</p>
-                                                        <p className="mt-1 text-3xl font-black">{formatCurrency(amounts.totalAmount)}</p>
+                                                        <p className="text-xs font-medium text-zinc-400">{amounts.discountAmount > 0 ? 'Valor final con descuento' : 'Valor de esta opción'}</p>
+                                                        <p className="mt-1 text-3xl font-semibold">{formatCurrency(amounts.totalAmount)}</p>
                                                     </div>
                                                     {!quotation.is_tax_exempt && quotation.currency !== 'USD' && <p className="mt-1 text-xs text-zinc-500">Incluye IVA del 19%</p>}
                                                     {scenario.externalBudget !== null && <div className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><strong>Presupuesto externo: {formatCurrency(scenario.externalBudget)}</strong>{scenario.externalBudgetNote && <p className="mt-1 leading-5">{scenario.externalBudgetNote}</p>}</div>}
@@ -292,15 +292,15 @@ const PublicQuotation = () => {
                                                     </div>
                                                 </div>
                                                 <div className="border-t border-zinc-100 pt-4 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right dark:border-zinc-800">
-                                                    <p className="text-xs font-semibold uppercase text-zinc-400">{Number(item.quantity)} {Number(item.quantity) === 1 ? 'unidad' : 'unidades'}</p>
+                                                    <p className="text-xs font-medium text-zinc-400">{Number(item.quantity)} {Number(item.quantity) === 1 ? 'unidad' : 'unidades'}</p>
                                                     <p className="mt-1 text-xl font-bold">{formatCurrency(Number(item.price) * Number(item.quantity))}</p>
-                                                    <p className="mt-1 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</p>
+                                                    <p className="mt-1 text-xs font-medium text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</p>
                                                 </div>
                                             </div>
                                         </article>
                                         {item.note && (
                                             <div className="ml-3 border-l-2 border-violet-300 pl-4 dark:border-violet-700">
-                                                <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Nota adicional</p>
+                                                <p className="text-xs font-medium text-violet-700 dark:text-violet-300">Nota adicional</p>
                                                 <p className="mt-1 text-sm font-normal leading-6 text-zinc-600 dark:text-zinc-300">{item.note}</p>
                                             </div>
                                         )}
@@ -318,19 +318,19 @@ const PublicQuotation = () => {
                     <div className="mx-auto max-w-4xl space-y-8">
                         <div className="space-y-6">
                             <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
-                                <p className="text-xs font-semibold uppercase text-zinc-400">Cliente</p>
+                                <p className="text-xs font-medium text-zinc-400">Cliente</p>
                                 <p className="mt-2 text-lg font-bold">{quotation.client_company || quotation.client_name}</p>
                                 {quotation.client_company && <p className="mt-1 text-sm text-zinc-500">Atención: {quotation.client_name}</p>}
                             </div>
                             <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
-                                <p className="text-xs font-semibold uppercase text-zinc-400">Contacto</p>
+                                <p className="text-xs font-medium text-zinc-400">Contacto</p>
                                 <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Mail className="h-4 w-4" /> {quotation.client_email || 'No proporcionado'}</p>
                                 <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Smartphone className="h-4 w-4" /> {quotation.client_phone}</p>
                             </div>
                         </div>
 
                         <div className="rounded-lg bg-violet-700 p-6 text-white shadow-xl shadow-violet-950/10 dark:bg-violet-800 sm:p-8">
-                            <p className="text-xs font-semibold uppercase text-violet-200">{scenarios.length > 0 ? (chosenScenario ? chosenScenario.name : 'Selecciona un escenario') : 'Inversión total'}</p>
+                            <p className="text-xs font-medium text-violet-200">{scenarios.length > 0 ? (chosenScenario ? chosenScenario.name : 'Selecciona un escenario') : 'Inversión total'}</p>
                             {scenarios.length === 0 || chosenAmounts ? <>
                                 <div className="mt-5 space-y-2 border-t border-white/20 pt-5 text-sm">
                                     {displayedAmounts.monthlySubtotal > 0 && <div className="flex justify-between gap-4"><span className="text-violet-100">Inversión mensual</span><span>{formatCurrency(displayedAmounts.monthlySubtotal)}</span></div>}
@@ -341,7 +341,7 @@ const PublicQuotation = () => {
                                     {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(displayedAmounts.taxAmount)}</span></div>}
                                 </div>
                                 <div className="mt-5 pt-5">
-                                    <p className="text-xs font-bold uppercase text-emerald-200">{displayedAmounts.discountAmount > 0 ? 'Valor final con descuento' : 'Inversión total'}</p>
+                                    <p className="text-xs font-medium text-emerald-200">{displayedAmounts.discountAmount > 0 ? 'Valor final con descuento' : 'Inversión total'}</p>
                                     <p className="mt-3 text-4xl font-bold leading-none sm:text-5xl">{formatCurrency(displayedAmounts.totalAmount)}</p>
                                 </div>
                             </> : <p className="mt-3 text-sm leading-6 text-violet-100">Compara las opciones anteriores y elige la que deseas aprobar.</p>}
@@ -382,7 +382,7 @@ const PublicQuotation = () => {
                         <div className="flex items-start gap-3">
                             <FileText className="mt-1 h-5 w-5 shrink-0 text-violet-600" />
                             <div>
-                                <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Información contractual</p>
+                                <p className="text-xs font-medium text-violet-700 dark:text-violet-300">Información contractual</p>
                                 <h2 className="mt-2 text-2xl font-bold">Términos y condiciones</h2>
                             </div>
                         </div>

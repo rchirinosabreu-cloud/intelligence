@@ -32,11 +32,11 @@ export default function CommercialRequestPage() {
           <img src="/brainstudio-logo.png" alt="Brain Studio" className="h-8 w-8 object-contain" />
           <span className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Brainstudio</span>
         </a>
-        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Solicitud comercial</span>
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Solicitud comercial</span>
       </header>
       <main className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-6">
         <CommercialRequestForm onSubmit={submit} />
-        <p className="mx-auto mt-6 max-w-3xl text-center text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">
+        <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-5 text-zinc-500 dark:text-zinc-400">
           Usaremos estos datos únicamente para preparar tu propuesta y contactarte. Brain Studio Agencia Creativa S.A.S.
         </p>
       </main>

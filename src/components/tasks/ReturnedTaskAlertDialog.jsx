@@ -129,7 +129,7 @@ export default function ReturnedTaskAlertDialog({
         <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
           <BriaPortrait  alt="Bria" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
           <DialogHeader className="relative z-10">
-            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Tarea devuelta</span>
+            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Tarea devuelta</span>
             <DialogTitle className="text-base leading-snug text-white sm:text-lg">
               Hola{firstName ? ` ${firstName}` : ''}, recuerda que tienes una tarea devuelta
             </DialogTitle>

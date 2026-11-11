@@ -365,7 +365,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">
+                    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">
                       {verdictLabels[result.review.verdict] || 'Revisión lista'}
                     </span>
                     <span className="text-xs text-zinc-600 dark:text-zinc-300">{coverageUi.pieces}</span>
@@ -375,7 +375,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
                     </span>
                   </div>
                   <p className="mt-3 max-w-4xl text-sm leading-6 text-zinc-700 dark:text-zinc-200">{result.review.summary}</p>
-                  {reviewedDate && <p className="mt-2 text-[11px] text-zinc-400">Actualizada {reviewedDate}</p>}
+                  {reviewedDate && <p className="mt-2 text-xs text-zinc-400">Actualizada {reviewedDate}</p>}
                   {coverageUi.previousScore && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">Puntaje de la última revisión completa.</p>}
                   {coverageUi.limit && <p className="mt-2 max-w-4xl text-xs leading-5 text-zinc-500 dark:text-zinc-400">{coverageUi.limit}</p>}
                 </div>
@@ -429,18 +429,18 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
                       const verificationUi = getFindingVerificationUi(finding, result?.meta);
                       return (
                         <article data-bria-finding-card key={finding.id || finding.fingerprint} className="relative flex w-[84vw] max-w-sm shrink-0 snap-start flex-col rounded-2xl border border-zinc-200/80 bg-zinc-50/80 p-4 sm:w-[360px] dark:border-zinc-800 dark:bg-zinc-900">
-                          <button type="button" disabled={actingId === finding.id} onClick={() => { setDismissFinding(finding); setDismissReason(dismissReasons[0]); setCustomReason(''); }} className="absolute right-3 top-3 min-h-11 rounded-xl px-2.5 text-[11px] font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-60 dark:text-destructive dark:hover:bg-destructive/15">
+                          <button type="button" disabled={actingId === finding.id} onClick={() => { setDismissFinding(finding); setDismissReason(dismissReasons[0]); setCustomReason(''); }} className="absolute right-3 top-3 min-h-11 rounded-xl px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-60 dark:text-destructive dark:hover:bg-destructive/15">
                             Descartar
                           </button>
                           <div className="flex flex-wrap items-center gap-2 pr-20">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                               {categoryLabels[finding.category] || finding.category}
                             </span>
-                            <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${severityStyles[finding.severity] || severityStyles.INFO}`}>
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityStyles[finding.severity] || severityStyles.INFO}`}>
                               {finding.severity === 'CRITICAL' ? 'Crítico' : finding.severity === 'WARNING' ? 'Atención' : 'Mejora'}
                             </span>
                             {verificationUi.label && (
-                              <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${verificationUi.isError ? 'bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive' : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-200'}`}>{verificationUi.label}</span>
+                              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${verificationUi.isError ? 'bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive' : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-200'}`}>{verificationUi.label}</span>
                             )}
                           </div>
                           <h4 className="mt-3 text-sm font-semibold text-zinc-950 dark:text-white">{finding.title}</h4>
@@ -454,7 +454,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
                           {sources.length > 0 && (
                             <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200/80 pt-3 dark:border-zinc-800">
                               {sources.map((source) => (
-                                <a key={source.id} href={source.sourceUrl || '#'} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-[11px] font-medium text-violet-700 hover:bg-violet-50 dark:bg-zinc-950 dark:text-violet-200 dark:hover:bg-violet-950/40">
+                                <a key={source.id} href={source.sourceUrl || '#'} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 dark:bg-zinc-950 dark:text-violet-200 dark:hover:bg-violet-950/40">
                                   {source.title}<ExternalLink className="h-3 w-3" />
                                 </a>
                               ))}
@@ -481,7 +481,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
                   </div>
                 </div>
               )}
-              <p className="text-[11px] leading-relaxed text-zinc-400">
+              <p className="text-xs leading-relaxed text-zinc-400">
                 Revisión consultiva global. No cambia el contenido ni crea tareas sin aprobación; el puntaje se recalcula al revisar nuevamente.
               </p>
             </>

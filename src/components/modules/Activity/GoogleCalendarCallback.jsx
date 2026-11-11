@@ -83,7 +83,7 @@ const GoogleCalendarCallback = () => {
           <button
             type="button"
             onClick={() => navigate('/actividad')}
-            className="mt-6 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-white shadow-lg shadow-indigo-600/20"
+            className="mt-6 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white shadow-lg shadow-indigo-600/20"
           >
             Volver a actividad
           </button>

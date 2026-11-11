@@ -938,7 +938,7 @@ export default function TeamChat({
         >
           <MessageCircle className={triggerContainer ? 'h-4 w-4' : 'h-6 w-6'} />
           {unread > 0 && (
-            <span className="absolute -right-1 -top-1 rounded-full border-2 border-background bg-primary px-1.5 text-[10px] text-primary-foreground">
+            <span className="absolute -right-1 -top-1 rounded-full border-2 border-background bg-primary px-1.5 text-xs text-primary-foreground">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
@@ -987,7 +987,7 @@ export default function TeamChat({
                   ? "Canales"
                   : `# ${selected?.name || "General"}`}
               </h2>
-              <p className="text-[11px] text-muted-foreground" role="status">
+              <p className="text-xs text-muted-foreground" role="status">
                 {selected?.isArchived ? "Canal archivado" : chat.connection}
               </p>
             </div>
@@ -1249,7 +1249,7 @@ export default function TeamChat({
                         ).toLocaleDateString("es-CO", {
                           timeZone: "America/Bogota",
                         })) && (
-                      <p className="my-3 text-center text-[11px] text-muted-foreground">
+                      <p className="my-3 text-center text-xs text-muted-foreground">
                         {new Date(m.createdAt).toLocaleDateString("es-CO", {
                           timeZone: "America/Bogota",
                           day: "numeric",

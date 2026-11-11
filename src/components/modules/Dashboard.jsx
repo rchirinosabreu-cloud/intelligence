@@ -290,7 +290,7 @@ const Dashboard = () => {
       ) : error ? (
         <div className="brain-glass p-8 text-center">
           <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-destructive" />
-          <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100">No se pudo cargar el dashboard</h3>
+          <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">No se pudo cargar el dashboard</h3>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">{error.message}</p>
         </div>
       ) : (
@@ -473,7 +473,7 @@ function AchievementsPanel({ feed, onOpenHistory, className, variants }) {
                       <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
                     </div>
                   )}
-                  <span className="text-[11px] text-brand-green-deep dark:text-brand-green block font-semibold truncate">
+                  <span className="text-xs text-brand-green-deep dark:text-brand-green block font-semibold truncate">
                     {task.assignee ? task.assignee.name : 'Equipo'} {task.participantMemberId ? 'terminó su parte de:' : 'completó:'}
                   </span>
                 </div>

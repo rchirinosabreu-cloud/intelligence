@@ -53,7 +53,7 @@ function PersonCard({ person, tasks }) {
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
               {types.map((type) => (
                 <tr key={type.workType} className="text-zinc-700 dark:text-zinc-200">
-                  <td className="py-2 pr-3">{type.workType}{!type.comparable && <span className="block text-[11px] text-zinc-400 dark:text-zinc-500">mezcla trabajos distintos</span>}</td>
+                  <td className="py-2 pr-3">{type.workType}{!type.comparable && <span className="block text-xs text-zinc-400 dark:text-zinc-500">mezcla trabajos distintos</span>}</td>
                   <td className="py-2 pr-3 tabular-nums">{type.measured}</td>
                   <td className="py-2 pr-3 tabular-nums">{formatDuration(type.medianMs)}</td>
                   <td className="py-2 pr-3 tabular-nums">{formatDuration(type.minMs)} a {formatDuration(type.maxMs)}</td>
@@ -76,7 +76,7 @@ function PersonCard({ person, tasks }) {
                 <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-200">{finding.message}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {finding.taskIds.slice(0, 4).map((id) => tasks[id] && (
-                    <span key={id} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300" title={tasks[id].title}>
+                    <span key={id} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300" title={tasks[id].title}>
                       <span className="truncate">{tasks[id].title}</span>
                       <span className="shrink-0 tabular-nums text-zinc-400 dark:text-zinc-500">· {tasks[id].measuredMs ? formatDuration(tasks[id].measuredMs) : 'sin medir'} · {shortDay(tasks[id].day)}</span>
                     </span>

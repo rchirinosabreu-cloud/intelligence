@@ -116,10 +116,10 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                         <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                                 <p className="text-xs font-bold">{entry.title}</p>
-                                <span className="rounded bg-cyan-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[#00859C] dark:bg-cyan-950/30">{entry.group}</span>
-                                {!manualIds.includes(entry.id) && <span className="text-[9px] font-semibold uppercase text-zinc-400">Automático</span>}
+                                <span className="rounded bg-cyan-50 px-1.5 py-0.5 text-xs font-medium text-[#00859C] dark:bg-cyan-950/30">{entry.group}</span>
+                                {!manualIds.includes(entry.id) && <span className="text-xs font-medium text-zinc-400">Automático</span>}
                             </div>
-                            <p className="mt-1 text-[11px] leading-5 text-zinc-500">{entry.text}</p>
+                            <p className="mt-1 text-xs leading-5 text-zinc-500">{entry.text}</p>
                         </div>
                         <button type="button" onClick={() => removeLibraryTerm(entry.id)} className="brain-danger-button-icon rounded-md p-1.5" aria-label={`Quitar ${entry.title}`}>
                             <Trash2 className="h-3.5 w-3.5" />
@@ -130,7 +130,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                 {effectiveCustomTerms.map((text, index) => (
                     <div key={`${index}-${text.slice(0, 20)}`} className="flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
                         <div className="min-w-0 flex-1">
-                            <p className="text-[9px] font-bold uppercase text-zinc-400">Cláusula personalizada</p>
+                            <p className="text-xs font-medium text-zinc-400">Cláusula personalizada</p>
                             <textarea
                                 value={text}
                                 onChange={(event) => {
@@ -138,7 +138,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                                     const targetIndex = preserveExisting ? index - (index < existingTerms.length ? 0 : existingTerms.length) : index;
                                     update((current) => current.map((termText, termIndex) => termIndex === targetIndex ? event.target.value : termText));
                                 }}
-                                className="mt-1 min-h-[64px] w-full resize-y bg-transparent text-[11px] leading-5 text-zinc-600 outline-none dark:text-zinc-300"
+                                className="mt-1 min-h-[64px] w-full resize-y bg-transparent text-xs leading-5 text-zinc-600 outline-none dark:text-zinc-300"
                             />
                         </div>
                         <button
@@ -165,7 +165,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
 
             <div className="grid gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800 sm:grid-cols-2">
                 <label className="space-y-1.5">
-                    <span className="text-[10px] font-bold uppercase text-zinc-400">Añadir desde la biblioteca</span>
+                    <span className="text-xs font-medium text-zinc-400">Añadir desde la biblioteca</span>
                     <Select
                         defaultValue=""
                         onChange={(event) => {
@@ -179,7 +179,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                     </Select>
                 </label>
                 <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold uppercase text-zinc-400">Cláusula personalizada</span>
+                    <span className="text-xs font-medium text-zinc-400">Cláusula personalizada</span>
                     <div className="flex gap-2">
                         <input
                             value={customDraft}

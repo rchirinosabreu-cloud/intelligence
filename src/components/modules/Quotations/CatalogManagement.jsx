@@ -157,10 +157,10 @@ const CatalogManagement = () => {
                 ) : (
                     Object.entries(groupedServices).map(([category, items]) => (
                         <div key={category} className="space-y-4">
-                            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                            <h3 className="text-sm font-semibold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
                                 <Tag className="w-4 h-4" />
                                 {category}
-                                <span className="ml-2 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[10px]">{items.length}</span>
+                                <span className="ml-2 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs">{items.length}</span>
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {items.map(item => (
@@ -186,16 +186,16 @@ const CatalogManagement = () => {
                                         </div>
                                         <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
                                             <div className="flex justify-between items-end gap-3">
-                                                <span className="text-[10px] font-bold text-zinc-400 uppercase">Precio oficial</span>
-                                                <span className="text-lg font-black text-primary">{item.precio_variable ? 'Valor variable' : formatCurrency(item.valor_neto)}</span>
+                                                <span className="text-xs font-medium text-zinc-400">Precio oficial</span>
+                                                <span className="text-lg font-semibold text-primary">{item.precio_variable ? 'Valor variable' : formatCurrency(item.valor_neto)}</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="space-y-1">
-                                                    <p className="text-[10px] text-zinc-400">Costo de producción</p>
+                                                    <p className="text-xs text-zinc-400">Costo de producción</p>
                                                     <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{formatCurrency(item.costo_real_estimado)}</p>
                                                 </div>
                                                 <div className="space-y-1 text-right">
-                                                    <p className="text-[10px] text-zinc-400">Ganancia</p>
+                                                    <p className="text-xs text-zinc-400">Ganancia</p>
                                                     <p className={cn(
                                                         "text-xs font-semibold",
                                                         item.ganancia_estimada === null
@@ -211,13 +211,13 @@ const CatalogManagement = () => {
                                             <div className="grid grid-cols-2 gap-3">
                                                 {item.precio_comercial_sugerido !== null && !item.precio_variable && (
                                                     <div className="space-y-1">
-                                                        <p className="text-[10px] text-zinc-400">Precio comercial sugerido</p>
+                                                        <p className="text-xs text-zinc-400">Precio comercial sugerido</p>
                                                         <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{formatCurrency(item.precio_comercial_sugerido)}</p>
                                                     </div>
                                                 )}
                                                 {item.margen_estimado !== null && (
                                                     <div className="space-y-1 text-right col-start-2">
-                                                        <p className="text-[10px] text-zinc-400">Margen estimado</p>
+                                                        <p className="text-xs text-zinc-400">Margen estimado</p>
                                                         <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{item.margen_estimado}%</p>
                                                     </div>
                                                 )}

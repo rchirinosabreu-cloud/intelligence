@@ -252,7 +252,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                     <div className="flex items-center gap-3">
                                         {task.dueDate && (
                                             <div className={cn(
-                                                "flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-medium border",
+                                                "flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded-md font-medium border",
                                                 isDone
                                                     ? "bg-zinc-100 text-zinc-400 border-zinc-200"
                                                     : overdue
@@ -267,7 +267,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                         {assigneeName && (
                                             <div className="flex items-center gap-1.5" title={`Asignado a: ${assigneeName}`}>
                                                 <TeamAvatar member={{ name: assigneeName, avatarUrl: assigneeAvatar }} className="w-5 h-5" />
-                                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 hidden sm:inline-block">
+                                                <span className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:inline-block">
                                                     {assigneeName}
                                                 </span>
                                             </div>

@@ -21,7 +21,7 @@ export const RichCommentContent = ({ content, contextData = {}, onImageClick }) 
         // Legacy/historical plain text rendering.
         // Falls back to safe text + linkify parser for S3 files, images, links, and @mentions.
         return (
-            <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200">
+            <div className="whitespace-pre-wrap break-words text-base leading-relaxed text-zinc-800 dark:text-zinc-200">
                 {linkify(content, onImageClick, contextData)}
             </div>
         );

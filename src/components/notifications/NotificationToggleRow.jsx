@@ -63,7 +63,7 @@ const NotificationToggleRow = ({
     </div>
     {/* Alineada bajo la etiqueta: el icono mide 16 px y el hueco 10. `ml-6.5` no existe
       * en la escala de Tailwind y no genera nada, como `dark:bg-white/2`. */}
-    {note && <p data-notification-toggle-note className="-mt-1 mb-2 ml-[26px] text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">{note}</p>}
+    {note && <p data-notification-toggle-note className="-mt-1 mb-2 ml-[26px] text-xs leading-snug text-zinc-500 dark:text-zinc-400">{note}</p>}
   </div>
 );
 

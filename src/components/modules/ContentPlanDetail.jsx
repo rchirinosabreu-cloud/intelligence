@@ -219,10 +219,10 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
           >
             <span aria-hidden="true" className={`h-9 w-1 shrink-0 rounded-full ${pieceStatusPresentation(item).dot}`} />
             <span className="min-w-0 flex-grow">
-              <span className={`block truncate text-[13px] leading-tight ${isSelected ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>
+              <span className={`block truncate text-sm leading-tight ${isSelected ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>
                 {item.objective || `Pieza ${index + 1}`}
               </span>
-              <span className="mt-0.5 block truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span className="mt-0.5 block truncate text-xs text-zinc-500 dark:text-zinc-400">
                 {accountLabel && <><span data-piece-account className="font-bold text-zinc-600 dark:text-zinc-300">{accountLabel}</span> · </>}
                 {item.format} · {shortPieceDate(item.publishDate)}
               </span>
@@ -261,7 +261,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
       <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
         <div className="mb-2 grid grid-cols-7 gap-2">
           {WEEKDAY_LABELS.map(label => (
-            <div key={label} className="px-1 text-[10px] font-black tracking-[0.08em] text-zinc-400">{label}</div>
+            <div key={label} className="px-1 text-xs font-semibold tracking-[0.08em] text-zinc-400">{label}</div>
           ))}
         </div>
 
@@ -277,7 +277,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
                     : 'border-zinc-100 bg-zinc-50 dark:border-white/5 dark:bg-white/5'
                 }`}
               >
-                <span className={`text-[11px] font-bold tabular-nums ${cell.inMonth ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>
+                <span className={`text-xs font-bold tabular-nums ${cell.inMonth ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>
                   {cell.day}
                 </span>
 
@@ -288,14 +288,14 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
                     onClick={() => onOpenPiece(piece.id)}
                     className={`flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition-opacity hover:opacity-80 ${pieceStatusPresentation(piece).chip}`}
                   >
-                    <span className="truncate text-[9px] font-black uppercase tracking-wider opacity-80">
+                    <span className="truncate text-xs font-medium opacity-80">
                       {piece.format}
                       {pieceAccountLabel(piece, accounts) && <span data-piece-account> · {pieceAccountLabel(piece, accounts)}</span>}
                     </span>
-                    <span className="line-clamp-2 text-[11px] font-medium leading-tight text-zinc-700 dark:text-zinc-200">
+                    <span className="line-clamp-2 text-xs font-medium leading-tight text-zinc-700 dark:text-zinc-200">
                       {piece.objective}
                     </span>
-                    <PieceStatusBadge item={piece} className="max-w-full px-0 text-[10px]" />
+                    <PieceStatusBadge item={piece} className="max-w-full px-0 text-xs" />
                   </button>
                 ))}
 
@@ -303,7 +303,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
                   <button
                     type="button"
                     onClick={() => onOpenPiece(pieces[2].id)}
-                    className="px-1 text-left text-[10px] font-bold text-zinc-500 hover:underline dark:text-zinc-400"
+                    className="px-1 text-left text-xs font-bold text-zinc-500 hover:underline dark:text-zinc-400"
                   >
                     +{pieces.length - 2} más
                   </button>
@@ -329,7 +329,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
             onClick={() => onOpenPiece(piece.id)}
             className="flex max-w-[260px] flex-col gap-0.5 rounded-lg bg-zinc-100 px-3 py-2 text-left transition-opacity hover:opacity-80 dark:bg-white/10"
           >
-            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{piece.format}</span>
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{piece.format}</span>
             <span className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{piece.objective}</span>
           </button>
         ))}
@@ -360,7 +360,7 @@ const FeedbackHistory = ({ comments }) => {
         <div className="p-1.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-xl">
           <MessageSquare className="w-3.5 h-3.5" />
         </div>
-        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">
+        <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
           Feedback del cliente
         </label>
       </div>
@@ -388,7 +388,7 @@ const FeedbackHistory = ({ comments }) => {
  * así que darle `h-9` no servía de nada: los desplegables medían 44 px y el campo de fecha 36, y la
  * fila salía descuadrada (Rodny, 25 de septiembre de 2026). Aquí todos valen 44.
  */
-const FIELD_CLASS = 'h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50';
+const FIELD_CLASS = 'h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50';
 /** Alto fijo también en la etiqueta: si una ocupa dos líneas, su campo baja y rompe la fila. */
 const FIELD_LABEL = 'flex h-5 items-center text-xs font-medium text-zinc-500 dark:text-zinc-400';
 
@@ -450,7 +450,7 @@ const ContentItemCard = ({
       {/* La ficha, en una franja: se lee de un vistazo y deja de robar una columna */}
       <div className="flex flex-col gap-4 border-b border-zinc-100 px-6 py-5 dark:border-white/5">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[13px] font-bold tabular-nums text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
+          <span className="text-sm font-bold tabular-nums text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
 
           {isEditing ? (
             <input
@@ -469,7 +469,7 @@ const ContentItemCard = ({
           <button
             type="button"
             onClick={onEditToggle}
-            className="inline-flex h-9 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-[13px] font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200"
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200"
           >
             {isEditing ? <Check className="h-3.5 w-3.5" /> : <Edit2 className="h-3.5 w-3.5" />}
             {isEditing ? 'Guardar' : 'Editar'}
@@ -494,7 +494,7 @@ const ContentItemCard = ({
             <button
               type="button"
               onClick={onDispatch}
-              className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-[13px] font-bold text-white transition hover:brightness-110"
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-sm font-bold text-white transition hover:brightness-110"
             >
               <Send className="h-3.5 w-3.5" /> Despachar a Kanban
             </button>
@@ -590,7 +590,7 @@ const ContentItemCard = ({
                 `title` y lo repite el servidor si alguien lo intenta igual. */}
             {queueStatusReason && (
               <p
-                className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400"
+                className="text-xs leading-snug text-zinc-500 dark:text-zinc-400"
                 data-piece-queue-owns-status
                 title={queueStatusReason}
               >
@@ -603,14 +603,14 @@ const ContentItemCard = ({
               <button
                 type="button"
                 onClick={() => onRequestRevision(item.id)}
-                className="flex items-center gap-1.5 text-left text-[11px] font-semibold text-zinc-500 underline-offset-2 transition-colors hover:text-brand-magenta-deep hover:underline dark:text-zinc-400 dark:hover:text-brand-magenta"
+                className="flex items-center gap-1.5 text-left text-xs font-semibold text-zinc-500 underline-offset-2 transition-colors hover:text-brand-magenta-deep hover:underline dark:text-zinc-400 dark:hover:text-brand-magenta"
                 title="El cliente la ve otra vez en el portal, con lo que haya ahora"
               >
                 <Sparkles className="h-3 w-3 shrink-0" /> Pedir nueva revisión
               </button>
             )}
             {pieceApproval === APPROVAL_STATES.MATERIAL_NUEVO && (
-              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-magenta-deep dark:text-brand-magenta">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-magenta-deep dark:text-brand-magenta">
                 <Sparkles className="h-3 w-3 shrink-0" /> El cliente la tiene por revisar
               </span>
             )}
@@ -626,7 +626,7 @@ const ContentItemCard = ({
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={`guion-${item.id}`} className={FIELD_LABEL}>Guion</label>
               {/* El cliente ve el guion en el portal desde el 30 de octubre de 2026: se escribe sabiendo que lo lee. */}
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[11px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-xs font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
                 <Eye className="h-3 w-3" /> Lo ve el cliente
               </span>
             </div>
@@ -638,10 +638,10 @@ const ContentItemCard = ({
                   if (e.target.value !== item.copyText) onUpdate({ id: item.id, copyText: e.target.value });
                 }}
                 placeholder="Escribe el guion aquí…"
-                className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border border-zinc-200 bg-white p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+                className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
               />
             ) : (
-              <div id={`guion-${item.id}`} className="min-h-[260px] max-h-[320px] min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-zinc-50 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
+              <div id={`guion-${item.id}`} className="min-h-[260px] max-h-[320px] min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
                 {item.copyText || <span className="italic text-zinc-400">Sin guion…</span>}
               </div>
             )}
@@ -650,7 +650,7 @@ const ContentItemCard = ({
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={`texto-${item.id}`} className={FIELD_LABEL}>Texto de la publicación</label>
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[11px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-xs font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
                 <Eye className="h-3 w-3" /> Lo ve el cliente
               </span>
             </div>
@@ -662,10 +662,10 @@ const ContentItemCard = ({
                   if (e.target.value !== item.captionText) onUpdate({ id: item.id, captionText: e.target.value });
                 }}
                 placeholder="Escribe el texto que se va a publicar…"
-                className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border-[1.5px] border-brand-cyan/30 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:bg-brand-cyan/5"
+                className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border-[1.5px] border-brand-cyan/30 bg-brand-cyan-soft/30 p-4 text-sm leading-relaxed outline-none transition focus:border-brand-cyan dark:bg-brand-cyan/5"
               />
             ) : (
-              <div id={`texto-${item.id}`} className="min-h-[260px] max-h-[320px] min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
+              <div id={`texto-${item.id}`} className="min-h-[260px] max-h-[320px] min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-sm leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
                 {item.captionText || <span className="italic text-zinc-400">Sin texto de publicación…</span>}
               </div>
             )}
@@ -699,7 +699,7 @@ const ContentItemCard = ({
             encima del resto de la tarjeta. Aquí crece hacia abajo y no empuja a nadie. */}
         <div className="border-t border-zinc-100 px-6 py-5 dark:border-white/5">
           <div className="rounded-r-xl border-l-[3px] border-brand-yellow bg-brand-yellow/[0.08] p-4 dark:bg-brand-yellow/[0.08]">
-            <label htmlFor={`nota-${item.id}`} className="mb-2 block text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
+            <label htmlFor={`nota-${item.id}`} className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               Nota interna
             </label>
             {isEditing ? (
@@ -710,10 +710,10 @@ const ContentItemCard = ({
                   if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
                 }}
                 placeholder="Instrucciones para el equipo…"
-                className="min-h-[72px] max-h-[132px] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+                className="min-h-[72px] max-h-[132px] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3.5 text-sm leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
               />
             ) : (
-              <p className="max-h-[132px] overflow-y-auto whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+              <p className="max-h-[132px] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
                 {item.internalNotes || <span className="text-zinc-400">Sin notas internas.</span>}
               </p>
             )}
@@ -749,10 +749,10 @@ const ContentItemCard = ({
                 {/* Con material ya cargado no hace falta anunciar «añadir más»: el propio botón
                     dice «Añadir archivos» (Rodny, 25 de septiembre de 2026). */}
                 {finalAssets.length === 0 && (
-                  <span className="text-[13px] text-zinc-500 dark:text-zinc-400">Arrastra la pieza aquí</span>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">Arrastra la pieza aquí</span>
                 )}
                 <div className={finalAssets.length ? 'flex items-center gap-2.5' : 'flex flex-col items-center gap-1'}>
-                  <label className="cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
+                  <label className="cursor-pointer text-sm font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
                     Añadir archivos
                     <input
                       type="file"
@@ -771,7 +771,7 @@ const ContentItemCard = ({
                   <button
                     type="button"
                     onClick={() => onDriveLink(item.id)}
-                    className="text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan"
+                    className="text-sm font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan"
                     title="Para un video que pesa demasiado para subirlo"
                   >
                     Enlace de Drive
@@ -779,7 +779,7 @@ const ContentItemCard = ({
                 </div>
               </div>
             ) : finalAssets.length === 0 && (
-              <p className="flex min-h-[144px] items-center justify-center rounded-xl border border-dashed border-zinc-200 p-4 text-[13px] text-zinc-400 dark:border-white/10">
+              <p className="flex min-h-[144px] items-center justify-center rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-400 dark:border-white/10">
                 Sin pieza final cargada.
               </p>
             )}
@@ -789,7 +789,7 @@ const ContentItemCard = ({
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
                   <div className="h-full rounded-full bg-brand-cyan transition-all" style={{ width: `${directUploadPercent}%` }} />
                 </div>
-                <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+                <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
                   Subiendo al almacenamiento… {directUploadPercent}%
                 </p>
               </div>
@@ -864,7 +864,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Responsable</label>
+            <label className="text-xs font-medium text-zinc-500">Responsable</label>
             <Select
               value={data.assigneeId}
               onChange={(e) => setData({ ...data, assigneeId: e.target.value })}
@@ -878,7 +878,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Fecha Límite</label>
+            <label className="text-xs font-medium text-zinc-500">Fecha Límite</label>
             <DatePicker
               {...brainDatePickerProps}
               selected={data.dueDate ? new Date(`${data.dueDate}T12:00:00.000Z`) : null}
@@ -1655,7 +1655,7 @@ const ContentPlanDetail = () => {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Objetivos estratégicos</h3>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Visible para el cliente en el portal de revisión.</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Visible para el cliente en el portal de revisión.</p>
           </div>
         </div>
 
@@ -1692,7 +1692,7 @@ const ContentPlanDetail = () => {
             </div>
             <div className="text-left">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Notas internas</h3>
-              <p className="text-[10px] text-zinc-500 font-medium">Solo visible para el equipo interno</p>
+              <p className="text-xs text-zinc-500 font-medium">Solo visible para el equipo interno</p>
             </div>
           </div>
           {showInternalNotes ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <Plus className="w-5 h-5 text-zinc-400" />}
@@ -1707,7 +1707,7 @@ const ContentPlanDetail = () => {
                     key={`${note}-${index}`}
                     className="group flex items-start gap-3 rounded-2xl border border-zinc-200/70 dark:border-white/10 bg-zinc-50/70 dark:bg-white/5 p-4"
                   >
-                    <span className="mt-0.5 text-[11px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">#{index + 1}</span>
+                    <span className="mt-0.5 text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">#{index + 1}</span>
                     <p className="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{note}</p>
                     <button
                       type="button"

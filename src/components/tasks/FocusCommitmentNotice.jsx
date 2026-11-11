@@ -23,7 +23,7 @@ export default function FocusCommitmentNotice({ task, open, onClose }) {
         <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
           <BriaPortrait  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
           <DialogHeader className="relative z-10">
-            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Compromiso</span>
+            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Compromiso</span>
             <DialogTitle className="text-lg text-white">
               Tienes un compromiso{time ? ` hasta las ${time}` : ''}
             </DialogTitle>

@@ -25,7 +25,7 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
     <div className="absolute -top-4 left-6 z-20">
       <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm flex items-center gap-2">
         <Icon className={cn("w-3.5 h-3.5", isActive ? "text-fuchsia-500" : "text-zinc-400")} />
-        <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
           {name}
         </span>
       </div>
@@ -344,7 +344,7 @@ const ActivityMap = () => {
         ].map((item, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <div className={cn("w-2 h-2 rounded-full", item.color)} />
-            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{item.label}</span>
+            <span className="text-xs font-medium text-zinc-500">{item.label}</span>
           </div>
         ))}
       </div>

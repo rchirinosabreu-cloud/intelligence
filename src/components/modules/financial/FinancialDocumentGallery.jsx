@@ -47,7 +47,7 @@ export function DocumentCard({ item, fetchBlob, onOpen, onDownload, onVoid }) {
                 <DocumentThumbnail item={item} fetchBlob={voided ? null : fetchBlob} className="aspect-[4/3] w-full" />
                 <div className="px-2 py-1.5">
                     <p className={cn('truncate text-xs font-medium', voided ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-100')}>{item.name}</p>
-                    <p className="text-[11px] text-zinc-400">{voided ? 'Anulado' : formatDocumentBytes(Number(item.size))}</p>
+                    <p className="text-xs text-zinc-400">{voided ? 'Anulado' : formatDocumentBytes(Number(item.size))}</p>
                 </div>
             </button>
             {!voided && (

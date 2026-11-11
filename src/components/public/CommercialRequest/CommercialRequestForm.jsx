@@ -339,7 +339,7 @@ export default function CommercialRequestForm({ onSubmit, initialAnswers = null 
             noValidate
           >
             <header className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-widest text-primary">{step.eyebrow}</p>
+              <p className="text-xs font-medium text-primary">{step.eyebrow}</p>
               <h2 className="text-2xl font-bold leading-tight tracking-tight text-zinc-950 dark:text-white sm:text-3xl">{step.title}</h2>
               {step.intro && <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{step.intro}</p>}
               {step.summary && (
@@ -348,7 +348,7 @@ export default function CommercialRequestForm({ onSubmit, initialAnswers = null 
                   <ol className="mt-3 grid gap-2 sm:grid-cols-3">
                     {step.summary.moments.map((moment, index) => (
                       <li key={moment.name} className="rounded-xl border border-zinc-200/80 bg-white/80 p-3 dark:border-zinc-700 dark:bg-zinc-950/60">
-                        <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">{index + 1} · {moment.name}</p>
+                        <p className="text-xs font-medium text-primary">{index + 1} · {moment.name}</p>
                         <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{moment.text}</p>
                       </li>
                     ))}

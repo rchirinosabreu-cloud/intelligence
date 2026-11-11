@@ -12,7 +12,7 @@ const LegalLayout = ({ children, title, sectionLabel = 'Legal' }) => {
             <img src="/brainstudio-logo.png" alt="BrainStudio" className="w-8 h-8 object-contain" />
             <span className="font-bold tracking-tighter text-lg">{LEGAL_ENTITY.platform}</span>
           </Link>
-          <div className="text-xs text-zinc-400 uppercase tracking-widest font-medium">
+          <div className="text-xs text-zinc-400 font-medium">
             {sectionLabel}
           </div>
         </div>
@@ -28,7 +28,7 @@ const LegalLayout = ({ children, title, sectionLabel = 'Legal' }) => {
 
       {/* Minimalist Footer */}
       <footer className="border-t border-zinc-100 dark:border-zinc-900 py-8 text-center">
-        <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
+        <p className="text-xs text-zinc-400">
           &copy; {new Date().getFullYear()} {LEGAL_ENTITY.name} · NIT {LEGAL_ENTITY.nit}. Todos los derechos reservados.
         </p>
         <nav className="mt-3 flex justify-center gap-5 text-xs text-zinc-500 dark:text-zinc-400" aria-label="Páginas legales">

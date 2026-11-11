@@ -120,9 +120,9 @@ const DashboardReminders = ({ dashboard, user: currentUser, className, now }) =>
                     <Icon className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <p className="flex items-center gap-2 text-xs font-medium text-zinc-400 dark:text-zinc-500">
                       {KIND_LABEL[kind]}
-                      {item.isRed && <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] normal-case tracking-normal text-destructive">Rojo</span>}
+                      {item.isRed && <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs normal-case tracking-normal text-destructive">Rojo</span>}
                       {item.meta && <span className="normal-case tracking-normal text-brand-coral-deep dark:text-brand-coral">{item.meta}</span>}
                     </p>
                     <h4 className="mt-0.5 truncate text-sm font-semibold text-zinc-950 dark:text-white" title={item.title}>{item.title}</h4>

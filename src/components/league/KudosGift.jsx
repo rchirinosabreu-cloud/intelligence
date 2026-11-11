@@ -39,7 +39,7 @@ export default function KudosGift({ lanes, selfId, given, onGiven }) {
   };
   return (
     <form data-race-kudos-form className="space-y-2" onSubmit={submit}>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">¿A quién?</p>
+      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">¿A quién?</p>
       <div className="grid max-h-44 grid-cols-2 gap-1 overflow-y-auto">
         {others.map((lane, index) => (
           <label key={lane.id} className={cn('flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-zinc-100 dark:hover:bg-white/5', to === lane.id && 'bg-brand-magenta/10 dark:bg-brand-magenta/15')}>

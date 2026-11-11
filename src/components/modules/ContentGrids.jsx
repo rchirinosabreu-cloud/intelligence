@@ -202,7 +202,7 @@ const ContentGrids = () => {
           />
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="px-4 py-2 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+          <div className="px-4 py-2 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-xl text-xs font-medium flex items-center gap-2 whitespace-nowrap">
             <Folder className="w-3 h-3" />
             {filteredClientGroups.length} Clientes
           </div>
@@ -249,7 +249,7 @@ const ContentGrids = () => {
                             <span>{group.plans.length} {group.plans.length === 1 ? 'Plan' : 'Planes'} • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}</span>
                           )}
                           {group.external && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-[11px] font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green" data-external-badge>
+                            <span className="inline-flex items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green" data-external-badge>
                               <FileSpreadsheet className="w-3 h-3" />Hoja de MIO
                             </span>
                           )}
@@ -289,14 +289,14 @@ const ContentGrids = () => {
                                 <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
                                   {month.label} {month.year}
                                 </span>
-                                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">
                                   {month.problem && !month.created ? month.problem : `Hoja de MIO · ${month.created} ${month.created === 1 ? 'pieza' : 'piezas'}`}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
                               {month.changes > 0 && (
-                                <span className="rounded-md bg-brand-yellow-soft px-2 py-0.5 text-[11px] font-semibold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" data-external-changes-count>
+                                <span className="rounded-md bg-brand-yellow-soft px-2 py-0.5 text-xs font-semibold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" data-external-changes-count>
                                   {month.changes} {month.changes === 1 ? 'cambio' : 'cambios'}
                                 </span>
                               )}

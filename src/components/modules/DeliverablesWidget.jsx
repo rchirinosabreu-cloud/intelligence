@@ -289,7 +289,7 @@ const DeliverablesWidget = ({ clientId }) => {
                             </h3>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                            <span className="text-xs text-zinc-400 font-medium">
                                 {isLoading ? '...' : `${files.length} Archivos`}
                             </span>
                             <button
@@ -320,7 +320,7 @@ const DeliverablesWidget = ({ clientId }) => {
                     <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
                         {isUploading ? 'Procesando archivos...' : 'Arrastra entregables finales'}
                     </p>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">o haz clic para explorar</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">o haz clic para explorar</p>
                 </div>
 
                 {isPanel && (
@@ -370,7 +370,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                 ) : (
                                     <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-emerald-500 transition-colors" />
                                 )}
-                                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
+                                <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
                                     {month}
                                 </span>
                                 <div className="flex-1 h-px bg-zinc-100 dark:bg-zinc-800 ml-2" />
@@ -458,7 +458,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                 </div>
                                 <div className="flex min-w-0 flex-col">
                                     <DialogTitle className="max-w-[45vw] truncate text-sm font-bold text-white sm:max-w-[300px]">{previewFile?.name}</DialogTitle>
-                                    <DialogDescription className="truncate text-[10px] font-medium uppercase tracking-tighter text-zinc-400">{previewFile ? `${formatSize(previewFile.size)} • ${formatDate(previewFile.createdAt)}` : ''}</DialogDescription>
+                                    <DialogDescription className="truncate text-xs font-medium tracking-tighter text-zinc-400">{previewFile ? `${formatSize(previewFile.size)} • ${formatDate(previewFile.createdAt)}` : ''}</DialogDescription>
                                 </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">

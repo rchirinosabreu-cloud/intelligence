@@ -64,7 +64,7 @@ const JsonList = ({ title, items, renderItem = item => String(item) }) => {
   if (!Array.isArray(items) || items.length === 0) return null;
   return (
     <section className="mt-6">
-      <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">{title}</h4>
+      <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{title}</h4>
       <ul className="mt-2 space-y-2">
         {items.map((item, index) => (
           <li key={`${title}-${index}`} className="rounded-xl bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-200">
@@ -78,12 +78,12 @@ const JsonList = ({ title, items, renderItem = item => String(item) }) => {
 
 const MinuteDocument = ({ content }) => (
   <div>
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan-deep dark:text-brand-cyan">Resumen ejecutivo</p>
+    <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Resumen ejecutivo</p>
     <h3 className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-white">{content.summaryTitle || 'Resumen de la reunión'}</h3>
     {content.summarySubtitle && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{content.summarySubtitle}</p>}
     <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-zinc-700 dark:text-zinc-200">{content.executiveSummary || 'Sin resumen disponible.'}</p>
     <div className="my-7 h-px bg-zinc-200 dark:bg-zinc-800" />
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan-deep dark:text-brand-cyan">Análisis de Bria</p>
+    <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Análisis de Bria</p>
     <h3 className="mt-2 text-xl font-semibold text-zinc-950 dark:text-white">{content.analysisTitle || 'Lectura operativa'}</h3>
     {content.analysisSubtitle && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{content.analysisSubtitle}</p>}
     <JsonList title="Temas" items={content.topics} />
@@ -96,7 +96,7 @@ const MinuteDocument = ({ content }) => (
 
 const TranscriptDocument = ({ content }) => (
   <div>
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan-deep dark:text-brand-cyan">Transcripción de Fireflies</p>
+    <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Transcripción de Fireflies</p>
     <h3 className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-white">{content.title || 'Reunión'}</h3>
     <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{formatDate(content.date)}</p>
     <div className="mt-6 space-y-3">

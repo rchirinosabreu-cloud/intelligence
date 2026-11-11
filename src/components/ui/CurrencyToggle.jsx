@@ -46,7 +46,7 @@ export default function CurrencyToggle({ value, onChange, bordered = false, aria
                         data-currency={currency}
                         onClick={() => onChange(currency)}
                         className={cn(
-                            'rounded-md px-2 py-1 text-[10px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                            'rounded-md px-2 py-1 text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
                             selected ? 'bg-white shadow-sm dark:bg-zinc-700' : 'text-zinc-500'
                         )}
                     >

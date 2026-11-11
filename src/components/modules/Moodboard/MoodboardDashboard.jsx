@@ -142,14 +142,14 @@ const MoodboardDashboard = () => {
                   {board.clientId ? (
                     <div className="flex items-center gap-1.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-sm">
                       <User className="w-3 h-3 text-indigo-500" />
-                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 uppercase tracking-tighter truncate max-w-[100px]">
+                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 tracking-tighter truncate max-w-[100px]">
                         {board.client?.name}
                       </span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 bg-indigo-500 text-white px-2 py-1 rounded-lg shadow-sm">
                       <Globe className="w-3 h-3" />
-                      <span className="text-[10px] font-bold uppercase tracking-tighter">Agencia</span>
+                      <span className="text-xs font-medium tracking-tighter">Agencia</span>
                     </div>
                   )}
                 </div>
@@ -197,14 +197,14 @@ const MoodboardDashboard = () => {
             onSubmit={handleCreateBoard}
             className="p-5 sm:p-8"
           >
-            <DialogTitle className="mb-2 pr-10 text-2xl font-black tracking-tighter text-zinc-900 dark:text-zinc-100">
+            <DialogTitle className="mb-2 pr-10 text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-zinc-100">
               Nuevo Tablero
             </DialogTitle>
             <DialogDescription className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">Organiza referencias visuales para la agencia o un cliente.</DialogDescription>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase mb-1 ml-1">Nombre</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1 ml-1">Nombre</label>
                 <input
                   autoFocus
                   required
@@ -217,7 +217,7 @@ const MoodboardDashboard = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase mb-1 ml-1">Cliente (Opcional)</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1 ml-1">Cliente (Opcional)</label>
                 <Select
                   className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-indigo-500"
                   value={newBoard.clientId || ''}

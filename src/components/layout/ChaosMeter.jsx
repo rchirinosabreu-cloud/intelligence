@@ -49,7 +49,7 @@ const ChaosMeter = () => {
                         <span className="text-lg font-bold leading-none tracking-tight text-destructive">
                             {streakData.currentReturnedTasksCount} {streakData.currentReturnedTasksCount === 1 ? 'tarea devuelta' : 'tareas devueltas'}
                         </span>
-                        <span className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-destructive/80">
+                        <span className="mt-1 text-xs font-medium text-destructive/80">
                             Atención requerida
                         </span>
                     </div>
@@ -68,7 +68,7 @@ const ChaosMeter = () => {
                     <span className="text-lg font-bold leading-none tracking-tight text-zinc-900 dark:text-zinc-100">
                         {currentStreak} {currentStreak === 1 ? 'día' : 'días'} de racha
                     </span>
-                    <span className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-brand-yellow-deep dark:text-brand-yellow">
+                    <span className="mt-1 text-xs font-medium text-brand-yellow-deep dark:text-brand-yellow">
                         Récord histórico: {maxStreak}
                     </span>
                 </div>

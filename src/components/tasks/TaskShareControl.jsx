@@ -39,7 +39,7 @@ export default function TaskShareControl({ isPrivate, viewerIds = [], members = 
                     type="button"
                     onClick={() => isPrivate && setOpen((prev) => !prev)}
                     className={cn(
-                        "whitespace-nowrap text-[10px] font-bold uppercase tracking-wider",
+                        "whitespace-nowrap text-xs font-medium",
                         isPrivate ? "text-primary" : "text-zinc-400"
                     )}
                     title={isPrivate ? "Elegir con quién se comparte" : "Compartir este pendiente solo con algunas personas"}

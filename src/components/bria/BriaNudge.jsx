@@ -29,13 +29,13 @@ function NudgeProgress({ progress }) {
     <div data-bria-nudge-progress className="mt-2 flex items-center gap-3 rounded-xl border border-zinc-200/80 bg-white/60 px-3 py-2 dark:border-white/10 dark:bg-zinc-950/30">
       <div className="flex h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-brand-yellow/20 px-2 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" aria-hidden="true">
         <span className="text-base font-semibold leading-none tabular-nums">{progress.score ?? '–'}</span>
-        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider">pts</span>
+        <span className="mt-0.5 text-xs font-medium">pts</span>
       </div>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
           {progress.position || 'Liga del mes'}
           {delta !== null && (
-            <span data-bria-nudge-delta className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums', delta >= 0 ? 'bg-brand-green/15 text-brand-green-deep dark:text-brand-green' : 'bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral')}>
+            <span data-bria-nudge-delta className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums', delta >= 0 ? 'bg-brand-green/15 text-brand-green-deep dark:text-brand-green' : 'bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral')}>
               {delta >= 0 ? `+${delta}` : delta} hoy
             </span>
           )}
@@ -89,7 +89,7 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
       <div className="flex items-start gap-3 px-1 pt-1">
         <BriaPortrait className="h-9 w-9 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          <p className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
             Bria se adelanta
             {nudges.length > 1 && <span className="normal-case tracking-normal text-zinc-400 dark:text-zinc-500" data-bria-nudge-count>1 de {nudges.length}</span>}
           </p>

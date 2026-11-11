@@ -109,7 +109,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
               </p>
             </div>
             {analysisReady && (
-              <span className="text-[10px] uppercase tracking-wide bg-green-500/10 text-green-300 px-2 py-1 rounded-full border border-green-500/30">
+              <span className="text-xs bg-green-500/10 text-green-300 px-2 py-1 rounded-full border border-green-500/30">
                 Activo
               </span>
             )}

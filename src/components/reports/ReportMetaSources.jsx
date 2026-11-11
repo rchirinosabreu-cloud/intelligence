@@ -271,7 +271,7 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
               <h3 id="report-meta-ads" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><Megaphone className="h-4 w-4" aria-hidden="true" /> Pauta</h3>
               {canManage && (
                 <button type="button" disabled={disabled} onClick={() => setDialogOpen(true)} aria-label="Vincular cuenta publicitaria" title="Vincular cuenta publicitaria"
-                  className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-[13px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 ${adAccounts.length ? 'w-9' : 'px-3'}`}>
+                  className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 ${adAccounts.length ? 'w-9' : 'px-3'}`}>
                   <Plus className="h-4 w-4" />
                   {!adAccounts.length && <span>Vincular cuenta publicitaria</span>}
                 </button>

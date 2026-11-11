@@ -34,7 +34,7 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                     e.stopPropagation();
                     openPlatformLink(sanitizeUrl(linkArray[0]), { navigate });
                 }}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 hover:text-primary hover:border-primary/30 transition-all shadow-sm flex-1"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-primary hover:border-primary/30 transition-all shadow-sm flex-1"
             >
                 <Icon size={12} /> {displayLabel} <ExternalLink size={10} />
             </button>
@@ -52,7 +52,7 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                 data-side-panel-ignore="true"
                 type="button"
                 className={cn(
-                    "w-full flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm",
+                    "w-full flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border rounded-xl text-xs font-medium transition-all shadow-sm",
                     isOpen ? "border-primary text-primary ring-2 ring-primary/10" : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400"
                 )}
             >

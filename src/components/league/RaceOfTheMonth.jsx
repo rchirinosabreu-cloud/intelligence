@@ -58,10 +58,10 @@ function Podium({ groups, title, tone = 'month', ...attrs }) {
         const shared = group.people.length > 1;
         return <div key={rank} data-podium-rank={rank} data-podium-shared={shared ? 'true' : undefined} className="flex min-w-0 flex-col items-center">
           <div className={cn('grid w-full items-end justify-items-center gap-x-1 gap-y-2', shared ? 'grid-cols-2' : 'grid-cols-1')}>{group.people.map(person => <div key={person.id} data-podium-member={person.id} className="flex w-full min-w-0 flex-col items-center">
-            <RunnerAvatar person={person} size={rank === 1 ? (shared ? 44 : 76) : (shared ? 36 : 60)} /><p className={cn('mt-1.5 w-full text-center font-semibold', shared ? 'truncate text-[11px] leading-4' : 'break-words text-sm')}>{person.name}</p>
+            <RunnerAvatar person={person} size={rank === 1 ? (shared ? 44 : 76) : (shared ? 36 : 60)} /><p className={cn('mt-1.5 w-full text-center font-semibold', shared ? 'truncate text-xs leading-4' : 'break-words text-sm')}>{person.name}</p>
           </div>)}</div>
           <p className={cn('mt-1 text-xs', muted)}>{group.score} pts</p>
-          {shared && <p className={cn('text-[10px] leading-4', muted)}>Puesto compartido</p>}
+          {shared && <p className={cn('text-xs leading-4', muted)}>Puesto compartido</p>}
           <span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
         </div>;
       })}
@@ -76,11 +76,11 @@ function Podium({ groups, title, tone = 'month', ...attrs }) {
 function RankingGrid({ people, ranked, attribute, tone = 'month', label }) {
   return <ol aria-label={label} className="grid grid-cols-3 gap-2">{people.map((person, index) => <li key={person.id} {...{ [attribute]: person.id }}
     className={cn('relative flex min-w-0 flex-col items-center rounded-2xl px-1.5 pb-2.5 pt-3 text-center', person.isSelf ? 'bg-brand-cyan/10 dark:bg-brand-cyan/10' : tone === 'week' ? 'bg-white/70 dark:bg-zinc-900/60' : cn(surface, 'rounded-2xl'))}>
-    <span className={cn('absolute left-2 top-1.5 text-[11px] font-semibold tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span>
+    <span className={cn('absolute left-2 top-1.5 text-xs font-semibold tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span>
     <RunnerAvatar person={person} size={40} phase={index} />
-    <p className="mt-1.5 flex w-full items-center justify-center gap-1 text-xs font-semibold"><span className="truncate">{person.name}</span>{person.isSelf && <span className="shrink-0 text-[10px] text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</p>
-    <p className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-[11px] font-normal', muted)}>pts</span></p>
-    {person.scoreBreakdown && <p className={cn('mt-0.5 text-[10px] leading-[14px]', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}
+    <p className="mt-1.5 flex w-full items-center justify-center gap-1 text-xs font-semibold"><span className="truncate">{person.name}</span>{person.isSelf && <span className="shrink-0 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</p>
+    <p className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></p>
+    {person.scoreBreakdown && <p className={cn('mt-0.5 text-xs leading-[14px]', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}
   </li>)}</ol>;
 }
 
