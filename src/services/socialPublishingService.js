@@ -40,7 +40,7 @@ const itemInclude = {
   finalAssets: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
   publications: true,
   // `year` y `month` solo los usa la suspensión por cartera: dicen de qué parrilla es la pieza.
-  plan: { select: { id: true, clientId: true, year: true, month: true, deletedAt: true, client: { select: { id: true, name: true, socialAccounts: true } } } }
+  plan: { select: { id: true, clientId: true, year: true, month: true, deletedAt: true, client: { select: { id: true, name: true, isArchived: true, socialAccounts: true } } } }
 };
 
 const isVideoAsset = (asset) => String(asset?.mimeType || '').toLowerCase().startsWith('video/');
@@ -447,6 +447,9 @@ export const createSocialPublishingService = ({
     };
     try {
       if (!item || item.deletedAt) throw Object.assign(new Error('La pieza ya no existe.'), { permanent: true });
+      // Un cliente archivado salió de la operación: lo que quedó programado no sale solo.
+      // Se dice el motivo y se puede reintentar tras reactivarlo en Directorio.
+      if (item.plan?.client?.isArchived) throw Object.assign(new Error('No se envió a Meta: el cliente está archivado. Reactívalo en Clientes → Directorio para publicarla.'), { permanent: true, code: 'CLIENT_ARCHIVED' });
       if (full.publishRequestedAt && row.status === 'PUBLISHING') {
         // Una fila recogida con lease vencido **después** de haber mandado publicar: no se repite la orden.
         throw Object.assign(new Error(AMBIGUOUS_PUBLISH_MESSAGE), { permanent: true, code: 'PUBLISH_AMBIGUOUS' });

@@ -6,7 +6,9 @@ const fail = message => new FinancialDomainError('PARTY_SELECTION_CHANGED', mess
 export async function financialPartyChoices(tx) {
   const [parties, clients, team, collaborators] = await Promise.all([
     tx.thirdParty.findMany({ where: { isActive: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
-    tx.client.findMany({ where: { isArchived: false }, select: { id: true, name: true } }),
+    // Un cliente archivado salió de la operación, no de la cartera: puede seguir debiendo,
+    // pagar o cerrar un canje (Rodny, 10 de noviembre de 2026). Por eso se ofrece aquí.
+    tx.client.findMany({ select: { id: true, name: true } }),
     tx.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
     // Quien ya no está en Equipo (cuenta desactivada) no se ofrece para préstamos, canjes ni pagos nuevos.
     tx.financialCollaborator.findMany({ where: { isActive: true, thirdPartyId: null, OR: [{ userId: null }, { user: { isActive: true } }] }, select:{id:true,displayName:true} }),
@@ -44,7 +46,7 @@ export async function resolveFinancialParty(tx, selection, actor) {
   }
   const id = value.slice(value.indexOf(':') + 1), link = source === 'client' ? 'clientId' : 'teamMemberId';
   const origin = source === 'client' ? await tx.client.findUnique({ where: { id } }) : await tx.teamMember.findUnique({ where: { id } });
-  if (!origin || (source === 'client' ? origin.isArchived : !origin.isActive)) throw fail('La persona o empresa está inactiva o ya no existe. Actualiza el directorio.');
+  if (!origin || (source === 'team' && !origin.isActive)) throw fail('La persona o empresa está inactiva o ya no existe. Actualiza el directorio.');
   const existing = await tx.thirdParty.findMany({ where: { [link]: id } });
   if (existing.length > 1 || (existing.length && !existing[0].isActive)) throw fail('Revisa las fichas vinculadas a esta identidad en Terceros antes de continuar.');
   if (existing.length) return existing[0];
