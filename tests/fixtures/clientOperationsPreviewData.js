@@ -136,8 +136,10 @@ export const clients = [
     description: 'Restaurante y café casual en Miami: café, sándwiches, hamburguesas y opciones dulces y saladas, junto a una estación de gasolina 24 horas.',
     instagramUrl: 'https://www.instagram.com/mimaskitchenoficial/',
     contract: contract({ startDate: '2026-01-15', endDate: '2026-12-15', cutDay: 15, deliverables: deliver([5, 'Reel'], [7, 'Post']) }),
-    current: { label: 'Septiembre', start: '2026-09-15', end: '2026-10-14', quota: 12, created: 12, stages: [12, 12, 12, 0, 0], overdueItems: 7 },
-    previous: month('Agosto', 12, 12, delivered('2026-09-16')), earlier: [month('Julio', 12, 12, delivered('2026-08-17'))],
+    // Con corte el 15, el ciclo toca dos meses y se nombra con los dos (10 de noviembre de 2026).
+    current: { label: 'Septiembre–octubre', start: '2026-09-15', end: '2026-10-14', quota: 12, created: 12, stages: [12, 12, 12, 0, 0], overdueItems: 7 },
+    previous: { ...month('Agosto', 12, 12, delivered('2026-09-16')), label: 'Agosto–septiembre', shortLabel: 'Ago–Sep', start: '2026-08-15', end: '2026-09-14' },
+    earlier: [{ ...month('Julio', 12, 12, delivered('2026-08-17')), label: 'Julio–agosto', shortLabel: 'Jul–Ago', start: '2026-07-15', end: '2026-08-14' }],
     openTasks: [task('t9', 'Programar los posts aprobados', jarlan, '2026-10-02'), task('t10', 'Revisar que la programación quedó bien en Meta', sara, '2026-10-03')],
   }),
   client('mari-colon', 'Mari Colón Kodesh Real Estate', {

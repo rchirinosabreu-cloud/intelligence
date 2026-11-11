@@ -239,10 +239,19 @@ const pad = (n) => String(n).padStart(2, '0');
 const dateKey = (y, m, d) => { const date = new Date(Date.UTC(y, m - 1, d)); return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`; };
 const clampCut = (cutDay) => Math.min(28, Math.max(1, Math.trunc(Number(cutDay) || 1)));
 
-/** La parrilla del mes `month` va del día de corte al día anterior del mes siguiente (mes calendario si el corte es 1). */
+/**
+ * La parrilla del mes `month` va del día de corte al día anterior del mes siguiente (mes calendario si el corte es 1).
+ * Con otro corte el ciclo toca dos meses y se nombra así, «Octubre–noviembre» (Rodny, 10 de noviembre de 2026:
+ * con solo «Noviembre» parecía que no se había hecho nada en noviembre cuando sí en octubre). `shortLabel` es la
+ * forma corta para las celdas estrechas: «Oct» u «Oct–Nov».
+ */
 export function cycleOf(year, month, cutDay = 1) {
   const cut = clampCut(cutDay);
-  return { year, month, start: dateKey(year, month, cut), end: dateKey(year, month + 1, cut - 1), label: MONTH_NAMES[month - 1] };
+  const name = MONTH_NAMES[month - 1];
+  const next = MONTH_NAMES[month % 12];
+  const label = cut === 1 ? name : `${name}–${next.toLowerCase()}`;
+  const shortLabel = cut === 1 ? name.slice(0, 3) : `${name.slice(0, 3)}–${next.slice(0, 3)}`;
+  return { year, month, start: dateKey(year, month, cut), end: dateKey(year, month + 1, cut - 1), label, shortLabel };
 }
 
 /** Qué parrilla corre en un día (texto «YYYY-MM-DD», día de Bogotá). */

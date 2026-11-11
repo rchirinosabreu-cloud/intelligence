@@ -19,17 +19,17 @@ const SUMMARY_HINT = {
   gray: 'En stand by o sin contrato cargado',
 };
 
-const ROW_GRID = 'lg:grid lg:grid-cols-[minmax(15rem,1.3fr)_4rem_minmax(0,1.1fr)_5.5rem_5.5rem_minmax(0,1.4fr)_1rem] lg:items-center lg:gap-5';
+const ROW_GRID = 'lg:grid lg:grid-cols-[minmax(15rem,1.3fr)_4rem_minmax(0,1.1fr)_6.5rem_5.5rem_minmax(0,1.4fr)_1rem] lg:items-center lg:gap-5';
 const FILTER_SELECT = 'min-h-11 border-none bg-transparent pl-0 pr-9 text-sm';
 
 function MonthCell({ cycle }) {
   if (!cycle) return <span className="text-xs text-zinc-400">—</span>;
   const fulfilled = cycle.reached.publicada >= cycle.quota;
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', fulfilled ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
+    <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', fulfilled ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
       title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas (${publishedPercent(cycle)} %)`}>
       <span className={cn('h-1.5 w-1.5 rounded-full', fulfilled ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />
-      {cycle.label.slice(0, 3)} {cycle.reached.publicada}/{cycle.quota}
+      {cycle.shortLabel || cycle.label.slice(0, 3)} {cycle.reached.publicada}/{cycle.quota}
     </span>
   );
 }

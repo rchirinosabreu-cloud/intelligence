@@ -124,7 +124,7 @@ test('el tablero calcula avance, atrasos y tareas con lo que hay en la plataform
 test('con día de corte, el 2 de octubre todavía corre la parrilla de septiembre', async () => {
   const { service } = fixture();
   const mimas = (await service.listOperations()).find((c) => c.slug === 'mimas');
-  assert.equal(mimas.cycles.current.label, 'Septiembre');
+  assert.equal(mimas.cycles.current.label, 'Septiembre–octubre');
   assert.equal(mimas.cycles.current.start, '2026-09-15');
   assert.equal(mimas.cycles.current.created, 2);
   assert.equal(mimas.cycles.current.overdueItems, 1);
