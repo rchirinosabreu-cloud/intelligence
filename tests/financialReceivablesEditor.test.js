@@ -82,6 +82,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows of the year
         counterpartyType: null,
         counterpartyName: null,
         loanRecordId: null,
+        // La revisión que ve la pantalla, para que una corrección no pise otra (10 de noviembre de 2026).
+        updatedAt: null,
         // La identidad del tercero viaja con la obligación: la pantalla la necesita
         // para saber si puede emitir, y para ofrecer completarla sin salir de Cartera.
         clientLegalName: null,

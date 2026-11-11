@@ -241,6 +241,11 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }
             if (existing.barterPaymentId && input.amount !== undefined) throw new FinancialDomainError('BARTER_SOURCE_PROTECTED', 'El importe del beneficiario procede del canje. Corrígelo desde su origen, conservando el historial.', 409);
+            // El valor de un préstamo y el de su egreso son el mismo hecho: cambiar solo uno los
+            // descuadraría. Se corrige con «Corregir préstamo», que cambia los dos juntos.
+            if (existing.kind === 'PRESTAMO' && existing.loanRecordId && input.amount !== undefined && financialCents(input.amount) !== financialCents(existing.amount)) {
+                throw new FinancialDomainError('LOAN_CORRECTION_REQUIRED', 'El valor de un préstamo se corrige con «Corregir préstamo»: así cambia también su egreso en Movimientos.', 409);
+            }
             const collectionMode = collectionModeInput(input.collectionMode, existing);
             const periodDate = new Date(existing.period);
             await assertOpenFinancialPeriod(tx, existing.year || periodDate.getUTCFullYear(), existing.month || periodDate.getUTCMonth() + 1);

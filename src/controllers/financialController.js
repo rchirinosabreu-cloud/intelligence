@@ -80,6 +80,13 @@ const serializeReceivable = (receivable) => {
         counterpartyType: receivable.counterpartyType || null,
         counterpartyName: receivable.counterpartyName || null,
         loanRecordId: receivable.loanRecordId || null,
+        ...(receivable.loanRecord && receivable.loanRecord.status !== 'VOIDED' ? {
+            loanRecord: {
+                accountId: receivable.loanRecord.accountId || null,
+                date: receivable.loanRecord.date instanceof Date ? receivable.loanRecord.date.toISOString() : receivable.loanRecord.date
+            }
+        } : {}),
+        updatedAt: receivable.updatedAt instanceof Date ? receivable.updatedAt.toISOString() : (receivable.updatedAt || null),
         // Lo que va impreso como deudor. Vive en la ficha del cliente y se escribe una
         // sola vez; viaja aquí para que el diálogo de emitir sepa si ya lo tiene.
         clientLegalName: receivable.client?.legalName || null,
@@ -401,7 +408,9 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                     },
                     orderBy: { paidAt: 'desc' }
                 },
-                items: { orderBy: { sortOrder: 'asc' } }
+                items: { orderBy: { sortOrder: 'asc' } },
+                // De qué cuenta y en qué fecha salió un préstamo, para corregirlo desde Cartera.
+                loanRecord: { select: { id: true, accountId: true, date: true, status: true } }
             },
             orderBy: [
                 { status: 'asc' },
