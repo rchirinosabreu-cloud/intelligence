@@ -21,6 +21,22 @@ export const payrollStatus = (transaction) => {
     return { key: 'APPROVED', label: 'Aprobada' };
 };
 
+// El resumen del mes de una persona, para su fila cerrada en Nómina (Rodny, 10 de noviembre de 2026:
+// las columnas quedaban vacías hasta abrirla). Las liquidaciones revertidas no suman.
+const SUMMARY_WORDS = { DRAFT: ['borrador', 'borradores'], APPROVED: ['aprobada', 'aprobadas'], PARTIAL: ['con pago parcial', 'con pago parcial'], PAID: ['pagada', 'pagadas'] };
+export const payrollPersonSummary = (transactions = []) => {
+    const live = transactions.filter((transaction) => transaction && !transaction.voidedAt);
+    const sum = (pick) => Math.round(live.reduce((total, transaction) => total + (Number(pick(transaction)) || 0), 0) * 100) / 100;
+    const outstanding = sum((transaction) => (transaction.status === 'PAID' ? 0 : Number(transaction.netAmount) - (Number(transaction.paidAmount) || 0)));
+    const statuses = live.map(payrollStatus);
+    const keys = [...new Set(statuses.map((status) => status.key))];
+    let status;
+    if (!live.length) status = { key: 'NONE', label: 'Sin generar' };
+    else if (keys.length === 1) status = live.length === 1 ? statuses[0] : { key: keys[0], label: `${live.length} ${SUMMARY_WORDS[keys[0]]?.[1] || statuses[0].label.toLowerCase()}` };
+    else status = { key: 'MIXED', label: keys.map((key) => { const count = statuses.filter((item) => item.key === key).length; return `${count} ${SUMMARY_WORDS[key]?.[count === 1 ? 0 : 1] || key.toLowerCase()}`; }).join(' · ') };
+    return { count: live.length, base: sum((t) => t.baseSalary), socialSecurity: sum((t) => t.socialSecurity), net: sum((t) => t.netAmount), outstanding, status };
+};
+
 export const activePayrollPayments = (transaction) => (transaction?.payments || []).filter((payment) => !payment.reversedAt);
 export const reversedPayrollPayments = (transaction) => (transaction?.payments || []).filter((payment) => payment.reversedAt);
 
