@@ -8,7 +8,8 @@ export async function financialPartyChoices(tx) {
     tx.thirdParty.findMany({ where: { isActive: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
     tx.client.findMany({ where: { isArchived: false }, select: { id: true, name: true } }),
     tx.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
-    tx.financialCollaborator.findMany({ where: { isActive: true, thirdPartyId: null }, select:{id:true,displayName:true} }),
+    // Quien ya no está en Equipo (cuenta desactivada) no se ofrece para préstamos, canjes ni pagos nuevos.
+    tx.financialCollaborator.findMany({ where: { isActive: true, thirdPartyId: null, OR: [{ userId: null }, { user: { isActive: true } }] }, select:{id:true,displayName:true} }),
   ]);
   // An explicitly inactive profile must not be silently recreated from its source.
   const links = await tx.thirdParty.findMany({ select: { clientId: true, teamMemberId: true } });

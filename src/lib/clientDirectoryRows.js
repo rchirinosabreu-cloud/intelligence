@@ -124,6 +124,9 @@ export const buildPartyRows = (clientRows = [], thirdParties = [], commercial = 
     }
     for (const collaborator of collaborators) {
         if (collaborator.thirdPartyId && rows.some(row => row.thirdParty?.id === collaborator.thirdPartyId)) continue;
+        // La ficha de nómina de alguien de Equipo va en la fila de esa persona, no en otra con el mismo nombre.
+        const person = collaborator.userId && rows.find(row => row.teamMember?.userId === collaborator.userId);
+        if (person) { person.collaborator = collaborator; continue; }
         rows.push({ sourceId: `payroll:${collaborator.id}`, name: collaborator.displayName, clientId: null, profile: null, collaborator, roles: ['COLABORADOR'], income: 0, receivable: 0, recordCount: 0, quotations: [], unlinked: false });
     }
     for (const prospect of commercial?.prospects || []) {

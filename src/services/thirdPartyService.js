@@ -38,7 +38,7 @@ export const listPartyTeam = async (prismaClient) => ({
     team: await prismaClient.teamMember.findMany({
         where: { isActive: true },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, role: true, email: true, avatarUrl: true, isActive: true }
+        select: { id: true, name: true, role: true, email: true, avatarUrl: true, isActive: true, userId: true }
     })
 });
 
@@ -66,7 +66,9 @@ export const listThirdParties = async (prismaClient, filters = {}) => {
         ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { legalName: { contains: q, mode: 'insensitive' } }, { documentNumber: { contains: q } }] } : {})
     };
     const thirdParties = await prismaClient.thirdParty.findMany({ where, include: { collaborators: { select: { id: true, displayName: true } } }, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] });
-    const collaborators = await prismaClient.financialCollaborator.findMany({where:{isActive:true},select:{id:true,displayName:true,thirdPartyId:true}});
+    // Una ficha de nómina sigue a su persona (Rodny, 10 de noviembre de 2026: Jarlan ya no está y
+    // seguía apareciendo): con la cuenta desactivada en Equipo, la ficha no se lista, igual que el equipo.
+    const collaborators = await prismaClient.financialCollaborator.findMany({ where: { isActive: true, OR: [{ userId: null }, { user: { isActive: true } }] }, select: { id: true, displayName: true, thirdPartyId: true, userId: true } });
     return { thirdParties, collaborators };
 };
 
