@@ -125,6 +125,17 @@ function taskReasons(client) {
   return [reason('TASKS_OVERDUE', 'operation', 'yellow', overdue === 1 ? '1 tarea vencida en Gestión.' : `${overdue} tareas vencidas en Gestión.`, 'tasks')];
 }
 
+// Jornadas de producción sin evidencia (10 de noviembre de 2026): estar en el calendario no basta, la jornada
+// cuenta cuando alguien sube el enlace del Drive. `client.production` lo arma el servicio con las del ciclo.
+function productionReasons(client) {
+  const missing = client.production?.missingEvidence || [];
+  if (!missing.length) return [];
+  const text = missing.length === 1
+    ? `La jornada del ${shortDate(missing[0].date)} no tiene evidencia.`
+    : `${missing.length} jornadas de producción sin evidencia.`;
+  return [reason('PRODUCTION_EVIDENCE', 'operation', 'yellow', text, 'production')];
+}
+
 function finish(reasons) {
   const level = reasons.some((r) => r.level === 'red') ? 'red' : reasons.length ? 'yellow' : 'green';
   reasons.sort((a, b) => OPERATION_LEVELS.indexOf(a.level) - OPERATION_LEVELS.indexOf(b.level));
@@ -163,7 +174,7 @@ export function evaluateClientOperation(client, { today }) {
 
   // Servicios: sin cupo de piezas, lo que dice si va bien son sus tareas.
   if (!isMeasured(client)) {
-    reasons.push(...taskReasons(client));
+    reasons.push(...taskReasons(client), ...productionReasons(client));
     if (!(client.openTasks || []).length && !reasons.length) return { level: 'gray', reasons: [reason('NO_SERVICE_TASKS', 'status', 'gray', 'Servicios sin trabajo abierto en Gestión.', 'tasks')] };
     return finish(reasons);
   }
@@ -201,7 +212,7 @@ export function evaluateClientOperation(client, { today }) {
     }
   }
 
-  reasons.push(...taskReasons(client));
+  reasons.push(...taskReasons(client), ...productionReasons(client));
   return finish(reasons);
 }
 

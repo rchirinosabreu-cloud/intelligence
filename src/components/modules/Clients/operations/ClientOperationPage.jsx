@@ -19,6 +19,7 @@ import { ContractScopeSummary } from './ClientContractScope';
 import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
+import ProductionDaysSection from './ProductionDaysSection';
 
 // Página completa de un cliente en «Operación» (borrador del 2 de octubre de 2026). Todo lo que la fila
 // del Excel tenía de ese cliente, más lo que se trabaja desde aquí: marcar lo publicado por fuera,
@@ -51,6 +52,7 @@ function Attention({ evaluation, client, onOpenPlan, onReport, onSection }) {
     const action = reason.action;
     if (!action) return null;
     if (action.type === 'profile' || action.type === 'tasks') return { label: action.type === 'tasks' ? 'Ver tareas' : 'Ver ficha', run: () => onSection(action.type) };
+    if (action.type === 'production') return { label: 'Ver jornadas', run: () => onSection('production') };
     const cycles = [client.cycles?.current, client.cycles?.previous, ...(client.history || [])].filter(Boolean);
     const cycle = cycles.find(item => item.year === action.year && item.month === action.month);
     if (!cycle) return null;
@@ -474,6 +476,7 @@ export default function ClientOperationPage({
           {projectsSection}
           {measured && current && <CurrentCycle cycle={current} next={client.cycles?.next} today={today} monthlyReport={current.monthlyReport ?? monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
             onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} onPeek={setPeeking} />}
+          <ProductionDaysSection production={client.production} cardClassName={CARD} titleClassName={CARD_TITLE} />
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
           {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
         </div>

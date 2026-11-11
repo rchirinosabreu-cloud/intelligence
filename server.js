@@ -31,6 +31,7 @@ import { initContractCycleAlertScheduler } from './src/services/contractCycleAle
 import { initPlanCloseNoticeScheduler } from './src/services/planCloseNoticeService.js';
 import { initAdBudgetAlertScheduler } from './src/services/adBudgetNoticeService.js';
 import { initClientSuspensionScheduler } from './src/services/clientSuspensionService.js';
+import { initProductionDayReminderScheduler } from './src/services/productionDayService.js';
 import { initUnbackedWorkAlertScheduler } from './src/services/unbackedWorkAlertService.js';
 import { initExternalPlanScheduler } from './src/services/externalPlanService.js';
 import { getAIHealth } from './src/services/aiService.js';
@@ -250,6 +251,7 @@ async function bootstrap() {
         initPlanCloseNoticeScheduler();
         initAdBudgetAlertScheduler();
         initClientSuspensionScheduler();
+        initProductionDayReminderScheduler();
         initUnbackedWorkAlertScheduler();
         initExternalPlanScheduler();
         startTaskAttachmentRetention();

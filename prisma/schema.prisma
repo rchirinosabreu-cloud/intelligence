@@ -752,6 +752,7 @@ model Client {
   monthlyCloses       ClientMonthlyClose[]
   workAuthorizations  ClientWorkAuthorization[]
   suspensions         ClientSuspension[]
+  productionDays      ProductionDay[]
   // La parrilla de MIO en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe en ella.
   externalPlanUrl       String?
   externalPlanSnapshots ExternalPlanSnapshot[]
@@ -852,6 +853,34 @@ model ClientWorkAuthorization {
 /// motivo (`liftKind`: PAGO cuando el cliente se puso al día, MANUAL cuando la levantó una persona). Un cliente solo
 /// puede tener una abierta: lo garantiza un índice único parcial que crea scripts/ensure-client-suspension-schema.js.
 /// Regla en src/lib/clientSuspension.js.
+/// Una jornada de producción de un cliente (reunión de Rodny con su jefe, 10 de noviembre de 2026: «no solamente es hacer
+/// la jornada, es subir las evidencias»). Nace del evento de Producción del calendario de Actividad, que es donde se agenda,
+/// y queda ligada a un cliente; se da por realizada cuando alguien sube el enlace del Drive con las evidencias. Fecha y
+/// título se copian del evento para que la historia sobreviva si el evento se borra. Aditiva con
+/// `scripts/ensure-production-days-schema.js`; regla en src/lib/productionDays.js.
+model ProductionDay {
+  id             String            @id @default(uuid())
+  eventId        String?           @unique
+  clientId       String
+  date           String // AAAA-MM-DD, día de Bogotá del evento
+  title          String
+  evidenceUrl    String?
+  evidenceNote   String?
+  evidenceAt     DateTime?         @db.Timestamptz(3)
+  evidenceById   String?
+  evidenceByName String?
+  linkedById     String?
+  linkedByName   String?
+  remindedAt     DateTime?         @db.Timestamptz(3)
+  reminders      Int               @default(0)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+  event          OperationalEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  client         Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, date])
+}
+
 model ClientSuspension {
   id            String    @id @default(uuid())
   clientId      String
@@ -1578,6 +1607,7 @@ model OperationalEvent {
   createdById            String?
   createdBy              User?                     @relation("OperationalEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
   googleLinks            GoogleCalendarEventLink[]
+  productionDay          ProductionDay?
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
 

@@ -15,6 +15,7 @@ import {
 import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
 import { authorizationProblem } from '../lib/unbackedWork.js';
 import { asOperationPiece } from '../lib/externalPlan.js';
+import { productionDayState, summarizeProductionDays } from '../lib/productionDays.js';
 import { suspensionCandidate } from '../lib/clientSuspension.js';
 import { userHasArea } from './teamAreaService.js';
 import { openSuspension } from './clientSuspensionGate.js';
@@ -75,6 +76,11 @@ const clientSelect = (window) => ({
         },
       },
     },
+  },
+  // Jornadas de producción ligadas al cliente (10 de noviembre de 2026): las más recientes bastan para el ciclo y el anterior.
+  productionDays: {
+    orderBy: { date: 'desc' }, take: 40,
+    select: { id: true, eventId: true, date: true, title: true, evidenceUrl: true, evidenceNote: true, evidenceAt: true, evidenceByName: true, event: { select: { memberIds: true } } },
   },
   nativeTasks: {
     where: { status: { in: OPEN_TASK_STATUSES } },
@@ -178,6 +184,31 @@ function externalPlanMonths(client, today) {
   });
 }
 
+/**
+ * Las jornadas de producción del ciclo en curso frente a las contratadas, y las que ya pasaron sin evidencia en
+ * este ciclo o el anterior (10 de noviembre de 2026). Con servicios, sin cupo de piezas, el ciclo es el mes.
+ */
+function productionOf(client, contract, today) {
+  const days = (client.productionDays || []).map((row) => ({
+    id: row.id, eventId: row.eventId ?? null, date: row.date, title: row.title,
+    evidenceUrl: row.evidenceUrl ?? null, evidenceNote: row.evidenceNote ?? null,
+    evidenceAt: row.evidenceAt ? bogotaDate(row.evidenceAt) : null, evidenceBy: row.evidenceByName ?? null,
+    memberIds: row.event?.memberIds || [],
+  }));
+  const contracted = Number(contract?.productionDays) || 0;
+  if (!days.length && !contracted) return null;
+  const cycle = cycleForDate(today, contract?.cutDay || 1);
+  const since = previousCycle(cycle, contract?.cutDay || 1).start;
+  const summary = summarizeProductionDays(days, cycle, { contracted, today });
+  return {
+    label: cycle.label, start: cycle.start, end: cycle.end,
+    contracted: summary.contracted, scheduled: summary.scheduled, done: summary.done, items: summary.items,
+    missingEvidence: days
+      .filter((day) => day.date >= since && productionDayState(day, today) === 'SIN_EVIDENCIA')
+      .map((day) => ({ id: day.id, eventId: day.eventId, date: day.date, title: day.title })),
+  };
+}
+
 const publicAuthorization = (row) => (row ? {
   until: row.until, reason: row.reason, byName: row.authorizedByName ?? null, at: row.createdAt ? bogotaDate(row.createdAt) : null,
 } : null);
@@ -204,6 +235,7 @@ function buildOperation(client, { today, reporters, detail }) {
     // La hoja de MIO y lo último leído de ella, mes a mes (29 de octubre de 2026).
     externalPlanUrl: client.externalPlanUrl ?? null,
     externalPlan: externalPlanMonths(client, today),
+    production: productionOf(client, contract, today),
     observations,
     latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null,
   };
@@ -236,7 +268,7 @@ function buildOperation(client, { today, reporters, detail }) {
       if (base.cycles.previous) base.cycles.previous = base.history[0];
     }
   }
-  if (!detail) { delete base.history; delete base.observations; }
+  if (!detail) { delete base.history; delete base.observations; if (base.production) delete base.production.items; }
   base.evaluation = evaluateClientOperation(base, { today });
   return base;
 }
