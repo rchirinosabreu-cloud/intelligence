@@ -117,7 +117,7 @@ test('el corte histórico inequívoco es el del contrato de ese periodo', async 
   const { service } = fixture([contract('old', '2026-01-11', 12, { cutDay: 11, endDate: '2026-10-10' }), contract('new', '2026-10-11', 4, { cutDay: 11 })]);
   const detail = await service.getOperation('client-renewal-test');
   assert.deepEqual(detail.history.map(month => [month.label, month.start, month.end, month.quota]), [
-    ['Septiembre', '2026-09-11', '2026-10-10', 12], ['Agosto', '2026-08-11', '2026-09-10', 12], ['Julio', '2026-07-11', '2026-08-10', 12],
+    ['Septiembre–octubre', '2026-09-11', '2026-10-10', 12], ['Agosto–septiembre', '2026-08-11', '2026-09-10', 12], ['Julio–agosto', '2026-07-11', '2026-08-10', 12],
   ]);
 });
 
@@ -127,7 +127,7 @@ test('un cambio de corte no reescribe los meses anteriores al cambio', async () 
   assert.deepEqual(detail.history.map(month => [month.label, month.start, month.end, month.quota]), [
     // Limitación conservada: dos ciclos posibles en noviembre comparten la misma parrilla mensual.
     // No se reparte ni prorratea esa parrilla; noviembre mantiene el criterio previo del contrato más reciente.
-    ['Noviembre', '2026-11-15', '2026-12-14', 4], ['Octubre', '2026-10-01', '2026-10-31', 12], ['Septiembre', '2026-09-01', '2026-09-30', 12],
+    ['Noviembre–diciembre', '2026-11-15', '2026-12-14', 4], ['Octubre', '2026-10-01', '2026-10-31', 12], ['Septiembre', '2026-09-01', '2026-09-30', 12],
   ]);
 });
 

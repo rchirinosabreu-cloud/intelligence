@@ -9,20 +9,21 @@ import {
 // reemplazan los porcentajes y estados que el Excel escribía a mano.
 
 test('el ciclo de un mes calendario va del 1 al último día', () => {
-  assert.deepEqual(cycleForDate('2026-10-02', 1), { year: 2026, month: 10, start: '2026-10-01', end: '2026-10-31', label: 'Octubre' });
-  assert.deepEqual(cycleForDate('2026-02-28', 1), { year: 2026, month: 2, start: '2026-02-01', end: '2026-02-28', label: 'Febrero' });
+  assert.deepEqual(cycleForDate('2026-10-02', 1), { year: 2026, month: 10, start: '2026-10-01', end: '2026-10-31', label: 'Octubre', shortLabel: 'Oct' });
+  assert.deepEqual(cycleForDate('2026-02-28', 1), { year: 2026, month: 2, start: '2026-02-01', end: '2026-02-28', label: 'Febrero', shortLabel: 'Feb' });
 });
 
 test('con otro día de corte, la parrilla del mes va del corte al día anterior del mes siguiente', () => {
   // Mimas cierra los 15: el 2 de octubre todavía corre la parrilla de septiembre.
-  assert.deepEqual(cycleForDate('2026-10-02', 15), { year: 2026, month: 9, start: '2026-09-15', end: '2026-10-14', label: 'Septiembre' });
-  assert.deepEqual(cycleForDate('2026-10-15', 15), { year: 2026, month: 10, start: '2026-10-15', end: '2026-11-14', label: 'Octubre' });
-  assert.deepEqual(cycleForDate('2027-01-03', 20), { year: 2026, month: 12, start: '2026-12-20', end: '2027-01-19', label: 'Diciembre' });
+  // Rodny, 10 de noviembre de 2026: un ciclo que toca dos meses se nombra con los dos.
+  assert.deepEqual(cycleForDate('2026-10-02', 15), { year: 2026, month: 9, start: '2026-09-15', end: '2026-10-14', label: 'Septiembre–octubre', shortLabel: 'Sep–Oct' });
+  assert.deepEqual(cycleForDate('2026-10-15', 15), { year: 2026, month: 10, start: '2026-10-15', end: '2026-11-14', label: 'Octubre–noviembre', shortLabel: 'Oct–Nov' });
+  assert.deepEqual(cycleForDate('2027-01-03', 20), { year: 2026, month: 12, start: '2026-12-20', end: '2027-01-19', label: 'Diciembre–enero', shortLabel: 'Dic–Ene' });
   assert.equal(cycleForDate('2026-10-02', 40).start, '2026-09-28', 'el corte nunca pasa del 28');
 });
 
 test('el ciclo anterior es el del mes previo, aunque cambie el año', () => {
-  assert.deepEqual(previousCycle({ year: 2026, month: 1 }, 1), { year: 2025, month: 12, start: '2025-12-01', end: '2025-12-31', label: 'Diciembre' });
+  assert.deepEqual(previousCycle({ year: 2026, month: 1 }, 1), { year: 2025, month: 12, start: '2025-12-01', end: '2025-12-31', label: 'Diciembre', shortLabel: 'Dic' });
   assert.equal(previousCycle({ year: 2026, month: 10 }, 15).start, '2026-09-15');
 });
 
