@@ -36,6 +36,7 @@ import { usePageLabel } from '@/components/layout/BackToOrigin';
 import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
+import LoanCorrectionDialog from './financial/LoanCorrectionDialog';
 import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
 import FinancialOffsetDialog from './financial/FinancialOffsetDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
@@ -224,6 +225,7 @@ const FinancialDashboard = () => {
     const [paymentToReverse, setPaymentToReverse] = useState(null);
     const [expandedReversals, setExpandedReversals] = useState({});
     const [editingAmountId, setEditingAmountId] = useState('');
+    const [loanToCorrect, setLoanToCorrect] = useState(null);
     const [amountDraft, setAmountDraft] = useState('');
     const [reversalReason, setReversalReason] = useState('');
     const [isReversingPayment, setIsReversingPayment] = useState(false);
@@ -379,6 +381,8 @@ const FinancialDashboard = () => {
     };
 
     const startAmountEdit = (debt) => {
+        // Un préstamo y su egreso cambian juntos: valor, fecha y cuenta en un solo cuadro.
+        if (isLoanReceivable(debt)) { setNoticeError(''); setLoanToCorrect(debt); return; }
         setEditingAmountId(debt.id);
         setAmountDraft(String(debt.amount ?? ''));
     };
@@ -1525,7 +1529,7 @@ await invalidateFinancialQueries(queryClient);
                                                                                     de verdad entró (Rodny, 30 de septiembre de 2026). */}
                                                                                 {canWriteFinancials && !debt.barterPaymentId && !debt.balanceReviewRequired && (debt.formattedNumber && debt.currency !== 'USD'
                                                                                     ? <button type="button" title={`Corregir la cuenta de cobro ${debt.formattedNumber}`} aria-label={`Corregir el valor de la cuenta de cobro ${debt.formattedNumber}`} onClick={() => openCorrectDialog(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>
-                                                                                    : <button type="button" title={debt.currency === 'USD' ? 'Ajustar el valor en pesos al que entró' : 'Editar valor'} aria-label={debt.currency === 'USD' ? `Editar el valor en pesos de la cuenta de cobro ${debt.formattedNumber || ''}` : `Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
+                                                                                    : <button type="button" data-loan-correct={isLoanReceivable(debt) ? '' : undefined} title={isLoanReceivable(debt) ? 'Corregir préstamo: valor, fecha y cuenta' : debt.currency === 'USD' ? 'Ajustar el valor en pesos al que entró' : 'Editar valor'} aria-label={isLoanReceivable(debt) ? `Corregir el préstamo de ${formatFinancialPeriod(debt.period)}` : debt.currency === 'USD' ? `Editar el valor en pesos de la cuenta de cobro ${debt.formattedNumber || ''}` : `Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
                                                                             </p>
                                                                         )}
                                                                         {debt.currency === 'USD' && (
@@ -1979,6 +1983,7 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={noticeError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            <LoanCorrectionDialog key={loanToCorrect?.id || "closed-loan"} debt={loanToCorrect} accounts={financialAccounts?.accounts || []} onClose={() => setLoanToCorrect(null)} onSaved={async (data) => { setLoanToCorrect(null); await invalidateFinancialQueries(queryClient); setNoticeSuccess(data?.message || 'Préstamo corregido.'); }} />
             {barterPaymentId && <FinancialBarterDialog paymentId={barterPaymentId} onClose={() => setBarterPaymentId(null)} />}
             {legacyOffsetId && <LegacyOffsetDialog paymentId={legacyOffsetId} onClose={() => setLegacyOffsetId(null)} onLinked={id => { setLegacyOffsetId(null); setOffsetPaymentId(id); }} />}
             {offsetPaymentId && <FinancialOffsetDialog paymentId={offsetPaymentId} onClose={() => setOffsetPaymentId(null)} />}

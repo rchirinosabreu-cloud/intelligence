@@ -275,7 +275,7 @@ test('el egreso de un préstamo con reintegros no se edita ni se anula desde Mov
     assert.match(reason, /Cuentas por cobrar/);
     assert.match(reason, /reintegro/i);
     assert.equal(financialRecordLockReason({ origin: 'MANUAL', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), null, 'sin reintegros, el movimiento se corrige en Movimientos y la cartera lo sigue');
-    assert.match(financialRecordLockReason({ origin: 'SYSTEM', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), /Eliminar/, 'el egreso que creó «Registrar préstamo» se deshace desde Cartera');
+    assert.match(financialRecordLockReason({ origin: 'SYSTEM', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), /Corregir préstamo/, 'el egreso que creó «Registrar préstamo» se corrige desde Cartera (10 de noviembre de 2026)');
     const ledger = read('../src/components/modules/financial/FinancialLedger.jsx');
     assert.match(ledger, /loanReceivable/, 'la pantalla sabe antes que un préstamo con reintegros no se toca aquí');
 });

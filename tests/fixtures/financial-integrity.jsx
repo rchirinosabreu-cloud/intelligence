@@ -511,6 +511,15 @@ axios.defaults.adapter = async config => {
     target.supportDocuments = [...(target.supportDocuments || []), { id: `cert-${++payrollCounter}`, name: file?.name || 'certificado.pdf', mimeType: 'application/pdf', size: file?.size || 1 }];
     window.__certificateUpload = paymentId;
     data = { message: 'Soporte guardado.', document: target.supportDocuments.at(-1) };
+  } else if (path.endsWith('/correction') && path.includes('/loans/')) {
+    // Como el servidor: valor, fecha y cuenta cambian en el préstamo y en su egreso; los reintegros se quedan.
+    const loan = loans.find(item => path.includes(item.id));
+    const applied = loan.amount - loan.outstanding;
+    if (Number(body.amount) < applied) throw Object.assign(new Error('Por debajo'), { response: { data: { message: 'El valor no puede quedar por debajo de lo ya reintegrado.' } } });
+    Object.assign(loan, { amount: Number(body.amount), outstanding: Number(body.amount) - applied, period: `${body.lentAt}T00:00:00Z`, loanRecord: { accountId: body.accountId, date: `${body.lentAt}T12:00:00Z` }, status: Number(body.amount) - applied === 0 ? 'PAGADO' : loan.status });
+    records = records.map(record => record.id === loan.loanRecordId ? { ...record, amount: Number(body.amount), date: `${body.lentAt}T12:00:00Z`, accountId: body.accountId } : record);
+    window.__loanCorrectionBody = body;
+    data = { message: 'Préstamo corregido: el egreso en Movimientos cambió con él.', receivable: loan, financialRecord: { id: loan.loanRecordId } };
   } else if (path.endsWith('/loans')) {
     // Como el servidor: el egreso (o el ya registrado) y la cuenta por cobrar de clase PRESTAMO, de una vez.
     if (new URLSearchParams(location.search).has('loanError')) throw Object.assign(new Error('Préstamo no guardado (simulado)'), { response: { data: { message: 'Préstamo no guardado (simulado)' } } });
@@ -518,7 +527,7 @@ axios.defaults.adapter = async config => {
     const name = body.clientId ? client.name : body.counterpartyName;
     let recordId = body.financialRecordId;
     if (!recordId) { recordId = `rec-loan-${++payrollCounter}`; records = [{ id: recordId, date: `${body.lentAt}T12:00:00Z`, year: 2026, month: 10, amount: Number(body.amount), type: 'EXPENSE', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: `Préstamo a ${name}`, accountId: body.accountId, account, documents: [], loanReceivable: { id: 'demo-loan' } }, ...records]; }
-    loans = [{ id: `demo-loan-${payrollCounter}`, kind: 'PRESTAMO', counterpartyType: body.counterpartyType, counterpartyName: name, clientId: body.clientId || null, clientName: name, clientSlug: null, sourceLabel: name, loanRecordId: recordId, amount: Number(body.amount), outstanding: Number(body.amount), paidAmount: 0, settledAmount: 0, status: 'DEBE', year: 2026, month: 10, period: `${body.lentAt}T00:00:00Z`, dueDate: body.dueDate ? `${body.dueDate}T00:00:00Z` : null, notes: body.notes || null, payments: [] }, ...loans];
+    loans = [{ id: `demo-loan-${payrollCounter}`, kind: 'PRESTAMO', counterpartyType: body.counterpartyType, counterpartyName: name, clientId: body.clientId || null, clientName: name, clientSlug: null, sourceLabel: name, loanRecordId: recordId, loanRecord: { accountId: body.accountId || account.id, date: `${body.lentAt}T12:00:00Z` }, amount: Number(body.amount), outstanding: Number(body.amount), paidAmount: 0, settledAmount: 0, status: 'DEBE', year: 2026, month: 10, period: `${body.lentAt}T00:00:00Z`, dueDate: body.dueDate ? `${body.dueDate}T00:00:00Z` : null, notes: body.notes || null, payments: [] }, ...loans];
     window.__loanBody = body;
     data = { message: body.financialRecordId ? 'Préstamo registrado en Cartera, ligado al egreso que ya existía.' : 'Préstamo registrado: el egreso quedó en Movimientos y la cuenta por cobrar en Cartera.', receivable: loans[0], financialRecord: { id: recordId } };
   } else if (path.endsWith('/payments') && loans.some(loan => path.includes(loan.id))) {

@@ -19,7 +19,7 @@ import {
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment, updateReceivablePayment } from '../services/receivablePaymentService.js';
 import { settleReceivable, listReceivableAdjustments } from '../services/receivableSettlementService.js';
-import { createLoan } from '../services/receivableLoanService.js';
+import { correctLoan, createLoan } from '../services/receivableLoanService.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { paymentKindLabel } from '../lib/receivableSettlement.js';
 import { attachReceivablePaymentDocument, openReceivablePaymentDocument } from '../services/receivablePaymentDocumentService.js';
@@ -317,6 +317,23 @@ export const createLoanHandler = async (req, res, dependencies = {}) => {
     } catch (error) {
         console.error('[Loans API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'LOAN_CREATE_FAILED', 'No fue posible registrar el préstamo.');
+    }
+};
+
+export const correctLoanHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const correct = dependencies.correctLoan || correctLoan;
+    try {
+        const result = await correct(prismaClient, req.params.receivableId, req.body || {}, req.user);
+        return res.json({
+            message: result.financialRecord
+                ? 'Préstamo corregido: el egreso en Movimientos cambió con él.'
+                : 'Préstamo corregido.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Loans API] Correction failed:', error.response?.data || error);
+        return respondWithError(res, error, 'LOAN_CORRECTION_FAILED', 'No fue posible corregir el préstamo.');
     }
 };
 

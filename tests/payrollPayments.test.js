@@ -249,7 +249,8 @@ test('en Movimientos, un pago de nómina dice dónde se parte y dónde se suben 
     const reason = financialRecordLockReason({ payrollPayment: { id: 'p-1' } });
     assert.match(reason, /lápiz de este mismo movimiento/, 'primero lo que tiene a la mano');
     assert.match(reason, /Cuentas por pagar → Nómina, eligiendo arriba el mes/, 'y Nómina con el mes, que abre en el actual');
-    assert.match(reason, /desglosarlo/);
+    assert.match(reason, /desglosa/);
+    assert.match(reason, /Corregir pago/, 'valor, fecha y cuenta se corrigen desde el pago (Elisa, noviembre de 2026)');
     assert.match(reason, /comprobante/);
 });
 
