@@ -61,11 +61,15 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
     && (responsibleId === 'all' || client.responsible?.id === responsibleId);
   const active = clients.filter((c) => !c.isArchived && matches(c));
   const archived = clients.filter((c) => c.isArchived && matches(c));
+  const activeTotal = clients.filter((c) => !c.isArchived).length;
+  const archivedTotal = clients.length - activeTotal;
 
-  const row = (client) => (
+  // Cada fila lleva su número (Rodny, 10 de noviembre de 2026: «ponme números … enumerarlos»).
+  const row = (client, index) => (
     <tr key={client.id} className="transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.03]">
       <td className="px-6 py-4">
         <div className="flex items-center gap-3">
+          <span className="w-6 shrink-0 text-right text-xs font-medium tabular-nums text-zinc-400" data-client-position>{index + 1}</span>
           <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
           <span className="whitespace-nowrap font-semibold text-zinc-900 dark:text-zinc-100">{client.name}</span>
         </div>
@@ -80,6 +84,13 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
               <ExternalLink className="h-4 w-4" />
             </button>
           )}
+          {client.isArchived ? (
+            // Volver a la operación es un clic a la vista: los clientes que regresan no se buscan en un menú.
+            <button type="button" onClick={() => onArchiveToggle(client)} disabled={archivePending}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-brand-cyan-deep transition-colors hover:bg-brand-cyan/10 disabled:opacity-50 dark:text-brand-cyan">
+              <RotateCcw className="h-4 w-4" />Reactivar
+            </button>
+          ) : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" aria-label={`Opciones de ${client.name}`} disabled={archivePending} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200">
@@ -98,6 +109,7 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
       </td>
     </tr>
@@ -133,6 +145,12 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
       </div>
 
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" aria-label="Clientes activos">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-zinc-100 px-6 py-4 dark:border-white/5" data-directory-count>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {loading ? 'Clientes activos' : `${activeTotal === 1 ? '1 cliente activo' : `${activeTotal} clientes activos`}`}
+          </h2>
+          {!loading && <span className="text-sm text-zinc-500 dark:text-zinc-400">{archivedTotal === 1 ? '1 inactivo' : `${archivedTotal} inactivos`} en el historial</span>}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             {head}
@@ -245,8 +263,8 @@ const Clients = () => {
       const accepted = await confirm({
         title: `${action} a ${client.name}`,
         description: client.isArchived
-          ? 'Volverá a aparecer entre los clientes activos con sus responsables e historial conservados.'
-          : 'Pasará a Clientes inactivos. Se conservarán su historial, contratos y responsables. Podrás reactivarlo después.',
+          ? 'Volverá a Operación, Gestión y Parrillas con sus responsables, tareas e historial conservados.'
+          : 'Saldrá de Operación, Gestión y Parrillas. Su cartera sigue en Financiero y se conservan historial, contratos y responsables. Podrás reactivarlo después.',
         confirmLabel: action,
         tone: 'neutral',
       });

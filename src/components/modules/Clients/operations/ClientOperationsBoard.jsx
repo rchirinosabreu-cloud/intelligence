@@ -4,7 +4,7 @@ import Select from '@/components/ui/Select';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
-import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf } from '@/lib/clientOperations';
+import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf, publishedPercent } from '@/lib/clientOperations';
 import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
 import { LEVEL_META, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
@@ -27,14 +27,14 @@ function MonthCell({ cycle }) {
   const fulfilled = cycle.reached.publicada >= cycle.quota;
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', fulfilled ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
-      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas`}>
+      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas (${publishedPercent(cycle)} %)`}>
       <span className={cn('h-1.5 w-1.5 rounded-full', fulfilled ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />
       {cycle.label.slice(0, 3)} {cycle.reached.publicada}/{cycle.quota}
     </span>
   );
 }
 
-function ClientRow({ client, evaluation, onOpen }) {
+function ClientRow({ client, evaluation, onOpen, position }) {
   const meta = LEVEL_META[evaluation.level];
   const { current, previous } = client.cycles || {};
   const tasks = client.openTasks || [];
@@ -48,6 +48,7 @@ function ClientRow({ client, evaluation, onOpen }) {
       <button type="button" onClick={onOpen}
         className={cn('grid w-full grid-cols-[1fr_auto] gap-x-4 gap-y-3 px-4 py-4 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-white/[0.03] sm:px-6', ROW_GRID)}>
         <span className="flex min-w-0 items-center gap-3">
+          <span className="w-6 shrink-0 text-right text-xs font-medium tabular-nums text-zinc-400" data-client-position>{position}</span>
           <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', meta.dot)} aria-hidden="true" />
           <ClientAvatar client={client} size={32} className="shrink-0 rounded-lg border border-zinc-200 dark:border-white/10" />
           <span className="min-w-0">
@@ -69,7 +70,10 @@ function ClientRow({ client, evaluation, onOpen }) {
             <>
               <span className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
                 <span className="font-medium text-zinc-700 dark:text-zinc-200">{current.label}</span>
-                <span className="tabular-nums text-zinc-500">{current.reached.publicada} de {current.quota} publicadas</span>
+                <span className="tabular-nums text-zinc-500" title={`${current.reached.publicada} de ${current.quota} publicadas`}>
+                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50" data-cycle-percent>{publishedPercent(current)} %</span>
+                  {' · '}{current.reached.publicada} de {current.quota}
+                </span>
               </span>
               <CycleBar cycle={current} />
             </>
@@ -162,6 +166,16 @@ export default function ClientOperationsBoard({ evaluated, team, onOpenClient })
       </div>
 
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" aria-label="Clientes">
+        {/* Cuántos clientes están en operación (Rodny, 10 de noviembre de 2026: «ponme números»).
+            Los archivados no cuentan: están en Directorio y se reactivan desde ahí. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-zinc-100 px-4 py-4 dark:border-white/5 sm:px-6" data-operation-count>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {evaluated.length === 1 ? '1 cliente en operación' : `${evaluated.length} clientes en operación`}
+          </h2>
+          {visible.length !== evaluated.length && (
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">Con estos filtros: {visible.length}</span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-zinc-100 px-4 py-3 text-xs text-zinc-500 dark:border-white/5 sm:px-6">
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Cada pieza va del color de la etapa a la que llegó:</span>
           {OPERATION_STAGES.map((stage) => (
@@ -175,8 +189,8 @@ export default function ClientOperationsBoard({ evaluated, team, onOpenClient })
         </div>
         {visible.length ? (
           <ul>
-            {visible.map(({ client, evaluation }) => (
-              <ClientRow key={client.id} client={client} evaluation={evaluation} onOpen={() => onOpenClient(client)} />
+            {visible.map(({ client, evaluation }, index) => (
+              <ClientRow key={client.id} client={client} evaluation={evaluation} position={index + 1} onOpen={() => onOpenClient(client)} />
             ))}
           </ul>
         ) : (

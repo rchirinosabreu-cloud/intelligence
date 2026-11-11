@@ -8,7 +8,7 @@ import { ContractContinuitySummary } from './ContractContinuityDecision';
 import { cn } from '@/lib/utils';
 import {
   CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES,
-  canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
+  canMarkPublished, contractQuota, isMeasured, labelOf, publishedPercent, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
@@ -123,7 +123,10 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">{cycle.label}{cycle.start && !cycle.start.endsWith('-01') && <span className="ml-1.5 text-sm font-normal text-zinc-500">del {shortDate(cycle.start)} al {shortDate(cycle.end)}</span>}</h2>
-          <p className={LABEL}>Día {cycle.day} de {cycle.length} · {cycle.reached.publicada} de {cycle.quota} publicadas</p>
+          <p className={LABEL}>
+            {publishedPercent(cycle) != null && <span className="mr-1 text-sm font-bold text-zinc-900 dark:text-zinc-50" data-cycle-percent>{publishedPercent(cycle)} % publicado ·</span>}
+            Día {cycle.day} de {cycle.length} · {cycle.reached.publicada} de {cycle.quota} publicadas
+          </p>
           {fromSheet && (
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-cycle-source="HOJA_MIO">
               Leído de la hoja de MIO{cycle.source.tab ? `, pestaña ${cycle.source.tab}` : ''}{cycle.source.readAt ? ` · ${shortDate(cycle.source.readAt)}` : ''}

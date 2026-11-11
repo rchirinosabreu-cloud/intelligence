@@ -79,17 +79,21 @@ try {
     assert.match(await inactive.innerText(), /PM actual/);
     await page.screenshot({ path: path.join(root, `output/client-scope/clientes-inactivos-${theme}.png`) });
 
+    // El conteo dice cuántos están en operación y cuántos en el historial (10 de noviembre de 2026).
+    assert.match(await page.locator('[data-directory-count]').innerText(), /0 clientes activos[\s\S]*1 inactivo/);
+    // Reactivar va a la vista, no dentro de un menú: los clientes que vuelven no se buscan.
+    const reactivate = () => inactive.getByRole('button', { name: 'Reactivar', exact: true });
     rejectNext = true;
-    await options().click();
-    await page.getByRole('menuitem', { name: 'Reactivar cliente' }).click();
+    await reactivate().click();
     await confirm.getByRole('button', { name: 'Reactivar', exact: true }).click();
     await page.getByText('No se pudo cambiar el estado', { exact: true }).waitFor();
     assert.match(await inactive.innerText(), /Cliente de muestra/, 'el fallo conserva el estado visible');
-    await options().click();
-    await page.getByRole('menuitem', { name: 'Reactivar cliente' }).click();
+    await reactivate().click();
     await confirm.getByRole('button', { name: 'Reactivar', exact: true }).click();
     await page.getByText('Cliente reactivado', { exact: true }).waitFor();
     assert.match(await active.innerText(), /Cliente de muestra/);
+    assert.match(await page.locator('[data-directory-count]').innerText(), /1 cliente activo/);
+    await page.screenshot({ path: path.join(root, `output/client-scope/directorio-conteo-${theme}.png`) });
     assert.equal(client.isArchived, false);
     assert.deepEqual(errors, []);
     await page.close();

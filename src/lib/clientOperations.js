@@ -66,6 +66,18 @@ export function contractQuota(contract) {
 export const isMeasured = (client) => client.contract?.serviceType === 'PARRILLA' && contractQuota(client.contract) > 0;
 
 /**
+ * Qué parte de lo contratado del mes ya salió publicado, en porcentaje entero (Rodny, 10 de
+ * noviembre de 2026: «las barras son buenas pero los números son claros y directos»). Se mide
+ * solo lo publicado, que es lo único que el cliente ve; la barra sigue contando las etapas.
+ * Pasar del contrato da más de 100: no se recorta. Sin cupo no hay porcentaje.
+ */
+export const publishedPercent = (cycle) => {
+  const quota = Number(cycle?.quota) || 0;
+  if (quota <= 0) return null;
+  return Math.round(((Number(cycle?.reached?.publicada) || 0) / quota) * 100);
+};
+
+/**
  * Cada cuántos días toca una pieza según el contrato: los días del ciclo entre las piezas contratadas.
  * Con 4 piezas en 31 días, una cada 7,75; con 20, una cada día y medio. `null` si no hay contra qué medir.
  */
