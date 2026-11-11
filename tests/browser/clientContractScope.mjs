@@ -60,6 +60,13 @@ try {
     await page.getByRole('button', { name: 'Editar', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.waitFor();
+    // Más ancha y con espacio para describir la marca (Rodny, 10 de noviembre de 2026).
+    const brand = dialog.getByLabel('Qué es la marca', { exact: true });
+    assert.equal(await brand.getAttribute('rows'), '6');
+    if (width === 1440) assert.ok((await dialog.boundingBox()).width > 850, 'La ficha usa el ancho de escritorio.');
+    await page.waitForTimeout(400); // la ventana termina de aparecer antes de la captura
+    await page.screenshot({ path: path.join(output, `editor-arriba-${suffix}.png`) });
+    captures.push(`editor-arriba-${suffix}.png`);
     const endDate = dialog.getByRole('textbox', { name: 'Fin del contrato', exact: true });
     await endDate.click();
     await page.locator('.react-datepicker__year-read-view').waitFor({ state: 'visible' });
