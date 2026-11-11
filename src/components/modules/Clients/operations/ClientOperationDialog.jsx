@@ -82,7 +82,9 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-2xl" showCloseButton={!saving}
+      {/* Ancha y con los campos cortos en una fila (Rodny, 10 de noviembre de 2026: «un poco más
+          anchas para que no haya tanto scroll»). */}
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-2xl" showCloseButton={!saving}
         onInteractOutside={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
         <DialogTitle className="pr-8">Ficha operativa de {client.name}</DialogTitle>
@@ -90,13 +92,22 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
         <form onSubmit={submit} className="space-y-5">
           <div className="space-y-1.5">
             <label htmlFor={`${id}-desc`} className={LABEL}>Qué es la marca</label>
-            <textarea id={`${id}-desc`} rows={3} value={profile.description} onChange={(e) => setP({ description: e.target.value })} placeholder="En una o dos frases: qué vende, dónde, a quién." className={cn(FIELD, 'resize-y')} />
+            <textarea id={`${id}-desc`} rows={6} value={profile.description} onChange={(e) => setP({ description: e.target.value })} placeholder="En una o dos frases: qué vende, dónde, a quién." className={cn(FIELD, 'resize-y')} />
           </div>
+          <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="space-y-1.5">
             <label htmlFor={`${id}-ig`} className={LABEL}>Instagram</label>
             <input id={`${id}-ig`} type="url" value={profile.instagramUrl} onChange={(e) => setP({ instagramUrl: e.target.value })} placeholder="https://www.instagram.com/…" className={FIELD} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* La parrilla de MIO vive en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe. */}
+          <div className="space-y-1.5">
+            <label htmlFor={`${id}-sheet`} className={LABEL}>Parrilla en hoja de Google <span className="font-normal text-zinc-400">(clientes de MIO)</span></label>
+            <input id={`${id}-sheet`} type="url" value={profile.externalPlanUrl} onChange={(e) => setP({ externalPlanUrl: e.target.value })} data-external-plan-url
+              placeholder="https://docs.google.com/spreadsheets/d/…" className={FIELD} />
+            <p className="text-xs text-zinc-500">Si el mes no tiene parrilla aquí, el avance sale de la pestaña del mes de esa hoja.</p>
+          </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
               <label htmlFor={`${id}-agency`} className={LABEL}>Agencia</label>
               <Select id={`${id}-agency`} value={profile.agency} onChange={(e) => setP({ agency: e.target.value })} className={FIELD}>
@@ -126,17 +137,9 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
             </div>
           </div>
 
-          {/* La parrilla de MIO vive en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe. */}
-          <div className="space-y-1.5">
-            <label htmlFor={`${id}-sheet`} className={LABEL}>Parrilla en hoja de Google <span className="font-normal text-zinc-400">(clientes de MIO)</span></label>
-            <input id={`${id}-sheet`} type="url" value={profile.externalPlanUrl} onChange={(e) => setP({ externalPlanUrl: e.target.value })} data-external-plan-url
-              placeholder="https://docs.google.com/spreadsheets/d/…" className={FIELD} />
-            <p className="text-xs text-zinc-500">Si el mes no tiene parrilla aquí, el avance sale de la pestaña del mes de esa hoja.</p>
-          </div>
-
           <div className={SECTION}>
             <p className="text-sm font-semibold">Contrato</p>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1.5">
                 <label htmlFor={`${id}-type`} className={LABEL}>Tipo</label>
                 <Select id={`${id}-type`} value={contract.serviceType} onChange={(e) => setC({ serviceType: e.target.value })} className={FIELD}>
