@@ -4,7 +4,7 @@ import Select from '@/components/ui/Select';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
-import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf } from '@/lib/clientOperations';
+import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf, publishedPercent } from '@/lib/clientOperations';
 import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
 import { LEVEL_META, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
@@ -27,7 +27,7 @@ function MonthCell({ cycle }) {
   const fulfilled = cycle.reached.publicada >= cycle.quota;
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', fulfilled ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
-      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas`}>
+      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas (${publishedPercent(cycle)} %)`}>
       <span className={cn('h-1.5 w-1.5 rounded-full', fulfilled ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />
       {cycle.label.slice(0, 3)} {cycle.reached.publicada}/{cycle.quota}
     </span>
@@ -70,7 +70,10 @@ function ClientRow({ client, evaluation, onOpen, position }) {
             <>
               <span className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
                 <span className="font-medium text-zinc-700 dark:text-zinc-200">{current.label}</span>
-                <span className="tabular-nums text-zinc-500">{current.reached.publicada} de {current.quota} publicadas</span>
+                <span className="tabular-nums text-zinc-500" title={`${current.reached.publicada} de ${current.quota} publicadas`}>
+                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50" data-cycle-percent>{publishedPercent(current)} %</span>
+                  {' · '}{current.reached.publicada} de {current.quota}
+                </span>
               </span>
               <CycleBar cycle={current} />
             </>

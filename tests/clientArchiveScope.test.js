@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { activeTaskSourceWhere } from '../src/lib/taskRetirement.js';
 import { financialPartyChoices, resolveFinancialParty } from '../src/services/financialPartySelection.js';
+import { publishedPercent } from '../src/lib/clientOperations.js';
+
+// Rodny, 10 de noviembre de 2026: «la salud del cliente también quiero verla en porcentaje».
+test('the month reads as a whole percentage of what was contracted and already published', () => {
+  assert.equal(publishedPercent({ quota: 12, reached: { publicada: 6 } }), 50);
+  assert.equal(publishedPercent({ quota: 12, reached: { publicada: 0 } }), 0);
+  assert.equal(publishedPercent({ quota: 12, reached: { publicada: 13 } }), 108, 'going beyond the contract is not clipped');
+  assert.equal(publishedPercent({ quota: 0, reached: { publicada: 2 } }), null, 'no quota, no percentage');
+  assert.equal(publishedPercent(null), null);
+});
 
 // Rodny, 10 de noviembre de 2026: «si yo archivo un cliente se archiva de operación y de todo,
 // excepto, por supuesto, de la cartera, y menos si debe plata».
