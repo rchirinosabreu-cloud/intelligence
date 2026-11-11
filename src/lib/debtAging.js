@@ -33,6 +33,8 @@ export const payableAgeStart = (item) => item?.receivedAt || null;
 /** Lo que de verdad se debe: saldo positivo, sin verificar pendiente y sin estar cerrada. */
 export const isOpenDebt = (item) => !!item
     && !item.balanceReviewRequired
+    // Archivada del cobro (11 de noviembre de 2026): sigue en Cartera, pero no es deuda que se esté cobrando.
+    && !item.collectionArchive?.archivedAt
     && !['PAGADO', 'SALDADO', 'PAGADA', 'SALDADA', 'ANULADA'].includes(item.status)
     && Number(item.outstanding) > 0.005;
 

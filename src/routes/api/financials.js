@@ -15,7 +15,8 @@ import {
     getFinancialReceivablesLedger,
     linkFinancialClient,
     updateFinancialPayrollContract,
-    updateFinancialReceivable
+    updateFinancialReceivable,
+    archiveFinancialReceivable
 } from '../../controllers/financialController.js';
 import {
     requireFinancialAccess,
@@ -138,6 +139,8 @@ router.patch('/clients/:id', requireFinancialWrite, updateDirectoryClientHandler
 router.patch('/client-links/:sourceClientId', requireFinancialWrite, linkFinancialClient);
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialWrite, updateFinancialReceivable);
+// Archivar del cobro (11 de noviembre de 2026): sigue en Cartera, sin avisos ni suspensión.
+router.post('/receivables/:id/collection-archive', requireFinancialWrite, archiveFinancialReceivable);
 router.post('/receivables', requireFinancialWrite, createReceivableHandler);
 // Eliminar una obligación tecleada por error o de prueba es trabajo de quien lleva el
 // financiero: mismo permiso que crearla. La auditoría conserva la fila entera.

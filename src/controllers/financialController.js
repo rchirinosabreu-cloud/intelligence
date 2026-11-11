@@ -2,13 +2,14 @@ import { withReceivablePeople } from '../services/financialPersonService.js';
 import prisma from '../lib/prisma.js';
 import { withPayrollMonthlyBasis } from '../services/payrollMonthlyBasis.js';
 import { withFinancialSearch, financialMonthFilter, ACTIVE_RECEIVABLE_PAYMENT, LIVE_PAYROLL_CONTRACT } from '../services/financialQueryFilters.js';
-import { updateReceivable } from '../services/financialReceivableService.js';
+import { setReceivableCollectionArchive, updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { formatReceivableNumber } from '../services/receivableDocumentService.js';
 import { isCashPayment, isReceivableClosed, isRetentionPayment } from '../lib/receivableSettlement.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 import { receivableCollectionMode, isFormalizationInstallment } from '../lib/receivableCollectionMode.js';
+import { isCollectionArchived } from '../lib/receivableArchive.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -87,6 +88,8 @@ const serializeReceivable = (receivable) => {
             }
         } : {}),
         updatedAt: receivable.updatedAt instanceof Date ? receivable.updatedAt.toISOString() : (receivable.updatedAt || null),
+        // Archivada del cobro: sigue aquí con su saldo, pero sin avisos ni antigüedad (11 de noviembre de 2026).
+        ...(isCollectionArchived(receivable) ? { collectionArchive: receivable.metadata.collectionArchive } : {}),
         // Lo que va impreso como deudor. Vive en la ficha del cliente y se escribe una
         // sola vez; viaja aquí para que el diálogo de emitir sepa si ya lo tiene.
         clientLegalName: receivable.client?.legalName || null,
@@ -433,6 +436,23 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
     }
 };
 
+export const archiveFinancialReceivable = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const setArchive = dependencies.setReceivableCollectionArchive || setReceivableCollectionArchive;
+    try {
+        const archived = req.body?.archived !== false;
+        const receivable = await setArchive(prismaClient, req.params.id, { archived, reason: req.body?.reason }, req.user);
+        return res.json({
+            message: archived ? 'Cuenta archivada: sigue en Cartera, pero ya no genera avisos de cobro.' : 'Cuenta desarchivada: vuelve al cobro y a los avisos.',
+            receivable: { id: receivable.id, ...(isCollectionArchived(receivable) ? { collectionArchive: receivable.metadata.collectionArchive } : {}) }
+        });
+    } catch (error) {
+        console.error('[Financials API] Receivable archive failed:', error.response?.data || error);
+        const statusCode = Number(error?.statusCode) || 500;
+        return res.status(statusCode).json({ error: error?.code || 'FINANCIAL_RECEIVABLE_ARCHIVE_FAILED', message: statusCode >= 500 ? 'No fue posible archivar la cuenta.' : error.message });
+    }
+};
+
 export const updateFinancialReceivable = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
     const updateReceivableService = dependencies.updateReceivableService || updateReceivable;
@@ -764,6 +784,8 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         const clientReceivableMap = {};
 
         for (const rec of await withReceivablePeople(prismaClient, receivables)) {
+            // Archivada del cobro (11 de noviembre de 2026): no cuenta en el saldo por cobrar del tablero.
+            if (isCollectionArchived(rec)) continue;
             // Un préstamo a un colaborador no tiene cliente: se agrupa por el nombre del tercero.
             const clientId = rec.partyId ? `party:${rec.partyId}` : rec.kind === 'BENEFICIARIO' ? `beneficiary:${rec.beneficiaryThirdPartyId || rec.id}` : rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
             const clientName = rec.partyName || rec.client?.name || rec.counterpartyName || 'Cliente Desconocido';

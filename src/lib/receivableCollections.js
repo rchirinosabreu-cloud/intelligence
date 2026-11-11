@@ -11,6 +11,7 @@
 //
 // Lógica pura: la usan el reloj que avisa, la banda y las pruebas. Los días son días civiles de Bogotá («AAAA-MM-DD»).
 import { receivableCollectionMode } from './receivableCollectionMode.js';
+import { isCollectionArchived } from './receivableArchive.js';
 
 // Nacen apagados (28 de octubre de 2026): la primera lectura de producción habría soltado 19 avisos de una vez, varios de
 // saldos del Excel que probablemente ya no son deuda. Administración limpia y un administrador los enciende.
@@ -78,6 +79,8 @@ export const openBalanceCents = (receivable) => {
 /** Las cuentas de cliente con saldo cuyo día de pago ya pasó, de la más vieja a la más nueva. */
 export const overdueReceivables = (receivables = [], today, settings = DEFAULT_COLLECTION_SETTINGS) => receivables
     .filter((receivable) => (receivable.kind || 'CLIENTE') === 'CLIENTE')
+    // Archivada del cobro: ni avisos ni suspensión (11 de noviembre de 2026).
+    .filter((receivable) => !isCollectionArchived(receivable))
     .map((receivable) => ({ receivable, due: receivableDueDate(receivable, settings), balanceCents: openBalanceCents(receivable) }))
     .filter(({ due, balanceCents }) => due && balanceCents > 0 && due.date < today)
     .sort((a, b) => a.due.date.localeCompare(b.due.date))
