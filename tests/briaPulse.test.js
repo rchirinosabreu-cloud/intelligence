@@ -87,6 +87,23 @@ test('the budget is 3 per workday and 1 per hour; muted kinds, said facts and th
   assert.equal(PULSE_LIMITS.perDay, 3);
 });
 
+// Rodny, 11 de noviembre de 2026: «"PROFESIONES" sale el 12 de noviembre y sigue sin aprobación» llegó por WhatsApp
+// sin decir de qué cliente era. El hecho lo traía; el modelo lo quitó del título. El código lo devuelve.
+test('a notice about a client always names that client in its title, whatever the model wrote', () => {
+  const facts = collectFacts({ pieces: [{ id: 'i4', title: 'PROFESIONES', planId: 'p4', clientName: 'Fundación Grit', day: '2026-10-14' }], operations, today: '2026-10-13' });
+  const [piece] = validatePulse({ speak: true, messages: [{ factIds: ['PIEZA_SIN_APROBAR:i4'], title: '«PROFESIONES» sale el 14 de octubre y sigue sin aprobación', body: 'Conviene hacer seguimiento con el cliente.', urgency: 'alta' }] }, { facts, budget: 1 });
+  assert.equal(piece.title, 'Fundación Grit · «PROFESIONES» sale el 14 de octubre y sigue sin aprobación');
+  assert.equal(piece.clientNames.join(), 'Fundación Grit');
+  const [named] = validatePulse({ speak: true, messages: [{ factIds: ['PIEZA_SIN_APROBAR:i4'], title: 'La pieza de fundacion grit sale mañana sin aprobar', body: '', urgency: 'alta' }] }, { facts, budget: 1 });
+  assert.equal(named.title, 'La pieza de fundacion grit sale mañana sin aprobar', 'already named, without accents or capitals: nothing added');
+  const [two] = validatePulse({ speak: true, messages: [{ factIds: ['OPERACION_ROJA:aristea', 'PIEZA_SIN_APROBAR:i4'], title: 'Dos cuentas piden atención hoy', body: '', urgency: 'alta' }] }, { facts, budget: 1 });
+  assert.equal(two.title, 'Aristea y Fundación Grit · Dos cuentas piden atención hoy');
+  const [person] = validatePulse({ speak: true, messages: [{ factIds: ['SIN_PROCESO:m-mel'], title: 'Melissa no tiene tarea en proceso.', body: '', urgency: 'media' }] }, { facts: collectFacts({ nudges, today: '2026-10-13' }), budget: 1 });
+  assert.equal(person.title, 'Melissa no tiene tarea en proceso.', 'a notice about a person has no client to add');
+  const request = buildPulseRequest({ digest: buildPulseDigest({ facts, now: tuesday1030 }), budget: 1 });
+  assert.match(request.prompt, /si el hecho es de un cliente, el título nombra al cliente/i);
+});
+
 test('the digest and the request: fast model, strict JSON, data marked as data, no vosotros, budget stated', () => {
   const facts = collectFacts({ operations, today: '2026-10-13' });
   const digest = buildPulseDigest({ facts, person: { name: 'Kamila', role: 'PROJECT_MANAGER' }, said: [{ title: 'Ya dicho' }], now: tuesday1030 });
