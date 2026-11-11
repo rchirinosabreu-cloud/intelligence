@@ -248,6 +248,30 @@
     overflow-wrap: anywhere;
   }
 
+  /* Papeles de texto (Rodny, 10 de noviembre de 2026: «en otras partes del mismo módulo todo se ve gigante, todo es
+     negrilla»). Una pantalla elige el papel, no el tamaño ni el grosor. El título de página es PageHeader y el de un
+     diálogo, DialogTitle; dentro de ellos solo estos. La negrilla queda para lo que se nombra (sección) y lo que se
+     cuenta (cifra): una etiqueta, un texto o una ayuda nunca la llevan. Contrato: tests/typographyRoles.test.js. */
+  .brain-type-section {
+    @apply text-sm font-semibold text-zinc-900 dark:text-zinc-50;
+  }
+  .brain-type-label {
+    @apply text-xs font-normal text-zinc-500 dark:text-zinc-400;
+  }
+  .brain-type-value {
+    @apply text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50;
+  }
+  .brain-type-body {
+    @apply text-sm font-normal text-zinc-700 dark:text-zinc-300;
+  }
+  .brain-type-help {
+    @apply text-xs font-normal text-zinc-500 dark:text-zinc-400;
+  }
+  /* Botón secundario dentro de una tarjeta o fila: el mismo alto táctil, sin competir con el principal. */
+  .brain-button-quiet {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:pointer-events-none disabled:opacity-50 dark:border-white/10 dark:bg-transparent dark:text-zinc-200 dark:hover:bg-white/5;
+  }
+
   .brain-danger-button {
     @apply bg-destructive text-destructive-foreground shadow-sm shadow-destructive/20 transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }

@@ -1750,85 +1750,85 @@ await invalidateFinancialQueries(queryClient);
                         {isPayrollLedgerLoading ? (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
                                 <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto mb-3" />
-                                <p className="text-sm font-semibold text-zinc-900 dark:text-white">Cargando nómina…</p>
+                                <p className="brain-type-body">Cargando nómina…</p>
                             </div>
                         ) : payrollRows.length > 0 ? (
                             <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                                                <th className="p-4">Colaborador</th>
-                                                <th className="p-4">Base del período</th>
-                                                <th className="p-4">Seguridad social del período</th>
-                                                <th className="p-4">Estado del período</th>
-                                                <th className="p-4 text-right">Total neto</th>
-                                                <th className="p-4 text-right">Acciones</th>
+                                            <tr className="brain-type-label border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50">
+                                                <th className="p-4 font-normal">Colaborador</th>
+                                                <th className="p-4 font-normal">Base del período</th>
+                                                <th className="p-4 font-normal">Seguridad social del período</th>
+                                                <th className="p-4 font-normal">Estado del período</th>
+                                                <th className="p-4 text-right font-normal">Total neto</th>
+                                                <th className="p-4 text-right font-normal">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
                                             {payrollPeople.map(person => <React.Fragment key={person.id}>
                                                 <tr data-payroll-person={person.id} className="bg-white dark:bg-zinc-900"><td colSpan={6} className="p-4"><button type="button" className="flex min-h-11 w-full items-center gap-3 text-left" aria-expanded={!!expandedPayrollPeople[person.id]} onClick={() => setExpandedPayrollPeople(current => ({...current,[person.id]:!current[person.id]}))}>
                                                     <TeamAvatar member={person.avatar || { name: person.name }} size={36} className="h-9 w-9" />
-                                                    <span className="flex-1"><span className="block text-sm font-semibold">{person.name}</span><span className="text-xs text-zinc-500">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {person.rows.filter(r=>r.transaction).length} período{person.rows.filter(r=>r.transaction).length===1?'':'s'} en el mes</span></span>
-                                                    <span className="text-xs font-semibold text-primary">{expandedPayrollPeople[person.id] ? 'Ocultar' : 'Ver períodos'}</span>{expandedPayrollPeople[person.id] ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
+                                                    <span className="flex-1"><span className="brain-type-section block">{person.name}</span><span className="brain-type-help">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {person.rows.filter(r=>r.transaction).length} período{person.rows.filter(r=>r.transaction).length===1?'':'s'} en el mes</span></span>
+                                                    <span className="text-sm font-medium text-primary">{expandedPayrollPeople[person.id] ? 'Ocultar' : 'Ver períodos'}</span>{expandedPayrollPeople[person.id] ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
                                                 </button></td></tr>
                                                 {expandedPayrollPeople[person.id] && <>
-                                                <tr><td colSpan={6} className="bg-zinc-50/60 px-5 py-3 dark:bg-white/[0.02]"><div className="space-y-3">{person.contracts.map(contract=><div key={contract.id} className="flex flex-wrap items-center justify-between gap-3 text-xs"><div><p className="font-semibold">Contrato · {new Date(contract.startDate).toLocaleDateString('es-CO',{timeZone:'UTC'})} – {contract.endDate ? new Date(contract.endDate).toLocaleDateString('es-CO',{timeZone:'UTC'}) : 'Sin terminación'}</p><p className="mt-1 text-zinc-500">Mensual: {formatCurrency(Number(contract.baseSalary)+Number(contract.socialSecurity))}</p></div><div className="flex flex-wrap items-center gap-4"><button className="min-h-11 font-semibold text-primary" onClick={()=>setPayrollPeriods(contract)}>Períodos e historial</button>{canWriteFinancials && <button className="min-h-11 font-semibold text-primary" onClick={()=>openPayrollContractEditor(contract)}>Editar contrato</button>}</div></div>)}</div></td></tr>
+                                                <tr><td colSpan={6} className="bg-zinc-50/60 px-5 py-3 dark:bg-white/[0.02]"><div className="space-y-3">{person.contracts.map(contract=><div key={contract.id} className="flex flex-wrap items-center justify-between gap-3"><div><p className="brain-type-section">Contrato · {new Date(contract.startDate).toLocaleDateString('es-CO',{timeZone:'UTC'})} – {contract.endDate ? new Date(contract.endDate).toLocaleDateString('es-CO',{timeZone:'UTC'}) : 'Sin terminación'}</p><p className="brain-type-help mt-1">Mensual: {formatCurrency(Number(contract.baseSalary)+Number(contract.socialSecurity))}</p></div><div className="flex flex-wrap items-center gap-4"><button className="min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>setPayrollPeriods(contract)}>Períodos e historial</button>{canWriteFinancials && <button className="min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>openPayrollContractEditor(contract)}>Editar contrato</button>}</div></div>)}</div></td></tr>
                                                 {person.rows.filter(row=>row.transaction || (String(row.startDate||'').slice(0,10)<=payrollMonthRange(selectedYear,payrollMonth).end && (!row.endDate || String(row.endDate).slice(0,10)>=payrollMonthRange(selectedYear,payrollMonth).start))).map((collab) => {
                                                 const transaction = collab.transaction;
                                                 const netAmount = transaction?.netAmount;
                                                 const draftChanged = payrollDraftNeedsContract(transaction, collab);
                                                 return (
                                                 <React.Fragment key={transaction?.id || collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name}>
-                                                <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
+                                                <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20">
                                                     <td className="p-4">
-                                                        <p className="font-medium">{transaction?.serviceStart ? `${new Date(transaction.serviceStart).toLocaleDateString('es-CO',{timeZone:'UTC'})} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO',{timeZone:'UTC'})}` : transaction?.monthlyBasis ? `Mensual registrado · ${FINANCIAL_MONTHS[transaction.month-1]} ${transaction.year}` : transaction ? 'Servicio por identificar en el historial' : 'Sin liquidación para este mes'}</p>
-                                                        {!transaction && canWriteFinancials && <button className="mt-2 min-h-11 font-semibold text-primary" onClick={()=>setPayrollPeriods(collab)}>Preparar período</button>}
+                                                        <p className="brain-type-body">{transaction?.serviceStart ? `${new Date(transaction.serviceStart).toLocaleDateString('es-CO',{timeZone:'UTC'})} – ${new Date(transaction.serviceEnd).toLocaleDateString('es-CO',{timeZone:'UTC'})}` : transaction?.monthlyBasis ? `Mensual registrado · ${FINANCIAL_MONTHS[transaction.month-1]} ${transaction.year}` : transaction ? 'Servicio por identificar en el historial' : 'Sin liquidación para este mes'}</p>
+                                                        {!transaction && canWriteFinancials && <button className="mt-2 min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>setPayrollPeriods(collab)}>Preparar período</button>}
                                                     </td>
-                                                    <td className="p-4 font-medium tabular-nums">{transaction ? formatCurrency(transaction.baseSalary) : '—'}</td>
-                                                    <td className="p-4 text-zinc-500 tabular-nums">{transaction ? formatCurrency(transaction.socialSecurity) : '—'}</td>
+                                                    <td className="brain-type-body p-4 tabular-nums">{transaction ? formatCurrency(transaction.baseSalary) : '—'}</td>
+                                                    <td className="brain-type-body p-4 tabular-nums">{transaction ? formatCurrency(transaction.socialSecurity) : '—'}</td>
                                                     <td className="p-4">
                                                         {(() => {
                                                             const status = payrollStatus(transaction);
                                                             return (
                                                                 <span data-payroll-status={status.key} className={cn(
-                                                                    "inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                                                                    "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
                                                                     status.key === 'NONE' && "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300",
-                                                                    status.key === 'DRAFT' && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-                                                                    status.key === 'APPROVED' && "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+                                                                    status.key === 'DRAFT' && "bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow",
+                                                                    status.key === 'APPROVED' && "bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan",
                                                                     status.key === 'PARTIAL' && "bg-primary/10 text-primary",
-                                                                    status.key === 'PAID' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                                                    status.key === 'PAID' && "bg-status-positive/10 text-status-positive-fg"
                                                                 )}>{status.label}</span>
                                                             );
                                                         })()}
-                                                        {transaction?.status === 'PAID' && <p className="mt-1 text-xs text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</p>}
+                                                        {transaction?.status === 'PAID' && <p className="brain-type-help mt-1">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</p>}
                                                         {transaction?.payments?.length > 0 && (() => {
                                                             const activeCount = transaction.payments.filter((payment) => !payment.reversedAt).length;
                                                             const open = !!expandedPayrollPayments[transaction.id];
                                                             return (
                                                                 <button type="button" data-payroll-payments-toggle aria-expanded={open}
                                                                     onClick={() => setExpandedPayrollPayments((prev) => ({ ...prev, [transaction.id]: !prev[transaction.id] }))}
-                                                                    className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-[#009EB9] hover:underline dark:text-cyan-300">
+                                                                    className="mt-1.5 flex min-h-8 items-center gap-1 text-xs font-medium text-primary hover:underline">
                                                                     {open ? 'Ocultar pagos' : (activeCount > 0 ? `Ver ${activeCount} pago${activeCount === 1 ? '' : 's'}` : 'Ver pagos')}
                                                                     {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                                                 </button>
                                                             );
                                                         })()}
                                                     </td>
-                                                    <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
+                                                    <td className="brain-type-value p-4 text-right">
                                                         {transaction ? formatCurrency(netAmount) : "—"}
                                                         {transaction?.status === 'APPROVED' && Number(transaction.paidAmount) > 0 && (
-                                                            <p className="mt-0.5 text-[10px] font-medium text-zinc-500">Falta {formatCurrency(transaction.outstanding)}</p>
+                                                            <p className="brain-type-help mt-0.5 font-normal">Falta {formatCurrency(transaction.outstanding)}</p>
                                                         )}
                                                     </td>
                                                     <td className="p-4 text-right">
                                                         <div className="flex items-center justify-end gap-2 whitespace-nowrap" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
-                                                            {transaction && (transaction.status !== 'PAID' || transaction.loanDeductions?.length > 0) && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Descuentos</button>}
-                                                            {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10">Revisar importe</button>}
-                                                            {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
-                                                            {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-xs font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
-                                                            {!transaction && <span className="text-xs text-zinc-400">Pendiente</span>}
+                                                            {transaction && (transaction.status !== 'PAID' || transaction.loanDeductions?.length > 0) && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="brain-button-quiet">Descuentos</button>}
+                                                            {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10">Revisar importe</button>}
+                                                            {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
+                                                            {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-sm font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
+                                                            {!transaction && <span className="brain-type-help">Pendiente</span>}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1852,8 +1852,8 @@ await invalidateFinancialQueries(queryClient);
                         ) : (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
                                 <Users className="w-12 h-12 text-zinc-300 mb-3 mx-auto" />
-                                <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Sin transacciones registradas</h4>
-                                <p className="text-[10px] text-zinc-500 max-w-xs mt-1 mx-auto">No hay nóminas validadas ni pagadas en este periodo.</p>
+                                <h4 className="brain-type-section">Sin transacciones registradas</h4>
+                                <p className="brain-type-help max-w-xs mt-1 mx-auto">No hay nóminas validadas ni pagadas en este periodo.</p>
                             </div>
                         )}
                     </div>
@@ -2263,16 +2263,16 @@ await invalidateFinancialQueries(queryClient);
                     <form onSubmit={handleSavePayrollContract} className="space-y-4">
                         {noticeError && <p role="alert" className="text-sm text-destructive brain-destructive-text">{noticeError}</p>}
                         <div className="grid gap-4 sm:grid-cols-2">
-                            {!editingPayrollContract && <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Persona de Terceros<Select required aria-label="Persona del contrato" className="w-full min-h-11 rounded-lg border border-zinc-200 px-3 dark:bg-zinc-950" value={payrollContractForm.partySelection || ''} onChange={event => { const choice=payrollPartyChoices?.thirdParties.find(p=>p.id===event.target.value); setPayrollContractForm(current=>({...current,partySelection:event.target.value,name:choice?.name||''})); }}><option value="">Selecciona la persona</option>{payrollPartyChoices?.thirdParties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select><p className="text-xs text-zinc-500">Si es una persona nueva, crea primero su ficha en Terceros.</p></label>}
+                            {!editingPayrollContract && <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Persona de Terceros<Select required aria-label="Persona del contrato" className="w-full min-h-11 rounded-lg border border-zinc-200 px-3 dark:bg-zinc-950" value={payrollContractForm.partySelection || ''} onChange={event => { const choice=payrollPartyChoices?.thirdParties.find(p=>p.id===event.target.value); setPayrollContractForm(current=>({...current,partySelection:event.target.value,name:choice?.name||''})); }}><option value="">Selecciona la persona</option>{payrollPartyChoices?.thirdParties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select><p className="brain-type-help">Si es una persona nueva, crea primero su ficha en Terceros.</p></label>}
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Colaborador<input required readOnly={!editingPayrollContract || !!editingPayrollContract?.partyId} value={payrollContractForm.name} onChange={(event) => setPayrollContractForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cargo<input value={payrollContractForm.position} onChange={(event) => setPayrollContractForm((current) => ({ ...current, position: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Inicio</span><BrainDatePicker ariaLabel="Inicio del contrato" value={payrollContractForm.startDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, startDate: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Terminación</span><BrainDatePicker ariaLabel="Terminación del contrato" isClearable placeholder="Contrato activo" value={payrollContractForm.endDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, endDate: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base mensual<MoneyInput required min="0" value={payrollContractForm.baseSalary} onChange={(baseSalary) => setPayrollContractForm((current) => ({ ...current, baseSalary }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Seguridad social<MoneyInput required min="0" value={payrollContractForm.socialSecurity} onChange={(socialSecurity) => setPayrollContractForm((current) => ({ ...current, socialSecurity }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                            <div className="rounded-lg bg-zinc-50 p-3 text-sm sm:col-span-2 dark:bg-white/5"><span className="text-zinc-500">Total mensual del contrato</span><p className="mt-1 font-semibold">{formatCurrency(Number(payrollContractForm.baseSalary || 0) + Number(payrollContractForm.socialSecurity || 0))}</p><p className="mt-1 text-xs text-zinc-500">Se aplica al generar nuevos meses. Un borrador existente se revisa antes de actualizarlo; los pagos anteriores se conservan.</p></div>
+                            <div className="rounded-lg bg-zinc-50 p-3 sm:col-span-2 dark:bg-white/5"><span className="brain-type-label">Total mensual del contrato</span><p className="brain-type-value mt-1">{formatCurrency(Number(payrollContractForm.baseSalary || 0) + Number(payrollContractForm.socialSecurity || 0))}</p><p className="brain-type-help mt-1">Se aplica al generar nuevos meses. Un borrador existente se revisa antes de actualizarlo; los pagos anteriores se conservan.</p></div>
                         </div>
-                        <DialogFooter><button type="button" onClick={() => setIsPayrollContractEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollContract} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayrollContract && <Loader2 className="h-4 w-4 animate-spin" />}{editingPayrollContract ? 'Guardar y revisar nómina' : 'Guardar contrato'}</button></DialogFooter>
+                        <DialogFooter><button type="button" onClick={() => setIsPayrollContractEditorOpen(false)} className="brain-button-quiet px-4">Cancelar</button><button type="submit" disabled={isSavingPayrollContract} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{isSavingPayrollContract && <Loader2 className="h-4 w-4 animate-spin" />}{editingPayrollContract ? 'Guardar y revisar nómina' : 'Guardar contrato'}</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
