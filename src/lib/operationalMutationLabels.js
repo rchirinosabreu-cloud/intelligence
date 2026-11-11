@@ -7,6 +7,7 @@ const moduleLabels = {
   'report-pdf': 'Minutas', drive: 'Drive', recognitions: 'Logros recientes', league: 'Liga del mes',
   crm: 'CRM', 'ad-budgets': 'Pautas', 'client-operations': 'Operación de clientes', 'global-announcements': 'Anuncios',
   'content-plans': 'Parrillas', 'external-plans': 'Parrillas', 'collection-activities': 'Financiero',
+  'production-days': 'Actividad',
 };
 const routePath = value => String(value || '').split('?')[0].replace(/\/+$/, '');
 const entry = (method, path, label, phrase) => ({ method, path: path.replace(/:[a-zA-Z]+/g, ':id'), label, phrase,
@@ -47,6 +48,8 @@ export const humanMutationCatalog = [
   entry('POST', '/api/content/items/:id/final-assets', 'Archivos añadidos', 'adjuntó archivos a una pieza'),
   ...crud('/api/activity/events', 'Calendario', 'un evento del calendario'),
   entry('POST', '/api/activity/events/generate-meet', 'Enlace de reunión', 'generó un enlace de reunión'),
+  entry('PUT', '/api/production-days/by-event/:id/client', 'Jornada de producción', 'ligó una jornada de producción a un cliente'),
+  entry('PUT', '/api/production-days/by-event/:id/evidence', 'Jornada de producción', 'subió la evidencia de una jornada de producción'),
   entry('POST', '/api/quotations', 'Cotización creada', 'creó una cotización'),
   entry('PUT', '/api/quotations/:id', 'Cotización actualizada', 'actualizó una cotización'),
   ...crud('/api/services', 'Catálogo de servicios', 'un servicio', 'PUT'),

@@ -37,6 +37,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import CalendarDateTimePicker from './CalendarDateTimePicker';
 import MailboxConnections from './MailboxConnections';
+import ProductionDayPanel from './ProductionDayPanel';
 import {
   addExternalEmailTags,
   combineBogotaDateAndTime,
@@ -95,7 +96,14 @@ const getTypeLabel = (type) => EVENT_TYPES.find(item => item.value === type)?.la
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
-  const [currentDate, setCurrentDate] = useState(() => toBogotaCalendarDate(new Date()));
+  // Un aviso puede traer `?evento=<id>&fecha=AAAA-MM-DD` (jornadas sin evidencia, 10 de noviembre de 2026): el
+  // calendario abre en el mes de esa fecha y, cuando llegan los eventos, abre el evento. Se lee una sola vez.
+  const deepLinkRef = useRef(null);
+  if (deepLinkRef.current === null) {
+    const params = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+    deepLinkRef.current = { eventId: params.get('evento') || '', date: /^\d{4}-\d{2}-\d{2}$/.test(params.get('fecha') || '') ? params.get('fecha') : '' };
+  }
+  const [currentDate, setCurrentDate] = useState(() => toBogotaCalendarDate(deepLinkRef.current.date ? new Date(`${deepLinkRef.current.date}T12:00:00-05:00`) : new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -563,6 +571,15 @@ const OperationalCalendar = () => {
     setDateInputErrors({});
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    const target = deepLinkRef.current?.eventId;
+    if (!target || !events.length) return;
+    const event = events.find(item => item.id === target);
+    if (!event) return;
+    deepLinkRef.current = { ...deepLinkRef.current, eventId: '' };
+    handleEdit(event);
+  }, [events]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDateRawInput = (field, event) => {
     const raw = event?.target?.value;
@@ -1135,6 +1152,10 @@ const OperationalCalendar = () => {
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div data-calendar-scroll-container="event-form" className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:grid-cols-2">
+              {/* Jornada de producción con evidencia (10 de noviembre de 2026): se guarda aparte del evento. */}
+              {editingEventId && formData.type === 'PRODUCTION' && (
+                <div className="md:col-span-2"><ProductionDayPanel eventId={editingEventId} /></div>
+              )}
               <div className="space-y-1.5 md:col-span-2">
                 <label htmlFor="operational-event-title" className="text-xs font-bold text-zinc-500">Título del evento</label>
                 <input
