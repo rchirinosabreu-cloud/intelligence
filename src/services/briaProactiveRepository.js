@@ -90,8 +90,8 @@ export const createBriaProactiveRepository = ({ pool }) => ({
   },
   /** Lo que Bria le avisó a una persona desde `dayStart`, con su desenlace, para el cierre del día. */
   async messagesOfDay(userRef, dayStart) {
-    const { rows } = await pool.query('SELECT id, title, kinds, resolution, resolved_at, follow_up, dismissed_at, created_at FROM bria_memory.pulse_messages WHERE user_ref=$1 AND created_at >= $2 ORDER BY created_at', [userRef, dayStart]);
-    return rows.map((row) => ({ id: row.id, title: row.title, kinds: row.kinds, resolution: row.resolution || null, resolvedAt: row.resolved_at || null, followUp: row.follow_up || null, dismissedAt: row.dismissed_at || null, createdAt: row.created_at }));
+    const { rows } = await pool.query('SELECT id, title, body, url, kinds, resolution, resolved_at, follow_up, dismissed_at, created_at FROM bria_memory.pulse_messages WHERE user_ref=$1 AND created_at >= $2 ORDER BY created_at', [userRef, dayStart]);
+    return rows.map((row) => ({ id: row.id, title: row.title, body: row.body || null, url: row.url || null, kinds: row.kinds, resolution: row.resolution || null, resolvedAt: row.resolved_at || null, followUp: row.follow_up || null, dismissedAt: row.dismissed_at || null, createdAt: row.created_at }));
   },
   async dailyCloseDelivery(dayKey, userRef) {
     const { rows } = await pool.query('SELECT conversation_id, created_at FROM bria_memory.daily_close_deliveries WHERE day_key=$1 AND user_ref=$2', [dayKey, userRef]);

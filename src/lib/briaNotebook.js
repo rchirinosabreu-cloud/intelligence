@@ -32,7 +32,10 @@ const pulseLine = (row) => {
     : row.dismissedAt ? 'la persona lo ocultó'
       : row.followUp ? `a la hora seguía igual: ${row.followUp}`
         : 'sigue vigente';
-  return `- ${hourOf(row.createdAt)} ${row.title} (${state})`;
+  // El aviso entero —título, sugerencia y enlace—: si la persona responde «¿de qué cliente me hablas?», Bria lo tiene
+  // delante y puede abrir lo que señala (Rodny, 11 de noviembre de 2026).
+  const said = [row.title, row.body ? clip(row.body, 220) : null].filter(Boolean).join(' — ');
+  return `- ${hourOf(row.createdAt)} ${said}${row.url ? ` [${row.url}]` : ''} (${state})`;
 };
 
 const VERDICT = { HECHO: 'hecho', NO: 'no', DESPUES: 'después' };

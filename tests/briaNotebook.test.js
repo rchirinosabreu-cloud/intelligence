@@ -34,6 +34,13 @@ test('the message tells what the loops saw and said, clipped, and is data rather
   assert.equal(notebookMessage(null), null);
 });
 
+// Rodny, 11 de noviembre de 2026: respondió a un aviso por WhatsApp «¿de qué cliente me estás hablando?» y Bria no
+// lo sabía. El cuaderno lleva el aviso entero: título con el cliente, la sugerencia y a dónde apunta.
+test('a pulse notice reaches the notebook whole: title, suggestion and where it points', () => {
+  const message = notebookMessage({ dia: '2026-11-11', decisiones: [], pulso: [{ title: 'Fundación Grit · «PROFESIONES» sale el 12 de noviembre y sigue sin aprobación', body: 'Conviene hacer seguimiento con el cliente.', url: '/parrillas/p4?item=i4', createdAt: '2026-11-11T14:19:00Z' }] });
+  assert.match(message.content, /09:19 Fundación Grit · «PROFESIONES» sale el 12 de noviembre y sigue sin aprobación — Conviene hacer seguimiento con el cliente\. \[\/parrillas\/p4\?item=i4\] \(sigue vigente\)/);
+});
+
 const repository = (overrides = {}) => ({
   messagesOfDay: async (userRef, dayStart) => { assert.equal(userRef, 'u'); assert.equal(dayStart.toISOString(), '2026-10-31T05:00:00.000Z'); return [{ id: 'p1', title: 'Aviso del pulso', createdAt: '2026-10-31T14:00:00Z' }]; },
   morningBriefDelivery: async (dayKey, userRef) => dayKey === '2026-10-31' && userRef === 'u' ? { conversationId: 'morning' } : null,
