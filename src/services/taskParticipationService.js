@@ -14,6 +14,7 @@ import { updateOrderedTask } from './taskOrderService.js';
 import { applyTaskAggregateEffects } from './taskCompletionEffectsService.js';
 import { assertTaskNotLocked } from './taskFocusService.js';
 import { suspensionBlock } from './clientSuspensionGate.js';
+import { productionTaskCloseProblem } from './productionDayGate.js';
 import { resetSystemStreak, recordQualityStreakTransition } from './qualityStreakService.js';
 import { createNotification } from './notificationService.js';
 import { notifyTeamCompletion } from './teamCompletionNoticeService.js';
@@ -94,6 +95,11 @@ export async function changeTaskParticipation({ db = prisma, transaction, taskId
     const status = aggregateParticipationStatus(parts);
     if (status === 'REALIZADA' && task.status !== status && isPublicationTask(task.title)) {
       const blocked = publicationTaskCloseProblem({ item: task.contentItem, publications: task.contentItem?.publications || [] });
+      if (blocked) throw fail(409, blocked);
+    }
+    // El pendiente de una jornada se cierra con su entrega, también cuando lo cierra la última persona del equipo.
+    if (status === 'REALIZADA' && task.status !== status) {
+      const blocked = await productionTaskCloseProblem(tx, taskId);
       if (blocked) throw fail(409, blocked);
     }
     const before = await prepareTaskRecognition(tx, taskId, at);

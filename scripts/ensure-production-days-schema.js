@@ -29,6 +29,11 @@ try {
     );
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS "ProductionDay_clientId_date_idx" ON "ProductionDay"("clientId", "date");`);
+  // 11 de noviembre de 2026: cada jornada crea su pendiente en Gestión, y una jornada puede no ser de un cliente.
+  await client.query(`ALTER TABLE "ProductionDay" ALTER COLUMN "clientId" DROP NOT NULL;`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "taskId" TEXT UNIQUE REFERENCES "Task"("id") ON DELETE SET NULL;`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "autoStartedAt" TIMESTAMPTZ(3);`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "autoEndedAt" TIMESTAMPTZ(3);`);
   console.log('[ensure-production-days-schema] Listo.');
 } catch (error) {
   console.error('[ensure-production-days-schema] Error:', error.message);

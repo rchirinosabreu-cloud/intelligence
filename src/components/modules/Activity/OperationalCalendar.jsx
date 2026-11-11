@@ -37,7 +37,8 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import CalendarDateTimePicker from './CalendarDateTimePicker';
 import MailboxConnections from './MailboxConnections';
-import ProductionDayPanel from './ProductionDayPanel';
+import ProductionDayStatus from './ProductionDayStatus';
+import { suggestedClientIds } from '@/lib/productionDays';
 import {
   addExternalEmailTags,
   combineBogotaDateAndTime,
@@ -137,7 +138,8 @@ const OperationalCalendar = () => {
     googleMeetSpaceName: '',
     description: '',
     attendeeEmails: [],
-    googleConnectionId: ''
+    googleConnectionId: '',
+    productionClientId: ''
   });
 
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
@@ -189,6 +191,43 @@ const OperationalCalendar = () => {
     },
     refetchInterval: 15_000
   });
+
+  // Jornada de producción (10 de noviembre de 2026): el cliente se elige en el mismo formulario, junto al tipo.
+  const isProductionForm = isModalOpen && formData.type === 'PRODUCTION';
+  const { data: productionClients = [] } = useQuery({
+    queryKey: ['production-day-clients'],
+    enabled: isProductionForm && isAdmin,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/production-days/clients`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('No se pudieron leer los clientes');
+      return res.json();
+    }
+  });
+  const { data: productionDayView } = useQuery({
+    queryKey: ['production-day', editingEventId],
+    enabled: Boolean(isProductionForm && editingEventId),
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/production-days/by-event/${encodeURIComponent(editingEventId)}`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('No se pudo leer la jornada');
+      return res.json();
+    }
+  });
+  // Al abrir un evento ya ligado, el desplegable arranca en su cliente; una sola vez por evento.
+  const syncedProductionEventRef = useRef(null);
+  useEffect(() => {
+    if (!editingEventId || !productionDayView || productionDayView.eventId !== editingEventId) return;
+    if (syncedProductionEventRef.current === editingEventId) return;
+    syncedProductionEventRef.current = editingEventId;
+    setFormData(current => ({ ...current, productionClientId: productionDayView.productionDay?.client?.id || '' }));
+  }, [editingEventId, productionDayView]);
+  const productionClientOptions = useMemo(() => {
+    const suggested = suggestedClientIds(formData.title, productionClients);
+    return [
+      ...suggested.map(id => productionClients.find(client => client.id === id)).filter(Boolean).map(client => ({ ...client, suggested: true })),
+      ...productionClients.filter(client => !suggested.includes(client.id))
+    ];
+  }, [formData.title, productionClients]);
 
   const googleConnections = useMemo(() => [...(googleCalendarStatus?.connections || [])]
     .sort((left, right) => String(left.email).localeCompare(String(right.email)) || String(left.id).localeCompare(String(right.id))), [googleCalendarStatus?.connections]);
@@ -449,9 +488,12 @@ const OperationalCalendar = () => {
       setIsModalOpen(false);
       setEditingEventId(null);
       createRequestIdentityRef.current.reset();
+      queryClient.invalidateQueries({ queryKey: ['client-operations'] });
+      queryClient.invalidateQueries({ queryKey: ['production-day'] });
       const feedback = getCalendarSaveFeedback(event, Boolean(eventId));
       if (feedback.success) toast.success(feedback.message);
       else toast.error(feedback.message, { duration: 8000 });
+      if (event?.productionLinkError) toast.error(`Evento guardado; no se ligó al cliente: ${event.productionLinkError}`, { duration: 8000 });
     },
     onError: (error) => {
       console.error('Operational event save error:', error.serverData || error);
@@ -526,7 +568,8 @@ const OperationalCalendar = () => {
       googleMeetSpaceName: '',
       description: '',
       attendeeEmails: [],
-      googleConnectionId: googleConnections.find(connection => connection.isActive !== false && !connection.reconnectRequired)?.id || ''
+      googleConnectionId: googleConnections.find(connection => connection.isActive !== false && !connection.reconnectRequired)?.id || '',
+      productionClientId: ''
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -542,6 +585,7 @@ const OperationalCalendar = () => {
   };
 
   const handleEdit = (event) => {
+    syncedProductionEventRef.current = null;
     setEditingEventId(event.id);
     lastCreationAttemptRef.current = null;
     originalEventDatesRef.current = {
@@ -563,7 +607,8 @@ const OperationalCalendar = () => {
       googleMeetSpaceName: event.googleMeetSpaceName || '',
       description: normalizeCalendarDescription(event.description || ''),
       attendeeEmails: getExternalAttendeeEmails(event.attendeeEmails || [], team),
-      googleConnectionId: event.googleConnectionId || ''
+      googleConnectionId: event.googleConnectionId || '',
+      productionClientId: ''
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -1152,10 +1197,6 @@ const OperationalCalendar = () => {
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div data-calendar-scroll-container="event-form" className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:grid-cols-2">
-              {/* Jornada de producción con evidencia (10 de noviembre de 2026): se guarda aparte del evento. */}
-              {editingEventId && formData.type === 'PRODUCTION' && (
-                <div className="md:col-span-2"><ProductionDayPanel eventId={editingEventId} /></div>
-              )}
               <div className="space-y-1.5 md:col-span-2">
                 <label htmlFor="operational-event-title" className="text-xs font-bold text-zinc-500">Título del evento</label>
                 <input
@@ -1169,7 +1210,8 @@ const OperationalCalendar = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
+              {/* Título, tipo y —si es Producción— el cliente, en ese orden (Rodny, 10 de noviembre de 2026). */}
+              <div className={cn('grid grid-cols-1 gap-4 md:col-span-2', formData.type === 'PRODUCTION' ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-type" className="text-xs font-bold text-zinc-500">Tipo</label>
                   <Select
@@ -1183,6 +1225,28 @@ const OperationalCalendar = () => {
                     ))}
                   </Select>
                 </div>
+                {formData.type === 'PRODUCTION' && (
+                  <div className="space-y-1.5" data-production-client-field>
+                    <label htmlFor="operational-event-client" className="text-xs font-bold text-zinc-500">Cliente de la jornada</label>
+                    {isAdmin ? (
+                      <Select
+                        id="operational-event-client"
+                        className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
+                        value={formData.productionClientId}
+                        onChange={e => setFormData({ ...formData, productionClientId: e.target.value })}
+                      >
+                        <option value="">No es de un cliente</option>
+                        {productionClientOptions.map(client => (
+                          <option key={client.id} value={client.id}>{client.suggested ? `${client.name} · sugerido` : client.name}</option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <p id="operational-event-client" className="flex min-h-[2.75rem] items-center rounded-xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
+                        {productionDayView?.productionDay?.client?.name || 'Sin cliente'}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-recurrence" className="text-xs font-bold text-zinc-500">Recurrencia</label>
                   <Select
@@ -1198,6 +1262,9 @@ const OperationalCalendar = () => {
                   {formData.recurrence === 'GOOGLE' && <p className="text-xs text-zinc-500 dark:text-zinc-400">Esta serie conserva su regla avanzada de Google Calendar.</p>}
                 </div>
               </div>
+              {editingEventId && formData.type === 'PRODUCTION' && productionDayView?.productionDay && (
+                <div className="md:col-span-2"><ProductionDayStatus view={productionDayView} /></div>
+              )}
 
               {formData.recurrence === 'WEEKLY' && (
                 <div className="space-y-1.5">

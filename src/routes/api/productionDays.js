@@ -17,6 +17,10 @@ const reply = (res, error, logger) => {
 export const createProductionDaysRouter = ({ service = productionDayService, logger = console } = {}) => {
   const router = express.Router();
 
+  router.get('/clients', async (req, res) => {
+    try { return res.json(await service.listClients(req.user)); } catch (error) { return reply(res, error, logger); }
+  });
+
   router.get('/by-event/:eventId', async (req, res) => {
     try { return res.json(await service.getByEvent(req.params.eventId, req.user)); } catch (error) { return reply(res, error, logger); }
   });
@@ -32,4 +36,18 @@ export const createProductionDaysRouter = ({ service = productionDayService, log
   return router;
 };
 
+// Desde el pendiente de Gestión que crea cada jornada (11 de noviembre de 2026). Va con el permiso de Gestión: quien
+// trabaja la jornada abre su pendiente aunque no tenga Actividad.
+export const createProductionTaskRouter = ({ service = productionDayService, logger = console } = {}) => {
+  const router = express.Router();
+  router.get('/:taskId', async (req, res) => {
+    try { return res.json(await service.getByTask(req.params.taskId, req.user)); } catch (error) { return reply(res, error, logger); }
+  });
+  router.put('/:taskId/evidence', async (req, res) => {
+    try { return res.json(await service.setEvidenceByTask(req.params.taskId, { url: req.body?.url, note: req.body?.note }, req.user)); } catch (error) { return reply(res, error, logger); }
+  });
+  return router;
+};
+
+export const productionTaskRouter = createProductionTaskRouter();
 export default createProductionDaysRouter();

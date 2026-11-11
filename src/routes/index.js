@@ -56,7 +56,7 @@ import servicesRouter from './api/services.js';
 import clientFileRouter from './api/clientFiles.js';
 import talentRadarRouter from './api/talentRadar.js';
 import activityRouter from './api/activity.js';
-import productionDaysRouter from './api/productionDays.js';
+import productionDaysRouter, { productionTaskRouter } from './api/productionDays.js';
 import reportsRouter from './api/reports.js';
 import boardsRouter from './api/boards.js';
 import quotationsRouter from './api/quotations.js';
@@ -382,6 +382,7 @@ router.use('/client-operations', requireModulePermission('clientes'), clientOper
 router.use('/ad-budgets', requireModulePermission('pautas'), createAdBudgetRouter());
 router.use('/talent-radar', talentRadarRouter);
 router.use('/activity', requireModulePermission('actividad'), activityRouter);
+router.use('/production-days/by-task', requireModulePermission('gestion'), productionTaskRouter);
 router.use('/production-days', requireModulePermission('actividad'), productionDaysRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/recognitions', recognitionRouter);

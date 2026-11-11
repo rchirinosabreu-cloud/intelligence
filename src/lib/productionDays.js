@@ -24,9 +24,15 @@ const addDays = (dayKey, days) => {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 };
 
+/**
+ * Si la jornada ya tiene su evidencia: el enlace de Drive o, desde el 11 de noviembre de 2026, la entrega en
+ * archivos de su pendiente en Gestión («Actualizar entrega»). Cualquiera de las dos la da por hecha.
+ */
+export const hasProductionEvidence = (day) => Boolean(day?.evidenceUrl || day?.hasDeliverables);
+
 /** En qué va una jornada el día `today` (texto AAAA-MM-DD de Bogotá). */
 export function productionDayState(day, today) {
-  if (day?.evidenceUrl) return 'REALIZADA';
+  if (hasProductionEvidence(day)) return 'REALIZADA';
   if (!DAY_RE.test(String(day?.date || '')) || day.date >= today) return 'AGENDADA';
   return 'SIN_EVIDENCIA';
 }
@@ -52,6 +58,27 @@ export function evidenceReminderDue(day, today) {
   const last = day.remindedAt ? new Date(day.remindedAt).toISOString().slice(0, 10) : day.date;
   return today >= addDays(last, EVIDENCE_REMINDER_GAP_DAYS);
 }
+
+/**
+ * El pendiente de la jornada pasa a «En proceso» durante sus horas y vuelve a «Pendiente» al terminar (Rodny, 11 de
+ * noviembre de 2026). Devuelve qué toca hacer ahora: 'START', 'STOP' o null. Una jornada de todo el día no mueve
+ * relojes solos: veinticuatro horas en proceso no dicen nada. Cada paso ocurre una sola vez.
+ */
+export function jornadaClockAction(day, now = new Date()) {
+  if (!day?.startAt || !day?.endAt || day.isAllDay) return null;
+  const at = new Date(now).getTime();
+  const start = new Date(day.startAt).getTime();
+  const end = new Date(day.endAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  if (!day.autoStartedAt && at >= start && at < end) return 'START';
+  if (day.autoStartedAt && !day.autoEndedAt && at >= end) return 'STOP';
+  return null;
+}
+
+/** El motivo, en español, por el que el pendiente de una jornada todavía no se puede cerrar; `null` si se puede. */
+export const jornadaCloseProblem = (day) => (day && !hasProductionEvidence(day)
+  ? 'Esta jornada se cierra con su entrega: sube las evidencias en archivos o pega el enlace de la carpeta de Drive.'
+  : null);
 
 const fold = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/[^a-z0-9]+/g, ' ').trim();
