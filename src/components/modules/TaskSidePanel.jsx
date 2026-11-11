@@ -66,6 +66,7 @@ import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 const taskCommentsCache = {};
 const PiecePeekDialog = lazyWithRecovery(() => import('./Clients/operations/PiecePeekDialog'));
 const TaskDeliverables = lazyWithRecovery(() => import('@/components/tasks/TaskDeliverables'));
+const TaskProductionEvidence = lazyWithRecovery(() => import('@/components/tasks/TaskProductionEvidence'));
 
 // Hours a manager can commit a task to (Bogotá wall clock, quarter hours of the working day).
 const FOCUS_HOURS = QUARTER_HOURS.filter((hour) => hour >= '06:00' && hour <= '21:45');
@@ -2716,6 +2717,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
 
                         {isEdition && formData.id && !formData.contentItemId && <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando entregables…</p>}>
+                            {/* El pendiente de una jornada de producción también recibe el enlace de Drive (11 de noviembre de 2026). */}
+                            <TaskProductionEvidence key={`production-${formData.id}`} taskId={formData.id} />
                             <TaskDeliverables key={formData.id} taskId={formData.id} onBusyChange={setDeliverableBusy} />
                         </Suspense>}
 

@@ -30,7 +30,7 @@ export default function ProductionDaysSection({ production, cardClassName, title
         <h2 className={titleClassName}>Jornadas de producción · {production.label}</h2>
         <span className="text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-200" data-production-summary>{summary}</span>
       </div>
-      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Una jornada cuenta como realizada cuando tiene el enlace del Drive con sus evidencias. Se agenda en el calendario de Actividad y ahí se sube la evidencia.</p>
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Se agenda en el calendario de Actividad y crea su pendiente en Gestión. Cuenta como realizada cuando ese pendiente tiene su entrega: los archivos o el enlace de Drive con las evidencias.</p>
       {items.length ? (
         <ul className="mt-3 divide-y divide-zinc-100 dark:divide-white/5">
           {items.map((day) => {
@@ -48,7 +48,13 @@ export default function ProductionDaysSection({ production, cardClassName, title
                     className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan">
                     Evidencias<ExternalLink className="h-3.5 w-3.5" />
                   </a>
-                ) : day.eventId ? (
+                ) : null}
+                {day.taskId ? (
+                  <button type="button" onClick={() => navigateFrom(`/gestion?taskId=${encodeURIComponent(day.taskId)}`)}
+                    className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan" data-production-day-task>
+                    Abrir pendiente
+                  </button>
+                ) : day.eventId && !day.evidenceUrl ? (
                   <button type="button" onClick={() => navigateFrom(calendarPathFor(day))}
                     className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan">
                     <CalendarDays className="h-3.5 w-3.5" />Abrir en el calendario
@@ -61,7 +67,8 @@ export default function ProductionDaysSection({ production, cardClassName, title
         </ul>
       ) : (
         <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">
-          {production.contracted ? `No hay jornadas ligadas en ${production.label.toLowerCase()}. Agéndala en el calendario de Actividad como evento de Producción y elige este cliente.` : 'No hay jornadas ligadas en este ciclo.'}
+          {production.contracted ? `No hay jornadas ligadas en ${production.label.toLowerCase()}.` : 'No hay jornadas ligadas en este ciclo.'}
+          {' '}Al crear el evento de Producción, elige este cliente en «Cliente de la jornada».
         </p>
       )}
     </section>

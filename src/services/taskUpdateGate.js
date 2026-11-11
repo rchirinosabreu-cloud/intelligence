@@ -22,6 +22,7 @@ import { publicationTaskCloseProblem } from '../lib/socialPublishing.js';
 import { assertTaskNotLocked } from './taskFocusService.js';
 import { assertTaskClientChange } from './taskClientChange.js';
 import { suspensionBlock } from './clientSuspensionGate.js';
+import { productionTaskCloseProblem } from './productionDayGate.js';
 
 const gateError = (status, message, extra = {}) => Object.assign(new Error(message), { gateStatus: status, ...extra });
 
@@ -68,6 +69,11 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
   // mano la dejaba en PUBLICADO y el publicador cancelaba las dos redes al llegar la hora.
   if (String(payload?.status || '') === 'REALIZADA' && task.status !== 'REALIZADA' && isPublicationTask(task.title || '')) {
     const problem = publicationTaskCloseProblem({ item: task.contentItem, publications: task.contentItem?.publications || [] });
+    if (problem) throw gateError(409, problem);
+  }
+  // El pendiente de una jornada de producción se cierra con su entrega (10 de noviembre de 2026).
+  if (String(payload?.status || '') === 'REALIZADA' && task.status !== 'REALIZADA') {
+    const problem = await productionTaskCloseProblem(db, taskId);
     if (problem) throw gateError(409, problem);
   }
   if (!isTaskReopenRequest({ currentStatus: task.status, payload }) && !canUpdateTask(user, task)) {

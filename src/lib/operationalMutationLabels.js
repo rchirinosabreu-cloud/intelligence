@@ -50,6 +50,7 @@ export const humanMutationCatalog = [
   entry('POST', '/api/activity/events/generate-meet', 'Enlace de reunión', 'generó un enlace de reunión'),
   entry('PUT', '/api/production-days/by-event/:id/client', 'Jornada de producción', 'ligó una jornada de producción a un cliente'),
   entry('PUT', '/api/production-days/by-event/:id/evidence', 'Jornada de producción', 'subió la evidencia de una jornada de producción'),
+  entry('PUT', '/api/production-days/by-task/:id/evidence', 'Jornada de producción', 'subió la evidencia de una jornada de producción'),
   entry('POST', '/api/quotations', 'Cotización creada', 'creó una cotización'),
   entry('PUT', '/api/quotations/:id', 'Cotización actualizada', 'actualizó una cotización'),
   ...crud('/api/services', 'Catálogo de servicios', 'un servicio', 'PUT'),

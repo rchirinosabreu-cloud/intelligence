@@ -26,6 +26,7 @@ import {
   markGoogleCalendarReauthRequired
 } from '../../services/googleCalendarOAuthService.js';
 import { requireManagerRole } from '../../middlewares/authMiddleware.js';
+import { productionDayService } from '../../services/productionDayService.js';
 
 const router = express.Router();
 
@@ -98,11 +99,32 @@ router.get('/events', async (req, res) => {
   }
 });
 
+// El cliente de una jornada de producción se elige en el mismo formulario del evento (10 de noviembre de 2026). El evento
+// se guarda primero; ligar la jornada va después y, si falla, el evento no se pierde: la respuesta lo dice.
+const linkProductionClient = async (eventId, body, user) => {
+  if (!eventId || !body || body.type !== 'PRODUCTION') return null;
+  try {
+    // Cada jornada crea su pendiente en Gestión (11 de noviembre de 2026), con o sin cliente.
+    if (!Object.hasOwn(body, 'productionClientId')) { await productionDayService.ensureTask(eventId); return null; }
+    const current = await productionDayService.getByEvent(eventId, user);
+    const wanted = body.productionClientId || null;
+    if ((current.productionDay?.client?.id || null) === wanted) { await productionDayService.ensureTask(eventId); return null; }
+    await productionDayService.linkClient(eventId, wanted, user);
+    await productionDayService.ensureTask(eventId);
+    return null;
+  } catch (error) {
+    console.error('[Activity API] El evento se guardó pero no se pudo ligar la jornada:', error?.message || error);
+    return error?.message || 'No se pudo ligar la jornada al cliente.';
+  }
+};
+
 router.post('/events', requireManagerRole, async (req, res) => {
   try {
     const event = await createOperationalEvent(req.body, req.user?.userId || null);
-    res.json(event);
+    const productionLinkError = await linkProductionClient(event?.id, req.body, req.user);
+    res.json(productionLinkError ? { ...event, productionLinkError } : event);
   } catch (error) {
+    if (error.preserveLocal && error.eventId) await linkProductionClient(error.eventId, req.body, req.user);
     console.error('[Activity API] Error creating event:', error.response?.data || error);
     if (isGoogleOAuthReauthError(error)) {
       return res.status(401).json({
@@ -271,8 +293,10 @@ router.patch('/google-calendar/reconciliation/:id/dismiss', requireManagerRole, 
 router.patch('/events/:id', requireManagerRole, async (req, res) => {
   try {
     const event = await updateOperationalEvent(req.params.id, req.body);
-    res.json(event);
+    const productionLinkError = await linkProductionClient(req.params.id, { type: event?.type, ...req.body }, req.user);
+    res.json(productionLinkError ? { ...event, productionLinkError } : event);
   } catch (error) {
+    if (error.preserveLocal && error.eventId) await linkProductionClient(error.eventId, req.body, req.user);
     console.error('[Activity API] Error updating event:', error.response?.data || error);
     return sendOperationalEventSaveError(res, error, 'Failed to update event');
   }

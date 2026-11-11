@@ -858,10 +858,16 @@ model ClientWorkAuthorization {
 /// y queda ligada a un cliente; se da por realizada cuando alguien sube el enlace del Drive con las evidencias. Fecha y
 /// título se copian del evento para que la historia sobreviva si el evento se borra. Aditiva con
 /// `scripts/ensure-production-days-schema.js`; regla en src/lib/productionDays.js.
+/// Desde el 11 de noviembre de 2026 cada jornada crea su pendiente en Gestión (`taskId`), que pasa a «En proceso»
+/// durante las horas del evento (`autoStartedAt`/`autoEndedAt`). Una jornada que no es de un cliente no tiene
+/// `clientId` y su pendiente va a la ficha de la agencia.
 model ProductionDay {
   id             String            @id @default(uuid())
   eventId        String?           @unique
-  clientId       String
+  taskId         String?           @unique
+  autoStartedAt  DateTime?         @db.Timestamptz(3)
+  autoEndedAt    DateTime?         @db.Timestamptz(3)
+  clientId       String?
   date           String // AAAA-MM-DD, día de Bogotá del evento
   title          String
   evidenceUrl    String?
@@ -876,7 +882,8 @@ model ProductionDay {
   createdAt      DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
   event          OperationalEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  client         Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  task           Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  client         Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, date])
 }
@@ -1686,6 +1693,7 @@ model DeletedTaskLog {
 
 model Task {
   cardOrders        TaskCardOrder[]
+  productionDay     ProductionDay?
   id                String            @id @default(uuid())
   title             String
   dueDate           DateTime?

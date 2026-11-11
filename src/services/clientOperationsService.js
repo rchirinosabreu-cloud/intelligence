@@ -80,7 +80,7 @@ const clientSelect = (window) => ({
   // Jornadas de producción ligadas al cliente (10 de noviembre de 2026): las más recientes bastan para el ciclo y el anterior.
   productionDays: {
     orderBy: { date: 'desc' }, take: 40,
-    select: { id: true, eventId: true, date: true, title: true, evidenceUrl: true, evidenceNote: true, evidenceAt: true, evidenceByName: true, event: { select: { memberIds: true } } },
+    select: { id: true, eventId: true, taskId: true, date: true, title: true, evidenceUrl: true, evidenceNote: true, evidenceAt: true, evidenceByName: true, event: { select: { memberIds: true } }, task: { select: { _count: { select: { deliverables: true } } } } },
   },
   nativeTasks: {
     where: { status: { in: OPEN_TASK_STATUSES } },
@@ -190,7 +190,8 @@ function externalPlanMonths(client, today) {
  */
 function productionOf(client, contract, today) {
   const days = (client.productionDays || []).map((row) => ({
-    id: row.id, eventId: row.eventId ?? null, date: row.date, title: row.title,
+    id: row.id, eventId: row.eventId ?? null, taskId: row.taskId ?? null, date: row.date, title: row.title,
+    hasDeliverables: (row.task?._count?.deliverables || 0) > 0,
     evidenceUrl: row.evidenceUrl ?? null, evidenceNote: row.evidenceNote ?? null,
     evidenceAt: row.evidenceAt ? bogotaDate(row.evidenceAt) : null, evidenceBy: row.evidenceByName ?? null,
     memberIds: row.event?.memberIds || [],
