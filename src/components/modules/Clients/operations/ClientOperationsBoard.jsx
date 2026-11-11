@@ -4,7 +4,7 @@ import Select from '@/components/ui/Select';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
-import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf, publishedPercent } from '@/lib/clientOperations';
+import { CLIENT_AGENCIES, CLIENT_COMPLEXITY, OPERATION_LEVELS, OPERATION_STAGES, isMeasured, labelOf, progressPercent } from '@/lib/clientOperations';
 import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
 import { LEVEL_META, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
@@ -27,16 +27,35 @@ function MonthCell({ cycle }) {
   const fulfilled = cycle.reached.publicada >= cycle.quota;
   return (
     <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-xs font-semibold tabular-nums', fulfilled ? LEVEL_META.green.soft : LEVEL_META.red.soft)}
-      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas (${publishedPercent(cycle)} %)`}>
+      title={`${cycle.label}: ${cycle.reached.publicada} de ${cycle.quota} publicadas · avance ${progressPercent(cycle)} %`}>
       <span className={cn('h-1.5 w-1.5 rounded-full', fulfilled ? LEVEL_META.green.dot : LEVEL_META.red.dot)} />
       {cycle.shortLabel || cycle.label.slice(0, 3)} {cycle.reached.publicada}/{cycle.quota}
     </span>
   );
 }
 
+/**
+ * El avance de un ciclo en porcentaje y su barra (reunión del 10 de noviembre de 2026). Se muestran el
+ * mes vigente y el siguiente: en noviembre se trabaja también diciembre.
+ */
+function MonthProgress({ cycle, upcoming = false }) {
+  const percent = progressPercent(cycle);
+  const r = cycle.reached || {};
+  const detail = `Avance ${percent} %: ${r.redactada || 0} redactadas, ${r.disenada || 0} diseñadas, ${r.aprobada || 0} aprobadas, ${r.programada || 0} programadas de ${cycle.quota}; ${r.publicada || 0} publicadas.`;
+  return (
+    <span className={cn('block', upcoming && 'mt-2.5')} data-cycle-progress={upcoming ? 'next' : 'current'} title={detail}>
+      <span className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+        <span className={cn('font-medium', upcoming ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-700 dark:text-zinc-200')}>{cycle.label}</span>
+        <span className={cn('font-bold tabular-nums', upcoming ? 'text-xs text-zinc-600 dark:text-zinc-300' : 'text-sm text-zinc-900 dark:text-zinc-50')} data-cycle-percent>{percent} %</span>
+      </span>
+      <CycleBar cycle={cycle} className={upcoming ? 'h-1.5' : undefined} />
+    </span>
+  );
+}
+
 function ClientRow({ client, evaluation, onOpen, position }) {
   const meta = LEVEL_META[evaluation.level];
-  const { current, previous } = client.cycles || {};
+  const { current, previous, next } = client.cycles || {};
   const tasks = client.openTasks || [];
   const overdue = tasks.filter((t) => t.overdue).length;
   const { primary, contract } = deriveClientAlerts(evaluation);
@@ -68,14 +87,8 @@ function ClientRow({ client, evaluation, onOpen, position }) {
         <span className="col-span-2 min-w-0 lg:col-span-1">
           {measured ? (
             <>
-              <span className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">{current.label}</span>
-                <span className="tabular-nums text-zinc-500" title={`${current.reached.publicada} de ${current.quota} publicadas`}>
-                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50" data-cycle-percent>{publishedPercent(current)} %</span>
-                  {' · '}{current.reached.publicada} de {current.quota}
-                </span>
-              </span>
-              <CycleBar cycle={current} />
+              <MonthProgress cycle={current} />
+              {next && <MonthProgress cycle={next} upcoming />}
             </>
           ) : <span className="text-xs text-zinc-400">{client.contract?.serviceType === 'SERVICIOS' ? 'Servicios: se sigue por tareas' : 'Sin medir'}</span>}
         </span>
@@ -185,7 +198,7 @@ export default function ClientOperationsBoard({ evaluated, team, onOpenClient })
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full border border-zinc-300 dark:border-white/20" />Falta crearla</span>
         </div>
         <div className={cn('hidden border-b border-zinc-100 bg-zinc-50/60 px-6 py-3 text-xs font-medium text-zinc-500 dark:border-white/5 dark:bg-white/[0.02]', ROW_GRID)}>
-          <span>Cliente</span><span>Equipo</span><span>Este mes</span><span>Mes anterior</span><span>Tareas</span><span>Lo más urgente</span><span />
+          <span>Cliente</span><span>Equipo</span><span>Este mes y el siguiente</span><span>Mes anterior</span><span>Tareas</span><span>Lo más urgente</span><span />
         </div>
         {visible.length ? (
           <ul>

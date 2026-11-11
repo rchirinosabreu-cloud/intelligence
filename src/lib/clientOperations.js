@@ -66,16 +66,26 @@ export function contractQuota(contract) {
 export const isMeasured = (client) => client.contract?.serviceType === 'PARRILLA' && contractQuota(client.contract) > 0;
 
 /**
- * Qué parte de lo contratado del mes ya salió publicado, en porcentaje entero (Rodny, 10 de
- * noviembre de 2026: «las barras son buenas pero los números son claros y directos»). Se mide
- * solo lo publicado, que es lo único que el cliente ve; la barra sigue contando las etapas.
- * Pasar del contrato da más de 100: no se recorta. Sin cupo no hay porcentaje.
+ * El avance del mes en porcentaje entero (reunión de Rodny con su jefe, 10 de noviembre de 2026:
+ * «tiene cuatro acciones, si tiene una acción un 25 %»). Cada pieza contratada vale cuatro pasos de
+ * 25 %: redactada, diseñada, aprobada y programada (publicada también cuenta como el cuarto paso).
+ * Una pieza que todavía no existe vale 0. Mide producción, no publicación: el día 15 la parrilla
+ * vigente ya debería ir al 100 % aunque sus piezas salgan a lo largo del mes. Se tope en 100: crear
+ * más piezas de las contratadas no es más avance. Sin cupo no hay porcentaje.
  */
-export const publishedPercent = (cycle) => {
+export const PROGRESS_STEPS = ['redactada', 'disenada', 'aprobada', 'programada'];
+export const progressPercent = (cycle) => {
   const quota = Number(cycle?.quota) || 0;
   if (quota <= 0) return null;
-  return Math.round(((Number(cycle?.reached?.publicada) || 0) / quota) * 100);
+  const reached = cycle?.reached || {};
+  const steps = PROGRESS_STEPS.reduce((sum, key) => sum + Math.min(quota, Number(reached[key]) || 0), 0);
+  return Math.min(100, Math.round((steps / (PROGRESS_STEPS.length * quota)) * 100));
 };
+
+/** El ciclo que sigue al que se le pasa, con el mismo corte. */
+export function nextCycle({ year, month }, cutDay = 1) {
+  return month === 12 ? cycleOf(year + 1, 1, cutDay) : cycleOf(year, month + 1, cutDay);
+}
 
 /**
  * Cada cuántos días toca una pieza según el contrato: los días del ciclo entre las piezas contratadas.

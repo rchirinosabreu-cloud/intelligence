@@ -109,6 +109,9 @@ test('el tablero calcula avance, atrasos y tareas con lo que hay en la plataform
   assert.equal(nattal.communityManager.name, 'Jarlan');
   assert.equal(nattal.projectManager.name, 'Kamila');
   assert.equal(nattal.cycles.current.label, 'Octubre');
+  // El mes siguiente también viene, sin piezas: solo su resumen (reunión del 10 de noviembre de 2026).
+  assert.equal(nattal.cycles.next.label, 'Noviembre');
+  assert.equal(nattal.cycles.next.pieces, undefined);
   assert.equal(nattal.cycles.current.created, 3);
   assert.deepEqual(nattal.cycles.current.reached, { redactada: 2, disenada: 2, aprobada: 1, programada: 1, publicada: 0 });
   assert.equal(nattal.cycles.current.overdueItems, 1, 'o1 era del 1 oct y no ha salido');

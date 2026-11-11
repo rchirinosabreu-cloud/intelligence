@@ -3,15 +3,24 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { activeTaskSourceWhere } from '../src/lib/taskRetirement.js';
 import { financialPartyChoices, resolveFinancialParty } from '../src/services/financialPartySelection.js';
-import { publishedPercent } from '../src/lib/clientOperations.js';
+import { progressPercent, nextCycle } from '../src/lib/clientOperations.js';
 
-// Rodny, 10 de noviembre de 2026: «la salud del cliente también quiero verla en porcentaje».
-test('the month reads as a whole percentage of what was contracted and already published', () => {
-  assert.equal(publishedPercent({ quota: 12, reached: { publicada: 6 } }), 50);
-  assert.equal(publishedPercent({ quota: 12, reached: { publicada: 0 } }), 0);
-  assert.equal(publishedPercent({ quota: 12, reached: { publicada: 13 } }), 108, 'going beyond the contract is not clipped');
-  assert.equal(publishedPercent({ quota: 0, reached: { publicada: 2 } }), null, 'no quota, no percentage');
-  assert.equal(publishedPercent(null), null);
+// Reunión de Rodny con su jefe (10 de noviembre de 2026): «tiene cuatro acciones, si tiene una acción un 25 %».
+// `reached` es acumulado: una pieza programada cuenta también como redactada, diseñada y aprobada.
+const reached = (redactada, disenada, aprobada, programada, publicada = 0) => ({ redactada, disenada, aprobada, programada, publicada });
+test('each contracted piece is four steps of 25 %, and a missing piece is 0', () => {
+  assert.equal(progressPercent({ quota: 4, reached: reached(1, 0, 0, 0) }), 6, 'one piece written of four: 25 % of a quarter');
+  assert.equal(progressPercent({ quota: 4, reached: reached(4, 0, 0, 0) }), 25);
+  assert.equal(progressPercent({ quota: 4, reached: reached(4, 4, 4, 4, 2) }), 100, 'programmed is the fourth step, published or not');
+  assert.equal(progressPercent({ quota: 12, reached: reached(12, 12, 12, 0) }), 75);
+  assert.equal(progressPercent({ quota: 4, reached: reached(6, 6, 6, 6, 6) }), 100, 'more pieces than contracted is not more progress');
+  assert.equal(progressPercent({ quota: 0, reached: reached(2, 2, 2, 2) }), null, 'no quota, no percentage');
+  assert.equal(progressPercent(null), null);
+});
+
+test('the next cycle keeps the cut and crosses the year', () => {
+  assert.deepEqual(nextCycle({ year: 2026, month: 11 }, 1), { year: 2026, month: 12, start: '2026-12-01', end: '2026-12-31', label: 'Diciembre', shortLabel: 'Dic' });
+  assert.equal(nextCycle({ year: 2026, month: 12 }, 15).start, '2027-01-15');
 });
 
 // Rodny, 10 de noviembre de 2026: «si yo archivo un cliente se archiva de operación y de todo,

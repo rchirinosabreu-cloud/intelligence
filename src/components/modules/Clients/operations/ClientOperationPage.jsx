@@ -8,7 +8,7 @@ import { ContractContinuitySummary } from './ContractContinuityDecision';
 import { cn } from '@/lib/utils';
 import {
   CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES,
-  canMarkPublished, contractQuota, isMeasured, labelOf, publishedPercent, shortDate,
+  canMarkPublished, contractQuota, isMeasured, labelOf, progressPercent, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
@@ -115,7 +115,7 @@ function CloseStatus({ cycle, today, onClose, onReopen, compact = false }) {
   return <span className="text-xs text-zinc-500" data-close-status="later">Se confirma desde el {shortDate(closeOpensOn(cycle))}</span>;
 }
 
-function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen, externalPlanUrl, onMarkPublished, onUndoPublished, onOpenPlan, onPeek }) {
+function CurrentCycle({ cycle, next, today, monthlyReport, onReport, onClose, onReopen, externalPlanUrl, onMarkPublished, onUndoPublished, onOpenPlan, onPeek }) {
   // Sin parrilla aquí, el mes sale de la hoja de MIO: sus piezas se leen, no se marcan desde la plataforma.
   const fromSheet = cycle.source?.kind === 'HOJA_MIO';
   return (
@@ -124,9 +124,14 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
         <div>
           <h2 className="text-base font-semibold">{cycle.label}{cycle.start && !cycle.start.endsWith('-01') && <span className="ml-1.5 text-sm font-normal text-zinc-500">del {shortDate(cycle.start)} al {shortDate(cycle.end)}</span>}</h2>
           <p className={LABEL}>
-            {publishedPercent(cycle) != null && <span className="mr-1 text-sm font-bold text-zinc-900 dark:text-zinc-50" data-cycle-percent>{publishedPercent(cycle)} % publicado ·</span>}
+            {progressPercent(cycle) != null && <span className="mr-1 text-sm font-bold text-zinc-900 dark:text-zinc-50" data-cycle-percent>{progressPercent(cycle)} % de avance ·</span>}
             Día {cycle.day} de {cycle.length} · {cycle.reached.publicada} de {cycle.quota} publicadas
           </p>
+          {next && progressPercent(next) != null && (
+            <p className={cn(LABEL, 'mt-1')} data-next-cycle>
+              Siguiente, {next.label.toLowerCase()}: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{progressPercent(next)} % de avance</span> · {next.created} de {next.quota} piezas creadas
+            </p>
+          )}
           {fromSheet && (
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-cycle-source="HOJA_MIO">
               Leído de la hoja de MIO{cycle.source.tab ? `, pestaña ${cycle.source.tab}` : ''}{cycle.source.readAt ? ` · ${shortDate(cycle.source.readAt)}` : ''}
@@ -467,7 +472,7 @@ export default function ClientOperationPage({
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           {projectsSection}
-          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={current.monthlyReport ?? monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
+          {measured && current && <CurrentCycle cycle={current} next={client.cycles?.next} today={today} monthlyReport={current.monthlyReport ?? monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
             onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} onPeek={setPeeking} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
           {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
