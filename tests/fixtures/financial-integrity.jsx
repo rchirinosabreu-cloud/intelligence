@@ -511,6 +511,11 @@ axios.defaults.adapter = async config => {
     target.supportDocuments = [...(target.supportDocuments || []), { id: `cert-${++payrollCounter}`, name: file?.name || 'certificado.pdf', mimeType: 'application/pdf', size: file?.size || 1 }];
     window.__certificateUpload = paymentId;
     data = { message: 'Soporte guardado.', document: target.supportDocuments.at(-1) };
+  } else if (path.endsWith('/collection-archive')) {
+    // Como el servidor: archivar del cobro no cambia el saldo, solo lo saca de avisos y antigüedad.
+    debt = body.archived === false ? (({ collectionArchive, ...rest }) => rest)(debt) : { ...debt, collectionArchive: { archivedAt: new Date().toISOString(), archivedByName: 'Elisa Mestra', reason: body.reason } };
+    window.__archiveBody = body;
+    data = { message: body.archived === false ? 'Cuenta desarchivada: vuelve al cobro y a los avisos.' : 'Cuenta archivada: sigue en Cartera, pero ya no genera avisos de cobro.', receivable: debt };
   } else if (path.endsWith('/correction') && path.includes('/loans/')) {
     // Como el servidor: valor, fecha y cuenta cambian en el préstamo y en su egreso; los reintegros se quedan.
     const loan = loans.find(item => path.includes(item.id));

@@ -6,6 +6,7 @@ import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { resolveDocumentMoney } from './receivableDocumentService.js';
 import { isFormalizationInstallment, isReceivableCollectionMode } from '../lib/receivableCollectionMode.js';
+import { collectionArchiveProblem, isCollectionArchived } from '../lib/receivableArchive.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -221,6 +222,52 @@ export const deleteReceivable = async (prismaClient, receivableId, reason, actor
         if (error?.code === 'P2034') {
             throw new FinancialDomainError('RECEIVABLE_CONFLICT', 'La cuenta por cobrar cambió durante la operación. Actualiza sus datos y vuelve a intentarlo.', 409);
         }
+        throw error;
+    }
+};
+
+/**
+ * Archiva o desarchiva una cuenta del cobro (Elisa y Rodny, 11 de noviembre de 2026: «no eliminarlas, sino que
+ * no aparezcan en las notificaciones»). No cambia valor, saldo ni abonos: solo la saca de los avisos, de la
+ * suspensión y de la antigüedad de lo vencido. Archivar pide motivo; todo queda en la auditoría.
+ */
+export const setReceivableCollectionArchive = async (prismaClient, receivableId, input = {}, actor) => {
+    const archive = input.archived !== false;
+    if (archive) {
+        const problem = collectionArchiveProblem(input);
+        if (problem) throw new FinancialDomainError('RECEIVABLE_ARCHIVE_REASON_REQUIRED', problem, 400);
+    }
+    const actorId = actor?.id || actor?.userId || null;
+    try {
+        return await prismaClient.$transaction(async (tx) => {
+            const existing = await tx.accountsReceivable.findUnique({ where: { id: receivableId } });
+            if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+            if (archive && isReceivableClosed(existing.status)) {
+                throw new FinancialDomainError('RECEIVABLE_ARCHIVE_CLOSED', 'Esta cuenta ya está pagada o saldada: no hay nada que dejar de cobrar.', 409);
+            }
+            if (archive === isCollectionArchived(existing)) return existing;
+            const user = actorId ? await tx.user.findUnique({ where: { id: actorId }, select: { name: true } }) : null;
+            const metadata = { ...(existing.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}) };
+            const now = new Date().toISOString();
+            if (archive) {
+                metadata.collectionArchive = { archivedAt: now, archivedById: actorId, archivedByName: user?.name || null, reason: String(input.reason).trim() };
+            } else {
+                metadata.collectionArchiveHistory = [...(Array.isArray(metadata.collectionArchiveHistory) ? metadata.collectionArchiveHistory : []),
+                    { ...metadata.collectionArchive, unarchivedAt: now, unarchivedById: actorId, unarchivedByName: user?.name || null }];
+                delete metadata.collectionArchive;
+            }
+            const receivable = await tx.accountsReceivable.update({ where: { id: receivableId }, data: { metadata } });
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'AccountsReceivable', entityId: receivableId, action: 'UPDATE', actorId,
+                    before: cloneForAudit({ metadata: existing.metadata }),
+                    after: cloneForAudit({ operation: archive ? 'COLLECTION_ARCHIVED' : 'COLLECTION_UNARCHIVED', metadata, reason: archive ? metadata.collectionArchive.reason : null })
+                }
+            });
+            return receivable;
+        }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+        if (error?.code === 'P2034') throw new FinancialDomainError('RECEIVABLE_CONFLICT', 'La cuenta por cobrar cambió durante la operación. Actualiza sus datos y vuelve a intentarlo.', 409);
         throw error;
     }
 };

@@ -26,8 +26,9 @@ import {
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
-    CheckCircle2, Link2, FileText, Download, Trash2, Edit
+    CheckCircle2, Link2, FileText, Download, Trash2, Edit, Archive
 } from '@/components/ui/icons';
+import ReceivableArchiveDialog from './financial/ReceivableArchiveDialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -238,6 +239,7 @@ const FinancialDashboard = () => {
     const [expandedReversals, setExpandedReversals] = useState({});
     const [editingAmountId, setEditingAmountId] = useState('');
     const [loanToCorrect, setLoanToCorrect] = useState(null);
+    const [archiveDebt, setArchiveDebt] = useState(null);
     const [amountDraft, setAmountDraft] = useState('');
     const [reversalReason, setReversalReason] = useState('');
     const [isReversingPayment, setIsReversingPayment] = useState(false);
@@ -386,6 +388,28 @@ const FinancialDashboard = () => {
         } catch (error) {
             console.error('Error updating financial receivable:', error.response?.data || error);
             setNoticeError(error.response?.data?.message || 'No fue posible guardar el cambio de cartera.');
+            return false;
+        } finally {
+            setSavingReceivableId('');
+        }
+    };
+
+    // Archivar o desarchivar del cobro (11 de noviembre de 2026). El éxito se dice con la respuesta del servidor.
+    const handleReceivableArchive = async (debt, { archived, reason }) => {
+        if (!debt?.id) return false;
+        setSavingReceivableId(debt.id);
+        setNoticeError('');
+        setNoticeSuccess('');
+        try {
+            const { data } = await axios.post(`${getApiBaseUrl()}/api/financials/receivables/${debt.id}/collection-archive`, { archived, reason }, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+            });
+            await invalidateFinancialQueries(queryClient);
+            setNoticeSuccess(data?.message || (archived ? 'Cuenta archivada.' : 'Cuenta desarchivada.'));
+            return true;
+        } catch (error) {
+            console.error('Error archiving financial receivable:', error.response?.data || error);
+            setNoticeError(error.response?.data?.message || 'No fue posible archivar la cuenta.');
             return false;
         } finally {
             setSavingReceivableId('');
@@ -1612,12 +1636,24 @@ await invalidateFinancialQueries(queryClient);
                                                                             Emitir cuenta de cobro
                                                                         </button>
                                                                     )}
+                                                                    {/* Archivar del cobro (11 de noviembre de 2026): sigue aquí, sin avisos ni antigüedad. */}
+                                                                    {canWriteFinancials && !debt.collectionArchive && !isReceivableClosed(debt.status) && Number(debt.outstanding) > 0.005 && <button type="button" data-receivable-archive
+                                                                        onClick={() => { setNoticeError(''); setArchiveDebt(debt); }}
+                                                                        className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
+                                                                        <Archive className="h-3.5 w-3.5" />Archivar del cobro
+                                                                    </button>}
                                                                     {canWriteFinancials && !debt.barterPaymentId && !debt.payments?.some(p => p.kind === 'CANJE') && <button type="button"
                                                                         onClick={() => { setDeleteReason(''); setNoticeError(''); setDebtToDelete(debt); }}
-                                                                        className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-500 transition hover:bg-destructive/10 hover:text-destructive">
+                                                                        className={`${!debt.collectionArchive && !isReceivableClosed(debt.status) && Number(debt.outstanding) > 0.005 ? '' : 'ml-auto '}inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-500 transition hover:bg-destructive/10 hover:text-destructive`}>
                                                                         <Trash2 className="h-3.5 w-3.5" />Eliminar
                                                                     </button>}
                                                                 </div>
+                                                                {debt.collectionArchive && (
+                                                                    <div data-receivable-archived className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
+                                                                        <span><strong className="font-semibold text-zinc-800 dark:text-zinc-100">Archivada del cobro</strong> · no genera avisos{debt.collectionArchive.reason ? ` · ${debt.collectionArchive.reason}` : ''}{debt.collectionArchive.archivedByName ? ` · ${debt.collectionArchive.archivedByName}` : ''}{debt.collectionArchive.archivedAt ? `, ${new Date(debt.collectionArchive.archivedAt).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}` : ''}</span>
+                                                                        {canWriteFinancials && <button type="button" data-receivable-unarchive disabled={savingReceivableId === debt.id} onClick={() => handleReceivableArchive(debt, { archived: false })} className="min-h-11 rounded-lg px-2 font-semibold text-primary hover:bg-primary/5 disabled:opacity-50">Desarchivar</button>}
+                                                                    </div>
+                                                                )}
                                                                 {debt.barterPaymentId && <button type="button" className="min-h-11 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan" onClick={() => setBarterPaymentId(debt.barterPaymentId)}>Ver canje de origen</button>}
                                                                 {debt.payments?.length > 0 && (() => {
                                                                     // La vista diaria muestra lo vigente. Lo revertido es historia: sigue
@@ -1995,6 +2031,8 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={noticeError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            <ReceivableArchiveDialog key={archiveDebt?.id || "closed-archive"} debt={archiveDebt} saving={savingReceivableId === archiveDebt?.id} error={archiveDebt ? noticeError : ''}
+                onClose={() => setArchiveDebt(null)} onConfirm={async (reason) => { if (await handleReceivableArchive(archiveDebt, { archived: true, reason })) setArchiveDebt(null); }} />
             <LoanCorrectionDialog key={loanToCorrect?.id || "closed-loan"} debt={loanToCorrect} accounts={financialAccounts?.accounts || []} onClose={() => setLoanToCorrect(null)} onSaved={async (data) => { setLoanToCorrect(null); await invalidateFinancialQueries(queryClient); setNoticeSuccess(data?.message || 'Préstamo corregido.'); }} />
             {barterPaymentId && <FinancialBarterDialog paymentId={barterPaymentId} onClose={() => setBarterPaymentId(null)} />}
             {legacyOffsetId && <LegacyOffsetDialog paymentId={legacyOffsetId} onClose={() => setLegacyOffsetId(null)} onLinked={id => { setLegacyOffsetId(null); setOffsetPaymentId(id); }} />}
