@@ -106,7 +106,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
             {/* Solo se pinta «Con» si hay a quién nombrar: mientras carga el equipo no queda un rótulo suelto. */}
             {selected.some((id) => memberById.has(id)) && (
                 <ul data-task-collaborators className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Colaboradores">
-                    <li className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Con</li>
+                    <li className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Con</li>
                     {selected.filter((id) => memberById.has(id)).map((id) => {
                         const member = memberById.get(id);
                         return (
@@ -174,7 +174,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                                     <TeamAvatar member={member} size={28} showTitle={false} className="h-7 w-7" />
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{member.name}</span>
-                                        {member.role && <span className="block truncate text-[11px] text-zinc-500 dark:text-zinc-400">{member.role}</span>}
+                                        {member.role && <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{member.role}</span>}
                                     </span>
                                     <span className={cn(
                                         'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border',

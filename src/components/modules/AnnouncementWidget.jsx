@@ -275,10 +275,10 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                 <div key={item.id} className="relative pl-3 border-l-2 border-zinc-100 dark:border-zinc-800 py-1">
                                     <div className={cn("absolute left-[-2px] top-1.5 w-1 h-4 rounded-r-full", typeConfig.bg.replace('/10', ''))} />
                                     <div className="flex items-center gap-2 mb-0.5">
-                                        <span className={cn("text-[9px] uppercase font-bold", typeConfig.color)}>
+                                        <span className={cn("text-xs font-medium", typeConfig.color)}>
                                             {typeConfig.label}
                                         </span>
-                                        <span className="text-[9px] text-zinc-400">• {getTimeAgo(item.createdAt)}</span>
+                                        <span className="text-xs text-zinc-400">• {getTimeAgo(item.createdAt)}</span>
                                     </div>
                                     <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-snug line-clamp-2">
                                         {item.content.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, '@$1')}
@@ -312,7 +312,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                     <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm border border-zinc-200 dark:border-zinc-800 space-y-4 relative">
                         <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Nuevo mensaje</span>
+                            <span className="text-xs font-medium text-zinc-500">Nuevo mensaje</span>
                         </div>
 
                         {showMentionDropdown && filteredMembers.length > 0 && (
@@ -328,7 +328,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                             <TeamAvatar member={member} className="w-6 h-6" />
                                             <div>
                                                 <p className="text-xs font-bold text-zinc-900 dark:text-white">{member.name}</p>
-                                                <p className="text-[10px] text-zinc-500 truncate">{member.role}</p>
+                                                <p className="text-xs text-zinc-500 truncate">{member.role}</p>
                                             </div>
                                         </button>
                                     ))}
@@ -352,7 +352,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                         onClick={() => setSelectedType(t.id)}
                                         disabled={isSubmitting}
                                         className={cn(
-                                            "px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all flex items-center gap-1.5",
+                                            "px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5",
                                             selectedType === t.id
                                                 ? cn(t.bg, t.color, "border-transparent ring-1 ring-inset", t.id === 'urgent' ? 'ring-red-500' : t.id === 'win' ? 'ring-emerald-500' : 'ring-blue-500')
                                                 : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
@@ -398,7 +398,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                                 </div>
                                                 <div className="flex items-center justify-between gap-3 mb-3">
                                                     <div className="flex items-center gap-3">
-                                                        <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded-md", typeConfig.bg, typeConfig.color)}>
+                                                        <span className={cn("text-xs font-medium px-2 py-0.5 rounded-md", typeConfig.bg, typeConfig.color)}>
                                                             {typeConfig.label}
                                                         </span>
                                                         <span className="text-xs text-zinc-400">{new Date(item.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>

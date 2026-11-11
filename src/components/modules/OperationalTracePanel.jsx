@@ -84,7 +84,7 @@ const OperationalTracePanel = () => {
       <div className="border-b border-zinc-100 p-5 dark:border-zinc-800 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase text-brand-cyan-deep dark:text-brand-cyan">
+            <div className="flex items-center gap-2 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">
               <Activity className="h-4 w-4" /> Actividad del equipo
             </div>
             <h2 className="mt-2 text-xl font-bold text-zinc-950 dark:text-white">Historial de actividad</h2>
@@ -170,7 +170,7 @@ const OperationalTracePanel = () => {
                     <span className={cn('flex h-9 w-9 items-center justify-center rounded-lg', config.tone)}><Icon className="h-4 w-4" /></span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">{event.displayLabel || config.label}</span>
+                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{event.displayLabel || config.label}</span>
                         {event.task && (
                           <Link to={`/gestion?taskId=${event.task.id}`} className="truncate text-xs font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
                             {event.task.clientName ? `${event.task.clientName} · ` : ''}{event.task.title}

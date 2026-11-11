@@ -32,7 +32,7 @@ const LeadCard = ({ lead, onOpen, onLog, bucket }) => (
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-700 dark:text-zinc-200">{lead.nextAction || <span className="text-zinc-400">Sin próxima acción definida</span>}</p>
     </button>
     <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
-      <span className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+      <span className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
         {lead.owner && <TeamAvatar member={lead.owner} className="h-5 w-5" size={20} />}
         {bucket === 'SIN_FECHA' ? 'Sin fecha' : `${formatDate(lead.nextFollowUpAt)} · ${relativeDays(lead.nextFollowUpAt)}`}
       </span>
@@ -66,7 +66,7 @@ const CrmFollowUps = ({ filters, onFiltersChange, team, onOpenLead }) => {
       <div className="flex gap-1 overflow-x-auto rounded-2xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-800/50 xl:hidden">
         {COLUMNS.map(column => (
           <button key={column.key} type="button" onClick={() => setActive(column.key)} className={cn('flex min-h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-xs font-semibold transition-colors', active === column.key ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500')}>
-            {column.label} <span className="rounded-full bg-zinc-200 px-1.5 text-[10px] dark:bg-zinc-700">{counts[column.key] ?? 0}</span>
+            {column.label} <span className="rounded-full bg-zinc-200 px-1.5 text-xs dark:bg-zinc-700">{counts[column.key] ?? 0}</span>
           </button>
         ))}
       </div>
@@ -82,7 +82,7 @@ const CrmFollowUps = ({ filters, onFiltersChange, team, onOpenLead }) => {
                 <h2 className={cn('flex items-center gap-2 text-sm font-semibold', column.tone)}><Icon className="h-4 w-4" /> {column.label}</h2>
                 <span className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{counts[column.key] ?? 0}</span>
               </header>
-              <p className="px-4 pb-3 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">{column.hint}</p>
+              <p className="px-4 pb-3 text-xs leading-4 text-zinc-500 dark:text-zinc-400">{column.hint}</p>
               <div className="flex-1 space-y-2 px-3 pb-3">
                 {isLoading ? [0, 1].map(item => <div key={item} className="h-28 animate-pulse rounded-xl bg-zinc-200/70 dark:bg-zinc-800" />) : items.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800">Nada por aquí.</p>

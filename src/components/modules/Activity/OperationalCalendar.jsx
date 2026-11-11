@@ -747,10 +747,10 @@ const OperationalCalendar = () => {
       <div className="flex flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-center dark:border-white/10 dark:bg-white/5">
-            <span className="bg-zinc-100 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
+            <span className="bg-zinc-100 py-1 text-xs font-medium text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
               {format(currentDate, 'MMM', { locale: es })}
             </span>
-            <span className="flex-1 text-lg font-black text-zinc-900 dark:text-white">
+            <span className="flex-1 text-lg font-semibold text-zinc-900 dark:text-white">
               {format(toBogotaCalendarDate(new Date()), 'd')}
             </span>
           </div>
@@ -771,14 +771,14 @@ const OperationalCalendar = () => {
                   {googleConnections.map(connection => {
                     const health = getGoogleConnectionHealth(connection);
                     return (
-                      <button type="button" key={connection.id} onClick={() => { if (health.status === 'reconnect') connectGoogleCalendar(connection.email); else if (['error', 'pending'].includes(health.status)) { setGoogleRetryError(''); setGoogleErrorConnection(connection); } }} disabled={!['error', 'reconnect', 'pending'].includes(health.status)} title={connection.lastSyncedAt ? `Última actualización: ${format(toBogotaCalendarDate(connection.lastSyncedAt), 'd MMM', { locale: es }) + ', ' + formatBogotaClock(connection.lastSyncedAt)}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
+                      <button type="button" key={connection.id} onClick={() => { if (health.status === 'reconnect') connectGoogleCalendar(connection.email); else if (['error', 'pending'].includes(health.status)) { setGoogleRetryError(''); setGoogleErrorConnection(connection); } }} disabled={!['error', 'reconnect', 'pending'].includes(health.status)} title={connection.lastSyncedAt ? `Última actualización: ${format(toBogotaCalendarDate(connection.lastSyncedAt), 'd MMM', { locale: es }) + ', ' + formatBogotaClock(connection.lastSyncedAt)}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
                         <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : ['error', 'reconnect'].includes(health.status) ? 'bg-destructive' : 'bg-amber-500')} />
                         {connection.email.split('@')[0]} · {health.label}
                       </button>
                     );
                   })}
                   {(googleCalendarStatus?.reconciliation?.pendingCount || 0) > 0 && (
-                    <button type="button" onClick={openReconciliation} disabled={isLoadingReconciliation} className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20" title="Revisar eventos históricos que todavía no tienen enlace con Google Calendar">
+                    <button type="button" onClick={openReconciliation} disabled={isLoadingReconciliation} className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20" title="Revisar eventos históricos que todavía no tienen enlace con Google Calendar">
                       {googleCalendarStatus.reconciliation.pendingCount} pendientes de reconciliar
                     </button>
                   )}
@@ -916,7 +916,7 @@ const OperationalCalendar = () => {
                           handleEdit(event);
                         }}
                         className={cn(
-                          'flex min-h-6 w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] font-bold leading-tight shadow-sm transition hover:shadow',
+                          'flex min-h-6 w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-xs font-bold leading-tight shadow-sm transition hover:shadow',
                           getEventTypeStyles(event.type),
                           !event.segmentStartsHere && '-ml-[9px] w-[calc(100%+9px)] rounded-l-none border-l-0 pl-[17px]',
                           !event.segmentEndsHere && '-mr-[9px] w-[calc(100%+9px)] rounded-r-none border-r-0 pr-[17px]'
@@ -936,7 +936,7 @@ const OperationalCalendar = () => {
                       <button
                         type="button"
                         onClick={() => setSelectedDayAgenda(day)}
-                        className="px-2 text-[11px] font-medium text-zinc-500 hover:text-indigo-600"
+                        className="px-2 text-xs font-medium text-zinc-500 hover:text-indigo-600"
                       >
                         {overflow} más
                       </button>
@@ -979,7 +979,7 @@ const OperationalCalendar = () => {
           <DialogContent data-operational-day-agenda="dialog" role="dialog" aria-modal="true" className="max-h-[82vh] max-w-2xl gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
             <DialogHeader className="border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-left dark:border-zinc-800 dark:bg-zinc-900/50">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-300">Agenda del día</p>
+                <p className="text-xs font-medium text-violet-600 dark:text-violet-300">Agenda del día</p>
                 <DialogTitle id="operational-day-agenda-title" className="mt-1 text-lg font-semibold capitalize text-zinc-950 dark:text-white">{format(selectedDayAgenda, 'EEEE d MMMM', { locale: es })}</DialogTitle>
                 <DialogDescription className="sr-only">Eventos programados para el día seleccionado.</DialogDescription>
               </div>
@@ -1046,7 +1046,7 @@ const OperationalCalendar = () => {
                 <p className="mt-1 leading-relaxed">{explainGoogleSyncError(googleRetryError)}</p>
                 <details className="mt-2">
                   <summary className="cursor-pointer font-semibold">Ver detalles técnicos</summary>
-                  <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-black/20">{googleRetryError}</p>
+                  <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-xs dark:bg-black/20">{googleRetryError}</p>
                 </details>
               </div>
             )}
@@ -1062,7 +1062,7 @@ const OperationalCalendar = () => {
                     <p className="leading-relaxed">{explainGoogleSyncError(event.googleSyncError, event.googleSyncStatus)}</p>
                     <details className="mt-2">
                       <summary className="cursor-pointer font-semibold">Ver detalles técnicos</summary>
-                      <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-black/20">{event.googleSyncError}</p>
+                      <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-xs dark:bg-black/20">{event.googleSyncError}</p>
                     </details>
                   </div>
                 ) : (
@@ -1086,7 +1086,7 @@ const OperationalCalendar = () => {
         <DialogContent showCloseButton={false} overlayClassName="z-[115]" className="z-[116] max-h-[calc(100dvh-1rem)] max-w-2xl gap-0 overflow-y-auto rounded-3xl border-zinc-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-zinc-900 sm:max-h-[85dvh] sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-300">Reconciliación controlada</p>
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-300">Reconciliación controlada</p>
                 <DialogTitle className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Eventos pendientes de Google Calendar</DialogTitle>
                 <DialogDescription className="sr-only">Selecciona los eventos vigentes que deben sincronizarse con Google Calendar.</DialogDescription>
               </div>
@@ -1116,7 +1116,7 @@ const OperationalCalendar = () => {
                 </div>
               ))}
             </div>
-            <button type="button" onClick={() => reconciliationMutation.mutate()} disabled={!selectedReconciliationIds.length || !reconciliationConnectionId || reconciliationMutation.isPending} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-violet-700 disabled:opacity-50">
+            <button type="button" onClick={() => reconciliationMutation.mutate()} disabled={!selectedReconciliationIds.length || !reconciliationConnectionId || reconciliationMutation.isPending} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 text-xs font-medium text-white transition hover:bg-violet-700 disabled:opacity-50">
               {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Confirmar y sincronizar
             </button>
@@ -1174,7 +1174,7 @@ const OperationalCalendar = () => {
                     <option value="WEEKLY">Semanal</option>
                     {formData.recurrence === 'GOOGLE' && <option value="GOOGLE">Personalizada en Google</option>}
                   </Select>
-                  {formData.recurrence === 'GOOGLE' && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Esta serie conserva su regla avanzada de Google Calendar.</p>}
+                  {formData.recurrence === 'GOOGLE' && <p className="text-xs text-zinc-500 dark:text-zinc-400">Esta serie conserva su regla avanzada de Google Calendar.</p>}
                 </div>
               </div>
 
@@ -1201,7 +1201,7 @@ const OperationalCalendar = () => {
               <label className="flex min-h-min shrink-0 cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2">
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-100">Todo el día</span>
-                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">El evento se mostrará sin horas en Brain Studio y Google Calendar.</span>
+                  <span className="block text-xs text-zinc-500 dark:text-zinc-400">El evento se mostrará sin horas en Brain Studio y Google Calendar.</span>
                 </span>
                 <input
                   type="checkbox"
@@ -1266,7 +1266,7 @@ const OperationalCalendar = () => {
                       <option key={connection.id} value={connection.id} disabled={connection.isActive === false || connection.reconnectRequired}>{connection.email}{connection.isActive === false || connection.reconnectRequired ? ' · Requiere reconexión' : ''}</option>
                     ))}
                   </Select>
-                  <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">{editingEventId ? 'El evento conserva su calendario de origen.' : 'Se guardará en el calendario principal de esta cuenta.'}</p>
+                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{editingEventId ? 'El evento conserva su calendario de origen.' : 'Se guardará en el calendario principal de esta cuenta.'}</p>
                 </div>
               )}
 
@@ -1313,7 +1313,7 @@ const OperationalCalendar = () => {
                   {/* Fireflies ya no se pregunta (Rodny, 6 de octubre de 2026): toda reunión
                       lo lleva. Se avisa, no se ofrece: quien entra a la llamada tiene derecho
                       a saber que se va a transcribir. */}
-                  <p data-fireflies-always className="flex min-h-11 items-center gap-2 rounded-xl border border-brand-cyan/20 bg-white px-4 py-3 text-[11px] leading-relaxed text-zinc-600 dark:border-brand-cyan/20 dark:bg-zinc-900 dark:text-zinc-300">
+                  <p data-fireflies-always className="flex min-h-11 items-center gap-2 rounded-xl border border-brand-cyan/20 bg-white px-4 py-3 text-xs leading-relaxed text-zinc-600 dark:border-brand-cyan/20 dark:bg-zinc-900 dark:text-zinc-300">
                     <Sparkles className="h-4 w-4 shrink-0 text-brand-cyan" />
                     <span><span className="font-semibold text-zinc-900 dark:text-white">Fireflies entra a esta reunión.</span> Fred se añade como invitado y genera la transcripción.</span>
                   </p>
@@ -1323,7 +1323,7 @@ const OperationalCalendar = () => {
                       type="button"
                       onClick={generateMeetLink}
                       disabled={isGeneratingLink || !hasValidGoogleSelection || hasDateInputErrors || Boolean(meetStartValidationError)}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
                     >
                       {isGeneratingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                       Generar
@@ -1372,14 +1372,14 @@ const OperationalCalendar = () => {
                         }}
                       />
                       <TeamAvatar member={member} showTitle={false} className="h-5 w-5" />
-                      <span className="truncate text-[11px] font-bold text-zinc-600 dark:text-zinc-300">{member.name}</span>
+                      <span className="truncate text-xs font-bold text-zinc-600 dark:text-zinc-300">{member.name}</span>
                     </label>
                   ))}
                 </div>
                 {selectedMembers.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {selectedMembers.map(member => (
-                      <span key={member.id} className="rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-bold text-zinc-500 dark:bg-white/10">
+                      <span key={member.id} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-bold text-zinc-500 dark:bg-white/10">
                         {member.name}
                       </span>
                     ))}

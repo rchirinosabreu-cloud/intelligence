@@ -115,7 +115,7 @@ const ScorePanel = ({ data }) => {
           </div>
         </div>
         <div className="min-w-0">
-          <span className={cn('inline-flex rounded-md px-2 py-1 text-[11px] font-bold uppercase', toneClasses[statusTone])}>
+          <span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium', toneClasses[statusTone])}>
             {data.status.label}
           </span>
           <h2 className="mt-3 text-lg font-bold text-zinc-950 dark:text-white">Índice general</h2>
@@ -141,14 +141,14 @@ const ActivityChart = ({ days }) => {
         const height = day.count === 0 ? 4 : Math.max(14, Math.round((day.count / maxValue) * 132));
         return (
           <div key={day.date} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
-            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{day.count}</span>
+            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{day.count}</span>
             <div className="flex h-[132px] w-full max-w-12 items-end rounded-md bg-zinc-100 dark:bg-zinc-800/70">
               <div
                 className="w-full rounded-md bg-violet-600 transition-[height] duration-500 dark:bg-violet-500"
                 style={{ height }}
               />
             </div>
-            <span className="text-[11px] font-semibold capitalize text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs font-semibold capitalize text-zinc-500 dark:text-zinc-400">
               {dayFormatter.format(new Date(day.date)).replace('.', '')}
             </span>
           </div>
@@ -166,7 +166,7 @@ const IssueList = ({ issues }) => {
     <section className={cn(panelClass, 'p-5')}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase text-destructive">Atención requerida</p>
+          <p className="text-xs font-medium text-destructive">Atención requerida</p>
           <h2 className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Incidencias accionables</h2>
         </div>
         <AlertCircle className="h-5 w-5 text-destructive" />
@@ -276,7 +276,7 @@ const OperationalHealth = () => {
     <div className="mx-auto w-full max-w-[1600px] pb-10">
       <header className="flex flex-col gap-4 py-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase text-violet-600 dark:text-violet-400">
+          <div className="flex items-center gap-2 text-xs font-medium text-violet-600 dark:text-violet-400">
             <ShieldCheck className="h-4 w-4" /> Vista administrativa
           </div>
           <h1 className="mt-2 text-3xl font-bold text-zinc-950 dark:text-white">Salud Operativa</h1>
@@ -334,7 +334,7 @@ const OperationalHealth = () => {
         <section className={cn(panelClass, 'p-5 sm:p-6')}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase text-violet-600 dark:text-violet-400">Ritmo semanal</p>
+              <p className="text-xs font-medium text-violet-600 dark:text-violet-400">Ritmo semanal</p>
               <h2 className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Actividad registrada</h2>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Acciones operativas confirmadas por Brainstudio, no simples visitas.</p>
             </div>
@@ -355,7 +355,7 @@ const OperationalHealth = () => {
                   <TeamAvatar member={user} className="h-8 w-8" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-200">{user.name}</p>
-                    <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">{user.role}</p>
+                    <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.role}</p>
                   </div>
                   <span className={cn(
                     'text-xs font-bold',
@@ -370,7 +370,7 @@ const OperationalHealth = () => {
         <section className={cn(panelClass, 'p-5 sm:p-6')}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase text-cyan-600 dark:text-cyan-400">Transparencia</p>
+              <p className="text-xs font-medium text-cyan-600 dark:text-cyan-400">Transparencia</p>
               <h2 className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Como se calcula</h2>
             </div>
             <button
@@ -416,7 +416,7 @@ const OperationalHealth = () => {
         <section className={cn(panelClass, 'p-5 sm:p-6')}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-400">Centralización</p>
+              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Centralización</p>
               <h2 className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Uso por módulo</h2>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Volumen de acciones confirmadas durante la semana actual.</p>
             </div>
@@ -435,7 +435,7 @@ const OperationalHealth = () => {
                   <span className="min-w-0">
                     <span className="flex items-center justify-between gap-3">
                       <span className="text-sm font-semibold text-zinc-800 group-hover/module:text-violet-700 dark:text-zinc-200 dark:group-hover/module:text-violet-300">{module.label}</span>
-                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{module.contributors} participantes</span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">{module.contributors} participantes</span>
                     </span>
                     <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                       <span className="block h-full rounded-full bg-zinc-700 dark:bg-zinc-300" style={{ width: `${Math.max(2, (module.current / maxModuleActivity) * 100)}%` }} />

@@ -435,7 +435,7 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
                 ))}
             </ul>
             {reversed.length > 0 && (
-                <div className="text-[11px]">
+                <div className="text-xs">
                     <button type="button" onClick={() => setShowReversed((current) => !current)} className="min-h-8 font-medium text-zinc-500 underline underline-offset-2">
                         {showReversed ? 'Ocultar' : 'Ver'} {reversed.length} {reversed.length === 1 ? 'pago revertido o desglosado' : 'pagos revertidos o desglosados'}
                     </button>

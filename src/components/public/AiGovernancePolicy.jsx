@@ -4,7 +4,7 @@ import LegalLayout from './LegalLayout';
 import { LEGAL_ENTITY } from './legalEntity';
 
 const Status = ({ children }) => (
-  <span className="inline-flex rounded-full border border-brand-green/30 bg-brand-green/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-brand-green-deep dark:text-brand-green">
+  <span className="inline-flex rounded-full border border-brand-green/30 bg-brand-green/10 px-2.5 py-1 text-xs font-medium text-brand-green-deep dark:text-brand-green">
     {children}
   </span>
 );
@@ -23,7 +23,7 @@ const AiGovernancePolicy = () => (
   <LegalLayout title="Seguridad y uso responsable de la inteligencia artificial" sectionLabel="Confianza digital">
     <div className="space-y-10">
       <section className="rounded-3xl bg-brain-gradient-primary p-6 text-white shadow-sm md:p-8">
-        <p className="m-0 text-xs font-bold uppercase tracking-[0.2em] text-white/80">Marco de BrainStudio</p>
+        <p className="m-0 text-xs font-medium text-white/80">Marco de BrainStudio</p>
         <p className="mb-0 mt-4 max-w-3xl text-base leading-7 text-white md:text-lg">
           BrainStudio protege la información y reduce los riesgos del uso de inteligencia artificial mediante controles técnicos, reglas de desarrollo, supervisión humana y responsabilidades para quienes usan la plataforma. La IA apoya el trabajo: no reemplaza el criterio profesional ni la autorización de una persona en decisiones sensibles.
         </p>

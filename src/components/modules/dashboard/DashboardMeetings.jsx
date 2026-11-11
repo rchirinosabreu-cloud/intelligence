@@ -76,7 +76,7 @@ const DashboardMeetings = ({ meetings = [], className, now }) => {
           </div>
         ) : groups.map((group) => (
           <div key={group.dayKey}>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{group.label}</p>
+            <p className="mb-2 text-xs font-medium text-zinc-400 dark:text-zinc-500">{group.label}</p>
             <ul className="space-y-2">
               {group.items.map((meeting) => {
                 const response = RESPONSE_LABELS[meeting.responseStatus] || null;
@@ -94,7 +94,7 @@ const DashboardMeetings = ({ meetings = [], className, now }) => {
                       <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                         {!meeting.isAllDay && meeting.endAt && <span>hasta {timeOf(meeting.endAt)}</span>}
                         {response && (
-                          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', response.className)}>{response.label}</span>
+                          <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', response.className)}>{response.label}</span>
                         )}
                       </span>
                     </span>

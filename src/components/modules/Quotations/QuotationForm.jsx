@@ -592,7 +592,7 @@ const QuotationForm = () => {
                                         </div>
                                         <div>
                                             <p className="font-bold text-sm">Brain Studio</p>
-                                            <p className="text-[10px] text-zinc-500 uppercase">Agencia Creativa</p>
+                                            <p className="text-xs text-zinc-500">Agencia Creativa</p>
                                         </div>
                                     </button>
                                     <button
@@ -609,7 +609,7 @@ const QuotationForm = () => {
                                         </div>
                                         <div>
                                             <p className="font-bold text-sm">Francisco Villa</p>
-                                            <p className="text-[10px] text-zinc-500 uppercase">Persona Natural</p>
+                                            <p className="text-xs text-zinc-500">Persona Natural</p>
                                         </div>
                                     </button>
                                 </div>
@@ -618,7 +618,7 @@ const QuotationForm = () => {
                             {/* Client Data */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label htmlFor="quotation-client-type" className="text-xs font-bold text-zinc-500 uppercase">Tipo de Propuesta</label>
+                                    <label htmlFor="quotation-client-type" className="text-xs font-medium text-zinc-500">Tipo de Propuesta</label>
                                     <Select
                                         id="quotation-client-type"
                                         value={clientType}
@@ -631,7 +631,7 @@ const QuotationForm = () => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Fecha de Emisión</label>
+                                    <label className="text-xs font-medium text-zinc-500">Fecha de Emisión</label>
                                     <input
                                         type="text"
                                         disabled
@@ -642,7 +642,7 @@ const QuotationForm = () => {
 
                                 {clientType === 'EMPRESA' && (
                                     <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <label className="text-xs font-bold text-zinc-500 uppercase">Nombre de la Empresa</label>
+                                        <label className="text-xs font-medium text-zinc-500">Nombre de la Empresa</label>
                                         <input
                                             type="text"
                                             value={clientCompany}
@@ -654,7 +654,7 @@ const QuotationForm = () => {
                                 )}
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Nombre del Cliente (Contacto)</label>
+                                    <label className="text-xs font-medium text-zinc-500">Nombre del Cliente (Contacto)</label>
                                     <input
                                         type="text"
                                         value={clientName}
@@ -665,7 +665,7 @@ const QuotationForm = () => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Correo Electrónico</label>
+                                    <label className="text-xs font-medium text-zinc-500">Correo Electrónico</label>
                                     <input
                                         type="email"
                                         value={clientEmail}
@@ -676,7 +676,7 @@ const QuotationForm = () => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Celular / WhatsApp</label>
+                                    <label className="text-xs font-medium text-zinc-500">Celular / WhatsApp</label>
                                     <input
                                         type="text"
                                         value={clientPhone}
@@ -702,7 +702,7 @@ const QuotationForm = () => {
                             <div className="space-y-3 border-t border-zinc-100 pt-6 dark:border-zinc-800">
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div>
-                                        <label className="text-xs font-bold uppercase text-zinc-500">Tipo de cotización</label>
+                                        <label className="text-xs font-medium text-zinc-500">Tipo de cotización</label>
                                         <p className="mt-1 text-xs text-zinc-400">Usa escenarios cuando el cliente deba elegir una sola alternativa.</p>
                                     </div>
                                     <div className="flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
@@ -749,7 +749,7 @@ const QuotationForm = () => {
 
                             {/* Service Search */}
                             <div className="space-y-2 relative">
-                                <label className="text-xs font-bold text-zinc-500 uppercase">Buscador de Servicios</label>
+                                <label className="text-xs font-medium text-zinc-500">Buscador de Servicios</label>
                                 <div className="relative">
                                     <Search className="absolute left-3 top-3 w-4 h-4 text-zinc-400" />
                                     <input
@@ -770,10 +770,10 @@ const QuotationForm = () => {
                                             >
                                                 <p className="text-sm font-bold">{service.name}</p>
                                                 <div className="flex justify-between items-center mt-1 gap-3">
-                                                    <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">{service.category}</span>
+                                                    <span className="text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">{service.category}</span>
                                                     <span className="text-xs font-semibold text-primary">{service.precio_variable ? 'Valor variable' : `Oficial ${formatCatalogPrice(service.valor_neto)}`}</span>
                                                 </div>
-                                                <div className="mt-2 flex justify-end gap-3 text-[10px] text-zinc-400">
+                                                <div className="mt-2 flex justify-end gap-3 text-xs text-zinc-400">
                                                     <span>Costo de producción {formatCatalogPrice(service.costo_real_estimado)}</span>
                                                     <span className="text-status-positive-fg">
                                                         Ganancia {service.ganancia_estimada === null ? 'sin costo' : formatCop(service.ganancia_estimada)}
@@ -801,7 +801,7 @@ const QuotationForm = () => {
                             </Button>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">Solo se guarda en esta propuesta, sin crear un producto en el catálogo.</p>
                             <div className="space-y-4">
-                                <label className="text-xs font-bold text-zinc-500 uppercase">Servicios Incluidos</label>
+                                <label className="text-xs font-medium text-zinc-500">Servicios Incluidos</label>
                                 {!Array.isArray(selectedItems) || selectedItems.length === 0 ? (
                                     <div className="p-12 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl text-center">
                                         <FileText className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
@@ -830,7 +830,7 @@ const QuotationForm = () => {
                                                     <ExecutionEditor label={`Ejecución del servicio ${idx + 1}`} value={item.execution} onChange={execution => updateItem(idx, 'execution', execution)} />
                                                 </div></details>
                                                 <div className="space-y-1">
-                                                    <label className="text-[10px] font-bold text-zinc-400 uppercase">Nota o aclaración sobre este servicio</label>
+                                                    <label className="text-xs font-medium text-zinc-400">Nota o aclaración sobre este servicio</label>
                                                     <textarea
                                                         placeholder="Ej: Incluye 2 rondas de ajustes..."
                                                         className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs outline-none focus:ring-1 ring-primary/30 min-h-[60px]"
@@ -840,7 +840,7 @@ const QuotationForm = () => {
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-bold text-zinc-400 uppercase">Cobro</span>
+                                                        <span className="text-xs font-medium text-zinc-400">Cobro</span>
                                                         <Select
                                                             value={item.billingType || 'MONTHLY'}
                                                             onChange={(e) => updateItem(idx, 'billingType', e.target.value)}
@@ -851,7 +851,7 @@ const QuotationForm = () => {
                                                         </Select>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-bold text-zinc-400 uppercase">Cant.</span>
+                                                        <span className="text-xs font-medium text-zinc-400">Cant.</span>
                                                         <input
                                                             type="number"
                                                             value={item.quantity}
@@ -860,7 +860,7 @@ const QuotationForm = () => {
                                                         />
                                                     </div>
                                                     <div className="flex-1 flex items-center gap-2 justify-end">
-                                                        <span className="text-[10px] font-bold text-zinc-400 uppercase">Precio</span>
+                                                        <span className="text-xs font-medium text-zinc-400">Precio</span>
                                                         <MoneyInput
                                                             aria-label={`Precio de ${item.name || 'el servicio'}`}
                                                             value={item.price}
@@ -870,7 +870,7 @@ const QuotationForm = () => {
                                                     </div>
                                                 </div>
                                                 {item.estimatedCost !== null && item.estimatedCost !== undefined && (
-                                                    <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-[10px] text-zinc-400">
+                                                    <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-zinc-400">
                                                         <span>Costo estimado {formatCop(Number(item.estimatedCost) * Number(item.quantity || 0))}</span>
                                                         <span className="font-semibold text-status-positive-fg">
                                                             Ganancia {formatCop((((Number(item.price) * (currency === 'USD' ? Number(exchangeRate) : 1)) - Number(item.estimatedCost)) * Number(item.quantity || 0)))}
@@ -914,8 +914,8 @@ const QuotationForm = () => {
 
                         {selectedItems.some(item => item.billingType !== 'ONE_TIME') && <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
                             <div>
-                                <p className="text-[10px] font-bold uppercase text-zinc-500">Duración de la propuesta</p>
-                                <p className="mt-1 text-[11px] leading-4 text-zinc-400">Periodo de cobro de los servicios mensuales, no plazo de implementación. Vigencia para aceptar: 15 días.</p>
+                                <p className="text-xs font-medium text-zinc-500">Duración de la propuesta</p>
+                                <p className="mt-1 text-xs leading-4 text-zinc-400">Periodo de cobro de los servicios mensuales, no plazo de implementación. Vigencia para aceptar: 15 días.</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {[1, 2, 3, 6].map((months) => (
@@ -931,7 +931,7 @@ const QuotationForm = () => {
                         </div>}
                         {quotationMode === 'STANDARD' && (
                             <div className="space-y-3 rounded-xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:border-brand-magenta/30 dark:bg-brand-magenta/10">
-                                <p className="text-[10px] font-bold uppercase text-brand-magenta-deep dark:text-brand-magenta-soft">Descuento comercial</p>
+                                <p className="text-xs font-medium text-brand-magenta-deep dark:text-brand-magenta-soft">Descuento comercial</p>
                                 <div className="grid gap-2 sm:grid-cols-2">
                                     <Select value={discountType} onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }} className="rounded-lg border border-brand-magenta/20 bg-white px-3 py-2 text-xs outline-none dark:border-brand-magenta/30 dark:bg-zinc-950">
                                         <option value="">Sin descuento</option>
@@ -950,8 +950,8 @@ const QuotationForm = () => {
                             <div className="rounded-lg border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:border-brand-magenta/30 dark:bg-brand-magenta/10">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase text-brand-magenta-deep dark:text-brand-magenta-soft">Tasa USD/COP</p>
-                                        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                        <p className="text-xs font-medium text-brand-magenta-deep dark:text-brand-magenta-soft">Tasa USD/COP</p>
+                                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                                             {exchangeRateSource === 'SUPERFINANCIERA_TRM' ? 'TRM oficial' : 'Tasa manual'}
                                             {exchangeRateDate ? ` · ${new Date(exchangeRateDate).toLocaleDateString('es-CO')}` : ''}
                                         </p>
@@ -983,14 +983,14 @@ const QuotationForm = () => {
                                     <span className="text-xs font-semibold text-zinc-500">COP</span>
                                 </div>
                                 {exchangeRateError && (
-                                    <p className="mt-2 text-[11px] leading-5 text-destructive">{exchangeRateError}</p>
+                                    <p className="mt-2 text-xs leading-5 text-destructive">{exchangeRateError}</p>
                                 )}
                             </div>
                         )}
 
                         {quotationMode === 'SCENARIOS' ? (
                             <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-                                <p className="text-[10px] font-bold uppercase text-primary">Valor de la opción activa</p>
+                                <p className="text-xs font-medium text-primary">Valor de la opción activa</p>
                                 <div className="flex justify-between text-base font-bold"><span>{activeScenario?.name}</span><span className="text-primary">{formatCurrency(activeScenarioTotals.totalAmount)}</span></div>
                                 <div className="space-y-2 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800">
                                     {activeScenarioTotals.monthlySubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal)}</span></div>}
@@ -999,9 +999,9 @@ const QuotationForm = () => {
                                     {activeScenarioTotals.discountAmount > 0 && <div className="flex justify-between text-brand-magenta-deep dark:text-brand-magenta-soft"><span>{activeScenario?.discountLabel || 'Descuento'}</span><span>-{formatCurrency(activeScenarioTotals.discountAmount)}</span></div>}
                                     <div className="flex justify-between font-semibold"><span>Subtotal contractual</span><span>{formatCurrency(activeScenarioTotals.subtotal)}</span></div>
                                     {!effectiveTaxExempt && <div className="flex justify-between"><span className="text-zinc-500">IVA (19%)</span><span>{formatCurrency(activeScenarioTotals.taxAmount)}</span></div>}
-                                    {taxLockReason === 'ISSUER' && <p data-quotation-tax-locked="ISSUER" className="text-[11px] leading-4 text-zinc-500">Exenta de IVA: Francisco Villa emite como persona natural.</p>}
+                                    {taxLockReason === 'ISSUER' && <p data-quotation-tax-locked="ISSUER" className="text-xs leading-4 text-zinc-500">Exenta de IVA: Francisco Villa emite como persona natural.</p>}
                                 </div>
-                                <p className="text-[10px] leading-4 text-zinc-500">La propuesta no mostrará un total general. El valor definitivo se calculará cuando el cliente elija una opción.</p>
+                                <p className="text-xs leading-4 text-zinc-500">La propuesta no mostrará un total general. El valor definitivo se calculará cuando el cliente elija una opción.</p>
                             </div>
                         ) : <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                             <div className="flex justify-between text-xs">
@@ -1018,7 +1018,7 @@ const QuotationForm = () => {
                                         <span className="text-zinc-500">IVA (19%)</span>
                                         <span className="font-medium text-zinc-500">Exenta</span>
                                     </div>
-                                    <p className="mt-1 text-[11px] leading-4 text-zinc-500">Francisco Villa emite como persona natural.</p>
+                                    <p className="mt-1 text-xs leading-4 text-zinc-500">Francisco Villa emite como persona natural.</p>
                                 </div>
                             )}
                             {!taxLockReason && (
@@ -1053,11 +1053,11 @@ const QuotationForm = () => {
                             <div className="rounded-lg border border-brand-green/20 bg-brand-green/5 p-4 dark:border-brand-green/30 dark:bg-brand-green/10">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase text-status-positive-fg">Margen estimado</p>
+                                        <p className="text-xs font-medium text-status-positive-fg">Margen estimado</p>
                                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Solo visible dentro de Brainstudio</p>
                                     </div>
                                     {profitabilityAvailable && profitability.pricedItems > 0 && (
-                                        <span className="text-xl font-black text-status-positive-fg">
+                                        <span className="text-xl font-semibold text-status-positive-fg">
                                             {profitability.estimatedMargin}%
                                         </span>
                                     )}
@@ -1074,13 +1074,13 @@ const QuotationForm = () => {
                                             <span className="font-bold text-status-positive-fg">{formatCop(profitability.estimatedProfit)}</span>
                                         </div>
                                         {!profitability.hasCompleteCostData && (
-                                            <p className="pt-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-400">
+                                            <p className="pt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
                                                 Cálculo parcial: {profitability.pricedItems} de {profitability.totalItems} servicios tienen costo registrado.
                                             </p>
                                         )}
                                     </div>
                                 ) : (
-                                    <p className="mt-3 border-t border-brand-green/20 pt-3 text-[10px] leading-relaxed text-amber-700 dark:border-brand-green/30 dark:text-amber-400">
+                                    <p className="mt-3 border-t border-brand-green/20 pt-3 text-xs leading-relaxed text-amber-700 dark:border-brand-green/30 dark:text-amber-400">
                                         {profitabilityAvailable ? "Sin costos registrados: no se puede estimar el margen de estos servicios." : "Registra una tasa USD/COP para calcular el margen estimado."}
                                     </p>
                                 )}
@@ -1107,14 +1107,14 @@ const QuotationForm = () => {
 
                         {generatedLink && (
                             <div className="p-4 bg-status-positive/10 border border-status-positive/20 rounded-xl space-y-3">
-                                <p className="text-[10px] font-bold text-status-positive-fg uppercase flex items-center gap-2">
+                                <p className="text-xs font-medium text-status-positive-fg flex items-center gap-2">
                                     <Globe className="w-3 h-3" /> Enlace Público Generado
                                 </p>
                                 <div className="flex gap-2">
                                     <input
                                         readOnly
                                         value={generatedLink}
-                                        className="flex-1 bg-white dark:bg-zinc-950 text-[10px] border border-status-positive/20 rounded-lg px-2 py-1.5 outline-none"
+                                        className="flex-1 bg-white dark:bg-zinc-950 text-xs border border-status-positive/20 rounded-lg px-2 py-1.5 outline-none"
                                     />
                                     <button
                                         onClick={copyToClipboard}

@@ -299,7 +299,7 @@ const ChatWidget = ({
                 {Object.keys(sortedGroups).map(dateKey => (
                     <div key={dateKey} className="relative">
                         <div className={cn("sticky top-0 z-10 flex justify-center mb-6", isModal ? "" : "bg-white dark:bg-zinc-900 py-1")}>
-                            <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm uppercase tracking-wider">
+                            <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 text-xs font-medium px-3 py-1 rounded-full shadow-sm">
                                 {dateKey}
                             </span>
                         </div>
@@ -319,7 +319,7 @@ const ChatWidget = ({
                                                 <span className={cn("text-xs font-bold truncate", isOwnMessage ? "text-primary-foreground/90" : "text-zinc-900 dark:text-white")}>
                                                     {isOwnMessage ? "Tú" : msg.author?.name}
                                                 </span>
-                                                <span className={cn("text-[10px] shrink-0", isOwnMessage ? "text-primary-foreground/70" : "text-zinc-400")}>
+                                                <span className={cn("text-xs shrink-0", isOwnMessage ? "text-primary-foreground/70" : "text-zinc-400")}>
                                                     {formatTime(msg.createdAt)}
                                                 </span>
                                             </div>
@@ -343,7 +343,7 @@ const ChatWidget = ({
             {showMentionDropdown && filteredMembers.length > 0 && (
                 <div className="brain-popover-surface absolute bottom-full left-0 mb-2 w-full overflow-hidden z-50">
                     <div className="p-2 border-b border-zinc-100 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mencionar a...</span>
+                        <span className="text-xs font-medium text-zinc-400">Mencionar a...</span>
                     </div>
                     <div className="max-h-48 overflow-y-auto">
                         {filteredMembers.map(member => (
@@ -356,7 +356,7 @@ const ChatWidget = ({
                                 <TeamAvatar member={member} className="w-6 h-6" />
                                 <div>
                                     <p className="text-xs font-bold text-zinc-900 dark:text-white">{member.name}</p>
-                                    <p className="text-[10px] text-zinc-500 truncate">{member.role}</p>
+                                    <p className="text-xs text-zinc-500 truncate">{member.role}</p>
                                 </div>
                             </button>
                         ))}
@@ -458,7 +458,7 @@ const ChatWidget = ({
                                             <p className="text-xs font-bold text-zinc-900 dark:text-white mb-0.5 truncate">
                                                 {author?.name || 'Desconocido'}
                                             </p>
-                                            <span className="text-[10px] text-zinc-400">{formatTime(msg.createdAt)}</span>
+                                            <span className="text-xs text-zinc-400">{formatTime(msg.createdAt)}</span>
                                         </div>
                                         <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">
                                             {msg.content.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, '@$1')}
@@ -511,7 +511,7 @@ const ChatWidget = ({
                                         <p className="text-xs font-bold text-zinc-900 dark:text-white mb-0.5 truncate">
                                             {author?.name || 'Desconocido'}
                                         </p>
-                                        <span className="text-[10px] text-zinc-400">{formatTime(msg.createdAt)}</span>
+                                        <span className="text-xs text-zinc-400">{formatTime(msg.createdAt)}</span>
                                     </div>
                                     <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">
                                         {msg.content.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, '@$1')}

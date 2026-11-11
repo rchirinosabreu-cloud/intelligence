@@ -99,7 +99,7 @@ const TalentRadar = () => {
                     <Select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
+                        className="bg-transparent border-none text-xs font-medium px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
                         {Array.from({ length: 12 }, (_, i) => (
                             <option key={i+1} value={i+1}>{format(new Date(2025, i, 1), 'MMMM', { locale: es }).toUpperCase()}</option>
@@ -109,7 +109,7 @@ const TalentRadar = () => {
                     <Select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(e.target.value)}
-                        className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
+                        className="bg-transparent border-none text-xs font-medium px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
                         {[2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
                     </Select>
@@ -135,7 +135,7 @@ const TalentRadar = () => {
                                     <TeamAvatar member={member} className="w-10 h-10 border-2 border-white dark:border-zinc-800" />
                                     <div className="flex flex-col min-w-0">
                                         <span className="text-sm font-bold truncate">{member.name}</span>
-                                        <span className="text-[10px] text-zinc-500 truncate">{member.role}</span>
+                                        <span className="text-xs text-zinc-500 truncate">{member.role}</span>
                                     </div>
                                     <div className="ml-auto">
                                         <div className={cn(
@@ -147,22 +147,22 @@ const TalentRadar = () => {
 
                                 {activeTask ? (
                                     <div className="space-y-2">
-                                        <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-tighter flex items-center gap-1">
+                                        <p className="text-xs text-zinc-400 font-medium tracking-tighter flex items-center gap-1">
                                             <Zap className="w-3 h-3 text-amber-500" />
                                             En Curso Ahora:
                                         </p>
                                         <div className="p-2.5 bg-zinc-100 dark:bg-white/5 rounded-xl border border-zinc-200 dark:border-white/5">
-                                            <p className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight">
+                                            <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight">
                                                 {activeTask.title}
                                             </p>
-                                            <p className="text-[10px] text-indigo-600 font-medium mt-1">
+                                            <p className="text-xs text-indigo-600 font-medium mt-1">
                                                 {activeTask.client?.name}
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="h-[64px] flex items-center justify-center opacity-30">
-                                        <p className="text-[10px] italic">Sin tareas activas</p>
+                                        <p className="text-xs italic">Sin tareas activas</p>
                                     </div>
                                 )}
                             </Card>
@@ -179,7 +179,7 @@ const TalentRadar = () => {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-sm font-bold">Distribución de Capacidad</h3>
-                            <p className="text-[10px] text-zinc-500">¿En qué gasta su tiempo la agencia?</p>
+                            <p className="text-xs text-zinc-500">¿En qué gasta su tiempo la agencia?</p>
                         </div>
                         <div className="p-2 bg-indigo-600/10 rounded-xl">
                             <BarChart3 className="w-4 h-4 text-indigo-600" />
@@ -216,7 +216,7 @@ const TalentRadar = () => {
                                 <Legend
                                     verticalAlign="bottom"
                                     iconType="circle"
-                                    formatter={(value) => <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">{value}</span>}
+                                    formatter={(value) => <span className="text-xs font-medium text-zinc-400 tracking-tighter">{value}</span>}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -228,9 +228,9 @@ const TalentRadar = () => {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-sm font-bold">Matriz de Desempeño (Nine-Box)</h3>
-                            <p className="text-[10px] text-zinc-500">Velocidad (X) vs. Calidad/Devoluciones (Y)</p>
+                            <p className="text-xs text-zinc-500">Velocidad (X) vs. Calidad/Devoluciones (Y)</p>
                         </div>
-                        <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded text-[10px] font-bold">
+                        <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded text-xs font-bold">
                             <TrendingUp className="w-3 h-3" />
                             CALIDAD ALTA
                         </div>
@@ -238,10 +238,10 @@ const TalentRadar = () => {
 
                     <div className="h-[280px] w-full relative">
                         {/* Matrix Labels */}
-                        <div className="absolute top-2 right-4 text-[8px] font-black text-indigo-600/40 uppercase tracking-[0.2em]">Súper Estrellas</div>
-                        <div className="absolute top-2 left-4 text-[8px] font-black text-zinc-400/40 uppercase tracking-[0.2em]">Promesas</div>
-                        <div className="absolute bottom-12 right-4 text-[8px] font-black text-zinc-400/40 uppercase tracking-[0.2em]">Ejecutores</div>
-                        <div className="absolute bottom-12 left-4 text-[8px] font-black text-red-500/30 uppercase tracking-[0.2em]">En Riesgo</div>
+                        <div className="absolute top-2 right-4 text-xs font-medium text-indigo-600/40">Súper Estrellas</div>
+                        <div className="absolute top-2 left-4 text-xs font-medium text-zinc-400/40">Promesas</div>
+                        <div className="absolute bottom-12 right-4 text-xs font-medium text-zinc-400/40">Ejecutores</div>
+                        <div className="absolute bottom-12 left-4 text-xs font-medium text-red-500/30">En Riesgo</div>
 
                         <ResponsiveContainer width="100%" height="100%">
                             <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
@@ -277,15 +277,15 @@ const TalentRadar = () => {
                                                     </div>
                                                     <div className="space-y-1.5">
                                                         <div className="flex justify-between gap-4">
-                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Nivel de Desafío</span>
-                                                            <span className="text-[10px] text-zinc-900 dark:text-zinc-100 font-black">{data.x.toFixed(1)}</span>
+                                                            <span className="text-xs text-zinc-500 font-medium">Nivel de Desafío</span>
+                                                            <span className="text-xs text-zinc-900 dark:text-zinc-100 font-semibold">{data.x.toFixed(1)}</span>
                                                         </div>
                                                         <div className="flex justify-between gap-4">
-                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Índice de Precisión</span>
-                                                            <span className="text-[10px] text-zinc-900 dark:text-zinc-100 font-black">{data.y.toFixed(1)} dev.</span>
+                                                            <span className="text-xs text-zinc-500 font-medium">Índice de Precisión</span>
+                                                            <span className="text-xs text-zinc-900 dark:text-zinc-100 font-semibold">{data.y.toFixed(1)} dev.</span>
                                                         </div>
                                                         <div className="pt-2 border-t border-zinc-100 dark:border-white/5 mt-2">
-                                                            <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
+                                                            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">
                                                                 {data.count} tareas completadas este periodo
                                                             </p>
                                                         </div>
@@ -480,11 +480,11 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             {/* Member Stats Overview */}
                             <div className="grid grid-cols-2 gap-4">
                                 <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">
-                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Tareas Completadas</span>
+                                    <span className="text-xs font-medium text-zinc-400">Tareas Completadas</span>
                                     <p className="text-2xl font-bold mt-1">{member?.nativeTasks?.length || 0}</p>
                                 </Card>
                                 <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">
-                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Retrabajo Acumulado</span>
+                                    <span className="text-xs font-medium text-zinc-400">Retrabajo Acumulado</span>
                                     <p className="text-2xl font-bold mt-1 text-red-500">
                                         {member?.nativeTasks?.reduce((sum, t) => sum + (t.returnCount || 0), 0) || 0}
                                     </p>
@@ -493,7 +493,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
 
                             {/* Personal Capacity Chart */}
                             <div className="space-y-4">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                <h4 className="text-xs font-medium text-zinc-400 flex items-center gap-2">
                                     <LayoutGrid className="w-3.5 h-3.5" />
                                     Mapa de Carga Personal
                                 </h4>
@@ -527,7 +527,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                             <Legend
                                                 verticalAlign="bottom"
                                                 iconType="circle"
-                                                formatter={(value) => <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">{value}</span>}
+                                                formatter={(value) => <span className="text-xs font-medium text-zinc-400 tracking-tighter">{value}</span>}
                                             />
                                         </PieChart>
                                     </ResponsiveContainer>
@@ -537,14 +537,14 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             {/* AI INSIGHT SECTION */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                    <h4 className="text-xs font-medium text-zinc-400 flex items-center gap-2">
                                         <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                                         Insights Ejecutivos (IA)
                                     </h4>
                                     <button
                                         onClick={generateInsight}
                                         disabled={isGenerating}
-                                        className="px-3 py-1.5 bg-[#009EB9] hover:bg-[#008CA4] disabled:opacity-50 rounded-xl text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
+                                        className="px-3 py-1.5 bg-[#009EB9] hover:bg-[#008CA4] disabled:opacity-50 rounded-xl text-white text-xs font-bold transition-all shadow-lg flex items-center gap-2"
                                     >
                                         {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                                         GENERAR ANÁLISIS
@@ -560,14 +560,14 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                             "{aiInsight}"
                                         </p>
                                         <div className="mt-4 flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] text-white font-bold">B</div>
-                                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tighter">Brain Core Ops Director</span>
+                                            <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-xs text-white font-bold">B</div>
+                                            <span className="text-xs font-medium text-indigo-600 tracking-tighter">Brain Core Ops Director</span>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="p-10 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-center opacity-50">
                                         <Sparkles className="w-8 h-8 text-zinc-300 mb-3" />
-                                        <p className="text-[10px] max-w-[200px]">Haz clic en Generar para que Brain analice las devoluciones del mes.</p>
+                                        <p className="text-xs max-w-[200px]">Haz clic en Generar para que Brain analice las devoluciones del mes.</p>
                                     </div>
                                 )}
                             </div>
@@ -575,11 +575,11 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             {/* Top 5 Impact Tasks */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                    <h4 className="text-xs font-medium text-zinc-400 flex items-center gap-2">
                                         <FileText className="w-3.5 h-3.5" />
                                         Top 5 Impacto del Mes
                                     </h4>
-                                    <span className="text-[10px] font-bold text-zinc-400 italic">Ordenado por relevancia</span>
+                                    <span className="text-xs font-bold text-zinc-400 italic">Ordenado por relevancia</span>
                                 </div>
                                 <div className="space-y-3">
                                     {topImpactTasks?.map(task => (
@@ -587,16 +587,16 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                             <div className="flex items-center justify-between mb-1">
                                                 <div className="flex items-center gap-2">
                                                     <ClientLogo client={task.client} className="w-4 h-4 rounded" />
-                                                    <span className="text-[10px] font-bold text-indigo-600">{task.client?.name}</span>
+                                                    <span className="text-xs font-bold text-indigo-600">{task.client?.name}</span>
                                                 </div>
                                                 {task.returnCount > 0 && (
-                                                    <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-bold">
+                                                    <span className="text-xs px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-bold">
                                                         {task.returnCount} DEVOLUCIONES
                                                     </span>
                                                 )}
                                             </div>
                                             <p className="text-xs font-bold truncate">{task.title}</p>
-                                            <div className="flex items-center gap-2 mt-2 text-[10px] text-zinc-500">
+                                            <div className="flex items-center gap-2 mt-2 text-xs text-zinc-500">
                                                 <div className="flex items-center gap-1.5">
                                                     <div className={cn(
                                                         "w-1.5 h-1.5 rounded-full",

@@ -63,18 +63,18 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                         {files.slice(0, 3).map((f, i) => (
-                            <span key={i} className="text-[10px] bg-muted/50 text-muted-foreground px-2 py-0.5 rounded border border-border truncate max-w-[150px]">
+                            <span key={i} className="text-xs bg-muted/50 text-muted-foreground px-2 py-0.5 rounded border border-border truncate max-w-[150px]">
                                 {f.title}
                             </span>
                         ))}
-                        {fileCount > 3 && <span className="text-[10px] text-gray-500">+{fileCount - 3} más</span>}
+                        {fileCount > 3 && <span className="text-xs text-gray-500">+{fileCount - 3} más</span>}
                     </div>
                   </div>
               </div>
 
               <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-border space-y-4">
                 <div>
-                  <label className="text-xs uppercase tracking-wide text-muted-foreground">Título del documento</label>
+                  <label className="text-xs text-muted-foreground">Título del documento</label>
                   <input
                     type="text"
                     value={reportTitle}
@@ -84,7 +84,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-wide text-muted-foreground">Subtítulo del proyecto</label>
+                  <label className="text-xs text-muted-foreground">Subtítulo del proyecto</label>
                   <input
                     type="text"
                     value={projectSubtitle}

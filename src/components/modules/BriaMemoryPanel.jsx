@@ -165,7 +165,7 @@ export default function BriaMemoryPanel() {
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{item.indexed} de {item.available} indexadas</p>
                 </div>
                 <span className={cn(
-                  'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
+                  'shrink-0 rounded-full px-2.5 py-1 text-xs font-medium',
                   item.status === 'CONNECTED'
                     ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
                     : item.status === 'INDEXING'
@@ -207,7 +207,7 @@ export default function BriaMemoryPanel() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{result.title}</p>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wide text-zinc-400">{result.section === 'TRANSCRIPT' ? 'Transcripción' : 'Resumen y análisis'} · {Math.min(100, Math.max(0, Math.round((result.score || 0) * 100)))}%</p>
+                    <p className="mt-0.5 text-xs text-zinc-400">{result.section === 'TRANSCRIPT' ? 'Transcripción' : 'Resumen y análisis'} · {Math.min(100, Math.max(0, Math.round((result.score || 0) * 100)))}%</p>
                   </div>
                   {result.sourceUrl && <a href={result.sourceUrl} className="shrink-0 text-[#00839A] hover:text-[#006C7D] dark:text-[#74D9EA]" aria-label={`Abrir fuente ${result.title}`}><ExternalLink className="h-4 w-4" /></a>}
                 </div>

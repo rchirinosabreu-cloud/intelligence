@@ -412,7 +412,7 @@ const AppLayout = ({ children }) => {
                                 type="button"
                                 data-notifications-mark-all
                                 onClick={(event) => { event.preventDefault(); markAllAsRead(); }}
-                                className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10"
+                                className="rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
                             >
                                 Marcar todas como leídas
                             </button>
@@ -431,7 +431,7 @@ const AppLayout = ({ children }) => {
                                 aria-pressed={tab.active}
                                 onClick={(event) => { event.preventDefault(); setUnreadOnly(tab.id === 'unread'); }}
                                 className={cn(
-                                    'rounded-lg px-2.5 py-1 text-[11px] font-semibold transition',
+                                    'rounded-lg px-2.5 py-1 text-xs font-semibold transition',
                                     tab.active
                                         ? 'bg-primary/10 text-primary'
                                         : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
@@ -543,14 +543,14 @@ const AppLayout = ({ children }) => {
                                         <div className="flex-1 min-w-0">
                                             <div className="space-y-0.5">
                                                 <p className={cn(
-                                                    "text-xs leading-snug transition-colors font-black",
+                                                    "text-xs leading-snug transition-colors font-semibold",
                                                     notif.isRead ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-900 dark:text-white"
                                                 )}>
                                                     {display.title}
                                                 </p>
                                                 {display.context && (
                                                     <p className={cn(
-                                                        "text-[11px] leading-snug font-semibold line-clamp-2",
+                                                        "text-xs leading-snug font-semibold line-clamp-2",
                                                         notif.isRead ? "text-zinc-500 dark:text-zinc-500" : "text-zinc-700 dark:text-zinc-300"
                                                     )}>
                                                         {display.context}
@@ -558,14 +558,14 @@ const AppLayout = ({ children }) => {
                                                 )}
                                                 {display.body && (
                                                     <p className={cn(
-                                                        "text-[11px] leading-snug font-medium line-clamp-2",
+                                                        "text-xs leading-snug font-medium line-clamp-2",
                                                         notif.isRead ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-600 dark:text-zinc-400"
                                                     )}>
                                                         {display.body}
                                                     </p>
                                                 )}
                                             </div>
-                                            <span className="text-[10px] text-zinc-400 mt-1 block font-medium">
+                                            <span className="text-xs text-zinc-400 mt-1 block font-medium">
                                                 {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>

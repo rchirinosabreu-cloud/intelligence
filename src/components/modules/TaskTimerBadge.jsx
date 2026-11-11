@@ -14,7 +14,7 @@ export default function TaskTimerBadge({ task }) {
 
   return (
     <span
-      className="ml-0.5 text-[10px] font-bold uppercase tracking-tighter tabular-nums text-zinc-500"
+      className="ml-0.5 text-xs font-medium tracking-tighter tabular-nums text-zinc-500"
       aria-label={`Tiempo de trabajo ${formatElapsedTime(getTaskElapsedMs(task, now))}`}
     >
       {formatElapsedTime(getTaskElapsedMs(task, now))}

@@ -64,7 +64,7 @@ export default function RecordDocumentsInline({ recordId, documents = [], canWri
         <div className={`flex min-w-0 flex-wrap items-center gap-1.5 ${className}`} data-record-documents>
             {documents.map((document) => (
                 <button key={document.id} type="button" onClick={() => open(document)} title={`Ver ${document.name}`}
-                    className="inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5">
+                    className="inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5">
                     <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{document.name}</span>
                 </button>
             ))}
@@ -73,7 +73,7 @@ export default function RecordDocumentsInline({ recordId, documents = [], canWri
                     <input ref={input} type="file" className="sr-only" accept={FINANCIAL_DOCUMENT_ACCEPT}
                         onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) upload(file); }} />
                     <button type="button" disabled={uploading} onClick={() => input.current?.click()}
-                        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50">
+                        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50">
                         {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}Subir {label}
                     </button>
                 </>

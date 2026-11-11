@@ -172,7 +172,7 @@ const WhatsAppLink = () => {
                   <li>Mándale por WhatsApp este mensaje, tal cual:</li>
                 </ol>
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-                  <code className="text-2xl font-black tracking-widest text-zinc-900 dark:text-zinc-100">{code.message}</code>
+                  <code className="text-2xl font-semibold tracking-widest text-zinc-900 dark:text-zinc-100">{code.message}</code>
                   <button type="button" onClick={copy} className={secondaryButtonClass} aria-label="Copiar el mensaje">
                     {copied ? <Check className="h-4 w-4 text-brand-green-deep dark:text-brand-green" /> : <Copy className="h-4 w-4" />} {copied ? 'Copiado' : 'Copiar'}
                   </button>

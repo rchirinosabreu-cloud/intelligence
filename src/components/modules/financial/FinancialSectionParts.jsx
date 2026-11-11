@@ -32,8 +32,8 @@ const TONES = {
 export function FinancialSummaryCard({ label, value, hint, tone = 'neutral', onClick, pressed, className, ...rest }) {
     const body = (
         <>
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{label}</p>
-            <p className={cn('mt-1 text-xl font-black', TONES[tone] || TONES.neutral)}>{value}</p>
+            <p className="text-xs font-medium text-zinc-400">{label}</p>
+            <p className={cn('mt-1 text-xl font-semibold', TONES[tone] || TONES.neutral)}>{value}</p>
             {hint && <p className="text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>}
         </>
     );

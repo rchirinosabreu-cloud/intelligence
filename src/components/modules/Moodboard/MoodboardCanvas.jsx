@@ -309,11 +309,11 @@ const MoodboardCanvas = () => {
 
         <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-5 py-2.5 rounded-2xl shadow-2xl pointer-events-auto">
           <div className="flex items-center gap-3">
-            <h1 className="text-sm font-black text-zinc-900 dark:text-zinc-100 tracking-tighter uppercase">
+            <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tighter uppercase">
               {board?.name}
             </h1>
             <div className="h-3 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            <span className="text-xs font-medium text-zinc-500">
               {board?.client?.name || 'Agencia'}
             </span>
           </div>
@@ -344,7 +344,7 @@ const MoodboardCanvas = () => {
         )}
 
         {!isMobile && (
-          <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-2xl text-[10px] text-zinc-400 font-mono hidden md:block pointer-events-auto">
+          <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-2xl text-xs text-zinc-400 font-mono hidden md:block pointer-events-auto">
             {Math.round(zoom * 100)}% | {items.length} items
           </div>
         )}
@@ -352,7 +352,7 @@ const MoodboardCanvas = () => {
         <div className="relative pointer-events-auto">
           <DropdownMenu open={isAdding} onOpenChange={setIsAdding}>
           <DropdownMenuTrigger asChild><button
-            className="flex items-center gap-2 bg-[#009EB9] hover:bg-[#008CA4] text-white px-6 py-3 rounded-2xl text-sm font-black transition-all shadow-2xl shadow-[#009EB9]/25 active:scale-95"
+            className="flex items-center gap-2 bg-[#009EB9] hover:bg-[#008CA4] text-white px-6 py-3 rounded-2xl text-sm font-semibold transition-all shadow-2xl shadow-[#009EB9]/25 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             <span>AÑADIR</span>
@@ -479,17 +479,17 @@ const MoodboardCanvas = () => {
                 title="🎯 Centrar Vista"
              >
                 <Target className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-tighter">Reset</span>
+                <span className="text-xs font-medium tracking-tighter">Reset</span>
              </button>
            </div>
 
            {/* Brand Meta Placeholder */}
            <div className="flex items-center gap-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2.5 rounded-2xl shadow-2xl pointer-events-auto">
               <div className="flex -space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[8px] text-white font-black">BS</div>
+                  <div className="w-6 h-6 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs text-white font-semibold">BS</div>
               </div>
               <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
-              <span className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Colaborativo</span>
+              <span className="text-xs font-medium text-zinc-500">Colaborativo</span>
            </div>
         </div>
       )}

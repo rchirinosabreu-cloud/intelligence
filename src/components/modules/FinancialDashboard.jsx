@@ -1187,72 +1187,72 @@ await invalidateFinancialQueries(queryClient);
                 {/* KPI Card 1: Ingresos del Mes */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ingresos registrados</span>
+                        <span className="text-xs font-medium text-zinc-400">Ingresos registrados</span>
                         <div className="p-2 bg-brand-green/10 rounded-xl">
                             <TrendingUp className="w-4 h-4 text-brand-green-deep dark:text-brand-green" />
                         </div>
                     </div>
-                    <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
+                    <p className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalIncome)}
                     </p>
                     {/* Un reintegro de préstamo entra en la cuenta pero no es venta (20 de octubre de 2026). */}
                     {data?.sourceSummary?.totals?.loanRepayments > 0
-                        ? <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
-                        : <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
+                        ? <p data-loan-repayments className="mt-2 text-xs text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
+                        : <p className="mt-2 text-xs text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Egresos registrados</span>
+                        <span className="text-xs font-medium text-zinc-400">Egresos registrados</span>
                         <div className="p-2 bg-destructive/10 rounded-xl">
                             <TrendingDown className="w-4 h-4 text-destructive" />
                         </div>
                     </div>
-                    <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
+                    <p className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalExpense)}
                     </p>
-                    <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
+                    <p className="mt-2 text-xs text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
                 </Card>
 
                 {/* KPI Card 3: Flujo Neto (Highest Visual Prominence) */}
                 <Card className="p-6 bg-brand-cyan-soft dark:bg-brand-cyan/10 border-brand-cyan/20 rounded-2xl shadow-md relative overflow-hidden group ring-1 ring-brand-cyan/10">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-brand-cyan-deep dark:text-brand-cyan uppercase tracking-widest">Resultado neto registrado</span>
+                        <span className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Resultado neto registrado</span>
                         <div className="p-2 bg-brand-cyan/20 rounded-xl">
                             <Wallet className="w-4 h-4 text-brand-cyan-deep dark:text-brand-cyan" />
                         </div>
                     </div>
-                    <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
+                    <p className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.netFlow)}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
                         <span className={cn(
-                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                            "text-xs font-bold px-1.5 py-0.5 rounded",
                             kpis.netFlow >= 0 ? "text-brand-green-deep dark:text-brand-green bg-brand-green/10" : "text-destructive bg-destructive/10"
                         )}>
                             {indicatorsPending || error ? '—' : kpis.netFlow >= 0 ? 'EXCEDENTE' : 'DÉFICIT'}
                         </span>
-                        <span className="text-[10px] text-zinc-600 dark:text-zinc-300">Ingresos menos egresos del periodo</span>
+                        <span className="text-xs text-zinc-600 dark:text-zinc-300">Ingresos menos egresos del periodo</span>
                     </div>
                 </Card>
 
                 {/* KPI Card 4: Cartera Pendiente (Alert) */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Saldo por cobrar · {filters.month ? `${FINANCIAL_MONTHS[Number(filters.month) - 1]} ` : ''}{selectedYear}</span>
+                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Saldo por cobrar · {filters.month ? `${FINANCIAL_MONTHS[Number(filters.month) - 1]} ` : ''}{selectedYear}</span>
                         <div className="rounded-xl bg-destructive/10 p-2">
                             <AlertCircle className="h-4 w-4 text-destructive" />
                         </div>
                     </div>
-                    <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
+                    <p className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalReceivable)}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
-                        <span className="text-[10px] font-bold text-brand-yellow-deep bg-brand-yellow/10 px-1.5 py-0.5 rounded">
+                        <span className="text-xs font-bold text-brand-yellow-deep bg-brand-yellow/10 px-1.5 py-0.5 rounded">
                             {indicatorsPending || error ? '—' : data?.accountsReceivable?.length || 0} deudores
                         </span>
-                        <span className="text-[10px] text-zinc-400">pendiente por cobrar</span>
+                        <span className="text-xs text-zinc-400">pendiente por cobrar</span>
                     </div>
                 </Card>
             </div>
@@ -1293,7 +1293,7 @@ await invalidateFinancialQueries(queryClient);
                             <div className="flex items-center justify-between mb-8">
                                 <div>
                                     <h3 className="text-sm font-bold">Flujo de Caja Histórico</h3>
-                                    <p className="text-[10px] text-zinc-500">Comparativa mensual de ingresos brutos vs egresos consolidados.</p>
+                                    <p className="text-xs text-zinc-500">Comparativa mensual de ingresos brutos vs egresos consolidados.</p>
                                 </div>
                             </div>
                             <div className="h-[320px] w-full">
@@ -1327,7 +1327,7 @@ await invalidateFinancialQueries(queryClient);
                                             verticalAlign="top"
                                             height={36}
                                             iconType="circle"
-                                            formatter={(value) => <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">{value === 'income' ? 'Ingresos' : 'Egresos'}</span>}
+                                            formatter={(value) => <span className="text-xs font-medium text-zinc-400 tracking-tighter">{value === 'income' ? 'Ingresos' : 'Egresos'}</span>}
                                         />
                                         <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} activeDot={{ r: 6 }} dot={{ r: 2 }} />
                                         <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={3} dot={{ r: 2 }} />
@@ -1341,7 +1341,7 @@ await invalidateFinancialQueries(queryClient);
                             <div className="flex items-center justify-between mb-8">
                                 <div>
                                     <h3 className="text-sm font-bold">Distribución de Gastos</h3>
-                                    <p className="text-[10px] text-zinc-500">Clasificación porcentual de egresos.</p>
+                                    <p className="text-xs text-zinc-500">Clasificación porcentual de egresos.</p>
                                 </div>
                                 <div className="p-2 bg-violet-600/10 rounded-xl">
                                     <PieIcon className="w-4 h-4 text-violet-600" />
@@ -1379,15 +1379,15 @@ await invalidateFinancialQueries(queryClient);
                                     </ResponsiveContainer>
                                     {/* Scrollable Legends list inside Card */}
                                     <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-                                        <span className="text-[9px] font-black uppercase text-zinc-400">Total Gastos</span>
-                                        <span className="text-sm font-black tracking-tight text-zinc-900 dark:text-white">
+                                        <span className="text-xs font-medium text-zinc-400">Total Gastos</span>
+                                        <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-white">
                                             {formatIndicator(kpis.totalExpense)}
                                         </span>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="h-[250px] flex items-center justify-center opacity-30 text-center">
-                                    <p className="text-[10px] italic">Sin gastos registrados en el periodo</p>
+                                    <p className="text-xs italic">Sin gastos registrados en el periodo</p>
                                 </div>
                             )}
                         </Card>
@@ -1517,8 +1517,8 @@ await invalidateFinancialQueries(queryClient);
                                                                         {editingAmountId === debt.id ? (
                                                                             <form className="mt-1 flex flex-wrap items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveAmountEdit(debt); }}>
                                                                                 <MoneyInput min="0.01" required autoFocus aria-label={debt.currency === 'USD' ? 'Nuevo valor en pesos' : 'Nuevo valor original'} value={amountDraft} onChange={setAmountDraft} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
-                                                                                <button type="submit" disabled={savingReceivableId === debt.id} className="rounded-lg bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Guardar</button>
-                                                                                <button type="button" onClick={() => setEditingAmountId('')} className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10">Cancelar</button>
+                                                                                <button type="submit" disabled={savingReceivableId === debt.id} className="rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50">Guardar</button>
+                                                                                <button type="button" onClick={() => setEditingAmountId('')} className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10">Cancelar</button>
                                                                             </form>
                                                                         ) : (
                                                                             <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-white">

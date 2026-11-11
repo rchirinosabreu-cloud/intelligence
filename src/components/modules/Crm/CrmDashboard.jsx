@@ -110,7 +110,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
                         <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
                         <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{leadSubtitle(lead) || lead.email || lead.code} · {(lead.request?.services || []).map(value => SERVICE_CATEGORIES.find(item => item.value === value)?.label || value).join(', ') || lead.serviceInterest}</span>
                       </span>
-                      <span className="shrink-0 text-right text-[11px] text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
+                      <span className="shrink-0 text-right text-xs text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
                     </button>
                   </li>
                 ))}
@@ -135,7 +135,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
                         <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
                         <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{[leadSubtitle(lead) || lead.email, originLabel(lead.origin), lead.serviceInterest].filter(Boolean).join(' · ')}</span>
                       </span>
-                      <span className="shrink-0 text-right text-[11px] text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
+                      <span className="shrink-0 text-right text-xs text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
                     </button>
                   </li>
                 ))}
@@ -201,7 +201,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
                   <dd className="ml-auto text-lg font-bold tabular-nums text-brand-green-deep dark:text-brand-green"><MoneyValues metrics={metrics} metric="wonValue" /></dd>
                 </div>
               </dl>
-              <p className="mt-4 text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">Valores cotizados por moneda, sin conversión. Solo cuentan las oportunidades con valor registrado; no son pagos recibidos.</p>
+              <p className="mt-4 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Valores cotizados por moneda, sin conversión. Solo cuentan las oportunidades con valor registrado; no son pagos recibidos.</p>
             </Panel>
           </section>
 
@@ -234,7 +234,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
             ) : (
               <div className="-mx-5 overflow-x-auto px-5">
                 <table className="w-full min-w-[56rem] text-left text-sm">
-                  <thead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <thead className="text-xs font-medium text-zinc-500">
                     <tr className="border-b border-zinc-200 dark:border-zinc-800">
                       <th className="py-2 pr-4">Empresa / contacto</th>
                       <th className="py-2 pr-4">Etapa</th>

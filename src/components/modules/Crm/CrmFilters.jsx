@@ -8,7 +8,7 @@ import { defaultCrmFilters } from '@/lib/crmFilterSession';
 
 const Field = ({ label, children, className }) => (
   <label className={cn('flex min-w-0 flex-col gap-1', className)}>
-    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</span>
+    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</span>
     {children}
   </label>
 );

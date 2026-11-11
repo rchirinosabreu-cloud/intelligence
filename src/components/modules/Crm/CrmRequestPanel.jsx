@@ -45,7 +45,7 @@ const CrmRequestPanel = ({ request, className }) => {
     <section className={cn('rounded-2xl border border-brand-magenta/25 bg-brand-magenta/[0.04] p-5 dark:bg-brand-magenta/[0.07]', className)} data-crm-request>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50"><FileText className="h-4 w-4 text-brand-magenta-deep dark:text-brand-magenta" /> Solicitud del cliente</h2>
-        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Recibida {formatDateTime(request.receivedAt)}{request.meta?.campaign ? ` · campaña ${request.meta.campaign}` : ''}</span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">Recibida {formatDateTime(request.receivedAt)}{request.meta?.campaign ? ` · campaña ${request.meta.campaign}` : ''}</span>
       </div>
       {services.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
@@ -62,7 +62,7 @@ const CrmRequestPanel = ({ request, className }) => {
             {request.suggestedItems.map(item => (
               <li key={`${item.category}:${item.name}`} className="flex flex-wrap items-baseline gap-x-2 text-sm text-zinc-800 dark:text-zinc-100">
                 <span className="font-medium">{item.name}</span>
-                {item.custom && <span className="rounded bg-zinc-100 px-1.5 text-[10px] font-semibold uppercase text-zinc-500 dark:bg-zinc-800">personalizada</span>}
+                {item.custom && <span className="rounded bg-zinc-100 px-1.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">personalizada</span>}
                 {item.detail && <span className="text-xs text-zinc-500 dark:text-zinc-400">{item.detail}</span>}
               </li>
             ))}

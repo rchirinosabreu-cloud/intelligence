@@ -45,7 +45,7 @@ function DraftFile({ entry, file, onRemove }) {
           className="max-h-24 max-w-full rounded object-contain"
         />
       )}
-      <span className="text-[11px] text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         {formatChatFileSize(entry.size)}
         {entry.upload ? " · Listo para enviar" : ""}
         {entry.missing ? " · Selecciona el archivo de nuevo" : ""}
@@ -303,7 +303,7 @@ export default function ChatComposer({
         </div>
       )}
       {!busy && !error && (
-        <p className="mt-1 text-[11px] text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           {editing
             ? "Los cambios se guardan al confirmar."
             : "Enter para enviar · Shift + Enter para salto de línea"}

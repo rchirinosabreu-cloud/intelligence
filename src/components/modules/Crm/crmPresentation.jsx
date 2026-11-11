@@ -95,7 +95,7 @@ export const TrafficLightBadge = ({ light, className, showMode = true }) => {
     <span title={light?.reason || ''} className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold', style.chip || 'border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300', className)}>
       <TrafficLightDot value={value} />
       {trafficLightLabel(value)}
-      {showMode && light?.mode === 'MANUAL' && <span className="text-[10px] font-medium uppercase tracking-wide opacity-70">manual</span>}
+      {showMode && light?.mode === 'MANUAL' && <span className="text-xs font-medium opacity-70">manual</span>}
     </span>
   );
 };
@@ -120,7 +120,7 @@ const priorityStyles = {
 };
 
 export const PriorityBadge = ({ priority, className }) => (
-  <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide', priorityStyles[priority] || priorityStyles.MEDIA, className)}>
+  <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium', priorityStyles[priority] || priorityStyles.MEDIA, className)}>
     {priorityLabel(priority)}
   </span>
 );
@@ -140,27 +140,27 @@ export const FollowUpLabel = ({ lead, className }) => {
   return (
     <span className={cn('inline-flex flex-col leading-tight', className)}>
       <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{formatDate(lead.nextFollowUpAt)}</span>
-      <span className={cn('text-[11px] font-semibold', bucketStyles[lead.followUpBucket])}>{lead.followUpBucket === 'VENCIDO' ? `Vencido · ${relativeDays(lead.nextFollowUpAt)}` : relativeDays(lead.nextFollowUpAt)}</span>
+      <span className={cn('text-xs font-semibold', bucketStyles[lead.followUpBucket])}>{lead.followUpBucket === 'VENCIDO' ? `Vencido · ${relativeDays(lead.nextFollowUpAt)}` : relativeDays(lead.nextFollowUpAt)}</span>
     </span>
   );
 };
 
 export const OriginBadge = ({ origin, className }) => (
-  <span className={cn('inline-flex items-center rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300', className)}>
+  <span className={cn('inline-flex items-center rounded-md bg-zinc-100 px-1.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300', className)}>
     {originLabel(origin)}
   </span>
 );
 
 /** Archivada: fuera de listas, métricas y avisos, con sus datos intactos (reunión del 4 de noviembre de 2026). */
 export const ArchivedBadge = ({ lead, className }) => (lead?.archivedAt ? (
-  <span className={cn('inline-flex items-center rounded-md border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300', className)} title={`Archivada el ${formatDate(lead.archivedAt)}`}>
+  <span className={cn('inline-flex items-center rounded-md border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 text-xs font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300', className)} title={`Archivada el ${formatDate(lead.archivedAt)}`}>
     Archivada
   </span>
 ) : null);
 
 /** Marks leads that arrived through the public request form. */
 export const RequestBadge = ({ lead, className }) => (lead?.hasRequest ? (
-  <span className={cn('inline-flex items-center rounded-md border border-brand-magenta/30 bg-brand-magenta/10 px-1.5 py-0.5 text-[11px] font-semibold text-brand-magenta-deep dark:text-brand-magenta', className)} title="Llegó por el formulario de solicitud">
+  <span className={cn('inline-flex items-center rounded-md border border-brand-magenta/30 bg-brand-magenta/10 px-1.5 py-0.5 text-xs font-semibold text-brand-magenta-deep dark:text-brand-magenta', className)} title="Llegó por el formulario de solicitud">
     Formulario
   </span>
 ) : null);
@@ -173,4 +173,4 @@ export const leadSubtitle = lead => {
 };
 
 export const inputClass = 'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500';
-export const labelClass = 'mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400';
+export const labelClass = 'mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400';

@@ -349,11 +349,11 @@ test('public proposal explains duration, billing cadence and discounts before ac
   assert.match(publicView, /Valor antes del descuento/i);
   assert.match(publicView, /Valor final con descuento/i);
   assert.match(publicView, /grossSubtotal/);
-  assert.match(publicView, /text-3xl font-black/);
+  assert.match(publicView, /text-3xl font-semibold/);
   assert.match(publicView, /sm:text-5xl/);
   assert.doesNotMatch(publicView, /Subtotal contractual/i);
   assert.match(publicView, /discountAmount/);
-  assert.match(publicView, /amounts\.grossSubtotal[\s\S]*Ahorro[\s\S]*text-3xl font-black/);
+  assert.match(publicView, /amounts\.grossSubtotal[\s\S]*Ahorro[\s\S]*text-3xl font-semibold/);
   assert.match(publicView, /displayedAmounts\.grossSubtotal[\s\S]*Ahorro[\s\S]*sm:text-5xl/);
   assert.doesNotMatch(publicView, /mt-4 border-t border-zinc-200 pt-4/);
   assert.doesNotMatch(publicView, /mt-5 border-t border-white\/20 pt-5/);

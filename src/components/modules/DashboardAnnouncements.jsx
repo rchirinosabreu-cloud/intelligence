@@ -63,13 +63,13 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
             </span>
           </div>
         ) : (
-          <span className="text-[10px] uppercase tracking-wider font-bold text-brand-cyan-deep dark:text-brand-cyan">
+          <span className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">
             Anuncio general
           </span>
         )}
         <div className="flex items-center gap-1.5">
           {showDate && (
-            <time className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            <time className="text-xs text-zinc-400 dark:text-zinc-500">
               {formatAnnouncementDate(announcement.createdAt)}
             </time>
           )}

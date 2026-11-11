@@ -17,7 +17,7 @@ const DateDivider = ({ date }) => {
 
   return (
     <div className="py-4 flex items-center justify-center">
-      <span className="text-[10px] font-black tracking-widest text-zinc-400 dark:text-zinc-500 uppercase select-none">
+      <span className="text-xs font-semibold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase select-none">
         {label}
       </span>
     </div>

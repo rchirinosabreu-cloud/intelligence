@@ -389,7 +389,7 @@ const Profile = () => {
                                     <form onSubmit={handleUpdateProfile} className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nombre Completo</label>
+                                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Nombre Completo</label>
                                                 <input
                                                     type="text"
                                                     disabled={!isOwnProfile}
@@ -399,7 +399,7 @@ const Profile = () => {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Email Corporativo</label>
+                                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Email Corporativo</label>
                                                 <input
                                                     type="email"
                                                     value={profileData.email}
@@ -409,7 +409,7 @@ const Profile = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Biografía / Acerca de mí</label>
+                                            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Biografía / Acerca de mí</label>
                                             <textarea
                                                 rows={4}
                                                 disabled={!isOwnProfile}
@@ -449,7 +449,7 @@ const Profile = () => {
                                     <CardContent className="p-8">
                                         <form onSubmit={handleUpdatePassword} className="space-y-5">
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Contraseña Actual</label>
+                                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Contraseña Actual</label>
                                                 <input
                                                     type="password"
                                                     required
@@ -459,7 +459,7 @@ const Profile = () => {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nueva Contraseña</label>
+                                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Nueva Contraseña</label>
                                                 <input
                                                     type="password"
                                                     required
@@ -469,7 +469,7 @@ const Profile = () => {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Confirmar Nueva Contraseña</label>
+                                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Confirmar Nueva Contraseña</label>
                                                 <input
                                                     type="password"
                                                     required
@@ -662,7 +662,7 @@ const Profile = () => {
                                         <form onSubmit={handleCreateFeedback} className="space-y-6">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Tipo de Sesión</label>
+                                                    <label className="text-xs font-medium text-zinc-500">Tipo de Sesión</label>
                                                     <Select
                                                         value={newFeedback.type}
                                                         onChange={e => setNewFeedback({...newFeedback, type: e.target.value})}
@@ -673,7 +673,7 @@ const Profile = () => {
                                                     </Select>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Fecha de la Sesión</label>
+                                                    <label className="text-xs font-medium text-zinc-500">Fecha de la Sesión</label>
                                                     <BrainDatePicker
                                                         ariaLabel="Fecha de la sesión"
                                                         value={newFeedback.date}
@@ -685,7 +685,7 @@ const Profile = () => {
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                    <label className="text-xs font-medium text-zinc-500 flex items-center gap-2">
                                                         <Award className="w-3.5 h-3.5 text-emerald-500" /> Fortalezas y Logros
                                                     </label>
                                                     <textarea
@@ -698,7 +698,7 @@ const Profile = () => {
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                    <label className="text-xs font-medium text-zinc-500 flex items-center gap-2">
                                                         <TrendingUp className="w-3.5 h-3.5 text-amber-500" /> Áreas de Mejora
                                                     </label>
                                                     <textarea
@@ -713,7 +713,7 @@ const Profile = () => {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                <label className="text-xs font-medium text-zinc-500 flex items-center gap-2">
                                                     <Target className="w-3.5 h-3.5 text-primary" /> Acuerdos y Siguientes Pasos
                                                 </label>
                                                 <textarea
@@ -727,7 +727,7 @@ const Profile = () => {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                <label className="text-xs font-medium text-zinc-500 flex items-center gap-2">
                                                     <Key className="w-3.5 h-3.5 text-zinc-400" /> Nota Privada (Solo Admins)
                                                 </label>
                                                 <textarea
@@ -804,7 +804,7 @@ const Profile = () => {
                                     </CardHeader>
                                     <CardContent className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
                                         <div className="space-y-3">
-                                            <h4 className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                            <h4 className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
                                                 <Award className="w-3.5 h-3.5" /> Fortalezas
                                             </h4>
                                             <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
@@ -812,7 +812,7 @@ const Profile = () => {
                                             </p>
                                         </div>
                                         <div className="space-y-3">
-                                            <h4 className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                                            <h4 className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
                                                 <TrendingUp className="w-3.5 h-3.5" /> Oportunidades
                                             </h4>
                                             <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
@@ -820,7 +820,7 @@ const Profile = () => {
                                             </p>
                                         </div>
                                         <div className="space-y-3">
-                                            <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                                            <h4 className="text-xs font-medium text-primary flex items-center gap-2">
                                                 <Target className="w-3.5 h-3.5" /> Acuerdos
                                             </h4>
                                             <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
@@ -830,7 +830,7 @@ const Profile = () => {
 
                                         {item.privateNote && isAdmin && (
                                             <div className="col-span-full mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/10 -mx-6 px-6 mb-0 pb-6">
-                                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2 mb-2">
+                                                <h4 className="text-xs font-medium text-zinc-500 flex items-center gap-2 mb-2">
                                                     <Key className="w-3.5 h-3.5" /> Nota Privada Administrativa
                                                 </h4>
                                                 <p className="text-sm italic text-zinc-500 dark:text-zinc-400">

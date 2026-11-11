@@ -36,7 +36,7 @@ const HelpCenter = () => {
     <nav aria-label="Capítulos de la guía" className="space-y-7">
       {helpGroups.map((group) => (
         <section key={group.id}>
-          <h2 className="px-3 text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">{group.label}</h2>
+          <h2 className="px-3 text-xs font-medium text-zinc-400 dark:text-zinc-500">{group.label}</h2>
           <div className="mt-2 space-y-1">
             {group.articles.map((article) => (
               <button key={article.id} type="button" onClick={() => selectArticle(article.id)} aria-current={activeArticle.id === article.id ? 'page' : undefined}
@@ -78,7 +78,7 @@ const HelpCenter = () => {
 
         <main className="min-w-0 px-4 py-10 sm:px-8 lg:px-12 lg:py-14 xl:px-16">
           <div className="mx-auto max-w-4xl">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-cyan-deep dark:text-brand-cyan">{activeArticle.groupLabel}</p>
+            <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{activeArticle.groupLabel}</p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">Guía de uso</h1>
             <p className="mt-3 text-base leading-7 text-zinc-500 dark:text-zinc-400">Aprende cómo funciona cada módulo y cómo registrar el trabajo con claridad, seguridad y trazabilidad.</p>
 
@@ -87,13 +87,13 @@ const HelpCenter = () => {
               <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{activeArticle.summary}</p>
 
               <div className="mt-6 rounded-2xl border border-brand-cyan/25 bg-brand-cyan/5 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-cyan-deep dark:text-brand-cyan">Para qué sirve</p>
+                <p className="text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Para qué sirve</p>
                 <p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-200">{activeArticle.purpose}</p>
               </div>
 
               <div className="mt-5 flex gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-white/10 dark:bg-zinc-950/60">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-green-deep dark:text-brand-green" />
-                <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Quién puede usarlo</p><p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-200">{activeArticle.access}</p></div>
+                <div><p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Quién puede usarlo</p><p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-200">{activeArticle.access}</p></div>
               </div>
 
               <div className="mt-7 space-y-7">

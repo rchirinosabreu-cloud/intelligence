@@ -230,7 +230,7 @@ export default function Team() {
             {member.role}
           </span>
           {!member.isActive && (
-            <span className="text-xs text-destructive block mt-2 font-medium uppercase tracking-wider">
+            <span className="text-xs text-destructive block mt-2 font-medium">
               Inactivo
             </span>
           )}
@@ -338,7 +338,7 @@ export default function Team() {
                     />
                     <span className="min-w-0 leading-tight">
                       <span className="block text-xs text-zinc-700 dark:text-zinc-300">{label}</span>
-                      {receives && <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">{receives}</span>}
+                      {receives && <span className="block text-xs text-zinc-500 dark:text-zinc-400">{receives}</span>}
                     </span>
                   </label>
                 ))}
@@ -349,7 +349,7 @@ export default function Team() {
             {email && email.trim() !== '' && (
               <div className="space-y-4 p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
                 <div className="md:max-w-sm">
-                  <label htmlFor="team-system-role" className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
+                  <label htmlFor="team-system-role" className="block text-xs font-medium text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
                   <Select
                     id="team-system-role"
                     value={systemRole}
@@ -364,7 +364,7 @@ export default function Team() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-2">Permisos por Módulo</label>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {PLATFORM_MODULES.map(({ key: module, label }) => {
                       return (

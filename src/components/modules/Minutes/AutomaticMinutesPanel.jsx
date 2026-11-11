@@ -231,7 +231,7 @@ const AutomaticMinutesPanel = () => {
                       {minute.actionItems?.length > 0 && (
                         <div className="mt-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Acciones propuestas</p>
+                            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Acciones propuestas</p>
                             {/* Los compromisos a pendientes (14 de octubre de 2026): deja la petición escrita en el chat de Bria; la persona la envía y confirma. */}
                             {minute.actionItems.some((item) => !item.taskId) && (
                               <button type="button" onClick={() => askBria(`Prepara los pendientes de la reunión «${minute.title}» (id ${minute.id})`)} className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-brand-cyan-deep hover:bg-brand-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-cyan">

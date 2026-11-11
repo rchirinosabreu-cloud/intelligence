@@ -19,7 +19,7 @@ const linkClass = 'font-medium text-brand-cyan-deep underline underline-offset-4
 const Row = ({ cells, head = false }) => (
   <tr className="border-b border-zinc-100 align-top dark:border-zinc-800">
     {cells.map((cell, index) => (head
-      ? <th key={index} scope="col" className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{cell}</th>
+      ? <th key={index} scope="col" className="px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">{cell}</th>
       : <td key={index} className="px-3 py-2 text-sm text-zinc-600 dark:text-zinc-300">{cell}</td>))}
   </tr>
 );

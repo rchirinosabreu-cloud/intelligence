@@ -102,7 +102,7 @@ const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now }) => {
           </div>
         ) : groups.map((group) => (
           <div key={group.dayKey}>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{group.label}</p>
+            <p className="mb-2 text-xs font-medium text-zinc-400 dark:text-zinc-500">{group.label}</p>
             <ul className="min-w-0 space-y-2">
               {group.items.map((task) => (
                 <li key={task.id} className="min-w-0">

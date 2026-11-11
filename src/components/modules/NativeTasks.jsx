@@ -1088,7 +1088,7 @@ const NativeTasks = () => {
                                         initial={{ opacity: 0, y: 6, scale: 0.96 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-brand-cyan-deep px-3 py-2 text-[11px] font-semibold text-white shadow-xl shadow-brand-cyan/20"
+                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-brand-cyan-deep px-3 py-2 text-xs font-semibold text-white shadow-xl shadow-brand-cyan/20"
                                     >
                                         Puedes volver a verlo aquí
                                     </motion.div>
@@ -1203,7 +1203,7 @@ const NativeTasks = () => {
                     <div className="relative overflow-hidden brain-ai-header px-6 py-7 pr-28 text-white">
                         <BriaPortrait  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
                         <DialogHeader className="relative z-10">
-                            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Novedad</span>
+                            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Novedad</span>
                             <DialogTitle className="text-lg text-white sm:whitespace-nowrap">El tiempo de trabajo será visible para ti</DialogTitle>
                             <DialogDescription className="text-sm leading-relaxed text-white">
                                 Ahora tenemos una forma más clara de comprender el trabajo de la agencia, aprender de nuestros tiempos para poder planificar mejor.
@@ -1539,7 +1539,7 @@ const NativeTasks = () => {
                                                     className="group/returned relative flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive shadow-sm transition-all hover:bg-destructive/15"
                                                 >
                                                     <TaskReturnIcon className="w-3.5 h-3.5 animate-pulse" />
-                                                    <span className="text-[10px] font-black uppercase tracking-tighter">
+                                                    <span className="text-xs font-medium tracking-tighter">
                                                         {returnedTasks.length} Devueltas
                                                     </span>
                                                 </button>
@@ -1700,7 +1700,7 @@ const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, high
                         <span
                             data-task-priority-tag={task.priority}
                             className={cn(
-                                "absolute left-0 top-0 z-10 inline-flex h-7 min-w-[7.5rem] items-center pl-3.5 pr-9 text-[10px] font-bold uppercase tracking-wider",
+                                "absolute left-0 top-0 z-10 inline-flex h-7 min-w-[7.5rem] items-center pl-3.5 pr-9 text-xs font-medium",
                                 priorityBadgeClass
                             )}
                         >
@@ -1762,7 +1762,7 @@ const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, high
                                                 ? `El compromiso venció a las ${focusTime}. Termínalo o pide más tiempo.`
                                                 : `Compromiso con hora: solo esta tarea hasta las ${focusTime}`}
                                             className={cn(
-                                                "inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[10px] font-bold",
+                                                "inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-xs font-bold",
                                                 focusOverdue
                                                     ? "border-destructive/30 bg-destructive/10 text-destructive"
                                                     : "border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan"
@@ -1772,7 +1772,7 @@ const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, high
                                         </span>
                                     )}
                                     {isReturned && (
-                                        <span className="flex items-center gap-1 rounded-lg bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
+                                        <span className="flex items-center gap-1 rounded-lg bg-destructive/10 px-1.5 py-0.5 text-xs font-medium tracking-tight text-destructive">
                                             <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
                                         </span>
                                     )}
@@ -1780,7 +1780,7 @@ const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, high
                                         <span
                                             data-task-working-chip
                                             title={`Trabajando ahora: ${workingNames.join(', ')}`}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan"
+                                            className="inline-flex items-center gap-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 px-1.5 py-0.5 text-xs font-bold text-brand-cyan-deep dark:text-brand-cyan"
                                         >
                                             <Users className="h-3 w-3" /> {workingIds.length} trabajando
                                         </span>
@@ -1831,7 +1831,7 @@ const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, high
                                         client={{ id: task.clientId, name: task.clientName, logoUrl: task.client?.logoUrl }}
                                         size={20}
                                     />
-                                    <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                    <span className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                                         {task.clientName}
                                     </span>
                                 </div>
@@ -1907,24 +1907,24 @@ const TaskCardSurface = ({ task, provided, snapshot, canPrioritize = false, high
                                 subió al encabezado, así que la categoría recupera el ancho que le faltaba. */}
                             <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-4 dark:border-white/10">
                                 <div className="flex min-w-0 items-center gap-2.5">
-                                    <span className="hidden items-center gap-1.5 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
+                                    <span className="hidden items-center gap-1.5 text-xs font-medium tracking-tight text-zinc-400 sm:inline-flex">
                                         <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || 'hsl(var(--muted-foreground))' }} />
                                         <span className="truncate max-w-[160px]">{task.aiCategory || 'Sin clasificar'}</span>
                                     </span>
                                     {task.aiComplexity && (
                                         <span className={cn(
-                                            "text-[10px] font-bold uppercase tracking-tight",
+                                            "text-xs font-medium tracking-tight",
                                             task.aiComplexity === 'ALTA' ? 'text-destructive' : task.aiComplexity === 'MEDIA' ? 'text-brand-cyan-deep dark:text-brand-cyan' : 'text-brand-green-deep dark:text-brand-green'
                                         )}>
                                             {task.aiComplexity}
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex shrink-0 items-center gap-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                                <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-zinc-400 dark:text-zinc-500">
                                     {taskCardFooterBadges.map((badge) => (
                                         <span
                                             key={badge.key}
-                                            className={cn("inline-flex h-[22px] items-center gap-1 rounded-md border px-1.5 text-[10px] font-bold leading-none", badge.className)}
+                                            className={cn("inline-flex h-[22px] items-center gap-1 rounded-md border px-1.5 text-xs font-bold leading-none", badge.className)}
                                             title={badge.label}
                                         >
                                             <span className="truncate">{badge.label}</span>

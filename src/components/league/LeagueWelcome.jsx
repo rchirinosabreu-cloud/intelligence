@@ -17,7 +17,7 @@ export default function LeagueWelcome({ busy, error, onFinish }) {
   useEffect(() => { heading.current?.focus(); }, []);
   return <section data-league-welcome className="flex min-h-0 flex-1 flex-col px-5 pb-5">
     <div data-welcome-content className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-5 custom-scrollbar">
-      <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-brand-cyan-deep dark:text-brand-cyan">La liga del mes</p>
+      <p className="mt-2 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">La liga del mes</p>
       <h2 ref={heading} tabIndex={-1} className="mt-2 text-3xl font-bold leading-tight text-zinc-900 outline-none dark:text-zinc-100">El buen trabajo suma</h2>
       <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Los buenos hábitos merecen reconocimiento. Aquí cuentan los pendientes bien gestionados, los logros y la ayuda entre compañeros.</p>
       <div data-welcome-team className="mt-5 flex h-32 items-end justify-center gap-2 overflow-hidden rounded-3xl bg-brand-cyan/10 px-3 pt-5 dark:bg-brand-cyan/10" aria-label="El equipo al frente">

@@ -41,7 +41,7 @@ export const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }
   };
 
   if (!isEditing) {
-    if (links.length === 0) return <span className="text-[10px] text-zinc-400 italic">No asignado</span>;
+    if (links.length === 0) return <span className="text-xs text-zinc-400 italic">No asignado</span>;
     return (
       <div className="flex flex-wrap gap-2">
         {links.map((link, i) => (
@@ -50,7 +50,7 @@ export const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }
             href={link}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2 py-1 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan font-bold text-[10px] rounded-xl transition-colors max-w-full truncate"
+            className="flex items-center gap-1.5 px-2 py-1 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan font-bold text-xs rounded-xl transition-colors max-w-full truncate"
           >
             <ExternalLink className="w-2.5 h-2.5" />
             {links.length > 1 ? `Enlace ${i + 1}` : 'Ver enlace'}
@@ -82,7 +82,7 @@ export const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }
       ))}
       <button
         onClick={handleAddLink}
-        className="flex items-center gap-1 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan transition-colors px-1"
+        className="flex items-center gap-1 text-xs font-bold text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan transition-colors px-1"
       >
         <Plus className="w-3 h-3" /> Añadir enlace
       </button>
@@ -115,7 +115,7 @@ export const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
 
   return (
     <div className="flex min-w-0 flex-col gap-2" data-piece-cover>
-      <span className={`${FIELD_LABEL} gap-2`}>Portada del reel <span className="text-[11px] font-normal">Opcional</span></span>
+      <span className={`${FIELD_LABEL} gap-2`}>Portada del reel <span className="text-xs font-normal">Opcional</span></span>
       <div className="flex min-h-[144px] items-start gap-3 rounded-xl border border-dashed border-zinc-300 bg-white p-4 dark:border-white/15 dark:bg-zinc-900">
         {cover ? (
           <div className="h-20 w-[45px] shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
@@ -129,14 +129,14 @@ export const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
           </div>
         )}
         <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs leading-snug text-zinc-500 dark:text-zinc-400">
             {cover
               ? 'Sale en la pestaña Reels. En la cuadrícula del perfil, Meta recorta su cuadrado central.'
               : 'Sin portada, Meta elige un fotograma del video. Vertical 9:16, JPG o PNG.'}
           </p>
           {isEditing && (
             <div className="flex items-center gap-2.5">
-              <label className={`cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan ${isBusy ? 'pointer-events-none opacity-50' : ''}`}>
+              <label className={`cursor-pointer text-sm font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan ${isBusy ? 'pointer-events-none opacity-50' : ''}`}>
                 {isBusy ? 'Guardando…' : cover ? 'Cambiar' : 'Subir portada'}
                 <input
                   type="file"
@@ -153,14 +153,14 @@ export const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
               {cover && (
                 <>
                   <span className="text-zinc-300 dark:text-zinc-600">·</span>
-                  <button type="button" onClick={() => onRemove(item.id)} disabled={isBusy} className="text-[13px] font-bold text-destructive hover:underline">
+                  <button type="button" onClick={() => onRemove(item.id)} disabled={isBusy} className="text-sm font-bold text-destructive hover:underline">
                     Quitar
                   </button>
                 </>
               )}
             </div>
           )}
-          {!isEditing && !cover && <span className="text-[12px] text-zinc-400">Sin portada.</span>}
+          {!isEditing && !cover && <span className="text-xs text-zinc-400">Sin portada.</span>}
         </div>
       </div>
     </div>
@@ -259,12 +259,12 @@ const FinalAssetTile = ({
               onKeyMove?.(asset.id, direction);
             }}
             aria-label={`${asset.name || 'Archivo'}, puesto ${position + 1} de ${total}. Arrastra la miniatura o usa las flechas del teclado para cambiar el orden.`}
-            className="absolute left-1.5 top-1.5 flex h-6 min-w-6 cursor-grab items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white outline-none backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-brand-cyan"
+            className="absolute left-1.5 top-1.5 flex h-6 min-w-6 cursor-grab items-center justify-center rounded-lg bg-black/55 px-1.5 text-xs font-bold tabular-nums text-white outline-none backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-brand-cyan"
           >
             {position + 1}
           </button>
         ) : (
-          <span data-final-asset-position className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white backdrop-blur-sm">
+          <span data-final-asset-position className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-lg bg-black/55 px-1.5 text-xs font-bold tabular-nums text-white backdrop-blur-sm">
             {position + 1}
           </span>
         )
@@ -303,7 +303,7 @@ const FinalAssetTile = ({
         )}
       </div>
 
-      <span title={downloadName} className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+      <span title={downloadName} className="block truncate px-2.5 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
         {downloadName}
       </span>
       {downloadError && <p role="alert" className="px-2.5 pb-2 text-xs text-destructive">{downloadError}</p>}

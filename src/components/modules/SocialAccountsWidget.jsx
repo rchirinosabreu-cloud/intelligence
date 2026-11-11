@@ -171,7 +171,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
             onClick={() => setDialogOpen(true)}
             aria-label={connectLabel}
             title={connectLabel}
-            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white text-[13px] font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 ${accounts.length ? 'w-9' : 'px-3'}`}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 ${accounts.length ? 'w-9' : 'px-3'}`}
           >
             <Plus className="h-4 w-4" />
             {!accounts.length && <span>Conectar página</span>}
@@ -182,7 +182,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
       ) : accounts.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-[13px] text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+        <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
           Sin redes conectadas. {canManage ? 'Conecta la página de Facebook del cliente para programar sus publicaciones desde la parrilla.' : 'Un administrador puede conectar la página del cliente.'}
         </p>
       ) : (
@@ -200,7 +200,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
                   {page.accounts.map((account) => {
                     const Icon = PLATFORM_ICON[account.platform] || Share2;
                     return (
-                      <li key={account.id} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-[13px] ${account.isActive ? 'border-zinc-200 dark:border-white/10' : 'border-destructive/30 bg-destructive/5'}`}>
+                      <li key={account.id} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${account.isActive ? 'border-zinc-200 dark:border-white/10' : 'border-destructive/30 bg-destructive/5'}`}>
                         <Icon className={`h-4 w-4 shrink-0 ${account.isActive ? 'text-zinc-500 dark:text-zinc-400' : 'text-destructive'}`} aria-hidden="true" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate font-bold text-zinc-900 dark:text-zinc-50">{account.displayName}</span>

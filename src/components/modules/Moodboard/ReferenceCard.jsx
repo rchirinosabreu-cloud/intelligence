@@ -133,7 +133,7 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
         if (item.isTemp) {
           return (
             <div className="flex flex-col bg-white rounded-xl border-2 border-indigo-500 overflow-hidden min-w-[280px] p-4 shadow-2xl animate-in zoom-in-95">
-              <div className="text-[10px] uppercase tracking-wider text-indigo-500 font-black mb-2">Pegar Enlace</div>
+              <div className="text-xs text-indigo-500 font-medium mb-2">Pegar Enlace</div>
               <input
                 autoFocus
                 type="text"
@@ -143,7 +143,7 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
                 onChange={(e) => setUrlInput(e.target.value)}
                 onKeyDown={handleLinkSubmit}
               />
-              <div className="text-[9px] text-zinc-400 mt-2">Presiona Enter para confirmar</div>
+              <div className="text-xs text-zinc-400 mt-2">Presiona Enter para confirmar</div>
             </div>
           );
         }
@@ -165,7 +165,7 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
                       <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
                         <ExternalLink className="w-6 h-6 text-white" />
                       </div>
-                      <span className="text-white text-[10px] font-black uppercase tracking-[0.2em] opacity-80">{brand.name}</span>
+                      <span className="text-white text-xs font-medium opacity-80">{brand.name}</span>
                    </div>
                 ) : (
                   <ExternalLink className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
@@ -175,17 +175,17 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
 
             <div className="p-4 relative">
               {/* Site Badge */}
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-tighter mb-3">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs font-medium text-zinc-500 dark:text-zinc-400 tracking-tighter mb-3">
                  <Globe className="w-2.5 h-2.5" />
                  {meta.siteName || brand?.name || 'Portal Web'}
               </div>
 
-              <h4 className="text-sm font-black text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight mb-2 tracking-tight">
+              <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight mb-2 tracking-tight">
                 {meta.title}
               </h4>
 
               {meta.description && (
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-4">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-4">
                   {meta.description}
                 </p>
               )}
@@ -195,12 +195,12 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
                   href={item.contentUrl?.startsWith('http') ? item.contentUrl : `https://${item.contentUrl}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-[10px] font-black text-indigo-500 hover:text-indigo-400 transition-colors uppercase tracking-widest"
+                  className="flex items-center gap-2 text-xs font-medium text-indigo-500 hover:text-indigo-400 transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Explorar</span>
                 </a>
-                <div className="text-[9px] font-mono text-zinc-300 dark:text-zinc-600">
+                <div className="text-xs font-mono text-zinc-300 dark:text-zinc-600">
                   {(() => {
                     try {
                       return new URL(item.contentUrl).hostname.replace('www.', '');
@@ -288,7 +288,7 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
               </div>
             ) : comment ? (
               <div
-                className="inline-flex items-center gap-1.5 bg-slate-800/90 text-white px-2.5 py-1.5 rounded-full text-[11px] shadow-sm cursor-pointer hover:bg-slate-700 transition-colors"
+                className="inline-flex items-center gap-1.5 bg-slate-800/90 text-white px-2.5 py-1.5 rounded-full text-xs shadow-sm cursor-pointer hover:bg-slate-700 transition-colors"
                 onClick={() => setIsEditing(true)}
               >
                 <MessageSquare className="w-3 h-3 text-slate-400" />
@@ -296,7 +296,7 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
               </div>
             ) : (
               <button
-                className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1.5 bg-white text-slate-500 px-2.5 py-1.5 rounded-full text-[11px] shadow-sm border border-slate-200 hover:bg-slate-50 transition-all"
+                className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1.5 bg-white text-slate-500 px-2.5 py-1.5 rounded-full text-xs shadow-sm border border-slate-200 hover:bg-slate-50 transition-all"
                 onClick={() => setIsEditing(true)}
               >
                 <MessageSquare className="w-3 h-3" />

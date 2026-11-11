@@ -164,7 +164,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                                   <p className="font-semibold text-zinc-900 dark:text-white">{formatCurrency(payable.amount)}</p>
                                   {payable.settledAmount > 0 && <p className="text-xs text-zinc-500">Compensado {formatCurrency(payable.settledAmount)} · pendiente {formatCurrency(payable.outstanding)}</p>}
                                   {!closed && payable.paidAmount > 0 && <p className="text-xs text-zinc-500">Pagado {formatCurrency(payable.paidAmount)} · falta {formatCurrency(payable.outstanding)}</p>}
-                                  <span data-payable-due={payable.dueState.key} className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                  <span data-payable-due={payable.dueState.key} className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
                                     ['PAGADA', 'SALDADA'].includes(payable.status) && 'bg-status-positive/10 text-status-positive',
                                     payable.status === 'ANULADA' && 'bg-zinc-100 text-zinc-500 dark:bg-white/10',
                                     payable.status === 'PARCIAL' && 'bg-primary/10 text-primary',

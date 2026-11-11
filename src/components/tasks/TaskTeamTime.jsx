@@ -123,9 +123,9 @@ export default function TaskTeamTime({ taskId, currentUserId, hasCollaborators, 
                 <p className="flex items-center gap-2 text-sm font-medium text-zinc-900 dark:text-zinc-50">
                   <span className="truncate">{row.name}</span>
                   {row.role === 'ASSIGNEE' && (
-                    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Responsable</span>
+                    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Responsable</span>
                   )}
-                  {mine && <span className="shrink-0 text-[10px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}
+                  {mine && <span className="shrink-0 text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}
                 </p>
                 <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {row.working ? 'Trabajando ahora' : row.elapsedMs > 0 ? 'En pausa' : 'No ha empezado'}

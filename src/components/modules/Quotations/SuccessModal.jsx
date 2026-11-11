@@ -34,7 +34,7 @@ const SuccessModal = ({ isOpen, onClose, link }) => {
 
                 <div className="flex items-center space-x-2 bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
                     <div className="grid flex-1 gap-2 overflow-hidden">
-                        <p className="text-xs font-bold text-zinc-400 uppercase flex items-center gap-2">
+                        <p className="text-xs font-medium text-zinc-400 flex items-center gap-2">
                             <Globe className="w-3 h-3" /> Enlace de la propuesta
                         </p>
                         <input

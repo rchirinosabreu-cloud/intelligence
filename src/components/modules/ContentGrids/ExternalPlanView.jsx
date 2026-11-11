@@ -109,7 +109,7 @@ function CommentThread({ comment, onReply, sending, onReplyOpenChange }) {
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500 dark:text-zinc-400">
         <span className="font-semibold text-zinc-800 dark:text-zinc-100">{comment.author}</span>
         <span>{when(comment.createdAt)}</span>
-        {comment.resolved && <span className="rounded bg-zinc-200 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">Resuelto</span>}
+        {comment.resolved && <span className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">Resuelto</span>}
       </p>
       {comment.quoted && <p className="mt-1 border-l-2 border-zinc-300 pl-2 text-xs italic text-zinc-500 dark:border-white/15 dark:text-zinc-400">«{comment.quoted}»</p>}
       <p className="mt-1 whitespace-pre-wrap text-zinc-800 [overflow-wrap:anywhere] dark:text-zinc-100">{comment.content}</p>
@@ -172,7 +172,7 @@ export function PieceCard({ piece, editable, statusOptions, onStatus, savingRow,
           </a>
         )}
       </header>
-      {piece.objective && <p className="mt-1 text-xs uppercase tracking-wide text-zinc-400">{piece.objective}</p>}
+      {piece.objective && <p className="mt-1 text-xs text-zinc-400">{piece.objective}</p>}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <LongText label="Copy" text={piece.copy} />
         <LongText label="Caption" text={piece.caption} />

@@ -78,7 +78,7 @@ const SidebarProfile = ({ className, collapsed = false }) => {
               />
             </span>
             <span className={cn('mt-1 max-w-full truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50', collapsed && 'lg:sr-only')}>{user.name}</span>
-            <span className={cn('flex max-w-full items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400', collapsed && 'lg:hidden')}>
+            <span className={cn('flex max-w-full items-center gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-400', collapsed && 'lg:hidden')}>
               <span className="truncate">{role}</span>
               <ChevronDown className="h-3 w-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
             </span>

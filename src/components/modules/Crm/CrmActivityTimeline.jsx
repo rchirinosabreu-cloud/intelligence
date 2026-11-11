@@ -37,7 +37,7 @@ const CrmActivityTimeline = ({ activities = [], emptyMessage = 'Todavía no hay 
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   {isStage ? <>{activity.fromStage ? stageLabel(activity.fromStage) : 'Inicio'} <ArrowRight className="mx-1 inline h-3 w-3 text-zinc-400" /> {stageLabel(activity.toStage)}</> : activityLabel(activity.type)}
                 </p>
-                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{formatDateTime(activity.occurredAt)}{activity.editedAt ? ' · editada' : ''}</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">{formatDateTime(activity.occurredAt)}{activity.editedAt ? ' · editada' : ''}</span>
               </div>
               {activity.note && <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-200">{activity.note}</p>}
               {activity.result && (
@@ -50,7 +50,7 @@ const CrmActivityTimeline = ({ activities = [], emptyMessage = 'Todavía no hay 
                 </p>
               )}
               {activity.author && (
-                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400">
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-400">
                   <TeamAvatar member={activity.author} className="h-4 w-4" size={16} showTitle={false} /> {activity.author.name}
                 </div>
               )}

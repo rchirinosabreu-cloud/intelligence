@@ -152,7 +152,7 @@ const DemographicsChart = ({ demographics }) => {
     <div className="space-y-6 mt-4 w-full">
       {ageGenderData.length > 0 && totalAgeGender > 0 && (
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
-          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">{toSentenceCase("Rango de edad y género")}</h5>
+          <h5 className="text-xs font-medium text-slate-400 mb-4">{toSentenceCase("Rango de edad y género")}</h5>
           <DemographicsBarChart data={ageGenderData} />
         </div>
       )}
@@ -160,7 +160,7 @@ const DemographicsChart = ({ demographics }) => {
       <div className="grid grid-cols-1 gap-6">
         {citiesData.length > 0 && totalCities > 0 && (
           <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">{toSentenceCase("Principales ciudades")}</h5>
+            <h5 className="text-xs font-medium text-slate-400 mb-4">{toSentenceCase("Principales ciudades")}</h5>
             <div className="space-y-4">
               {citiesData.map((city, idx) => (
                 <div key={idx} className="space-y-1.5">
@@ -179,7 +179,7 @@ const DemographicsChart = ({ demographics }) => {
 
         {countriesData.length > 0 && totalCountries > 0 && (
           <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">{toSentenceCase("Principales países")}</h5>
+            <h5 className="text-xs font-medium text-slate-400 mb-4">{toSentenceCase("Principales países")}</h5>
             <div className="space-y-4">
               {countriesData.map((country, idx) => (
                 <div key={idx} className="space-y-1.5">
@@ -285,10 +285,10 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
         {sanitizedDataset.map((item, idx) => (
           <div key={idx} className="bg-[#f8fafc] border border-slate-200 p-6 rounded-2xl space-y-2 shadow-sm break-inside-avoid">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <span className="text-xs font-medium text-slate-400">
               {toSentenceCase(item.label)}
             </span>
-            <h4 className="text-2xl font-black text-[#0f172a]">
+            <h4 className="text-2xl font-semibold text-[#0f172a]">
               {((item[activeDataKey] !== undefined && item[activeDataKey] !== null) ? item[activeDataKey] : (item.value || 0)).toLocaleString('es-ES')}
             </h4>
           </div>
@@ -364,7 +364,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
     return (
       <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white mt-4">
         <table className="w-full border-collapse text-left text-xs text-slate-500">
-          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+          <thead className="bg-slate-50 text-xs font-medium text-slate-400 border-b border-slate-100">
             <tr>
               <th className="px-6 py-4 font-bold">Publicación destacada / Ad Creative</th>
               <th className="px-6 py-4 font-bold text-right">Resultados</th>
@@ -434,7 +434,7 @@ const TopContentTable = ({ data }) => {
   return (
     <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white mt-4">
       <table className="w-full border-collapse text-left text-xs text-slate-500">
-        <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+        <thead className="bg-slate-50 text-xs font-medium text-slate-400 border-b border-slate-100">
           <tr>
             <th className="px-6 py-4 font-bold">Publicación destacada / Ad Creative</th>
             <th className="px-6 py-4 font-bold text-right">Resultados</th>
@@ -490,13 +490,13 @@ const ReportCover = ({ report }) => {
       {/* Main Cover Body */}
       <div className="space-y-6 md:space-y-8 my-auto">
          {/* Badge redondeado */}
-         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#8ab9ee]/20 text-[#144c8c] rounded-full text-xs font-extrabold tracking-wider uppercase">
+         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#8ab9ee]/20 text-[#144c8c] rounded-full text-xs font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-[#144c8c]" />
             Reporte oficial
          </div>
 
          {/* Giant Title */}
-         <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-black text-[#1c242c] tracking-tight leading-[0.95] max-w-6xl">
+         <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-semibold text-[#1c242c] tracking-tight leading-[0.95] max-w-6xl">
             <span data-cover-line="title" className="block md:whitespace-nowrap">Reporte de desempeño digital</span>
             <span data-cover-line="client" className="block mt-3 text-[#144c8c]">de {clientName}</span>
          </h1>
@@ -508,7 +508,7 @@ const ReportCover = ({ report }) => {
       </div>
 
       {/* Bottom Footer Section */}
-      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] border-t border-slate-100 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="text-xs font-medium text-slate-400 border-t border-slate-100 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
          <span>Creado por Brainstudio agencia</span>
          <span className="text-slate-300 hidden sm:block">•</span>
          <span>Periodo: {formattedStart} — {formattedEnd}</span>
@@ -531,7 +531,7 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
       <div className="space-y-4">
         <textarea
           rows={2}
-          className="w-full bg-transparent border-none text-3xl font-black text-[#0f172a] leading-snug tracking-tight focus:ring-1 focus:ring-primary/10 rounded-xl py-2 outline-none resize-none"
+          className="w-full bg-transparent border-none text-3xl font-semibold text-[#0f172a] leading-snug tracking-tight focus:ring-1 focus:ring-primary/10 rounded-xl py-2 outline-none resize-none"
           value={toSentenceCase(narrative.headline) || ''}
           onChange={(e) => onUpdate({ ...narrative, headline: e.target.value })}
         />
@@ -547,7 +547,7 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
 
           return (
             <Card key={idx} className="bg-[#144c8c] border-[#144c8c] p-6 flex flex-col gap-4 break-inside-avoid shadow-sm text-white rounded-3xl">
-              <div className="w-8 h-8 rounded-full bg-white/20 border border-white/10 text-white flex items-center justify-center font-black text-sm shrink-0">
+              <div className="w-8 h-8 rounded-full bg-white/20 border border-white/10 text-white flex items-center justify-center font-semibold text-sm shrink-0">
                 {idx + 1}
               </div>
               <div className="flex-1 space-y-2">
@@ -637,13 +637,13 @@ const MetricGrid = ({ metrics }) => {
               <MetricIcon className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1 space-y-1">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+              <span className="text-xs font-medium text-slate-500">
                 {CANONICAL_METRICS[key] || metric.label || key}
                 {metric.isManuallyEdited && (
-                  <span className="ml-1 text-[9px] text-primary font-bold lowercase tracking-normal">(editado)</span>
+                  <span className="ml-1 text-xs text-primary font-bold lowercase tracking-normal">(editado)</span>
                 )}
               </span>
-              <h4 className="text-2xl font-black leading-tight text-slate-900 dark:text-slate-50 break-words">
+              <h4 className="text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-50 break-words">
                 {formatMetricValue(key, metric)}
               </h4>
             </div>
@@ -688,7 +688,7 @@ const OrganicSummary = ({ summary, organicSummaryByPlatform, sourceExtractions }
       {rows.map((row) => (
         <div key={row.key} className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#627d9f]">{row.label}</span>
+            <span className="text-xs font-medium text-[#627d9f]">{row.label}</span>
             <span className="h-px flex-1 bg-[#d3cebe]" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -701,8 +701,8 @@ const OrganicSummary = ({ summary, organicSummaryByPlatform, sourceExtractions }
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{style.label}</span>
-                    <h4 className="text-2xl font-black text-slate-900 dark:text-slate-50 truncate">{formatMetricValue(key, metric)}</h4>
+                    <span className="text-xs font-medium text-slate-500">{style.label}</span>
+                    <h4 className="text-2xl font-semibold text-slate-900 dark:text-slate-50 truncate">{formatMetricValue(key, metric)}</h4>
                   </div>
                 </div>
               );
@@ -728,13 +728,13 @@ const ActionPlan = ({ narrative, onUpdate }) => {
   return (
     <div className="space-y-6 break-inside-avoid pt-12 border-t border-slate-100">
       <div className="space-y-2">
-        <h3 className="text-xl font-black tracking-tight text-slate-800">Plan de Acción Sugerido</h3>
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Estrategias de Optimización para el Siguiente Periodo</p>
+        <h3 className="text-xl font-semibold tracking-tight text-slate-800">Plan de Acción Sugerido</h3>
+        <p className="text-xs text-slate-400 font-medium">Estrategias de Optimización para el Siguiente Periodo</p>
       </div>
 
       <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white">
         <table className="w-full border-collapse text-left text-sm text-slate-500">
-          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+          <thead className="bg-slate-50 text-xs font-medium text-slate-400 border-b border-slate-100">
             <tr>
               <th className="px-6 py-4 font-bold">Compromiso / Acción Recomendada</th>
               <th className="px-6 py-4 font-bold">KPI de Éxito</th>
@@ -802,13 +802,13 @@ const SourceAppendix = ({ sources }) => {
   return (
     <div className="space-y-6 break-inside-avoid pt-12 border-t border-slate-100 print:hidden">
       <div className="space-y-2">
-        <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Apéndice de evidencias")}</h3>
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Capturas originales de Meta Ads procesadas")}</p>
+        <h3 className="text-xl font-semibold tracking-tight text-slate-800">{toSentenceCase("Apéndice de evidencias")}</h3>
+        <p className="text-xs text-slate-400 font-medium">{toSentenceCase("Capturas originales de Meta Ads procesadas")}</p>
       </div>
       <div className="grid grid-cols-1 gap-6">
         {sources.map((src, idx) => (
           <Card key={idx} className="overflow-hidden border-slate-100 p-4 bg-slate-50/50">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-200/60 mb-3 flex justify-between items-center">
+            <div className="text-xs font-medium text-slate-400 pb-3 border-b border-slate-200/60 mb-3 flex justify-between items-center">
               <span>{src.screenType || 'Evidencia'}</span>
               <span>{src.platform}</span>
             </div>
@@ -863,7 +863,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
   return (
     <div className="space-y-8 bg-white dark:bg-slate-900 border border-[#e2e8f0] dark:border-slate-700 rounded-[2.5rem] p-10 shadow-lg no-print">
       <div className="border-b border-slate-100 pb-6 space-y-2">
-        <h2 className="text-2xl font-black text-slate-800 dark:text-slate-50 flex items-center gap-2">
+        <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-50 flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-primary" />
           Auditoría de Métricas Extraídas (Visión AI)
         </h2>
@@ -889,7 +889,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
       {Object.keys(report.normalizedMetrics?.organicSummary || {}).length > 0 && (
         <section className="space-y-4">
           <div className="space-y-1">
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Resumen orgánico detectado</h3>
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Resumen orgánico detectado</h3>
             <p className="text-xs text-slate-500">Un único grupo con cifras orgánicas verificables; los totales mixtos y de anuncios quedan excluidos.</p>
           </div>
           <OrganicSummary
@@ -901,7 +901,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
       )}
 
       {getReviewMetricEntries(localMetrics).length > 0 && (
-        <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Métricas de pauta detectadas</h3>
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Métricas de pauta detectadas</h3>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {getReviewMetricEntries(localMetrics).map(([key, metric]) => {
@@ -918,11 +918,11 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
               )}
             >
               <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <span className="text-xs font-medium text-slate-400">
                   {metric.label || key}
                 </span>
                 <span className={cn(
-                  "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                  "text-xs font-bold px-2 py-0.5 rounded-full",
                   warningActive ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
                 )}>
                   {((metric.confidence || 1.0) * 100).toFixed(0)}% conf
@@ -950,7 +950,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evidencia detectada:</p>
+                  <p className="text-xs text-slate-400 font-medium">Evidencia detectada:</p>
                   <p className="text-xs text-slate-600 bg-white/75 border border-slate-100 p-2.5 rounded-lg italic line-clamp-2">
                     &ldquo;{metric.evidence || 'N/A'}&rdquo;
                   </p>
@@ -1566,11 +1566,11 @@ const Reports = () => {
               </Select>
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-1.5">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Desde</span>
+                  <span className="text-xs font-medium text-slate-400">Desde</span>
                   <BrainDatePicker ariaLabel="Desde" value={startDate} max={endDate} onChange={setStartDate} className="py-2.5 text-xs" />
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Hasta</span>
+                  <span className="text-xs font-medium text-slate-400">Hasta</span>
                   <BrainDatePicker ariaLabel="Hasta" value={endDate} min={startDate} onChange={setEndDate} className="py-2.5 text-xs" />
                 </label>
               </div>
@@ -1793,7 +1793,7 @@ const Reports = () => {
                              return (
                                <div key={idx} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm break-inside-avoid">
                                  <div className="bg-[#1c242c] px-5 py-4">
-                                   <input type="text" className="w-full bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-sm font-black" value={achievement.title} onChange={(e) => updateAchievement('title', e.target.value)} />
+                                   <input type="text" className="w-full bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-sm font-semibold" value={achievement.title} onChange={(e) => updateAchievement('title', e.target.value)} />
                                  </div>
                                  <textarea rows={3} className="w-full bg-white dark:bg-slate-900 border-none text-slate-600 dark:text-slate-200 focus:ring-0 outline-none p-5 text-sm leading-relaxed resize-none" value={achievement.description} onChange={(e) => updateAchievement('description', e.target.value)} />
                                </div>
@@ -1807,8 +1807,8 @@ const Reports = () => {
                      {Object.keys(report.normalizedMetrics?.organicSummary || {}).length > 0 && (
                        <div className="border-t border-slate-100 pt-8 space-y-6 page-break-after w-full">
                          <div className="space-y-1">
-                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
-                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Lectura consolidada de la actividad orgánica</p>
+                           <h3 className="text-xl font-semibold tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
+                         <p className="text-xs text-slate-400 font-medium">Lectura consolidada de la actividad orgánica</p>
                          </div>
                          <OrganicSummary
                            summary={report.normalizedMetrics.organicSummary}
@@ -1821,8 +1821,8 @@ const Reports = () => {
                      {/* 5. Sección Orgánica (Redes Sociales): Distribución de Formatos, Demografía con Ciudades/Países, y Contenido Top */}
                      {report.sections?.some(s => s.sectionCategory === 'ORGANIC') && <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
                        <div className="space-y-1">
-                         <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Sección orgánica (redes sociales)")}</h3>
-                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
+                         <h3 className="text-xl font-semibold tracking-tight text-slate-800">{toSentenceCase("Sección orgánica (redes sociales)")}</h3>
+                         <p className="text-xs text-slate-400 font-medium">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
                        </div>
 
                        {report.sections && report.sections.filter(s => s.sectionCategory === 'ORGANIC').map((sect, idx) => {
@@ -1834,8 +1834,8 @@ const Reports = () => {
                          return (
                          <div key={sect.sectionId || `organic-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
                            <div className="flex justify-between items-center">
-                             <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Rendimiento orgánico')}</h4>
-                             <span className="text-[10px] font-bold text-[#144c8c] uppercase tracking-wider bg-[#8ab9ee]/20 px-2.5 py-0.5 rounded-full">{platformLabel}</span>
+                             <h4 className="text-base font-semibold text-slate-800">{toSentenceCase(sect.title || 'Rendimiento orgánico')}</h4>
+                             <span className="text-xs font-medium text-[#144c8c] bg-[#8ab9ee]/20 px-2.5 py-0.5 rounded-full">{platformLabel}</span>
                            </div>
                            {sect.demographics ? (
                              <DemographicsChart demographics={sect.demographics} />
@@ -1854,7 +1854,7 @@ const Reports = () => {
                        {/* Demographics stacked cleanly under formats */}
                        {report.normalizedMetrics?.demographics && (
                          <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
-                           <h4 className="text-sm font-black text-slate-800">{toSentenceCase("Distribución demográfica")}</h4>
+                           <h4 className="text-sm font-semibold text-slate-800">{toSentenceCase("Distribución demográfica")}</h4>
                            <DemographicsChart demographics={report.normalizedMetrics.demographics} />
                            <GranularNarrativeBlock
                              sectionKey="demographics"
@@ -1869,13 +1869,13 @@ const Reports = () => {
                      {/* 6. Sección de Pauta Digital (Meta Ads): Tabla de Desempeño de Anuncios y Tendencias Temporales */}
                      {(report.sections?.some(s => s.sectionCategory === 'ADS') || Object.keys(report.normalizedMetrics?.adsSummary || {}).length > 0) && <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
                        <div className="space-y-1">
-                         <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Sección de pauta digital (Meta Ads)")}</h3>
-                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
+                         <h3 className="text-xl font-semibold tracking-tight text-slate-800">{toSentenceCase("Sección de pauta digital (Meta Ads)")}</h3>
+                         <p className="text-xs text-slate-400 font-medium">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
                        </div>
 
                        {Object.keys(report.normalizedMetrics?.adsSummary || {}).length > 0 && (
                          <div className="space-y-4 break-inside-avoid">
-                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño de pauta</h3>
+                           <h3 className="text-xl font-semibold tracking-tight text-slate-800">Resultados generales — Desempeño de pauta</h3>
                            <MetricGrid metrics={report.normalizedMetrics.adsSummary} />
                          </div>
                        )}
@@ -1884,8 +1884,8 @@ const Reports = () => {
                        {report.normalizedMetrics?.series && report.normalizedMetrics.series.length > 0 && (
                          <div className="space-y-4 pt-6 w-full">
                            <div className="space-y-1">
-                             <h4 className="text-sm font-black text-slate-800">{toSentenceCase("Tendencia de desempeño")}</h4>
-                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{toSentenceCase("Evolución de rendimiento en el periodo")}</p>
+                             <h4 className="text-sm font-semibold text-slate-800">{toSentenceCase("Tendencia de desempeño")}</h4>
+                             <p className="text-xs text-slate-400 font-medium">{toSentenceCase("Evolución de rendimiento en el periodo")}</p>
                            </div>
                            <PerformanceTrendChart data={report.normalizedMetrics.series} />
                            <GranularNarrativeBlock
@@ -1900,7 +1900,7 @@ const Reports = () => {
                        {/* Top content table (creative names / Reels) for ads */}
                        {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
                          <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
-                           <h4 className="text-sm font-black text-slate-800">{toSentenceCase("Desempeño de anuncios")}</h4>
+                           <h4 className="text-sm font-semibold text-slate-800">{toSentenceCase("Desempeño de anuncios")}</h4>
                            <TopContentTable data={report.normalizedMetrics.topContent} />
 
                            {narrativeState?.contenidoTopAnalisis && (
@@ -1923,8 +1923,8 @@ const Reports = () => {
                          return (
                          <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
                            <div className="flex justify-between items-center">
-                             <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
-                             <span className="text-[10px] font-bold text-[#1f3c58] uppercase tracking-wider bg-[#d3cebe]/40 px-2.5 py-0.5 rounded-full">Meta Ads</span>
+                             <h4 className="text-base font-semibold text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
+                             <span className="text-xs font-medium text-[#1f3c58] bg-[#d3cebe]/40 px-2.5 py-0.5 rounded-full">Meta Ads</span>
                            </div>
                            <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={sect.platform || 'META_ADS'} />
                            <SectionInsight
@@ -1953,16 +1953,16 @@ const Reports = () => {
                                  <div className="border-b border-white/10 pb-3 flex items-center justify-between">
                                    <input
                                      type="text"
-                                     className="bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-base font-black w-full"
+                                     className="bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-base font-semibold w-full"
                                      value={item.title || ''}
                                      onChange={(e) => updateItem('title', e.target.value)}
                                      placeholder="Título de la Oportunidad"
                                    />
-                                   <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider bg-cyan-400/10 px-2.5 py-0.5 rounded-full shrink-0">Oportunidad</span>
+                                   <span className="text-xs font-medium text-cyan-400 bg-cyan-400/10 px-2.5 py-0.5 rounded-full shrink-0">Oportunidad</span>
                                  </div>
                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-normal">
                                    <div className="space-y-1">
-                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Evidencia:</span>
+                                     <span className="text-xs font-medium text-slate-400 block">Evidencia:</span>
                                      <textarea
                                        rows={2}
                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/10 !h-auto"
@@ -1972,7 +1972,7 @@ const Reports = () => {
                                      />
                                    </div>
                                    <div className="space-y-1">
-                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Aprendizaje:</span>
+                                     <span className="text-xs font-medium text-slate-400 block">Aprendizaje:</span>
                                      <textarea
                                        rows={2}
                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/10 !h-auto"
@@ -1982,7 +1982,7 @@ const Reports = () => {
                                      />
                                    </div>
                                    <div className="space-y-1">
-                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Aplicación:</span>
+                                     <span className="text-xs font-medium text-slate-400 block">Aplicación:</span>
                                      <textarea
                                        rows={2}
                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/10 !h-auto"
@@ -2020,13 +2020,13 @@ const Reports = () => {
                                  <div className="border-b border-white/20 pb-3 flex items-center justify-between">
                                    <input
                                      type="text"
-                                     className="bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-base font-black w-full"
+                                     className="bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-base font-semibold w-full"
                                      value={item.action || ''}
                                      onChange={(e) => updateItem('action', e.target.value)}
                                      placeholder="Acción Recomendada"
                                    />
                                    <span className={cn(
-                                     "text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full shrink-0",
+                                     "text-xs font-medium px-2.5 py-0.5 rounded-full shrink-0",
                                      item.priority === 'ALTA' ? "bg-red-500/20 text-red-200" : "bg-amber-500/20 text-amber-200"
                                    )}>
                                      Prioridad {item.priority || 'ALTA'}
@@ -2034,7 +2034,7 @@ const Reports = () => {
                                  </div>
                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm font-normal">
                                    <div className="space-y-1">
-                                     <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 block">Justificación Estratégica:</span>
+                                     <span className="text-xs font-medium text-white/60 block">Justificación Estratégica:</span>
                                      <textarea
                                        rows={2}
                                        className="w-full bg-white/5 border border-white/20 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/20 !h-auto"
@@ -2044,7 +2044,7 @@ const Reports = () => {
                                      />
                                    </div>
                                    <div className="space-y-1">
-                                     <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 block">KPI / Métrica de Éxito:</span>
+                                     <span className="text-xs font-medium text-white/60 block">KPI / Métrica de Éxito:</span>
                                      <textarea
                                        rows={2}
                                        className="w-full bg-white/5 border border-white/20 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/20 !h-auto"
@@ -2061,7 +2061,7 @@ const Reports = () => {
                        </div>
                      )}
 
-                     <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-350 text-[10px] font-bold tracking-widest uppercase font-bold w-full">
+                     <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-350 text-xs font-medium w-full">
                         <span>Creado por Brainstudio Agencia</span>
                         <span>Fecha de emisión: {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                      </div>

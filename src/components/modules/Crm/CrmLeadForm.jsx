@@ -22,7 +22,7 @@ const Field = ({ label, children, className, hint }) => (
   <div className={cn('min-w-0', className)}>
     <label className={labelClass}>{label}</label>
     {children}
-    {hint && <p className="mt-1 text-[11px] text-zinc-400">{hint}</p>}
+    {hint && <p className="mt-1 text-xs text-zinc-400">{hint}</p>}
   </div>
 );
 
