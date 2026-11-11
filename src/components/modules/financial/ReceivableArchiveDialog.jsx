@@ -12,8 +12,8 @@ export default function ReceivableArchiveDialog({ debt, saving, error, onClose, 
   const problem = collectionArchiveProblem({ reason });
   return <Dialog open={!!debt} onOpenChange={open => !open && !saving && onClose()}><DialogContent data-receivable-archive-dialog className="sm:max-w-md dark:bg-zinc-900">
     <DialogHeader>
-      <DialogTitle>Archivar del cobro</DialogTitle>
-      <DialogDescription>{debt?.clientName} · saldo {money(debt?.outstanding)}. La cuenta sigue en Cartera con su saldo y su historial, pero deja de generar avisos y no cuenta como vencida. Puedes desarchivarla cuando quieras.</DialogDescription>
+      <DialogTitle>Archivar cuenta</DialogTitle>
+      <DialogDescription>{debt?.clientName} · saldo {money(debt?.outstanding)}. La cuenta sigue en Cartera con su saldo y su historial, pero pasa a «Cobros archivados», deja de generar avisos y no cuenta como vencida. Puedes desarchivarla cuando quieras.</DialogDescription>
     </DialogHeader>
     <form onSubmit={event => { event.preventDefault(); if (!problem) onConfirm(reason.trim()); }} className="space-y-4">
       <label className="block space-y-1.5 text-sm"><span className="block">Motivo</span>

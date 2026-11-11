@@ -1162,11 +1162,22 @@ await invalidateFinancialQueries(queryClient);
             .filter(item => item.value > 0);
     }, [data?.categoriesDistribution]);
 
-    const receivablesByClient = useMemo(() => groupFinancialReceivables((receivablesLedger?.items || []).filter((item) => (
-        (!receivableKind || receivableKind === (item.kind || 'CLIENTE'))
-        && (!receivableBucket || agingBucketOf(item) === receivableBucket)
-    ))), [receivablesLedger?.items, receivableKind, receivableBucket]);
-    const receivableSections = useMemo(() => [{ key: 'PERSONAS', title: 'Cuentas por cobrar por tercero', groups: receivablesByClient }], [receivablesByClient]);
+    // Rodny, 11 de noviembre de 2026: lo archivado y lo que ya no tiene deuda no van mezclados con lo que se cobra;
+    // cada uno en su panel plegado. Una cuenta archivada va a «Cobros archivados» aunque el cliente tenga otras al día.
+    const receivableSections = useMemo(() => {
+        const visible = (receivablesLedger?.items || []).filter((item) => (
+            (!receivableKind || receivableKind === (item.kind || 'CLIENTE'))
+            && (!receivableBucket || agingBucketOf(item) === receivableBucket)
+        ));
+        const groups = groupFinancialReceivables(visible.filter((item) => !item.collectionArchive));
+        const pending = (group) => group.totalOutstanding > 0.005 || group.reviewCount > 0;
+        return [
+            { key: 'PERSONAS', title: 'Cuentas por cobrar por tercero', groups: groups.filter(pending) },
+            { key: 'SIN_DEUDA', title: 'Sin deuda pendiente', collapsible: true, groups: groups.filter((group) => !pending(group)) },
+            { key: 'ARCHIVADAS', title: 'Cobros archivados', collapsible: true, groups: groupFinancialReceivables(visible.filter((item) => item.collectionArchive)) }
+        ].filter((section) => !section.collapsible || section.groups.length);
+    }, [receivablesLedger?.items, receivableKind, receivableBucket]);
+    const [openReceivableSections, setOpenReceivableSections] = useState({});
     const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser, canFormalize }), [isAdminUser, canFormalize]);
     const activeFinancialTab = financialTabOfView(activeTab);
     const activeTabViews = financialTabs.find((group) => group.key === activeFinancialTab)?.views || [];
@@ -1461,12 +1472,20 @@ await invalidateFinancialQueries(queryClient);
                                 <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto mb-3" />
                                 <p className="text-sm font-semibold text-zinc-900 dark:text-white">Cargando cuentas por cobrar…</p>
                             </div>
-                        ) : receivablesByClient.length > 0 ? (
+                        ) : receivableSections.some((section) => section.groups.length) ? (
                             <div className="space-y-6">
                                 {receivableSections.map((section) => (
                                 <section key={section.key} data-receivable-section={section.key} className="space-y-3">
-                                <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{section.title}</h3>
-                                {section.groups.map((client) => {
+                                {section.collapsible
+                                    ? <button type="button" data-receivable-section-toggle={section.key} aria-expanded={!!openReceivableSections[section.key]}
+                                        onClick={() => setOpenReceivableSections((current) => ({ ...current, [section.key]: !current[section.key] }))}
+                                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 text-left text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-white/5">
+                                        <span>{section.title} <span className="font-normal text-zinc-500">· {section.groups.length} {section.groups.length === 1 ? 'tercero' : 'terceros'}{section.key === 'ARCHIVADAS' ? ` · ${formatCurrency(section.groups.reduce((sum, group) => sum + group.totalOutstanding, 0))}` : ''}</span></span>
+                                        {openReceivableSections[section.key] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    </button>
+                                    : <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{section.title}</h3>}
+                                {!section.collapsible && !section.groups.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay cuentas pendientes de cobro con estos filtros.</p>}
+                                {(!section.collapsible || openReceivableSections[section.key]) && section.groups.map((client) => {
                                     const isExpanded = !!expandedClients[client.clientId];
                                     return (
                                         <Card key={client.clientId} className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
@@ -1640,7 +1659,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     {canWriteFinancials && !debt.collectionArchive && !isReceivableClosed(debt.status) && Number(debt.outstanding) > 0.005 && <button type="button" data-receivable-archive
                                                                         onClick={() => { setNoticeError(''); setArchiveDebt(debt); }}
                                                                         className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
-                                                                        <Archive className="h-3.5 w-3.5" />Archivar del cobro
+                                                                        <Archive className="h-3.5 w-3.5" />Archivar
                                                                     </button>}
                                                                     {canWriteFinancials && !debt.barterPaymentId && !debt.payments?.some(p => p.kind === 'CANJE') && <button type="button"
                                                                         onClick={() => { setDeleteReason(''); setNoticeError(''); setDebtToDelete(debt); }}
@@ -1650,7 +1669,7 @@ await invalidateFinancialQueries(queryClient);
                                                                 </div>
                                                                 {debt.collectionArchive && (
                                                                     <div data-receivable-archived className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
-                                                                        <span><strong className="font-semibold text-zinc-800 dark:text-zinc-100">Archivada del cobro</strong> · no genera avisos{debt.collectionArchive.reason ? ` · ${debt.collectionArchive.reason}` : ''}{debt.collectionArchive.archivedByName ? ` · ${debt.collectionArchive.archivedByName}` : ''}{debt.collectionArchive.archivedAt ? `, ${new Date(debt.collectionArchive.archivedAt).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}` : ''}</span>
+                                                                        <span><strong className="font-semibold text-zinc-800 dark:text-zinc-100">Archivada</strong> · no genera avisos{debt.collectionArchive.reason ? ` · ${debt.collectionArchive.reason}` : ''}{debt.collectionArchive.archivedByName ? ` · ${debt.collectionArchive.archivedByName}` : ''}{debt.collectionArchive.archivedAt ? `, ${new Date(debt.collectionArchive.archivedAt).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}` : ''}</span>
                                                                         {canWriteFinancials && <button type="button" data-receivable-unarchive disabled={savingReceivableId === debt.id} onClick={() => handleReceivableArchive(debt, { archived: false })} className="min-h-11 rounded-lg px-2 font-semibold text-primary hover:bg-primary/5 disabled:opacity-50">Desarchivar</button>}
                                                                     </div>
                                                                 )}

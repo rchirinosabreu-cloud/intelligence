@@ -78,6 +78,11 @@ test('Cartera ofrece «Archivar del cobro», muestra la marca y la ruta está de
     assert.match(dashboard, /data-receivable-archive\b/);
     assert.match(dashboard, /data-receivable-archived/);
     assert.match(dashboard, /data-receivable-unarchive/);
+    // Lo archivado y lo que ya no tiene deuda van en paneles plegados, aparte de lo que se cobra (11 de noviembre de 2026).
+    assert.match(dashboard, /key: 'ARCHIVADAS', title: 'Cobros archivados', collapsible: true/);
+    assert.match(dashboard, /key: 'SIN_DEUDA', title: 'Sin deuda pendiente', collapsible: true/);
+    assert.match(dashboard, /groupFinancialReceivables\(visible\.filter\(\(item\) => !item\.collectionArchive\)\)/);
+    assert.match(dashboard, /<Archive className="h-3\.5 w-3\.5" \/>Archivar\r?\n/);
     assert.match(dashboard, /\/api\/financials\/receivables\/\$\{debt\.id\}\/collection-archive/);
     assert.match(fs.readFileSync(new URL('../src/routes/api/financials.js', import.meta.url), 'utf8'), /router\.post\('\/receivables\/:id\/collection-archive', requireFinancialWrite, archiveFinancialReceivable\)/);
     assert.match(fs.readFileSync(new URL('../src/lib/platformCatalog.js', import.meta.url), 'utf8'), /'POST \/financials\/receivables\/:id\/collection-archive'/);
