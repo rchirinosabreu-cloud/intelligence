@@ -76,12 +76,12 @@ import { payrollPersonSummary, payrollStatus } from '@/lib/payrollPayments';
 // El estado de una liquidación, o el resumen del mes de una persona, con el mismo color en las dos filas.
 const PayrollStatusBadge = ({ status }) => (
     <span data-payroll-status={status.key} className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold",
+        "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
         (status.key === 'NONE' || status.key === 'MIXED') && "bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300",
-        status.key === 'DRAFT' && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-        status.key === 'APPROVED' && "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+        status.key === 'DRAFT' && "bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow",
+        status.key === 'APPROVED' && "bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan",
         status.key === 'PARTIAL' && "bg-primary/10 text-primary",
-        status.key === 'PAID' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+        status.key === 'PAID' && "bg-status-positive/10 text-status-positive-fg"
     )}>{status.label}</span>
 );
 import ClientProfileFields from '@/components/modules/Clients/ClientProfileFields';
@@ -1208,9 +1208,7 @@ await invalidateFinancialQueries(queryClient);
                         {formatIndicator(kpis.totalIncome)}
                     </p>
                     {/* Un reintegro de préstamo entra en la cuenta pero no es venta (20 de octubre de 2026). */}
-                    {data?.sourceSummary?.totals?.loanRepayments > 0
-                        ? <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
-                        : <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
+                    {data?.sourceSummary?.totals?.loanRepayments > 0 && <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>}
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
@@ -1224,7 +1222,6 @@ await invalidateFinancialQueries(queryClient);
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalExpense)}
                     </p>
-                    <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
                 </Card>
 
                 {/* KPI Card 3: Flujo Neto (Highest Visual Prominence) */}
@@ -1782,33 +1779,24 @@ await invalidateFinancialQueries(queryClient);
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-<<<<<<< Updated upstream
-                                            {payrollPeople.map(person => <React.Fragment key={person.id}>
-                                                <tr data-payroll-person={person.id} className="bg-white dark:bg-zinc-900"><td colSpan={6} className="p-4"><button type="button" className="flex min-h-11 w-full items-center gap-3 text-left" aria-expanded={!!expandedPayrollPeople[person.id]} onClick={() => setExpandedPayrollPeople(current => ({...current,[person.id]:!current[person.id]}))}>
-                                                    <TeamAvatar member={person.avatar || { name: person.name }} size={36} className="h-9 w-9" />
-                                                    <span className="flex-1"><span className="brain-type-section block">{person.name}</span><span className="brain-type-help">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {person.rows.filter(r=>r.transaction).length} período{person.rows.filter(r=>r.transaction).length===1?'':'s'} en el mes</span></span>
-                                                    <span className="text-sm font-medium text-primary">{expandedPayrollPeople[person.id] ? 'Ocultar' : 'Ver períodos'}</span>{expandedPayrollPeople[person.id] ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
-                                                </button></td></tr>
-=======
                                             {payrollPeople.map(person => { const summary = payrollPersonSummary(person.rows.map(row => row.transaction)); const open = !!expandedPayrollPeople[person.id]; const toggle = () => setExpandedPayrollPeople(current => ({...current,[person.id]:!current[person.id]})); return <React.Fragment key={person.id}>
                                                 {/* La fila cerrada ya dice el mes de la persona: base, seguridad social, estado y total. */}
                                                 <tr data-payroll-person={person.id} className="cursor-pointer bg-white hover:bg-zinc-50/60 dark:bg-zinc-900 dark:hover:bg-white/[0.03]" onClick={toggle}>
                                                     <td className="p-4"><div className="flex min-h-11 min-w-0 items-center gap-3">
                                                         <TeamAvatar member={person.avatar || { name: person.name }} size={36} className="h-9 w-9 shrink-0" />
-                                                        <span className="min-w-0"><span className="block truncate text-sm font-semibold">{person.name}</span><span className="block truncate text-xs text-zinc-500">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {summary.count} período{summary.count===1?'':'s'} en el mes</span></span>
+                                                        <span className="min-w-0"><span className="brain-type-section block truncate">{person.name}</span><span className="brain-type-help block truncate">{person.contracts.length} contrato{person.contracts.length === 1 ? '' : 's'} · {summary.count} período{summary.count===1?'':'s'} en el mes</span></span>
                                                     </div></td>
-                                                    <td className="p-4 text-sm font-medium tabular-nums">{summary.count ? formatCurrency(summary.base) : '—'}</td>
-                                                    <td className="p-4 text-sm text-zinc-500 tabular-nums">{summary.count ? formatCurrency(summary.socialSecurity) : '—'}</td>
+                                                    <td className="brain-type-body p-4 tabular-nums">{summary.count ? formatCurrency(summary.base) : '—'}</td>
+                                                    <td className="brain-type-body p-4 tabular-nums">{summary.count ? formatCurrency(summary.socialSecurity) : '—'}</td>
                                                     <td className="p-4"><PayrollStatusBadge status={summary.status} /></td>
-                                                    <td className="p-4 text-right text-sm font-black tabular-nums text-zinc-900 dark:text-white">
+                                                    <td className="brain-type-value p-4 text-right">
                                                         {summary.count ? formatCurrency(summary.net) : '—'}
-                                                        {summary.outstanding > 0.005 && summary.outstanding < summary.net - 0.005 && <p className="mt-0.5 text-[10px] font-medium text-zinc-500">Falta {formatCurrency(summary.outstanding)}</p>}
+                                                        {summary.outstanding > 0.005 && summary.outstanding < summary.net - 0.005 && <p className="brain-type-help mt-0.5 font-normal">Falta {formatCurrency(summary.outstanding)}</p>}
                                                     </td>
-                                                    <td className="p-4 text-right"><button type="button" data-payroll-person-toggle aria-expanded={open} aria-label={`${open ? 'Ocultar' : 'Ver'} los períodos de ${person.name}`} onClick={event => { event.stopPropagation(); toggle(); }} className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-primary">
+                                                    <td className="p-4 text-right"><button type="button" data-payroll-person-toggle aria-expanded={open} aria-label={`${open ? 'Ocultar' : 'Ver'} los períodos de ${person.name}`} onClick={event => { event.stopPropagation(); toggle(); }} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary">
                                                         {open ? 'Ocultar' : 'Ver períodos'}{open ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
                                                     </button></td>
                                                 </tr>
->>>>>>> Stashed changes
                                                 {expandedPayrollPeople[person.id] && <>
                                                 <tr><td colSpan={6} className="bg-zinc-50/60 px-5 py-3 dark:bg-white/[0.02]"><div className="space-y-3">{person.contracts.map(contract=><div key={contract.id} className="flex flex-wrap items-center justify-between gap-3"><div><p className="brain-type-section">Contrato · {new Date(contract.startDate).toLocaleDateString('es-CO',{timeZone:'UTC'})} – {contract.endDate ? new Date(contract.endDate).toLocaleDateString('es-CO',{timeZone:'UTC'}) : 'Sin terminación'}</p><p className="brain-type-help mt-1">Mensual: {formatCurrency(Number(contract.baseSalary)+Number(contract.socialSecurity))}</p></div><div className="flex flex-wrap items-center gap-4"><button className="min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>setPayrollPeriods(contract)}>Períodos e historial</button>{canWriteFinancials && <button className="min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>openPayrollContractEditor(contract)}>Editar contrato</button>}</div></div>)}</div></td></tr>
                                                 {person.rows.filter(row=>row.transaction || (String(row.startDate||'').slice(0,10)<=payrollMonthRange(selectedYear,payrollMonth).end && (!row.endDate || String(row.endDate).slice(0,10)>=payrollMonthRange(selectedYear,payrollMonth).start))).map((collab) => {
@@ -1825,25 +1813,8 @@ await invalidateFinancialQueries(queryClient);
                                                     <td className="brain-type-body p-4 tabular-nums">{transaction ? formatCurrency(transaction.baseSalary) : '—'}</td>
                                                     <td className="brain-type-body p-4 tabular-nums">{transaction ? formatCurrency(transaction.socialSecurity) : '—'}</td>
                                                     <td className="p-4">
-<<<<<<< Updated upstream
-                                                        {(() => {
-                                                            const status = payrollStatus(transaction);
-                                                            return (
-                                                                <span data-payroll-status={status.key} className={cn(
-                                                                    "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
-                                                                    status.key === 'NONE' && "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300",
-                                                                    status.key === 'DRAFT' && "bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow",
-                                                                    status.key === 'APPROVED' && "bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan",
-                                                                    status.key === 'PARTIAL' && "bg-primary/10 text-primary",
-                                                                    status.key === 'PAID' && "bg-status-positive/10 text-status-positive-fg"
-                                                                )}>{status.label}</span>
-                                                            );
-                                                        })()}
-                                                        {transaction?.status === 'PAID' && <p className="brain-type-help mt-1">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</p>}
-=======
                                                         <PayrollStatusBadge status={payrollStatus(transaction)} />
-                                                        {transaction?.status === 'PAID' && <p className="mt-1 text-xs text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</p>}
->>>>>>> Stashed changes
+                                                        {transaction?.status === 'PAID' && <p className="brain-type-help mt-1">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</p>}
                                                         {transaction?.payments?.length > 0 && (() => {
                                                             const activeCount = transaction.payments.filter((payment) => !payment.reversedAt).length;
                                                             const open = !!expandedPayrollPayments[transaction.id];
@@ -1864,21 +1835,12 @@ await invalidateFinancialQueries(queryClient);
                                                         )}
                                                     </td>
                                                     <td className="p-4 text-right">
-<<<<<<< Updated upstream
-                                                        <div className="flex items-center justify-end gap-2 whitespace-nowrap" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
+                                                        <div className="flex flex-wrap items-center justify-end gap-2" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
                                                             {transaction && (transaction.status !== 'PAID' || transaction.loanDeductions?.length > 0) && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="brain-button-quiet">Descuentos</button>}
                                                             {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10">Revisar importe</button>}
                                                             {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
                                                             {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-sm font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
                                                             {!transaction && <span className="brain-type-help">Pendiente</span>}
-=======
-                                                        <div className="flex flex-wrap items-center justify-end gap-2" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
-                                                            {transaction && (transaction.status !== 'PAID' || transaction.loanDeductions?.length > 0) && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Descuentos</button>}
-                                                            {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10">Revisar importe</button>}
-                                                            {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
-                                                            {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-xs font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
-                                                            {!transaction && <span className="text-xs text-zinc-400">Pendiente</span>}
->>>>>>> Stashed changes
                                                         </div>
                                                     </td>
                                                 </tr>
