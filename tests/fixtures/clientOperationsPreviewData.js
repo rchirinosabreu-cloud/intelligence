@@ -70,13 +70,25 @@ const task = (id, title, assignee, dueDate, overdue = false) => ({ id, title, as
 const contract = (extra) => ({ serviceType: 'PARRILLA', status: 'ACTIVO', startDate: '2026-01-01', endDate: '2026-12-31', cutDay: 1, deliverables: STANDARD_12, storiesPerWeek: 3, productionDays: 0, monthlyReport: true, notes: '', ...extra });
 
 /** Arma el cliente: ciclo actual con sus piezas, mes anterior e historial de los tres anteriores. */
-function client(slug, name, { current, previous, earlier = [], ...extra }) {
+// El mes siguiente (reunión del 10 de noviembre de 2026): por defecto la mitad redactada y un cuarto diseñada,
+// para que la muestra enseñe la segunda barra; `next: null` lo quita y `next: { stages }` lo cambia.
+function nextOf(cycle, override) {
+  if (override === null) return null;
+  const MONTHS = Object.keys(MONTH_INDEX);
+  const month = (cycle.month % 12) + 1;
+  const base = monthBounds(MONTHS[month - 1]);
+  const half = Math.round(cycle.quota / 2);
+  const stages = override?.stages || [half, Math.round(cycle.quota / 4), 0, 0, 0];
+  return { label: MONTHS[month - 1], ...base, year: cycle.month === 12 ? cycle.year + 1 : cycle.year, quota: cycle.quota, created: stages[0], reached: reached(stages), report: null, close: null };
+}
+
+function client(slug, name, { current, previous, earlier = [], next: nextOverride, ...extra }) {
   const base = { id: `client-${slug}`, slug, name, logoUrl: null, agency: 'BRAIN', projectManager: kamila, openTasks: [], observations: [], ...extra };
   base.latestObservation = base.observations[0] ? { text: base.observations[0].text, date: base.observations[0].date, by: base.observations[0].by } : null;
   if (!current) return { ...base, cycles: {}, history: [] };
   const cycle = cycleOf(current);
   cycle.pieces = piecesFor(slug, cycle, base.contract.deliverables);
-  return { ...base, cycles: { current: cycle, previous }, history: [previous, ...earlier].filter(Boolean) };
+  return { ...base, cycles: { current: cycle, previous, next: nextOf(cycle, nextOverride) }, history: [previous, ...earlier].filter(Boolean) };
 }
 
 const full = (q) => [q, q, q, q, q];

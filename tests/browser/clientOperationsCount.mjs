@@ -29,10 +29,11 @@ for (const [name, viewport] of [['escritorio', { width: 1440, height: 1000 }], [
       const total = await rows.count();
       assert.ok(total > 0);
       assert.match(await count.innerText(), new RegExp(`${total} clientes? en operación`));
-      // El mes se lee también en porcentaje, no solo en la barra.
+      // El avance se lee en porcentaje, del mes vigente y del siguiente (reunión del 10 de noviembre de 2026).
       const percents = await page.locator('[data-cycle-percent]').allInnerTexts();
       assert.ok(percents.length > 0);
       for (const text of percents) assert.match(text, /^\d+ %$/);
+      assert.ok(await page.locator('[data-cycle-progress="next"]').count() > 0, 'cada cliente medido muestra también el mes siguiente');
       const positions = await page.locator('[data-client-position]').allInnerTexts();
       assert.deepEqual(positions, Array.from({ length: total }, (_, i) => String(i + 1)));
 

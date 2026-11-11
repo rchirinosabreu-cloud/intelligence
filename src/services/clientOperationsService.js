@@ -9,7 +9,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { CONTRACT_ORDER, orderedContracts, contractAt, selectedContract } from '../lib/clientContractSelection.js';
 import {
-  cycleForDate, cycleOf, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
+  cycleForDate, cycleOf, nextCycle, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
   normalizeOperationProfile, contractQuota, MONTH_NAMES,
 } from '../lib/clientOperations.js';
 import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
@@ -223,7 +223,13 @@ function buildOperation(client, { today, reporters, detail }) {
       past.push(cycleSummary(client, cycleOf(cursor.year, cursor.month, historical.cutDay), historical, today, reporters));
     }
     const current = cycleSummary(client, currentCycle, contract, today, reporters);
-    base.cycles = { current, previous: past[0] || null };
+    // El mes siguiente también se mira (reunión del 10 de noviembre de 2026: «tiene que salir una barra de mes
+    // vigente y el mes futuro»): en noviembre ya se trabaja diciembre. Solo si el contrato llega hasta allá.
+    const upcoming = nextCycle(currentCycle, contract.cutDay);
+    const next = !contract.endDate || contract.endDate >= upcoming.start
+      ? (({ pieces: _pieces, ...summary }) => summary)(cycleSummary(client, upcoming, contract, today, reporters))
+      : null;
+    base.cycles = { current, previous: past[0] || null, next };
     base.history = past.map(({ pieces: _pieces, ...month }) => month);
     if (!detail) {
       delete base.cycles.current.pieces;
