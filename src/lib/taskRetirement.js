@@ -1,6 +1,11 @@
 // La retirada deriva del origen, sin duplicar su estado ni borrar la tarea.
 // Las consultas históricas no aplican este filtro.
+// Un cliente archivado sale de la operación entera (Rodny, 10 de noviembre de 2026:
+// «si yo archivo un cliente se archiva de operación y de todo»): sus tareas dejan de
+// verse en Gestión, el dashboard, la carga y los avisos, sin borrarse. Reactivarlo
+// desde Directorio las devuelve tal cual. Financiero no usa este filtro.
 export const activeTaskSourceWhere = {
+  client: { is: { isArchived: false } },
   OR: [
     { contentItemId: null },
     { contentItem: { is: { deletedAt: null, plan: { is: { deletedAt: null } } } } },

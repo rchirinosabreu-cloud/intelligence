@@ -34,7 +34,7 @@ function MonthCell({ cycle }) {
   );
 }
 
-function ClientRow({ client, evaluation, onOpen }) {
+function ClientRow({ client, evaluation, onOpen, position }) {
   const meta = LEVEL_META[evaluation.level];
   const { current, previous } = client.cycles || {};
   const tasks = client.openTasks || [];
@@ -48,6 +48,7 @@ function ClientRow({ client, evaluation, onOpen }) {
       <button type="button" onClick={onOpen}
         className={cn('grid w-full grid-cols-[1fr_auto] gap-x-4 gap-y-3 px-4 py-4 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-white/[0.03] sm:px-6', ROW_GRID)}>
         <span className="flex min-w-0 items-center gap-3">
+          <span className="w-6 shrink-0 text-right text-xs font-medium tabular-nums text-zinc-400" data-client-position>{position}</span>
           <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', meta.dot)} aria-hidden="true" />
           <ClientAvatar client={client} size={32} className="shrink-0 rounded-lg border border-zinc-200 dark:border-white/10" />
           <span className="min-w-0">
@@ -162,6 +163,16 @@ export default function ClientOperationsBoard({ evaluated, team, onOpenClient })
       </div>
 
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" aria-label="Clientes">
+        {/* Cuántos clientes están en operación (Rodny, 10 de noviembre de 2026: «ponme números»).
+            Los archivados no cuentan: están en Directorio y se reactivan desde ahí. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-zinc-100 px-4 py-4 dark:border-white/5 sm:px-6" data-operation-count>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {evaluated.length === 1 ? '1 cliente en operación' : `${evaluated.length} clientes en operación`}
+          </h2>
+          {visible.length !== evaluated.length && (
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">Con estos filtros: {visible.length}</span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-zinc-100 px-4 py-3 text-xs text-zinc-500 dark:border-white/5 sm:px-6">
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Cada pieza va del color de la etapa a la que llegó:</span>
           {OPERATION_STAGES.map((stage) => (
@@ -175,8 +186,8 @@ export default function ClientOperationsBoard({ evaluated, team, onOpenClient })
         </div>
         {visible.length ? (
           <ul>
-            {visible.map(({ client, evaluation }) => (
-              <ClientRow key={client.id} client={client} evaluation={evaluation} onOpen={() => onOpenClient(client)} />
+            {visible.map(({ client, evaluation }, index) => (
+              <ClientRow key={client.id} client={client} evaluation={evaluation} position={index + 1} onOpen={() => onOpenClient(client)} />
             ))}
           </ul>
         ) : (

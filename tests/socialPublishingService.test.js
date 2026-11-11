@@ -236,6 +236,20 @@ test('when the last pending network goes out, the piece becomes PUBLICADO', asyn
   assert.equal(state.item.status, 'PUBLICADO');
 });
 
+// Rodny, 10 de noviembre de 2026: un cliente archivado sale de la operación; lo programado no sale solo.
+test('a piece of an archived client is not sent to Meta and says why', async () => {
+  const item = baseItem();
+  item.plan.client.isArchived = true;
+  const { db, state } = memoryDb({ item, publications: [
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }
+  ] });
+  const meta = fakeMeta();
+  const outcomes = await build({ db, meta: meta.client }).processDuePublications();
+  assert.equal(meta.calls.length, 0, 'nothing reaches Meta');
+  assert.equal(outcomes[0].status, 'FAILED');
+  assert.match(state.publications[0].error, /cliente está archivado/);
+});
+
 // Rodny, 15 de octubre de 2026: «si ya la plataforma está reconociendo que se publicó en Meta, entonces
 // eso debe publicarse automáticamente». El community manager no tiene que mover su pendiente «Publicar»
 // —que era justo lo que mataba la publicación— y el logro queda a su nombre.

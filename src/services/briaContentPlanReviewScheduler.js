@@ -62,6 +62,8 @@ export const reconcilePendingContentPlanReviews = async ({
   const plans = await db.contentPlan.findMany({
     where: {
       deletedAt: null,
+      // Un cliente archivado no gasta revisiones de Bria (10 de noviembre de 2026).
+      client: { is: { isArchived: false } },
       AND: [{ OR: [
         { status: { in: ['PLANIFICACION', 'EN_APROBACION', 'ACTIVO'] } },
         { briaReviewFindings: { some: { status: 'VERIFYING' } } }

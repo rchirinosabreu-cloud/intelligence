@@ -211,7 +211,10 @@ const getPlanContentItemsSelect = async () => ({
 export const getContentPlans = async (clientId) => {
   try {
     const where = { deletedAt: null };
+    // La lista de Parrillas solo muestra clientes en operación; las de un cliente
+    // archivado se conservan y vuelven al reactivarlo (10 de noviembre de 2026).
     if (clientId) where.clientId = clientId;
+    else where.client = { is: { isArchived: false } };
 
     console.log(`[Service] getContentPlans: Fetching plans for clientId=${clientId || 'ALL'}`);
 
