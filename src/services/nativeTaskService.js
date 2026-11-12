@@ -5,6 +5,7 @@ import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, tran
 import { hasTaskParticipations } from '../lib/taskParticipation.js';
 import { hydrateTaskParticipations, hydrateArchivedTaskParticipations } from './taskParticipationStore.js';
 import { applyTaskAggregateEffects } from './taskCompletionEffectsService.js';
+import { contentItemStatusFromTask } from '../lib/contentTaskMirror.js';
 import { taskParticipationSelect, completedTaskParticipationWhere, completedTaskParticipationViews } from '../lib/taskParticipationMetrics.js';
 import { nextTaskOrder, updateOrderedTask } from './taskOrderService.js';
 import { hydrateTaskCardOrder } from './taskCardOrderService.js';
@@ -1015,17 +1016,14 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
 
             // --- Sincronización Bidireccional (Efecto Espejo Total) ---
-                if (currentTask.contentItemId) {
-                    let contentItemStatus = null;
+                // Solo un cambio de estado de verdad mueve la pieza (Rodny, 12 de noviembre de 2026): guardar el
+                // panel de un pendiente sin cambiarle el estado devolvía a «En producción» una pieza ya realizada.
+                if (currentTask.contentItemId && currentTask.status !== newStatus) {
                     const isPublicationTask = currentTask.title.startsWith('[Publicar]');
-
-                    if (newStatus === 'REALIZADA') {
-                        contentItemStatus = isPublicationTask ? 'PUBLICADO' : 'REALIZADO';
-                    } else if (newStatus === 'DEVUELTA') {
-                        contentItemStatus = 'DEVUELTO';
-                    } else if (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO') {
-                        contentItemStatus = 'EN_PRODUCCION';
-                    }
+                    const piece = isPublicationTask
+                        ? await tx.contentItem.findUnique({ where: { id: currentTask.contentItemId }, select: { status: true } })
+                        : null;
+                    let contentItemStatus = contentItemStatusFromTask({ newStatus, isPublication: isPublicationTask, itemStatus: piece?.status });
 
                     // Mientras haya una publicación esperando salir, el estado de la pieza es de la cola
                     // (15 de octubre de 2026). El espejo la habría devuelto a EN_PRODUCCION por tomar el
