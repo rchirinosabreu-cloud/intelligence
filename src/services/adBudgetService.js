@@ -7,11 +7,10 @@
 import { randomUUID } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import {
-    SPECIFIC_CYCLE_KEY, adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adCycleFor, adSpendProblem,
+    SPECIFIC_CYCLE_KEY, adBudgetApprovalProblem, adBudgetName, adBudgetProblem, addDays, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adCycleFor, adSpendProblem,
     budgetCutDay, carryOverFor, cycleFromKey, evaluateAdCycle, formatAdMoney, previousCycleKey, shortDay, toCents
 } from '../lib/adBudgets.js';
-import { metaDifference } from '../lib/adBudgetMeta.js';
-
+import { manualSpendProblem, metaDifference, metaSpendLock } from '../lib/adBudgetMeta.js';
 import { metaForecastExcess } from '../lib/adBudgetMetaBudgets.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -48,6 +47,18 @@ const metaOf = (budget, row) => {
     };
 };
 
+/**
+ * En una pauta ligada, las campañas que cuentan son las de Meta: su estado y su fecha de fin salen de la última lectura
+ * (hoy o ayer). Así «termina después del cierre» o «no hay ninguna activa» hablan de lo que de verdad corre en Meta.
+ */
+const metaCampaignsForFlags = (forecast, today) => {
+    if (!forecast || forecast.problem || !Array.isArray(forecast.objects) || forecast.on < addDays(today, -1)) return [];
+    return forecast.objects.map((object) => ({
+        id: object.id, name: object.level === 'ADSET' && object.campaignName ? `${object.campaignName} · ${object.name}` : object.name,
+        status: object.status === 'ACTIVE' ? 'ACTIVA' : 'PAUSADA', endDate: object.endDate || null, source: 'META'
+    }));
+};
+
 const publicCampaign = (campaign) => ({
     id: campaign.id, budgetId: campaign.budgetId, name: campaign.name, link: campaign.link || null, objective: campaign.objective || null,
     status: campaign.status, startDate: campaign.startDate || null, endDate: campaign.endDate || null,
@@ -63,7 +74,11 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
     const row = rows.find((item) => item.cycleKey === cycle.key) || null;
     const carry = specific ? { cents: 0, known: true, final: true } : carryOverFor(cycle.key, rows, cutDay);
     const campaigns = (budget.campaigns || []).map(publicCampaign);
-    const evaluation = evaluateAdCycle({ budget, cycle, row, carry, campaigns, today });
+    const linked = (budget.metaCampaigns || []).length > 0;
+    const evaluation = evaluateAdCycle({ budget, cycle, row, carry, campaigns: linked ? metaCampaignsForFlags(row?.metaForecast, today) : campaigns, today });
+    const lock = metaSpendLock({ linked, row, cycle, today });
+    // Lo que pasaría solo de un ciclo al otro, sin el acuerdo a mano: se muestra al registrar un acuerdo distinto.
+    const carryAuto = specific ? null : carryOverFor(cycle.key, rows.map((item) => (item.cycleKey === cycle.key ? { ...item, carryOverManual: null } : item)), cutDay);
     // El ciclo anterior sin su gasto final: mientras falte, lo que pasa a este ciclo es provisional. Una pauta que no
     // existía en ese ciclo no debe nada.
     const previousKey = specific || cycleKey ? null : previousCycleKey(cycle.key, cutDay);
@@ -71,7 +86,10 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
     const previous = previousKey ? cycleFromKey(previousKey, cutDay) : null;
     const existedThen = previous && bogotaToday(new Date(budget.createdAt || 0)) <= previous.end;
     const pendingClose = budget.status === 'ACTIVA' && previous && !previousRow?.closedAt && (previousRow || existedThen)
-        ? { cycle: previous, evaluation: evaluateAdCycle({ budget, cycle: previous, row: previousRow, carry: carryOverFor(previousKey, rows, cutDay), today }) }
+        ? {
+            cycle: previous, evaluation: evaluateAdCycle({ budget, cycle: previous, row: previousRow, carry: carryOverFor(previousKey, rows, cutDay), today }),
+            lock: metaSpendLock({ linked, row: previousRow, cycle: previous, today })
+        }
         : null;
     return {
         id: budget.id, clientId: budget.clientId, brand: budget.brand || null, platform: budget.platform, kind: budget.kind,
@@ -81,8 +99,11 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
         responsible: budget.responsible ? { id: budget.responsible.id, name: budget.responsible.name, avatarUrl: budget.responsible.avatarUrl || null } : null,
         projectManager: budget.client?.projectManager?.isActive === false ? null : (budget.client?.projectManager ? { id: budget.client.projectManager.id, name: budget.client.projectManager.name } : null),
         cutDay, cutSource: source, ownCutDay: budget.cutDay || null, cycle, evaluation, campaigns, pendingClose,
-        carryOverReason: row?.carryOverReason || null, today,
-        meta: { ...metaOf(budget, row), excess: metaForecastExcess({ forecast: row?.metaForecast || null, evaluation, status: budget.status, today, currency: budget.currency }) }
+        carryOverReason: row?.carryOverReason || null, today, carryAuto,
+        meta: {
+            ...metaOf(budget, row), ...(lock ? { difference: null } : {}), lock,
+            excess: metaForecastExcess({ forecast: row?.metaForecast || null, evaluation, status: budget.status, today, currency: budget.currency })
+        }
     };
 };
 
@@ -149,6 +170,20 @@ const budgetChanges = (current, next) => {
         changed: keys.length > 0
     };
 };
+
+/** Quién aprobó y por qué, ya revisado. Sin eso el cambio del presupuesto no se guarda. */
+const withApproval = (input) => {
+    const problem = adBudgetApprovalProblem(input);
+    if (problem) throw httpError(422, problem);
+    const approvedBy = input.approvedBy.trim();
+    const reason = input.reason.trim();
+    return { approvedBy, reason, text: `Aprobó: ${approvedBy}. Motivo: ${reason}` };
+};
+
+/** Si en ese ciclo manda Meta (pauta ligada y Meta leyó bien hace poco). */
+const lockOf = (budget, cycle, today) => metaSpendLock({
+    linked: (budget.metaCampaigns || []).length > 0, row: (budget.cycles || []).find((item) => item.cycleKey === cycle.key) || null, cycle, today
+});
 
 const readCycleRow = async (db, budgetId, cycleKey) => {
     const row = await db.adBudgetCycle.findUnique({ where: { budgetId_cycleKey: { budgetId, cycleKey } } });
@@ -255,6 +290,12 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const cycle = adCycleFor(merged, { cutDay, today: day });
             const next = { ...budgetData(merged), clientId: merged.clientId, status: merged.status };
             const changes = budgetChanges(current, next);
+            // El presupuesto aprobado es el tope de lo que se gasta: cambiarlo pide quién lo aprobó y por qué.
+            const approval = 'amount' in changes.after || 'currency' in changes.after ? withApproval(input) : null;
+            if (approval) {
+                changes.summary = `${changes.summary}. ${approval.text}`;
+                changes.after = { ...changes.after, approvedBy: approval.approvedBy, reason: approval.reason };
+            }
             await db.$transaction(async (tx) => {
                 await tx.adBudget.update({ where: { id }, data: { ...next, updatedById: actorId(actor) } });
                 const open = await tx.adBudgetCycle.findUnique({ where: { budgetId_cycleKey: { budgetId: id, cycleKey: cycle.key } } });
@@ -293,6 +334,11 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             if (input.readOn > day) throw httpError(422, 'La fecha de la lectura no puede ser futura.');
             const { cutDay } = budgetCutDay(budget, day);
             const cycle = input.cycleKey && budget.kind !== 'ESPECIFICA' ? cycleFromKey(input.cycleKey, cutDay) : adCycleFor(budget, { cutDay, today: day });
+            // En una pauta ligada manda Meta: a mano solo si Meta no responde, y el gasto final es el que marca Meta.
+            const blocked = manualSpendProblem({
+                lock: lockOf(budget, cycle, day), final: input.final === true, spentCents: toCents(input.spent), currency: budget.currency
+            });
+            if (blocked) throw httpError(409, blocked);
             await db.$transaction(async (tx) => {
                 const row = await ensureAdCycle(tx, budget, cycle);
                 await tx.adSpendReading.create({
@@ -311,6 +357,12 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             if (problem) throw httpError(422, problem);
             const now = clock();
             if (merged.readOn > bogotaToday(now)) throw httpError(422, 'La fecha de la lectura no puede ser futura.');
+            if (Number(merged.spent) !== Number(reading.spent) || (merged.final === true) !== reading.isFinal) {
+                const { cutDay } = budgetCutDay(budget, bogotaToday(now));
+                const cycle = budget.kind === 'ESPECIFICA' ? adCycleFor(budget, { cutDay, today: bogotaToday(now) }) : cycleFromKey(reading.cycle.cycleKey, cutDay);
+                const blocked = manualSpendProblem({ lock: lockOf(budget, cycle, bogotaToday(now)), final: merged.final === true, spentCents: toCents(merged.spent), currency: budget.currency });
+                if (blocked) throw httpError(409, blocked);
+            }
             const money = (value) => formatAdMoney(toCents(value), budget.currency);
             await db.$transaction(async (tx) => {
                 await tx.adSpendReading.update({ where: { id: readingId }, data: { spent: Number(merged.spent), readOn: merged.readOn, note: text(merged.note), isFinal: merged.final === true } });
@@ -357,10 +409,12 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const budget = await readBudget(db, id);
             const row = await readCycleRow(db, id, cycleKey);
             const money = (value) => formatAdMoney(toCents(value), budget.currency);
+            const approval = Number(row.amount) !== Number(input.amount) ? withApproval(input) : null;
             await db.$transaction(async (tx) => {
                 await tx.adBudgetCycle.update({ where: { id: row.id }, data: { amount: Number(input.amount) } });
-                await logEvent(tx, budget, 'CORREGIR_CICLO', `Corrigió el presupuesto del ciclo ${cycleKey}: de ${money(row.amount)} a ${money(input.amount)}`, actor, {
-                    before: { amount: Number(row.amount) }, after: { amount: Number(input.amount) }
+                await logEvent(tx, budget, 'CORREGIR_CICLO', `Corrigió el presupuesto del ciclo ${cycleKey}: de ${money(row.amount)} a ${money(input.amount)}${approval ? `. ${approval.text}` : ''}`, actor, {
+                    before: { amount: Number(row.amount) },
+                    after: { amount: Number(input.amount), ...(approval ? { approvedBy: approval.approvedBy, reason: approval.reason } : {}) }
                 });
             });
             return fresh(id, cycleOptions(cycleKey));
@@ -399,7 +453,8 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
         async createCampaign(budgetId, input, actor) {
             const problem = adCampaignProblem(input);
             if (problem) throw httpError(422, problem);
-            await readBudget(db, budgetId);
+            const budget = await readBudget(db, budgetId);
+            if ((budget.metaCampaigns || []).length) throw httpError(409, 'Las campañas de esta pauta vienen de Meta: se ligan en «Gasto en Meta».');
             const saved = await db.adCampaign.create({
                 data: {
                     id: randomUUID(), budgetId, name: input.name.trim(), link: text(input.link), objective: text(input.objective), status: input.status || 'POR_ACTIVAR',

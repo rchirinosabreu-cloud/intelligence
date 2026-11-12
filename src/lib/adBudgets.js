@@ -274,6 +274,19 @@ export const evaluateAdCycle = ({ budget, cycle, row = null, carry = { cents: 0,
     };
 };
 
+/**
+ * Cambiar el presupuesto aprobado pide quién lo aprobó y por qué (Rodny, 12 de noviembre de 2026: «aunque yo tenga
+ * permisos, no pueda romper lo establecido por el cliente»). Es el tope de lo que se puede gastar: queda en el historial.
+ */
+export const adBudgetApprovalProblem = ({ approvedBy, reason } = {}) => {
+    const who = typeof approvedBy === 'string' ? approvedBy.trim() : '';
+    const why = typeof reason === 'string' ? reason.trim() : '';
+    if (!who) return 'Cambiar el presupuesto aprobado pide decir quién lo aprobó.';
+    if (who.length > 120) return 'Quién lo aprobó: 120 caracteres como máximo.';
+    if (!why) return 'Cambiar el presupuesto aprobado pide el motivo.';
+    if (why.length > 300) return 'El motivo: 300 caracteres como máximo.';
+    return null;
+};
 const clean = (value) => (typeof value === 'string' ? value.trim() : '');
 const isKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
 const isCycleKey = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ''));

@@ -110,24 +110,24 @@ test('cambiar el presupuesto aplica al ciclo abierto y respeta los meses pasados
             { id: 'now', budgetId: 'b-endova', cycleKey: '2026-10', amount: 300000, spent: 91000, spentAsOf: '2026-11-06', closedAt: null }
         ]
     });
-    await service(db).update('b-endova', { ...baseInput, clientId: 'c-endova', amount: '400000' }, actor);
+    await service(db).update('b-endova', { ...baseInput, clientId: 'c-endova', amount: '400000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
     assert.equal(db.store.cycles.find((row) => row.id === 'now').amount, 400000);
     assert.equal(db.store.cycles.find((row) => row.id === 'old').amount, 200000);
 });
 
 test('corregir un dato conserva los demás y deja qué decía antes', async () => {
     const db = newDb({ budgets: [{ ...endova, objective: 'Interacción', platform: 'META', kind: 'MENSUAL', currency: 'COP', payer: 'POR_DEFINIR' }] });
-    const saved = await service(db).update('b-endova', { amount: '350000' }, actor);
+    const saved = await service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
     assert.equal(saved.amount, 350000);
     assert.equal(saved.objective, 'Interacción');
-    assert.equal(db.store.events[0].summary, 'Cambió el presupuesto');
+    assert.match(db.store.events[0].summary, /^Cambió el presupuesto\. Aprobó: Gema por WhatsApp/);
     assert.deepEqual(db.store.events[0].before, { amount: 300000 });
 });
 
 test('se corrige todo, incluso la moneda y el cliente de una pauta con gasto registrado', async () => {
     const db = newDb({ budgets: [endova] });
     await service(db).recordSpend('b-endova', { spent: '100', readOn: '2026-11-06' }, actor);
-    const usd = await service(db).update('b-endova', { currency: 'USD', amount: '100' }, actor);
+    const usd = await service(db).update('b-endova', { currency: 'USD', amount: '100', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
     assert.equal(usd.currency, 'USD');
     const moved = await service(db).update('b-endova', { clientId: 'c-pueblito' }, actor);
     assert.equal(moved.client.name, 'New Pueblito');
@@ -177,7 +177,7 @@ test('un cierre se deshace, y el saldo que pasaba vuelve a ser provisional', asy
 
 test('el presupuesto de un mes cerrado se corrige aparte, y cambia el saldo que pasó', async () => {
     const db = newDb({ budgets: [{ ...endova, clientId: 'c-pueblito', id: 'b-p' }], cycles: [{ id: 'y', budgetId: 'b-p', cycleKey: '2026-10', amount: 300000, spent: 100000, closedAt: at('2026-11-01') }] });
-    await service(db).updateCycle('b-p', '2026-10', { amount: '400000' }, actor);
+    await service(db).updateCycle('b-p', '2026-10', { amount: '400000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
     assert.equal((await service(db).list()).budgets[0].evaluation.carryCents, 30_000_000);
     await assert.rejects(service(db).updateCycle('b-p', '2026-10', { amount: '0' }, actor), /presupuesto/);
 });
@@ -211,7 +211,7 @@ test('una pauta terminada se reactiva editando su estado', async () => {
 
 test('el detalle dice qué se corrigió y quién', async () => {
     const db = newDb({ budgets: [endova] });
-    await service(db).update('b-endova', { amount: '350000' }, actor);
+    await service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
     const detail = await service(db).detail('b-endova');
     assert.equal(detail.changes[0].by, 'Keila');
     assert.match(detail.changes[0].summary, /presupuesto/);
@@ -362,4 +362,15 @@ test('más de tres pautas salen en un solo aviso, y lo atendido se cierra en el 
     assert.match(twoOfOne.create[0].message, /^3 pautas/, 'cuenta pautas, no avisos: lo mismo que el tablero');
     const closed = adNoticePlan({ wanted: [], open: [{ id: 'n', subjectId: 'pauta:1:2026-11' }], today: '2026-11-06' });
     assert.deepEqual(closed.close, [{ id: 'n', resolution: 'YA_ATENDIDO' }]);
+});
+
+test('cambiar el presupuesto aprobado pide quién lo aprobó y por qué, y lo deja en el historial', async () => {
+    const db = newDb({ budgets: [{ ...endova, id: 'b-endova' }] });
+    await assert.rejects(service(db).update('b-endova', { amount: '350000' }, actor), /quién lo aprobó/);
+    await assert.rejects(service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema' }, actor), /motivo/);
+    assert.equal((await service(db).update('b-endova', { notes: 'Solo una nota' }, actor)).notes, 'Solo una nota', 'lo demás se corrige sin pedir nada');
+    await service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema por WhatsApp', reason: 'Subieron la pauta de noviembre' }, actor);
+    const event = db.store.events.find((row) => row.action === 'EDITAR' && row.after?.amount === 350000);
+    assert.match(event.summary, /Aprobó: Gema por WhatsApp\. Motivo: Subieron la pauta de noviembre/);
+    assert.equal(event.after.approvedBy, 'Gema por WhatsApp');
 });

@@ -8,7 +8,7 @@
 // lo que una persona escribió ese día no lo pisa. Solo se lee: nada de esto cambia campañas ni presupuestos en Meta.
 //
 // Lógica pura: la leen el servidor, la pantalla y las pruebas.
-import { addDays, toleranceCents } from './adBudgets.js';
+import { addDays, formatAdMoney, shortDay, toleranceCents } from './adBudgets.js';
 
 /** Días tras el cierre en que la plataforma todavía lee el ciclo anterior: después, el gasto final es de una persona. */
 export const META_FINAL_GRACE_DAYS = 5;
@@ -35,16 +35,43 @@ export const metaCyclesToSync = ({ current, previous = null, previousClosed = tr
 };
 
 /**
- * Qué hacer con la cifra de Meta en un ciclo. Una lectura de Meta por día, que se actualiza durante el día. Lo que escribió
- * una persona ese día (o después) manda: la plataforma no lo pisa y la pantalla muestra la diferencia.
+ * Qué hacer con la cifra de Meta en un ciclo. Una lectura de Meta por día, que se actualiza durante el día.
+ *
+ * En una pauta ligada **Meta manda** (Rodny, 12 de noviembre de 2026: «si ya está ceñido a Meta, eso no crearía cifras
+ * diferentes?»). Lo escrito a mano solo vale mientras Meta no responde: en cuanto vuelve a leer, su cifra queda como la
+ * vigente (`touch` la deja como la más reciente del día). Lo escrito a mano no se borra: queda en el historial.
  */
 export const metaReadingAction = ({ readings = [], metaCents, readOn, closed = false }) => {
     if (closed) return { action: 'SKIP', reason: 'CERRADO' };
-    if (readings.some((row) => row.source !== 'META' && row.readOn >= readOn)) return { action: 'SKIP', reason: 'MANUAL' };
     const ofDay = readings.find((row) => row.source === 'META' && row.readOn === readOn);
+    const newerManual = readings.some((row) => row.source !== 'META' && row.readOn >= readOn
+        && (!ofDay || new Date(row.createdAt || 0) >= new Date(ofDay.createdAt || 0)));
     if (!ofDay) return { action: 'CREATE' };
-    if (Math.round(Number(ofDay.spent) * 100) === metaCents) return { action: 'SKIP', reason: 'IGUAL' };
-    return { action: 'UPDATE', readingId: ofDay.id };
+    if (Math.round(Number(ofDay.spent) * 100) === metaCents && !newerManual) return { action: 'SKIP', reason: 'IGUAL' };
+    return { action: 'UPDATE', readingId: ofDay.id, touch: newerManual };
+};
+
+/**
+ * ¿Manda Meta en este ciclo? Sí, si la pauta está ligada y Meta lo leyó bien hoy o ayer, o lo leyó completo hasta su
+ * cierre. Si Meta falla, o hace días que no lee, se puede escribir a mano para no quedarse sin dato.
+ */
+export const metaSpendLock = ({ linked, row, cycle, today }) => {
+    if (!linked || !row || row.metaProblem || row.metaSpent === null || row.metaSpent === undefined || !row.metaSpentAsOf) return null;
+    const complete = Boolean(cycle && row.metaSpentAsOf >= cycle.end);
+    const fresh = row.metaSpentAsOf >= addDays(today, -1);
+    if (!fresh && !complete) return null;
+    return { metaCents: Math.round(Number(row.metaSpent) * 100), asOf: row.metaSpentAsOf, complete };
+};
+
+/** Lo que se le dice a quien intenta escribir el gasto de una pauta en la que manda Meta. */
+export const manualSpendProblem = ({ lock, final = false, spentCents, currency }) => {
+    if (!lock) return null;
+    const money = formatAdMoney(lock.metaCents, currency);
+    if (final) {
+        if (!lock.complete) return 'Meta todavía no ha leído el ciclo completo: el gasto final se confirma cuando lo lea hasta el cierre.';
+        return spentCents === lock.metaCents ? null : `El gasto final de una pauta ligada a Meta es el que marca Meta: ${money}.`;
+    }
+    return `Esta pauta lee el gasto de Meta (va en ${money} al ${shortDay(lock.asOf)}). Se escribe a mano solo si Meta no responde.`;
 };
 
 /** La cifra vigente la escribió una persona y no coincide con Meta. Por debajo de la tolerancia no es una diferencia. */

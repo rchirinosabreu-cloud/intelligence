@@ -3,7 +3,7 @@
 // 1. **Descubrir**: las cuentas publicitarias que ve la llave de la plataforma y las campañas que gastaron en los últimos 30
 //    días. Así se ve qué campaña es de qué pauta y qué gasto no está en ninguna.
 // 2. **Leer el gasto** de cada pauta con campañas ligadas, en los días de su ciclo, y dejarlo como una lectura más marcada
-//    «Meta». Lo que una persona escribió ese día manda (`metaReadingAction`).
+//    «Meta». En una pauta ligada manda Meta: lo escrito a mano solo vale mientras Meta no responde (`metaReadingAction`).
 //
 // 3. **Ajustar el presupuesto** de una campaña ligada (o de sus conjuntos), con el tope de lo aprobado en la pauta. Es lo único que\n//    cambia algo en Meta, y solo el presupuesto (`metaAdBudgetClient`).\n//\n// Un fallo de Meta nunca borra lo que ya había: se anota en la cuenta o en el ciclo y la pantalla lo dice.
 import { randomUUID } from 'node:crypto';
@@ -130,7 +130,7 @@ export const adBudgetMetaService = (db = prisma, {
                     if (decision.action === 'CREATE') {
                         await tx.adSpendReading.create({ data: { id: randomUUID(), cycleId: row.id, readOn: window.until, spent: read.totalCents / 100, isFinal: false, source: 'META', recordedById: null } });
                     } else if (decision.action === 'UPDATE') {
-                        await tx.adSpendReading.update({ where: { id: decision.readingId }, data: { spent: read.totalCents / 100 } });
+                        await tx.adSpendReading.update({ where: { id: decision.readingId }, data: { spent: read.totalCents / 100, ...(decision.touch ? { createdAt: now } : {}) } });
                     }
                     if (decision.action !== 'SKIP') await syncAdCycle(tx, row.id, now);
                     return { ...decision, totalCents: read.totalCents };

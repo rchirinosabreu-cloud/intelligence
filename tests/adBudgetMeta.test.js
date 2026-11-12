@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    META_FINAL_GRACE_DAYS, metaCampaignIdsProblem, metaCyclesToSync, metaDifference, metaReadingAction, metaSpendWindow, suggestMetaCampaigns, unassignedMetaCampaigns
+    META_FINAL_GRACE_DAYS, manualSpendProblem, metaCampaignIdsProblem, metaCyclesToSync, metaDifference, metaReadingAction, metaSpendLock, metaSpendWindow, suggestMetaCampaigns, unassignedMetaCampaigns
 } from '../src/lib/adBudgetMeta.js';
 
 const cycle = { key: '2026-10', start: '2026-10-19', end: '2026-11-18' };
@@ -25,15 +25,17 @@ const reading = (over) => ({ id: 'r', readOn: '2026-11-12', spent: 100, source: 
 test('Meta escribe una lectura por día y la actualiza durante el día', () => {
     assert.deepEqual(metaReadingAction({ readings: [], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'CREATE' });
     const ofToday = reading({ id: 'm1', source: 'META', spent: 400 });
-    assert.deepEqual(metaReadingAction({ readings: [ofToday], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'UPDATE', readingId: 'm1' });
+    assert.deepEqual(metaReadingAction({ readings: [ofToday], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'UPDATE', readingId: 'm1', touch: false });
     assert.equal(metaReadingAction({ readings: [ofToday], metaCents: 40_000, readOn: '2026-11-12' }).action, 'SKIP', 'misma cifra, nada que escribir');
     const yesterday = reading({ id: 'm0', source: 'META', readOn: '2026-11-11', spent: 500 });
     assert.deepEqual(metaReadingAction({ readings: [yesterday], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'CREATE' }, 'un día nuevo deja su lectura aunque la cifra no cambie');
 });
 
-test('lo que escribió una persona ese día no lo pisa Meta, y un ciclo cerrado no se toca', () => {
+test('en una pauta ligada manda Meta: lo escrito a mano queda en el historial pero la cifra vigente vuelve a ser la de Meta', () => {
     const manual = reading({ source: 'MANUAL', spent: 700 });
-    assert.deepEqual(metaReadingAction({ readings: [manual], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'SKIP', reason: 'MANUAL' });
+    assert.deepEqual(metaReadingAction({ readings: [manual], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'CREATE' });
+    const meta = reading({ id: 'm1', source: 'META', spent: 500, createdAt: new Date('2026-11-12T13:00:00Z') });
+    assert.deepEqual(metaReadingAction({ readings: [meta, manual], metaCents: 50_000, readOn: '2026-11-12' }), { action: 'UPDATE', readingId: 'm1', touch: true }, 'misma cifra, pero lo escrito después la tapaba: se vuelve la más reciente');
     const older = reading({ source: 'MANUAL', readOn: '2026-11-10' });
     assert.equal(metaReadingAction({ readings: [older], metaCents: 50_000, readOn: '2026-11-12' }).action, 'CREATE');
     assert.deepEqual(metaReadingAction({ readings: [], metaCents: 1, readOn: '2026-11-12', closed: true }), { action: 'SKIP', reason: 'CERRADO' });
@@ -79,4 +81,23 @@ test('la lista que se liga a una pauta se valida antes de escribir', () => {
     assert.match(metaCampaignIdsProblem(['1', '1']), /repetida/);
     assert.match(metaCampaignIdsProblem(['abc']), /campaña de Meta/);
     assert.match(metaCampaignIdsProblem(Array.from({ length: 51 }, (_, i) => String(i + 1))), /50/);
+});
+
+test('manda Meta solo con una lectura buena y reciente; si falla, se escribe a mano', () => {
+    const cycle = { start: '2026-11-01', end: '2026-11-30' };
+    const row = { metaSpent: 105_338, metaSpentAsOf: '2026-11-12', metaProblem: null };
+    const lock = metaSpendLock({ linked: true, row, cycle, today: '2026-11-12' });
+    assert.deepEqual(lock, { metaCents: 10_533_800, asOf: '2026-11-12', complete: false });
+    assert.equal(metaSpendLock({ linked: false, row, cycle, today: '2026-11-12' }), null, 'sin campañas ligadas, a mano como siempre');
+    assert.equal(metaSpendLock({ linked: true, row: { ...row, metaProblem: 'Meta no respondió' }, cycle, today: '2026-11-12' }), null, 'si Meta falla, a mano');
+    assert.equal(metaSpendLock({ linked: true, row: { ...row, metaSpentAsOf: '2026-11-09' }, cycle, today: '2026-11-12' }), null, 'hace días que no lee: a mano');
+    assert.equal(metaSpendLock({ linked: true, row: { metaSpent: null }, cycle, today: '2026-11-12' }), null, 'todavía no la ha leído');
+    assert.equal(metaSpendLock({ linked: true, row: { ...row, metaSpentAsOf: '2026-11-30' }, cycle, today: '2026-12-04' }).complete, true, 'leído hasta el cierre: vale para el gasto final');
+
+    assert.match(manualSpendProblem({ lock, spentCents: 40_000_000, currency: 'COP' }), /lee el gasto de Meta \(va en \$ 105\.338 al 12 nov\)/);
+    assert.match(manualSpendProblem({ lock, final: true, spentCents: 10_533_800, currency: 'COP' }), /ciclo completo/);
+    const closed = { ...lock, complete: true };
+    assert.equal(manualSpendProblem({ lock: closed, final: true, spentCents: 10_533_800, currency: 'COP' }), null, 'el gasto final es el de Meta');
+    assert.match(manualSpendProblem({ lock: closed, final: true, spentCents: 10_000_000, currency: 'COP' }), /es el que marca Meta: \$ 105\.338/);
+    assert.equal(manualSpendProblem({ lock: null, spentCents: 1, currency: 'COP' }), null);
 });

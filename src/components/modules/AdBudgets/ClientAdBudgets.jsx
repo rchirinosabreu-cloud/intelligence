@@ -46,7 +46,7 @@ export default function ClientAdBudgets({ clientId, className, inDialog = false 
               </div>
               <p className="text-zinc-600 dark:text-zinc-300">{formatAdMoney(e.spentCents, budget.currency)} de {formatAdMoney(e.availableCents, budget.currency)} · cierra el {shortDay(budget.cycle.end)}</p>
               {canEdit && <div className="-ml-2 flex flex-wrap items-center">
-                <button type="button" data-client-ad-spend onClick={() => setDialog({ kind: 'spend', budget })} className={action}>Actualizar gasto</button>
+                {!budget.meta?.lock && <button type="button" data-client-ad-spend onClick={() => setDialog({ kind: 'spend', budget })} className={action}>Actualizar gasto</button>}
                 <button type="button" data-client-ad-edit onClick={() => setDialog({ kind: 'edit', budget })} className={action}>Editar</button>
               </div>}
             </li>

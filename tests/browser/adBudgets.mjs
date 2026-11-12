@@ -178,8 +178,18 @@ test('todo se corrige y se deshace: lectura, cierre, presupuesto, saldo, campañ
   const budget = cycle.getByLabel('Presupuesto del ciclo');
   await budget.fill('');
   await budget.pressSequentially('1200000');
+  // Cambiar lo aprobado pide quién lo aprobó y por qué: sin eso no se guarda.
+  await cycle.locator('[data-ad-approval]').waitFor();
+  await cycle.locator('button[type=submit]').click();
+  assert.equal(await cycle.getByLabel('Quién lo aprobó').evaluate((input) => input.validity.valueMissing), true, 'el formulario no se envía sin decir quién aprobó');
+  assert.equal(await cycle.isVisible(), true);
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${OUT}/16-aprobacion.png` });
+  await cycle.getByLabel('Quién lo aprobó').fill('Gema, por WhatsApp');
+  await cycle.getByLabel('Motivo').fill('Septiembre se amplió');
   await cycle.locator('button[type=submit]').click();
   await cycle.waitFor({ state: 'detached' });
+  await detail.locator('[data-ad-changes]').getByText(/Aprobó: Gema, por WhatsApp\. Motivo: Septiembre se amplió/).waitFor();
   await page.waitForFunction(() => document.querySelector('[data-ad-history="2026-09"]').innerText.includes('$ 1.200.000'));
 
   // Un saldo ajustado vuelve a la cuenta automática.
@@ -187,7 +197,8 @@ test('todo se corrige y se deshace: lectura, cierre, presupuesto, saldo, campañ
   const carry = page.locator('[data-ad-carry-dialog]');
   await carry.waitFor();
   assert.equal(await carry.locator('[data-ad-carry-clear]').count(), 0, 'sin ajuste no hay nada que deshacer');
-  await carry.getByPlaceholder('Ej.: saldo de octubre según Meta').fill('Prueba');
+  await carry.locator('[data-ad-carry-auto]').waitFor();
+  await carry.getByPlaceholder('Ej.: el cliente pidió no acumular lo de octubre').fill('Prueba');
   await carry.locator('button[type=submit]').click();
   await carry.waitFor({ state: 'detached' });
   await page.waitForTimeout(300);
@@ -252,6 +263,8 @@ test('desde la ficha se edita la misma pauta del módulo', async () => {
   const amount = dialog.getByLabel('Presupuesto', { exact: true });
   await amount.fill('');
   await amount.pressSequentially('150');
+  await dialog.getByLabel('Quién lo aprobó').fill('Lina, por correo');
+  await dialog.getByLabel('Motivo').fill('Aprobó USD 150 para noviembre');
   await dialog.locator('button[type=submit]').click();
   await dialog.waitFor({ state: 'detached' });
   await page.waitForFunction(() => document.querySelector('[data-client-ad-budget="b-foobe"]').innerText.includes('USD 246,47'));
@@ -337,7 +350,7 @@ test('Meta: la lectura encuentra las campañas y ligarlas pone el gasto de Meta 
   await page.close();
 });
 
-test('Meta: si la cifra escrita a mano no coincide, se dice y se puede usar la de Meta', async () => {
+test('Meta: con la pauta ligada manda Meta; lo escrito a mano antes queda en el historial y ya no se escribe otra cifra', async () => {
   const { page, errors } = await open();
   const bonsai = row(page, 'b-bonsai');
   await bonsai.locator('[data-ad-spend-open]').click();
@@ -354,19 +367,17 @@ test('Meta: si la cifra escrita a mano no coincide, se dice y se puede usar la d
   await dialog.locator('button[type=submit]').click();
   await dialog.waitFor({ state: 'detached' });
 
-  const difference = bonsai.locator('[data-ad-meta-difference]');
-  await difference.waitFor();
-  assert.match(await difference.innerText(), /Meta marca \$ 509\.200 hasta el 6 nov; la cifra escrita a mano es \$ 700\.000/, 'lo escrito ese día manda y la diferencia queda a la vista');
+  await bonsai.getByText(/\$ 509\.200/).first().waitFor();
+  assert.equal(await bonsai.locator('[data-ad-spend-open]').count(), 0, 'el gasto ya no se escribe a mano');
+  assert.equal(await bonsai.locator('[data-ad-meta-difference]').count(), 0);
+  await bonsai.locator('[data-ad-history]').first().getByText(/\$ 700\.000/).waitFor();
+  assert.equal(await bonsai.locator('[data-ad-campaign-add]').count(), 0, 'las campañas vienen de Meta');
   await bonsai.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200);
-  await shot(page, '10-diferencia-con-meta');
-  await difference.locator('[data-ad-meta-use]').click();
-  await difference.waitFor({ state: 'detached' });
-  assert.match(await bonsai.innerText(), /\$ 509\.200/);
+  await shot(page, '10-manda-meta');
   assert.deepEqual(errors, []);
   await page.close();
 });
-
 test('Meta: lo que gasta sin pauta se liga a la suya o se marca como que no es de ninguna', async () => {
   const { page, errors } = await open();
   await page.locator('[data-ad-meta-unassigned]').click();

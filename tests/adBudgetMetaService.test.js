@@ -102,16 +102,67 @@ test('la siguiente lectura del mismo día actualiza la misma lectura en vez de s
     }
 });
 
-test('lo que escribió una persona ese día manda, y la diferencia queda a la vista', async () => {
+test('en una pauta ligada manda Meta: lo escrito a mano queda en el historial y ya no se puede escribir otra cifra', async () => {
     const { metaService, budgetService } = setup();
     await metaService.run();
     await budgetService.recordSpend('b-bonsai', { spent: '687798', readOn: '2026-11-12' }, actor);
     await metaService.assign('b-bonsai', ['2001'], actor);
     const detail = await budgetService.detail('b-bonsai');
-    assert.equal(detail.evaluation.spentCents, 68_779_800, 'la cifra de Keila sigue vigente');
-    assert.equal(detail.meta.spentCents, 67_500_000, '25 días del ciclo del 19');
-    assert.equal(detail.meta.difference.cents, 1_279_800);
-    assert.equal(detail.meta.asOf, '2026-11-12');
+    assert.equal(detail.evaluation.spentCents, 67_500_000, 'la cifra de Meta: 25 días del ciclo del 19');
+    assert.equal(detail.meta.difference, null);
+    assert.deepEqual(detail.meta.lock, { metaCents: 67_500_000, asOf: '2026-11-12', complete: false });
+    assert.equal(detail.history[0].readings.some((reading) => Number(reading.spent) === 687798), true, 'lo escrito a mano no se borra');
+    await assert.rejects(budgetService.recordSpend('b-bonsai', { spent: '700000', readOn: '2026-11-12' }, actor), (error) => error.statusCode === 409 && /lee el gasto de Meta/.test(error.message));
+    const manual = detail.history[0].readings.find((reading) => reading.source === 'MANUAL');
+    await assert.rejects(budgetService.updateReading('b-bonsai', manual.id, { spent: '900000' }, actor), (error) => error.statusCode === 409);
+    await assert.rejects(budgetService.createCampaign('b-bonsai', { name: 'A mano', status: 'ACTIVA' }, actor), /vienen de Meta/);
+    assert.equal((await budgetService.updateReading('b-bonsai', manual.id, { note: 'Era de prueba' }, actor)).id, 'b-bonsai', 'la nota sí se corrige');
+});
+
+test('si Meta no responde, se puede escribir a mano; cuando vuelve, su cifra manda otra vez', async () => {
+    const base = fakeMeta();
+    const failing = { ...base, campaignSpend: async (args) => { if (args.campaignIds) throw Object.assign(new Error('Service temporarily unavailable'), { name: 'MetaGraphError', code: 2 }); return base.campaignSpend(args); } };
+    const env = setup({ meta: failing });
+    await env.metaService.run();
+    await env.metaService.assign('b-bonsai', ['2001'], actor);
+    const broken = await env.budgetService.detail('b-bonsai');
+    assert.equal(broken.meta.lock, null);
+    assert.ok(broken.meta.problem);
+    await env.budgetService.recordSpend('b-bonsai', { spent: '600000', readOn: '2026-11-12' }, actor);
+
+    const healed = setup({ meta: fakeMeta() });
+    Object.assign(healed.db.store, env.db.store);
+    await healed.metaService.syncBudgets({ budgetId: 'b-bonsai' });
+    assert.equal((await healed.budgetService.detail('b-bonsai')).evaluation.spentCents, 67_500_000, 'Meta volvió y su cifra es la vigente');
+});
+
+test('el gasto final de una pauta ligada es el de Meta, leído hasta el cierre', async () => {
+    const november = setup({ day: '2026-11-20' });
+    await november.metaService.run();
+    await november.metaService.assign('b-hoff', ['1001', '1002'], actor);
+    const env = setup({ day: '2026-12-03' });
+    Object.assign(env.db.store, november.db.store);
+    await env.metaService.syncBudgets({ budgetId: 'b-hoff' });
+    const detail = await env.budgetService.detail('b-hoff');
+    const { lock, cycle } = detail.pendingClose;
+    assert.equal(lock.complete, true);
+    assert.equal(lock.metaCents, 30_000_000, '10.000 diarios los 30 días de noviembre');
+    await assert.rejects(env.budgetService.recordSpend('b-hoff', { spent: '250000', readOn: cycle.end, final: true, cycleKey: cycle.key }, actor), /es el que marca Meta/);
+    const closed = await env.budgetService.recordSpend('b-hoff', { spent: '300000', readOn: cycle.end, final: true, cycleKey: cycle.key, note: 'Confirmado con Meta' }, actor);
+    assert.equal(closed.evaluation.closed, true);
+});
+
+test('en una pauta ligada, las campañas que cuentan para los avisos son las de Meta', async () => {
+    const client = fakeBudgets();
+    client.state['1001'].stop_time = '2026-12-04T23:59:00-0500';
+    const { metaService, budgetService } = await linkedHoff(client);
+    const hoff = (await budgetService.list()).budgets.find((row) => row.id === 'b-hoff');
+    const flag = hoff.evaluation.flags.find((item) => item.campaignId === '1001');
+    assert.equal(flag.code, 'PASA_EL_CIERRE');
+    assert.match(hoff.evaluation.reasons.join(' '), /«PABLO HOFF- MENSAJES INSCRIPCIONES»: Termina el 4 dic, después del cierre del 30 nov/);
+    const { adNoticesFor } = await import('../src/lib/adBudgetNotices.js');
+    assert.ok(adNoticesFor(hoff).some((notice) => notice.subjectId === 'pauta-campana-meta:b-hoff:1001'), 'el aviso lleva la pauta para poder releerla');
+    assert.ok(metaService);
 });
 
 test('una campaña es de una sola pauta, en su moneda, y soltarla no borra el historial', async () => {
