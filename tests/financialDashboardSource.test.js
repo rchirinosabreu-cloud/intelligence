@@ -86,7 +86,13 @@ test('getFinancialDashboard uses posted actual records as the only source of tru
         month: 1,
         income: 100,
         expense: 40,
-        netFlow: 60
+        netFlow: 60,
+        // Estado de resultados (12 de noviembre de 2026): lo prestado, lo reintegrado y la
+        // pauta viajan por mes para poder apartarlos del gasto y de la venta. El flujo
+        // bruto no cambia: es el dinero que de verdad se movió en la cuenta.
+        loansGranted: 0,
+        loanRepayments: 0,
+        pauta: 0
     }]);
     const recordWhere = calls.find(([name]) => name === 'financialRecord.findMany')[1].where;
     assert.equal(recordWhere.scenario, 'ACTUAL');

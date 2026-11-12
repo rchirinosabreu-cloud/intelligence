@@ -153,7 +153,7 @@ export default function IncomeStatementTab({
                         <h3 className="text-sm font-bold text-zinc-900 dark:text-white">A dónde se va la plata</h3>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que salió por operar en el periodo, de mayor a menor.</p>
                     </div>
-                    <p className="text-sm font-black tracking-tight text-zinc-900 dark:text-white">{indicator(outgoings.operatingTotal)}</p>
+                    <p className="brain-type-value">{indicator(outgoings.operatingTotal)}</p>
                 </div>
                 {outgoings.operating.length > 0 ? (
                     <ul className="space-y-3">
