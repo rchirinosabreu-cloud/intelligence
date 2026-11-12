@@ -1,5 +1,6 @@
 import { nextTaskOrder } from './taskOrderService.js';
 import { ACTIVE_PUBLICATION_STATUSES } from '../lib/socialPublishing.js';
+import { contentItemStatusFromTask } from '../lib/contentTaskMirror.js';
 
 // Solo recibe un cambio del estado conjunto, nunca el cierre parcial de una persona.
 export async function applyTaskAggregateEffects(tx, task, status, actorId) {
@@ -18,8 +19,9 @@ export async function applyTaskAggregateEffects(tx, task, status, actorId) {
       } });
     }
   }
+  const piece = publication ? await tx.contentItem.findUnique({ where: { id: task.contentItemId }, select: { status: true } }) : null;
+  const next = contentItemStatusFromTask({ newStatus: status, isPublication: publication, itemStatus: piece?.status });
+  if (!next) return;
   const armed = await tx.socialPublication.count({ where: { contentItemId: task.contentItemId, status: { in: [...ACTIVE_PUBLICATION_STATUSES] } } });
-  if (!armed) await tx.contentItem.update({ where: { id: task.contentItemId }, data: {
-    status: status === 'REALIZADA' ? (publication ? 'PUBLICADO' : 'REALIZADO') : status === 'DEVUELTA' ? 'DEVUELTO' : 'EN_PRODUCCION',
-  } });
+  if (!armed) await tx.contentItem.update({ where: { id: task.contentItemId }, data: { status: next } });
 }
