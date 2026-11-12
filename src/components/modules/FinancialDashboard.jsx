@@ -20,12 +20,8 @@ import {
 } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    PieChart, Pie, Cell
-} from 'recharts';
-import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
-    Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
+    Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, ListCollapse, ListCollapse as ExpandIcon,
     CheckCircle2, Link2, FileText, Download, Trash2, Edit, Archive
 } from '@/components/ui/icons';
 import ReceivableArchiveDialog from './financial/ReceivableArchiveDialog';
@@ -54,6 +50,7 @@ import { RECEIVABLE_COLLECTION_MODES, collectionModeLabel } from '@/lib/receivab
 import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
 import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
+import IncomeStatementTab from './financial/IncomeStatementTab';
 import ProfitabilityTab from './financial/ProfitabilityTab';
 import FormalizationsTab from './financial/FormalizationsTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
@@ -109,21 +106,6 @@ function ReceivableDraftNotice({ savedAt, onDiscard }) {
         </div>
     );
 }
-
-const CATEGORY_COLORS = {
-    'MEMBRESIA': '#009EB9',
-    'SERVICIO': '#4f46e5',       // Indigo
-    'PAUTA': '#06b6d4',          // Cyan
-    'NOMINA': '#ec4899',         // Pink
-    'LOGISTICA': '#f97316',      // Orange
-    'ADMINISTRATIVO': '#00AC8A',
-    'TAX': '#ef4444',            // Red
-    'FINANCIAL': '#10b981',      // Emerald
-    'OPERATIVO': '#71717a',      // Zinc
-    'DONACION': '#009EB9',
-    'SIEMBRA': '#00AC8A',
-    'PRESTAMO': '#A8118C'
-};
 
 const CATEGORY_LABELS = {
     'MEMBRESIA': 'Membresías',
@@ -1149,19 +1131,6 @@ await invalidateFinancialQueries(queryClient);
         }).format(val);
     };
 
-    // Donut chart formatted distribution data
-    const expenseDistributionData = useMemo(() => {
-        if (!data?.categoriesDistribution?.EXPENSE) return [];
-        return Object.entries(data.categoriesDistribution.EXPENSE)
-            .map(([name, value]) => ({
-                name: CATEGORY_LABELS[name] || name,
-                rawName: name,
-                value: value,
-                fill: CATEGORY_COLORS[name] || '#71717a'
-            }))
-            .filter(item => item.value > 0);
-    }, [data?.categoriesDistribution]);
-
     // Rodny, 11 de noviembre de 2026: lo archivado y lo que ya no tiene deuda no van mezclados con lo que se cobra;
     // cada uno en su panel plegado. Una cuenta archivada va a «Cobros archivados» aunque el cliente tenga otras al día.
     const receivableSections = useMemo(() => {
@@ -1329,113 +1298,17 @@ await invalidateFinancialQueries(queryClient);
                 {activeTab === 'records' && (
                     <FinancialLedger selectedYear={selectedYear} filters={filters} searchPending={searchPending} formatCurrency={formatCurrency} />
                 )}
-                {/* PESTAÑA 1: ANALISIS DE FLUJO */}
+                {/* PESTAÑA 1: ESTADO DE RESULTADOS MENSUAL
+                    Punto 7 del frente 8 del plan «el negocio primero». La vista vive en
+                    financial/IncomeStatementTab.jsx y su regla en src/lib/incomeStatement.js. */}
                 {activeTab === 'flow' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in slide-in-from-right-4 duration-300">
-                        {/* Cash flow line chart */}
-                        <Card className="lg:col-span-8 p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
-                            <div className="flex items-center justify-between mb-8">
-                                <div>
-                                    <h3 className="text-sm font-bold">Flujo de Caja Histórico</h3>
-                                    <p className="text-xs text-zinc-500">Comparativa mensual de ingresos brutos vs egresos consolidados.</p>
-                                </div>
-                            </div>
-                            <div className="h-[320px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={indicatorsPending || error ? [] : data?.cashFlow || []} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.05} />
-                                        <XAxis
-                                            dataKey="month"
-                                            fontSize={10}
-                                            tickFormatter={(val) => {
-                                                const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                                                return monthNames[val - 1] || val;
-                                            }}
-                                        />
-                                        <YAxis
-                                            fontSize={10}
-                                            tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: '#fff',
-                                                borderRadius: '16px',
-                                                border: '1px solid #e4e4e7',
-                                                fontSize: '11px',
-                                                fontWeight: 'bold',
-                                                color: '#18181b'
-                                            }}
-                                            formatter={(value) => formatCurrency(value)}
-                                        />
-                                        <Legend
-                                            verticalAlign="top"
-                                            height={36}
-                                            iconType="circle"
-                                            formatter={(value) => <span className="text-xs font-medium text-zinc-400 tracking-tighter">{value === 'income' ? 'Ingresos' : 'Egresos'}</span>}
-                                        />
-                                        <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} activeDot={{ r: 6 }} dot={{ r: 2 }} />
-                                        <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={3} dot={{ r: 2 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </Card>
-
-                        {/* Doughnut Categories Distribution Chart */}
-                        <Card className="lg:col-span-4 p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
-                            <div className="flex items-center justify-between mb-8">
-                                <div>
-                                    <h3 className="text-sm font-bold">Distribución de Gastos</h3>
-                                    <p className="text-xs text-zinc-500">Clasificación porcentual de egresos.</p>
-                                </div>
-                                <div className="p-2 bg-violet-600/10 rounded-xl">
-                                    <PieIcon className="w-4 h-4 text-violet-600" />
-                                </div>
-                            </div>
-                            {expenseDistributionData.length > 0 ? (
-                                <div className="h-[300px] w-full relative">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={expenseDistributionData}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={85}
-                                                paddingAngle={4}
-                                                dataKey="value"
-                                            >
-                                                {expenseDistributionData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip
-                                                contentStyle={{
-                                                    backgroundColor: '#fff',
-                                                    borderRadius: '12px',
-                                                    border: '1px solid #e4e4e7',
-                                                    fontSize: '11px',
-                                                    fontWeight: 'bold',
-                                                    color: '#18181b'
-                                                }}
-                                                formatter={(value) => formatCurrency(value)}
-                                            />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    {/* Scrollable Legends list inside Card */}
-                                    <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-                                        <span className="text-xs font-medium text-zinc-400">Total Gastos</span>
-                                        <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-white">
-                                            {formatIndicator(kpis.totalExpense)}
-                                        </span>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="h-[250px] flex items-center justify-center opacity-30 text-center">
-                                    <p className="text-xs italic">Sin gastos registrados en el periodo</p>
-                                </div>
-                            )}
-                        </Card>
-                    </div>
+                    <IncomeStatementTab
+                        cashFlow={data?.cashFlow || []}
+                        expenseDistribution={data?.categoriesDistribution?.EXPENSE || null}
+                        categoryLabel={(name) => CATEGORY_LABELS[name] || name}
+                        formatCurrency={formatCurrency}
+                        pending={!!(indicatorsPending || error)}
+                    />
                 )}
 
                 {/* PESTAÑA 2: CARTERA MOROSA */}

@@ -738,15 +738,30 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                     month: rMonth,
                     income: 0,
                     expense: 0,
-                    netFlow: 0
+                    netFlow: 0,
+                    // Lo prestado y lo reintegrado, mes a mes: no son gasto ni venta, y el
+                    // estado de resultados los aparta (src/lib/incomeStatement.js).
+                    loansGranted: 0,
+                    loanRepayments: 0,
+                    pauta: 0
                 };
             }
 
             if (type === 'INCOME') {
                 monthlyGroups[key].income = roundFloat(monthlyGroups[key].income + amount);
+                if (record.category === 'PRESTAMO') {
+                    monthlyGroups[key].loanRepayments = roundFloat(monthlyGroups[key].loanRepayments + amount);
+                }
             } else {
                 monthlyGroups[key].expense = roundFloat(monthlyGroups[key].expense + amount);
+                if (record.category === 'PRESTAMO') {
+                    monthlyGroups[key].loansGranted = roundFloat(monthlyGroups[key].loansGranted + amount);
+                }
+                if (record.category === 'PAUTA') {
+                    monthlyGroups[key].pauta = roundFloat(monthlyGroups[key].pauta + amount);
+                }
             }
+            // El flujo bruto se conserva: es el dinero que de verdad se movió en la cuenta.
             monthlyGroups[key].netFlow = roundFloat(monthlyGroups[key].income - monthlyGroups[key].expense);
         }
 
