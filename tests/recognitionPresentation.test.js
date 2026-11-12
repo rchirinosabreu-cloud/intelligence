@@ -37,7 +37,7 @@ test('copy preserves the explicit line break and distinguishes eight daily tasks
     FIRST_TASK: 'Eres el primero del equipo en completar una tarea.\nCada avance cuenta.',
     EARLY_DELIVERY: 'Terminaste ese pendiente antes de lo previsto. Anticiparte también suma.',
     DAILY_EIGHT: 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!',
-    CAUGHT_UP: 'Resolviste todo lo que tenías vencido, buen trabajo.',
+    CAUGHT_UP: 'Cerraste el día sin dejar nada vencido, buen trabajo.',
     PLAN_APPROVED: 'El cliente aprobó tu parrilla, mandemos a producción',
     WEEKLY_FIFTY: 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!',
   });

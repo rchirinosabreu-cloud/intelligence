@@ -82,7 +82,7 @@ Fuera del modo de revisión, el componente prevé cierre tras 9 segundos, pausad
 
 Ejecutar `npm run dev:recognitions` y abrir `http://127.0.0.1:3000/`. Es un servidor de muestra aislado, no un backend financiero, de calendarios o de tareas. No requiere Docker ni credenciales reales. Si el puerto ya está ocupado, usar `RECOGNITION_PREVIEW_PORT` con otro puerto; no detener procesos ajenos.
 
-Los seis botones simulan buen comienzo, entrega anticipada, on fire, ponerse al día, parrilla aprobada y 50 tareas semanales para Rodny. Se puede cambiar el estilo, navegar a Gestión, cambiar de tema, abrir el historial, cerrar el aviso y reiniciar la muestra. Repetir el mismo ejemplo no duplica su registro. Las muestras viven en memoria del navegador y se reinician al recargar; este comportamiento no es la persistencia deseada para producción.
+Los seis botones simulan buen comienzo, entrega anticipada, on fire, al día, parrilla aprobada y 50 tareas semanales para Rodny. Se puede cambiar el estilo, navegar a Gestión, cambiar de tema, abrir el historial, cerrar el aviso y reiniciar la muestra. Repetir el mismo ejemplo no duplica su registro. Las muestras viven en memoria del navegador y se reinician al recargar; este comportamiento no es la persistencia deseada para producción.
 
 Los nombres del equipo se usan solo para evaluar textos. Ninguna persona recibe estos reconocimientos ni notificaciones reales. Las seis situaciones son simuladas, no una certificación de su desempeño.
 
@@ -99,7 +99,7 @@ Las seis condiciones ya se evalúan en el servicio de servidor descrito abajo. L
 | Buen comienzo | Primera tarea completada por el equipo en el día | Eres el primero del equipo en completar una tarea.<br>Cada avance cuenta. |
 | Entrega anticipada | Completar el pendiente antes del plazo comprometido | Terminaste ese pendiente antes de lo previsto. Anticiparte también suma. |
 | On fire | Ocho tareas distintas completadas por la persona en el mismo día | Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas! |
-| Al día | La persona tenía vencidas y las completa, quedando sin vencidas | Resolviste todo lo que tenías vencido, buen trabajo. |
+| Al día | Al cierre de la jornada (18:00 de Bogotá, días hábiles): cerró al menos una tarea ese día y no dejó nada vencido ni nada de ese día sin cerrar. Sustituye desde el 12 de noviembre de 2026 a «se puso al día con sus vencidas», que premiaba atrasarse | Cerraste el día sin dejar nada vencido, buen trabajo. |
 | Parrilla aprobada | Todas las piezas activas están aprobadas; destinatario: responsable de la parrilla | El cliente aprobó tu parrilla, mandemos a producción |
 | Ya son 50 | Cincuenta tareas distintas cumplidas por la persona en la misma semana | Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades! |
 
