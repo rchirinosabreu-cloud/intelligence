@@ -16,12 +16,13 @@ import {
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
 import { clientOperationPlanPath } from '@/lib/clientOperationAlerts';
+import { canSeeClientOperations } from '@/lib/clientOperations';
+import { isManagerRole } from '@/lib/taskEditPermissions';
 import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 
 // `/clientes/operacion/:slug`: la página completa de un cliente (Rodny, 2 de octubre de 2026: «necesito
-// entrar a una sección completa»). Solo administradores y project managers.
-
-const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
+// entrar a una sección completa»). Dirección y project managers por su cargo, y quien tenga marcada su
+// casilla de la operación de clientes en Equipo (12 de noviembre de 2026).
 
 export default function ClientOperationRoute() {
   const { slug } = useParams();
@@ -30,7 +31,7 @@ export default function ClientOperationRoute() {
   // Lo que se abre desde aquí ofrece volver a esta misma página (30 de octubre de 2026).
   const navigateFrom = useNavigateFrom();
   const { currentUser } = useAuth();
-  const canManage = MANAGER_ROLES.includes(String(currentUser?.role || '').toUpperCase());
+  const canManage = canSeeClientOperations(currentUser);
   const { data: client, isLoading, error, refetch } = useClientOperation(canManage ? slug : null);
   const viewerId = currentUser?.id || currentUser?.userId;
   const projectQuery = useClientProjects(canManage ? client?.id : null, viewerId);
@@ -78,7 +79,9 @@ export default function ClientOperationRoute() {
 
   return (
     <>
-      <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage
+      {/* Ver no es cambiar: quien entra por la casilla nueva lee la página, y las acciones siguen siendo
+          de dirección y project managers, que es lo que exige el servidor. */}
+      <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage={isManagerRole(currentUser?.role)}
         currentUserId={currentUser?.id} isAdmin={String(currentUser?.role || '').toUpperCase() === 'ADMIN'}
         adBudgetsSection={<ClientAdBudgets clientId={client.id} className="mt-4 border-t border-zinc-100 dark:border-white/5 pt-3" />}
         projectsSection={<ClientProjects key={`${client.id}:${viewerId}`} projects={projectQuery.data || []} team={team}
@@ -194,3 +197,4 @@ export default function ClientOperationRoute() {
     </>
   );
 }
+

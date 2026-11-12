@@ -1,5 +1,6 @@
 import express from 'express';
 import { isManagerRole } from '../../config/security.js';
+import { canSeeClientOperations } from '../../lib/clientOperations.js';
 import { clientOperationsService } from '../../services/clientOperationsService.js';
 import { projectOperationsService } from '../../services/projectOperationsService.js';
 import { productionDayService } from '../../services/productionDayService.js';
@@ -10,9 +11,23 @@ import { productionDayService } from '../../services/productionDayService.js';
 const PROFILE_FIELDS = ['description', 'instagramUrl', 'agency', 'complexity', 'projectManagerId', 'communityManagerId', 'externalPlanUrl', 'contract', 'renew'];
 const PROJECT_FIELDS = ['expectedRevision', 'title', 'modality', 'startDate', 'endDate', 'projectManagerId', 'deliverables', 'productionDays', 'productionHours', 'reportRequired', 'notes', 'review'];
 
-const requireManager = (req, res, next) => {
+// Leer la operación: dirección y project managers por su cargo, y quien tenga marcada su casilla en Equipo
+// (Rodny, 12 de noviembre de 2026: «un permiso para que quien yo quiera vea los clientes completos»).
+const requireClientOperations = (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Usuario no autenticado' });
-  if (!isManagerRole(req.user.role)) return res.status(403).json({ error: 'La operación de clientes es de administradores y project managers.' });
+  if (!canSeeClientOperations(req.user)) return res.status(403).json({ error: 'No tienes permiso para ver la operación de clientes.' });
+  return next();
+};
+// A propósito sin etiqueta `permission` para el mapa de Bria: la etiqueta es plana («pide este rol y este
+// módulo») y aquí la puerta es una *o* —el cargo o la casilla—. Etiquetarla haría que Bria le negara a un
+// project manager una lectura que sí puede hacer. La etiqueta de abajo, más estricta, sigue describiendo la
+// ruta; la cerradura de verdad es esta función.
+
+// Escribirla sigue siendo de dirección y project managers: el permiso nuevo es para ver, no para cambiar el
+// contrato, la ficha operativa ni el cierre del mes.
+const requireManager = (req, res, next) => {
+  if (req.method === 'GET') return next();
+  if (!isManagerRole(req.user.role)) return res.status(403).json({ error: 'Cambiar la operación de un cliente es de administradores y project managers.' });
   return next();
 };
 requireManager.permission = { role: 'MANAGER' }; // Lo lee el mapa de la plataforma de Bria.
@@ -28,7 +43,7 @@ const reply = (res, error, logger) => {
 
 export const createClientOperationsRouter = ({ service = clientOperationsService, projectService = projectOperationsService, productionDays = productionDayService, logger = console } = {}) => {
   const router = express.Router();
-  router.use(requireManager);
+  router.use(requireClientOperations, requireManager);
 
   router.get('/', async (_req, res) => {
     try { return res.json(await service.listOperations()); } catch (error) { return reply(res, error, logger); }

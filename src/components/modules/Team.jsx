@@ -9,9 +9,17 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { cn } from '../../lib/utils';
 import { effectiveFinancialRole } from '../../utils/financialPermissions';
-import { PLATFORM_MODULES, presetModulePermissions, readModulePermissions } from '../../lib/platformModules';
+import { PLATFORM_MODULES, extraPermissionsFor, presetPermissions, readModulePermissions } from '../../lib/platformModules';
 import InitialAccessDialog from '@/components/team/InitialAccessDialog';
 import { TEAM_AREAS, memberAreas, normalizeTeamAreas } from '../../lib/teamAreas';
+
+// El color de cada casilla suelta, de la paleta oficial: lo elige `EXTRA_PERMISSIONS` por su `tone`.
+const EXTRA_TONES = {
+  cyan: 'border-brand-cyan/30 bg-brand-cyan/5',
+  yellow: 'border-brand-yellow/40 bg-brand-yellow/10',
+  green: 'border-brand-green/30 bg-brand-green/5',
+  neutral: 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+};
 
 export default function Team() {
   const navigate = useNavigate();
@@ -39,12 +47,12 @@ export default function Team() {
   const [financialRole, setFinancialRole] = useState('NONE');
   // Las casillas salen de la lista única de módulos (src/lib/platformModules.js): un módulo
   // nuevo aparece aquí solo, con los roles que lo traen marcado.
-  const [modulePermissions, setModulePermissions] = useState(() => ({ ...presetModulePermissions('VIEWER'), bria: false, liga: false, pautas_editar: false }));
+  const [modulePermissions, setModulePermissions] = useState(() => (presetPermissions('VIEWER')));
 
   const handleRolePresetChange = (selectedRole) => {
     setSystemRole(selectedRole);
     setFinancialRole(selectedRole === 'ADMIN' ? 'ADMIN' : 'NONE');
-    setModulePermissions({ ...presetModulePermissions(selectedRole), bria: false, liga: false, pautas_editar: false });
+    setModulePermissions(presetPermissions(selectedRole));
   };
 
   const fetchTeam = async () => {
@@ -92,7 +100,7 @@ export default function Team() {
       setAvatarUrl('');
       setSystemRole('VIEWER');
       setFinancialRole('NONE');
-      setModulePermissions({ ...presetModulePermissions('VIEWER'), bria: false, liga: false, pautas_editar: false });
+      setModulePermissions(presetPermissions('VIEWER'));
     }
     setIsModalOpen(true);
   };
@@ -391,11 +399,20 @@ export default function Team() {
                       );
                     })}
                   </div>
-                  {['ADMIN', 'PROJECT_MANAGER'].includes(systemRole) && <label className="mt-3 flex min-h-11 items-center gap-3 rounded-xl border border-brand-cyan/30 bg-brand-cyan/5 p-3 text-sm text-zinc-700 dark:text-zinc-200"><input type="checkbox" checked={modulePermissions.bria === true} onChange={(event) => setModulePermissions((prev) => ({ ...prev, bria: event.target.checked }))} className="h-4 w-4 text-primary focus:ring-primary" /><span>Activar Bria para esta persona</span></label>}
-                  {/* La liga del mes (3 de noviembre de 2026): se enciende persona por persona, a cualquier rol; un administrador también la necesita marcada. */}
-                  <label className="mt-3 flex min-h-11 items-center gap-3 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 p-3 text-sm text-zinc-700 dark:text-zinc-200"><input type="checkbox" data-team-league-toggle checked={modulePermissions.liga === true} onChange={(event) => setModulePermissions((prev) => ({ ...prev, liga: event.target.checked }))} className="h-4 w-4 text-primary focus:ring-primary" /><span>Activar la liga del mes para esta persona</span></label>
-                  {/* Pautas en dos niveles (12 de noviembre de 2026): la casilla del módulo deja ver; esta, editar y ajustar el presupuesto en Meta. Ni un administrador la tiene por su cargo. */}
-                  {(systemRole === 'ADMIN' || modulePermissions.pautas) && <label className="mt-3 flex min-h-11 items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"><input type="checkbox" data-team-ad-edit-toggle checked={modulePermissions.pautas_editar === true} onChange={(event) => setModulePermissions((prev) => ({ ...prev, pautas_editar: event.target.checked }))} className="h-4 w-4 text-primary focus:ring-primary" /><span>Editar pautas y ajustar presupuestos en Meta</span></label>}
+                  {/* Las casillas sueltas (Bria, la liga, editar pautas, la operación de clientes) salen de
+                      `EXTRA_PERMISSIONS`: a quién se le ofrece cada una lo dice la lista, no esta pantalla. */}
+                  {extraPermissionsFor(systemRole, modulePermissions).map((extra) => (
+                    <label key={extra.key}
+                      className={`mt-3 flex min-h-11 items-start gap-3 rounded-xl border p-3 text-sm text-zinc-700 dark:text-zinc-200 ${EXTRA_TONES[extra.tone] || EXTRA_TONES.neutral}`}>
+                      <input type="checkbox" {...(extra.testId ? { [extra.testId]: true } : {})} checked={modulePermissions[extra.key] === true}
+                        onChange={(event) => setModulePermissions((prev) => ({ ...prev, [extra.key]: event.target.checked }))}
+                        className="mt-0.5 h-4 w-4 text-primary focus:ring-primary" />
+                      <span className="min-w-0">
+                        {extra.label}
+                        {extra.hint && <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">{extra.hint}</span>}
+                      </span>
+                    </label>
+                  ))}
                 </div>
                 {(systemRole === 'ADMIN' || modulePermissions.financiero) && (
                   <div>
@@ -449,3 +466,4 @@ export default function Team() {
     </div>
   );
 }
+
