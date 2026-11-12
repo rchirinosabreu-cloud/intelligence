@@ -8,6 +8,8 @@ import {
   formatDateTimeText, parseDateTimeText, QUARTER_HOURS
 } from '@/lib/brainDatePicker';
 import { cn } from '@/lib/utils';
+import Select from '@/components/ui/Select';
+import { monthOptions } from '@/lib/monthOptions';
 
 export { dateKeyToPickerDate, pickerDateToKey, splitDateTimeKey, joinDateTimeKey };
 
@@ -76,34 +78,20 @@ export function BrainDatePicker({ id, value, onChange, className, placeholder = 
  * The value stays the first day of the month so it keeps travelling as a plain date
  * string, like every other field, and nothing downstream has to learn a new shape.
  */
-export function BrainMonthPicker({ id, value, onChange, className, placeholder = 'Mes y año', min, max, disabled, isClearable = false, ariaLabel, required, name }) {
-  const monthKey = date => (date ? `${pickerDateToKey(date).slice(0, 7)}-01` : '');
+//
+// Desde el 12 de noviembre de 2026 (Rodny: «quiero un estilo global y prefiero el desplegable como en las parrillas»)
+// el mes se elige con el desplegable compartido, como el período de una parrilla: «Noviembre 2026», del más reciente
+// al más antiguo. La rejilla de meses se retiró. Mismo valor 'YYYY-MM-01' y mismas props: nadie aguas abajo cambia.
+export function BrainMonthPicker({ id, value, onChange, className, placeholder = 'Mes y año', min, max, disabled, isClearable = false, ariaLabel, required, name, before, after }) {
+  const options = monthOptions({ value, min, max, before, after });
+  const current = value ? `${String(value).slice(0, 7)}-01` : '';
   return (
-    <DatePicker
-      id={id}
-      name={name}
-      {...brainDatePickerProps}
-      selected={dateKeyToPickerDate(value)}
-      onChange={date => onChange(monthKey(date))}
-      minDate={dateKeyToPickerDate(min) || undefined}
-      maxDate={dateKeyToPickerDate(max) || undefined}
-      showMonthYearPicker
-      dateFormat="MMMM 'de' yyyy"
-      placeholderText={placeholder}
-      disabled={disabled}
-      required={required}
-      isClearable={isClearable && !disabled}
-      ariaLabelledBy={undefined}
-      ariaLabel={ariaLabel}
-      className={cn(brainDateInputClass, className)}
-      // Las dos: la base da borde, sombra y cabecera; la de meses, la rejilla.
-      // Poner solo la segunda pisaría `brainDatePickerProps` y dejaría el panel sin estilo.
-      calendarClassName="brain-datepicker brain-datepicker-months"
-      wrapperClassName="w-full"
-      popperPlacement="bottom-start"
-      {...brainPopperProps}
-      autoComplete="off"
-    />
+    <Select id={id} name={name} aria-label={ariaLabel} value={current} disabled={disabled} required={required}
+      onChange={event => onChange(event.target.value)}
+      className={cn('h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100', className)}>
+      {(isClearable || !current) && <option value="">{placeholder}</option>}
+      {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </Select>
   );
 }
 

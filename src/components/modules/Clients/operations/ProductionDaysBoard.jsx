@@ -92,7 +92,7 @@ export default function ProductionDaysBoard() {
         </div>
         <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
           <span className="shrink-0">Mes</span>
-          <BrainMonthPicker ariaLabel="Mes de las jornadas" value={monthKey} onChange={(value) => value && setMonthKey(value)} className="min-h-11 rounded-xl" />
+          <BrainMonthPicker ariaLabel="Mes de las jornadas" value={monthKey} onChange={(value) => value && setMonthKey(value)} className="w-56" />
         </label>
       </div>
 

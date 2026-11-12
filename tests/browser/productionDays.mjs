@@ -173,6 +173,18 @@ try {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'sin desbordar a lo ancho');
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `4-pestana-jornadas-${name}-${theme}.png`), fullPage: true });
+      // El mes se elige con el desplegable de toda la plataforma, como el período de una parrilla (12 de noviembre de 2026).
+      if (name === 'escritorio') {
+        const picker = board.locator('button[aria-label="Mes de las jornadas"]');
+        assert.match(await picker.textContent(), /Noviembre 2026/);
+        await picker.click();
+        await page.waitForTimeout(250);
+        await page.screenshot({ path: path.join(OUT, `5-desplegable-mes-${theme}.png`) });
+        const october = page.getByRole('option', { name: 'Octubre 2026' });
+        if (await october.count()) await october.click(); else await picker.selectOption('2026-10-01');
+        await page.waitForTimeout(400);
+        assert.ok(asked.some((p) => p === '/api/client-operations/jornadas?year=2026&month=10'), 'pide el mes elegido');
+      }
       assert.deepEqual(errors, []);
       await page.close();
     }
