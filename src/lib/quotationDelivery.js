@@ -25,11 +25,98 @@ const formatDay = (value) => {
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
+// El correo en HTML (Rodny, 12 de noviembre de 2026). Los clientes de correo no leen hojas de estilo ni variables: todo
+// va en tablas con estilos en línea, con los hexadecimales de la paleta oficial (el cian «deep» del botón da contraste
+// AA con texto blanco). El logo es el horizontal de los documentos, servido desde la plataforma. Gmail no carga fuentes
+// web, así que Roboto Condensed se queda en los clientes que sí y el resto cae a Roboto o Arial.
+const EMAIL = Object.freeze({
+    font: "'Roboto Condensed',Roboto,Arial,Helvetica,sans-serif",
+    page: '#F3F5F7', card: '#FFFFFF', border: '#E3E8EC', text: '#1F2933', muted: '#5B6670',
+    cyan: '#009BBF', green: '#31AA8A', cyanDeep: '#007A96', cyanSoft: '#E6F5F9'
+});
+const LOGO_URL = `${LEGAL_ENTITY.platformUrl}/brainstudio-logo-horizontal.png`;
+const AGENCY_WHATSAPP = `https://wa.me/${String(LEGAL_ENTITY.phone).replace(/\D/g, '')}`;
+
+const summaryRow = (label, value) => `
+              <tr>
+                <td style="padding:6px 0;font-family:${EMAIL.font};font-size:14px;color:${EMAIL.muted};width:120px;vertical-align:top;">${label}</td>
+                <td style="padding:6px 0;font-family:${EMAIL.font};font-size:15px;font-weight:700;color:${EMAIL.text};vertical-align:top;">${value}</td>
+              </tr>`;
+
+const proposalEmailHtml = ({ code, name, recipient, link, issuerName, until }) => {
+    const href = escapeHtml(link);
+    const paragraph = (content, extra = '') => `<p style="margin:0 0 16px;font-family:${EMAIL.font};font-size:16px;line-height:1.55;color:${EMAIL.text};${extra}">${content}</p>`;
+    const rows = [
+        summaryRow('Propuesta', escapeHtml(code)),
+        recipient ? summaryRow('Para', escapeHtml(recipient)) : '',
+        until ? summaryRow('Vigente hasta', escapeHtml(until)) : ''
+    ].join('');
+    return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Propuesta ${escapeHtml(code)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:${EMAIL.page};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Tu propuesta ${escapeHtml(code)} está lista para revisar y aceptar.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${EMAIL.page};">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:${EMAIL.card};border:1px solid ${EMAIL.border};border-radius:16px;overflow:hidden;">
+        <tr><td height="5" bgcolor="${EMAIL.cyan}" style="height:5px;line-height:5px;font-size:0;background:${EMAIL.cyan};background-image:linear-gradient(90deg,${EMAIL.cyan},${EMAIL.green});">&nbsp;</td></tr>
+        <tr>
+          <td style="padding:28px 40px 8px;">
+            <img src="${LOGO_URL}" width="168" alt="Brain Studio" style="display:block;width:168px;max-width:100%;height:auto;border:0;">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 40px 8px;">
+            ${paragraph(`Hola${name ? ` ${escapeHtml(name)}` : ''},`)}
+            ${paragraph('Te compartimos nuestra propuesta. Puedes revisarla con calma y, si estás de acuerdo, aceptarla desde el mismo enlace.')}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${EMAIL.cyanSoft};border-radius:12px;margin:8px 0 28px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}
+                  </table>
+                </td>
+              </tr>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+              <tr>
+                <td bgcolor="${EMAIL.cyanDeep}" style="border-radius:10px;background:${EMAIL.cyanDeep};">
+                  <a href="${href}" target="_blank" style="display:inline-block;padding:15px 30px;font-family:${EMAIL.font};font-size:16px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:10px;">Ver y aceptar la propuesta</a>
+                </td>
+              </tr>
+            </table>
+            ${paragraph(`¿El botón no abre? Copia este enlace en tu navegador:<br><a href="${href}" target="_blank" style="color:${EMAIL.cyanDeep};word-break:break-all;">${href}</a>`, `font-size:13px;color:${EMAIL.muted};`)}
+            ${paragraph('Adjuntamos también el PDF por si prefieres leerla así.')}
+            ${paragraph(`Cualquier duda, respóndenos a este correo o <a href="${AGENCY_WHATSAPP}" target="_blank" style="color:${EMAIL.cyanDeep};">escríbenos por WhatsApp</a>.`)}
+            ${paragraph(`Un saludo,<br><strong>${escapeHtml(issuerName)}</strong>`, 'margin-bottom:28px;')}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px 28px;border-top:1px solid ${EMAIL.border};font-family:${EMAIL.font};font-size:13px;line-height:1.6;color:${EMAIL.muted};">
+            Brain Studio · Cartagena de Indias, Colombia<br>
+            <a href="mailto:${QUOTATION_SENDER_ADDRESS}" style="color:${EMAIL.muted};">${QUOTATION_SENDER_ADDRESS}</a> · ${escapeHtml(LEGAL_ENTITY.phone)}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+};
+
 /** Lo que recibe el cliente: saludo por su nombre, el enlace para ver y aceptar, y el PDF adjunto. */
 export const proposalEmail = ({ consecutive, clientName, clientCompany, link, issuerName = 'Brain Studio', expiresAt = null }) => {
     const code = quotationCode(consecutive);
     const name = firstName(clientName);
-    const who = clientCompany ? ` para ${clientCompany}` : '';
+    const company = String(clientCompany || '').trim();
+    const who = company ? ` para ${company}` : '';
     const until = formatDay(expiresAt);
     const subject = `Propuesta ${code} de ${issuerName}${who}`;
     const lines = [
@@ -45,15 +132,7 @@ export const proposalEmail = ({ consecutive, clientName, clientCompany, link, is
         '',
         `${issuerName}`
     ].filter((line) => line !== null);
-    const html = [
-        `<p>Hola${name ? ` ${escapeHtml(name)}` : ''},</p>`,
-        `<p>Te compartimos la propuesta <strong>${escapeHtml(code)}</strong>${escapeHtml(who)}. Puedes verla y aceptarla aquí:</p>`,
-        `<p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>`,
-        '<p>Adjuntamos también el PDF por si prefieres leerla así.</p>',
-        until ? `<p>La propuesta tiene vigencia hasta el ${escapeHtml(until)}.</p>` : '',
-        '<p>Cualquier duda, respóndenos a este correo o escríbenos por WhatsApp.</p>',
-        `<p>${escapeHtml(issuerName)}</p>`
-    ].filter(Boolean).join('\n');
+    const html = proposalEmailHtml({ code, name, recipient: company || String(clientName || '').trim(), link, issuerName, until });
     return { subject, text: lines.join('\n'), html, attachmentName: `Propuesta_${code}.pdf` };
 };
 

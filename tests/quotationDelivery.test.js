@@ -44,12 +44,43 @@ test('el correo saluda por el nombre, lleva el enlace para aceptar, la vigencia 
     assert.match(email.text, /^Hola Darling,/);
     assert.match(email.text, /Puedes verla y aceptarla en este enlace:\nhttps:\/\/labs\.brainstudioagencia\.com\/cotizaciones\/ver\/abc-123/);
     assert.match(email.text, /vigencia hasta el 19 de noviembre de 2026/);
-    assert.match(email.html, /<a href="https:\/\/labs\.brainstudioagencia\.com\/cotizaciones\/ver\/abc-123">/);
+    assert.match(email.html, /<a href="https:\/\/labs\.brainstudioagencia\.com\/cotizaciones\/ver\/abc-123"[^>]*>/);
     assert.equal(email.attachmentName, 'Propuesta_COT-0042.pdf');
     assert.doesNotMatch(email.text, /vosotros|podéis/);
     const nameless = proposalEmail({ consecutive: 7, clientName: '', clientCompany: null, link });
     assert.match(nameless.text, /^Hola,\n/);
     assert.equal(nameless.subject, 'Propuesta COT-0007 de Brain Studio');
+});
+
+// Rodny, 12 de noviembre de 2026: «se puede hacer que esto se vea mejor con html?». El correo lleva el logo, un resumen
+// de la propuesta, un botón para verla y aceptarla y los datos de contacto; el texto plano sigue igual para quien no
+// lee HTML.
+test('el correo en HTML lleva logo, resumen, botón de aceptar con su enlace de respaldo y los datos de contacto', () => {
+    const link = quotationPublicUrl('abc-123');
+    const email = proposalEmail({ consecutive: 42, clientName: 'Darling Pérez', clientCompany: 'Café Altura ', link, issuerName: 'BRAIN STUDIO AGENCIA CREATIVA S.A.S', expiresAt: quotation.expires_at });
+    assert.match(email.html, /^<!doctype html>/i);
+    assert.match(email.html, /<img[^>]+src="https:\/\/labs\.brainstudioagencia\.com\/brainstudio-logo-horizontal\.png"[^>]+alt="Brain Studio"/);
+    assert.match(email.html, /Hola Darling,/);
+    assert.match(email.html, />COT-0042</);
+    assert.match(email.html, />Café Altura</);
+    assert.match(email.html, />19 de noviembre de 2026</);
+    // El botón y el enlace de respaldo para quien no pueda tocarlo.
+    assert.equal((email.html.match(/href="https:\/\/labs\.brainstudioagencia\.com\/cotizaciones\/ver\/abc-123"/g) || []).length, 2);
+    assert.match(email.html, /Ver y aceptar la propuesta/);
+    assert.match(email.html, /contacto@brainstudioagencia\.com/);
+    assert.match(email.html, /\+57 323 6917177/);
+    // Un nombre con espacio de más no deja «Café Altura .».
+    assert.match(email.text, /COT-0042 para Café Altura\. Puedes/);
+    assert.doesNotMatch(email.html, /Café Altura \./);
+});
+
+test('el HTML del correo escapa lo que escribió el equipo y sin vigencia no inventa fecha', () => {
+    const email = proposalEmail({ consecutive: 3, clientName: '<b>Ana</b>', clientCompany: 'A & B "Co"', link: 'https://x/ver/1?a=1&b=2', issuerName: 'Brain Studio' });
+    assert.doesNotMatch(email.html, /<b>Ana<\/b>/);
+    assert.match(email.html, /&lt;b&gt;Ana&lt;\/b&gt;/);
+    assert.match(email.html, /A &amp; B &quot;Co&quot;/);
+    assert.match(email.html, /href="https:\/\/x\/ver\/1\?a=1&amp;b=2"/);
+    assert.doesNotMatch(email.html, /Vigente hasta/);
 });
 
 test('el mensaje de WhatsApp y el enlace que abre el chat con el número colombiano completo', () => {
