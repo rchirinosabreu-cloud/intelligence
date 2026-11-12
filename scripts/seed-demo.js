@@ -70,7 +70,7 @@ const counts = {
     personas: dataset.team.length, clientes: dataset.clients.length, parrillas: dataset.plans.length,
     piezas: dataset.plans.reduce((n, p) => n + p.pieces.length, 0), tareas: dataset.tasks.length, oportunidades: dataset.leads.length,
     movimientos: dataset.records.length, cuentasPorCobrar: dataset.receivables.length, terceros: dataset.thirdParties.length,
-    cuentasPorPagar: dataset.payables.length, hechosDeBria: dataset.facts.length
+    cuentasPorPagar: dataset.payables.length, pautas: dataset.adBudgets.length, hechosDeBria: dataset.facts.length
 };
 console.log(`[Demo] Base: ${target} · ${confirmed ? (reset ? 'REINICIA Y SIEMBRA' : 'SIEMBRA') : 'simulación'} · ${dataset.agency.name}`);
 if (!confirmed) {
@@ -222,6 +222,22 @@ try {
             const expense = await prisma.financialRecord.create({ data: { type: 'EXPENSE', category: p.category, section: 'ADMIN_COST', amount: p.amount, description: `Pago a ${party.name}: ${p.concept}`, date: p.dueDate, year: p.year, month: p.month, accountId: accounts.banco.id, counterparty: party.name, origin: 'SYSTEM', status: 'POSTED', postedAt: p.dueDate, createdById: accountant.id } });
             await prisma.payablePayment.create({ data: { payableId: payable.id, accountId: accounts.banco.id, financialRecordId: expense.id, amount: p.amount, paidAt: p.dueDate, reference: `TRF-${p.documentNumber}`, createdById: accountant.id } });
         }
+    }
+
+    // Pautas: presupuesto global por cuenta; un ciclo solo existe desde su primera lectura de gasto, como en la pantalla.
+    for (const b of dataset.adBudgets) {
+        const responsible = members[b.responsible];
+        const budget = await prisma.adBudget.create({ data: {
+            clientId: clients[b.client].id, brand: b.brand || null, platform: b.platform, kind: b.kind, status: 'ACTIVA', currency: b.currency, amount: b.amount,
+            objective: b.objective, payer: b.payer, responsibleId: responsible.id, startDate: b.startDate || null, endDate: b.endDate || null, notes: b.notes || null, createdById: admin.id
+        } });
+        for (const c of b.cycles) {
+            if (!c.readings.length) continue;
+            const last = c.readings[c.readings.length - 1];
+            const cycle = await prisma.adBudgetCycle.create({ data: { budgetId: budget.id, cycleKey: c.cycleKey, amount: c.amount, spent: last.spent, spentAsOf: last.readOn, spentSource: 'MANUAL', closedAt: last.isFinal ? dataset.now : null, closedById: last.isFinal ? responsible.userId : null } });
+            for (const r of c.readings) await prisma.adSpendReading.create({ data: { cycleId: cycle.id, readOn: r.readOn, spent: r.spent, isFinal: Boolean(r.isFinal), note: r.note || null, recordedById: responsible.userId, source: 'MANUAL' } });
+        }
+        for (const campaign of b.campaigns) await prisma.adCampaign.create({ data: { budgetId: budget.id, name: campaign.name, objective: campaign.objective, status: campaign.status, startDate: campaign.startDate || null, endDate: campaign.endDate || null, planned: campaign.planned ?? null, createdById: admin.id } });
     }
 
     for (const a of dataset.announcements) await prisma.globalAnnouncement.create({ data: { content: a.content, type: 'DASHBOARD', authorId: users[a.author].id } });

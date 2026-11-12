@@ -333,10 +333,48 @@ export const buildDemoDataset = ({ now = new Date() } = {}) => {
         { thirdParty: 'fotografo', concept: 'Sesión de fotos de producto · Café Altura', category: 'OPERATIVO', amount: 650000, receivedAt: bogotaDate(current.year, current.month, Math.min(10, today.day), 9), dueDate: bogotaDate(current.year, current.month, 25, 12), year: current.year, month: current.month, status: 'POR_PAGAR', documentNumber: 'CC-018' }
     ];
 
+    // Pautas: el presupuesto global de tres cuentas con sus lecturas de gasto (escritas mirando Meta) y sus campañas.
+    // Las fechas de Pautas viajan como texto `YYYY-MM-DD`; el ciclo mensual es el mes calendario (corte 1).
+    const dayKey = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+    const agoKey = (days) => { const p = bogotaParts(new Date(now.getTime() - days * 86400000)); return dayKey(p.year, p.month, p.day); };
+    const monthKey = (m) => `${m.year}-${pad(m.month)}`;
+    const previousEnd = new Date(Date.UTC(previous.year, previous.month, 0)).getUTCDate();
+    const spentSoFar = (amount, share, days) => (today.day > days ? Math.round(amount * Math.min(0.92, ((today.day - days) / 30) * share) / 1000) * 1000 : 0);
+    const currentReading = (amount, share, days = 2) => (today.day > days && spentSoFar(amount, share, days) > 0 ? [{ readOn: agoKey(days), spent: spentSoFar(amount, share, days) }] : []);
+    const adBudgets = [
+        {
+            client: 'cafe-altura', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: 1200000, objective: 'Ventas', payer: 'TARJETA_CLIENTE', responsible: 'laura',
+            startDate: dayKey(previous.year, previous.month, 1), notes: 'Enfoque en el combo de desayuno. El cliente aprueba las creatividades por WhatsApp.',
+            cycles: [
+                { cycleKey: monthKey(previous), amount: 1200000, readings: [{ readOn: dayKey(previous.year, previous.month, 15), spent: 560000 }, { readOn: dayKey(previous.year, previous.month, previousEnd - 2), spent: 1185000, isFinal: true, note: 'Cerrado para el informe del mes.' }] },
+                { cycleKey: monthKey(current), amount: 1200000, readings: currentReading(1200000, 1) }
+            ],
+            campaigns: [
+                { name: `Combo de desayuno · ${MONTHS_ES[current.month - 1]}`, objective: 'Ventas', status: 'ACTIVA', startDate: dayKey(current.year, current.month, 1), planned: 800000 },
+                { name: 'Tienda en línea · lanzamiento', objective: 'Seguidores', status: 'FINALIZADA', startDate: dayKey(previous.year, previous.month, 1), endDate: dayKey(previous.year, previous.month, previousEnd), planned: 1200000 }
+            ]
+        },
+        {
+            client: 'clinica-sonria', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: 800000, objective: 'Mensajes de WhatsApp', payer: 'TARJETA_BRAIN', responsible: 'juliana',
+            startDate: dayKey(previous.year, previous.month, 1), notes: 'Se paga con la tarjeta de la agencia y se cobra en la cuenta del mes siguiente.',
+            cycles: [
+                { cycleKey: monthKey(previous), amount: 800000, readings: [{ readOn: dayKey(previous.year, previous.month, previousEnd - 2), spent: 790000, isFinal: true }] },
+                { cycleKey: monthKey(current), amount: 800000, readings: currentReading(800000, 0.6, 5) }
+            ],
+            campaigns: [{ name: 'Valoración de ortodoncia sin costo', objective: 'Mensajes de WhatsApp', status: 'ACTIVA', startDate: dayKey(current.year, current.month, 1), planned: 800000 }]
+        },
+        {
+            client: 'hotel-mar-azul', brand: 'Restaurante La Terraza', platform: 'META', kind: 'ESPECIFICA', currency: 'USD', amount: 300, objective: 'Alcance', payer: 'TARJETA_CLIENTE', responsible: 'laura',
+            startDate: agoKey(10), endDate: agoKey(-10), notes: 'Temporada de fin de año del restaurante: la pauta termina con la campaña.',
+            cycles: [{ cycleKey: 'UNICO', amount: 300, readings: [{ readOn: agoKey(6), spent: 95 }, { readOn: agoKey(1), spent: 162 }] }],
+            campaigns: [{ name: 'Cenas de temporada · La Terraza', objective: 'Alcance', status: 'ACTIVA', startDate: agoKey(10), endDate: agoKey(-10), planned: 300 }]
+        }
+    ];
+
     return {
         now, today, current, previous, next,
         agency: DEMO_AGENCY, team: DEMO_TEAM, clients, plans, monthlyReports, tasks, leads,
-        accounts, records, receivables, thirdParties: THIRD_PARTIES, payables,
+        accounts, records, receivables, thirdParties: THIRD_PARTIES, payables, adBudgets,
         facts: FACTS, announcements: ANNOUNCEMENTS
     };
 };
