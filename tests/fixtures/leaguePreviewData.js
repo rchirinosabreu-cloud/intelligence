@@ -66,7 +66,12 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     score,
     scoreBreakdown: lanes.find(lane => lane.isSelf).scoreBreakdown,
     gender: 'M',
-    today: { ...today, ...todayPoints(today), isProvisional: true, isConfirmed: false, points: todayPoints(today).points + 10 },
+    // Hábitos por área (12 de noviembre de 2026): la evidencia nombra cada fuente que se jugó.
+    today: { ...today, ...todayPoints(today), isProvisional: true, isConfirmed: false, points: todayPoints(today).points + 10, evidence: perfect ? {} : {
+      AL_DIA: 'Tareas: Amaneció sin vencidas. · Parrillas: Sin piezas atrasadas en sus 3 cuentas. · CRM: Sin seguimientos vencidos.',
+      A_TIEMPO: 'Tareas: 1 de 1 a tiempo. · Parrillas: 1 de 2 piezas de hoy publicadas o programadas.',
+      DOCUMENTADO: 'Sin tareas creadas ese día.'
+    } },
     recognitionPoints: 20,
     meetings: { canManage: true, minDate: "2026-11-03", maxDate: "2026-11-04", entries: [] },
     nextStep: leagueNextStep(allDays),

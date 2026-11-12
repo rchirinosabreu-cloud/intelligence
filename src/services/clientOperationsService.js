@@ -313,9 +313,10 @@ export const createClientOperationsService = ({
    * Las cuentas con piezas que pasaron su fecha y siguen sin publicar, para los avisos de la banda
    * (Rodny, 30 de octubre de 2026). Se lee con las mismas reglas de la pantalla —incluidas las hojas de
    * MIO— para que el aviso y el semáforo nunca digan cosas distintas. `clientId` acota a una sola cuenta,
-   * que es lo que la banda comprueba antes de volver a mostrar un aviso.
+   * que es lo que la banda comprueba antes de volver a mostrar un aviso. `includeClean` devuelve también las
+   * cuentas medidas sin piezas atrasadas (`overdue: 0`): la liga necesita saber quién lleva cuentas, no solo quién debe.
    */
-  const listOverduePlans = async ({ clientId = null } = {}) => {
+  const listOverduePlans = async ({ clientId = null, includeClean = false } = {}) => {
     const today = todayKey();
     const where = { isArchived: false, ...(clientId ? { id: String(clientId) } : {}) };
     const clients = await db.client.findMany({ where, orderBy: { name: 'asc' }, select: clientSelect(monthWindow(today)) });
@@ -327,7 +328,7 @@ export const createClientOperationsService = ({
       if (!isMeasured({ contract })) continue;
       const cycle = cycleForDate(today, contract.cutDay);
       const summary = cycleSummary(client, cycle, contract, today, new Map());
-      if (!summary.overdueItems) continue;
+      if (!summary.overdueItems && !includeClean) continue;
       const member = (person) => (person?.userId && person.isActive !== false ? { userId: person.userId, name: person.name } : null);
       rows.push({
         clientId: client.id, clientName: client.name, slug: client.slug, cycle,

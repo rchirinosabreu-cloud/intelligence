@@ -4,6 +4,7 @@
 // evidencia es una frase en español por hábito, hechos y números, nunca un juicio sobre la persona.
 import { DAILY_HABITS, EXTRA_ACTIONS } from './platformLeague.js';
 import { describePlatformMutation } from './operationalMutationLabels.js';
+import { mergeAreaChecks } from './leagueAreaChecks.js';
 
 /** Menos de diez minutos medidos no es una tarea con cronómetro (el mismo umbral que pide el tiempo declarado). */
 export const MIN_MEASURED_MS = 10 * 60 * 1000;
@@ -72,8 +73,9 @@ export function workRecordFromTrace(event = {}) {
  * nadie; `undefined` sin lectura) y `memberId`, para saber si fue esta persona.
  * `workRecords`: los módulos donde la persona dejó registro ese día; `presence`: si dejó alguna huella aunque no
  * registrara trabajo; `productionDays`: las jornadas de producción (eventos de Actividad) en que participó.
+ * `areaChecks`: los chequeos de su área por hábito (`leagueAreaChecks.js`), que se suman a lo que dieron las tareas.
  */
-export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [] } = {}) {
+export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [], areaChecks = null } = {}) {
   const habits = {}, evidence = {}, extras = {};
 
   // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
@@ -167,6 +169,9 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   // Tráfico se suma desde su registro administrativo separado; no duplicarlo en las fotos diarias.
   extras.PRIMERO_EN_REUNION = null;
   evidence.PRIMERO_EN_REUNION = 'El administrador confirma quién llegó primero a tráfico.';
+
+  // Hábitos por área (Rodny, 12 de noviembre de 2026): las fuentes de Parrillas, el CRM, Pautas y Financiero.
+  if (areaChecks) mergeAreaChecks(habits, evidence, areaChecks);
 
   for (const habit of DAILY_HABITS) if (!(habit.key in habits)) habits[habit.key] = null;
   for (const extra of EXTRA_ACTIONS) if (!(extra.key in extras)) extras[extra.key] = null;

@@ -450,3 +450,32 @@ test('the pilot: only the accounts with the «Liga del mes» box in Equipo get t
   await assert.rejects(() => service.leagueFor({ userId: 'u-jesu' }), (error) => error.code === 'LEAGUE_NOT_OPEN', 'an administrator without the box does not see it either');
   assert.equal(await service.computeAndSave(DAY), 3, 'the three people are evaluated and saved regardless');
 });
+
+// Hábitos por área (Rodny, 12 de noviembre de 2026: «Sí, hábitos por área»).
+test('area checks join the habits: today asks for the snapshot, a past day does not, and a failing read never sinks the day', async () => {
+  const asked = [];
+  const areaSources = { read: async ({ dayKey, isToday, members: people }) => {
+    asked.push({ dayKey, isToday, people: people.length });
+    return new Map([['m-jesu', {
+      AL_DIA: [{ source: 'CRM', ok: false, text: '1 seguimiento vencido.' }],
+      A_TIEMPO: [],
+      DOCUMENTADO: [{ source: 'Financiero', ok: true, text: '1 de 1 registro con soporte o nota.' }]
+    }]]);
+  } };
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, areaSources, now: () => at(`${DAY}T19:00:00.000Z`) });
+  const jesu = (await service.evaluateDay(DAY)).find((row) => row.memberId === 'm-jesu');
+  assert.equal(jesu.habits.DOCUMENTADO, true, 'a source plays a habit that tasks did not');
+  assert.equal(jesu.evidence.DOCUMENTADO, 'Financiero: 1 de 1 registro con soporte o nota.');
+  assert.equal(jesu.habits.AL_DIA, false, 'clean tasks do not cover an overdue follow-up');
+  assert.equal(jesu.evidence.AL_DIA, 'Tareas: Amaneció sin vencidas. · CRM: 1 seguimiento vencido.');
+  const helen = (await service.evaluateDay(DAY)).find((row) => row.memberId === 'm-helen');
+  assert.equal(helen.evidence.DOCUMENTADO, '0 de 1 tareas creadas con comentario o archivo.', 'people without area checks keep their evidence as it was');
+  await service.evaluateDay('2026-11-02');
+  assert.deepEqual(asked.map(({ dayKey, isToday }) => [dayKey, isToday]), [[DAY, true], [DAY, true], ['2026-11-02', false]]);
+  assert.equal(asked[0].people, 3);
+
+  const failing = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`),
+    areaSources: { read: async () => { throw new Error('down'); } }, logger: { error: () => {} } });
+  const rows = await failing.evaluateDay(DAY);
+  assert.equal(rows.find((row) => row.memberId === 'm-jesu').habits.AL_DIA, true, 'without the areas the day is the one tasks gave');
+});
