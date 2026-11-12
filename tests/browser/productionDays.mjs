@@ -156,23 +156,51 @@ try {
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       const asked = [];
+      const posts = [];
+      await page.addInitScript((u) => { localStorage.setItem('currentUser', JSON.stringify(u)); localStorage.setItem('authToken', `x.${btoa(JSON.stringify({ exp: 4102444800 }))}.x`); }, user);
       await page.route('**/*', async (route) => {
         const url = new URL(route.request().url());
         if (url.origin !== origin) return route.abort();
         if (!url.pathname.startsWith('/api/')) return route.continue();
         asked.push(url.pathname + url.search);
-        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(month) });
+        let body = month;
+        if (url.pathname === '/api/auth/me') body = user;
+        else if (url.pathname === '/api/team') body = team;
+        else if (url.pathname === '/api/production-days/clients') body = [...clients, { id: 'c-ph', name: 'Pablo Hoff' }, { id: 'c-lsi', name: 'La Sazón de Iris' }];
+        else if (url.pathname === '/api/activity/google-calendar/status') body = { connected: true, connections: [{ id: 'g1', email: 'calendario@agencia.test', isActive: true }] };
+        else if (url.pathname === '/api/activity/events' && route.request().method() === 'POST') {
+          posts.push(route.request().postDataJSON());
+          body = { id: 'ev-new', ...route.request().postDataJSON(), googleSyncStatus: 'SYNCED' };
+        } else if (!url.pathname.startsWith('/api/client-operations/jornadas')) body = [];
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
       });
       await page.goto(`${origin}/tests/fixtures/production-days-preview.html?mes`);
       await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark');
       const board = page.locator('[data-production-days-board]');
       await board.locator('[data-production-month-row]').first().waitFor();
       assert.ok(asked.some((p) => p === '/api/client-operations/jornadas?year=2026&month=11'), 'pide el mes en curso');
-      assert.equal(await board.locator('[data-production-month-row]').count(), 3);
-      assert.match(await board.locator('[data-production-month-pending]').innerText(), /Pablo Hoff[\s\S]*falta 1 de 1/);
+      // Lo que el contrato pide y no está agendado va en la misma tabla, con su estado (Rodny, 12 de noviembre de 2026).
+      assert.equal(await board.locator('[data-production-month-row]').count(), 5);
+      assert.equal(await board.locator('[data-production-month-row="NO_AGENDADA"]').count(), 2);
+      assert.equal(await board.locator('[data-production-month-pending]').count(), 0, 'sin la lista aparte');
+      assert.match(await board.locator('[data-production-month-summary]').innerText(), /No agendadas\s*2/);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'sin desbordar a lo ancho');
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `4-pestana-jornadas-${name}-${theme}.png`), fullPage: true });
+      // Tocar «No agendada» abre el formulario del calendario con la jornada y el cliente ya puestos.
+      await board.locator('[data-production-schedule="c-ph"]').click();
+      const form = page.locator('[data-operational-event-form]');
+      await form.waitFor();
+      assert.equal(await form.locator('#operational-event-title').inputValue(), 'Jornada de producción Pablo Hoff');
+      await page.waitForFunction(() => /Pablo Hoff/.test(document.querySelector('[data-operational-event-form] #operational-event-client')?.textContent || ''), null, { timeout: 5000 }).catch(() => {});
+      assert.match(await form.locator('#operational-event-client').textContent(), /Pablo Hoff/, 'con el cliente ya elegido');
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `6-agendar-desde-la-fila-${name}-${theme}.png`) });
+      await form.getByRole('button', { name: /Crear evento|Guardar evento/ }).click();
+      await form.waitFor({ state: 'detached' });
+      assert.equal(posts.at(-1)?.type, 'PRODUCTION');
+      assert.equal(posts.at(-1)?.productionClientId, 'c-ph', 'se agenda para ese cliente');
+      assert.match(String(posts.at(-1)?.startAt), /^2026-11-12/, 'el día propuesto es hoy');
       // El mes se elige con el desplegable de toda la plataforma, como el período de una parrilla (12 de noviembre de 2026).
       if (name === 'escritorio') {
         const picker = board.locator('button[aria-label="Mes de las jornadas"]');
