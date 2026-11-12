@@ -18,7 +18,10 @@ const inWindow = (where, value) => value >= where.gte && value < where.lt;
 
 const fakeDb = (calls = []) => ({
   crmActivity: { findMany: async ({ where }) => { calls.push('crmActivity'); assert.ok(where.type.in.includes('LLAMADA') && !where.type.in.includes('NOTA'));
-    return [{ authorId: 'u-francys', note: 'Pidió la propuesta', result: null, createdAt: new Date(`${DAY}T15:00:00Z`) }, { authorId: 'u-francys', note: '', result: '', createdAt: new Date(`${DAY}T16:00:00Z`) }]
+    // La gestión de un toque desde la banda no juega: su nota la escribe la plataforma, no la persona.
+    return [{ authorId: 'u-francys', note: 'Pidió la propuesta en PDF para el lunes', result: null, requestId: null, createdAt: new Date(`${DAY}T15:00:00Z`) },
+      { authorId: 'u-francys', note: '.', result: '', requestId: 'r-2', createdAt: new Date(`${DAY}T16:00:00Z`) },
+      { authorId: 'u-francys', note: 'Registrado desde el aviso de seguimiento.', result: null, requestId: 'aviso-n1', createdAt: new Date(`${DAY}T17:00:00Z`) }]
       .filter((row) => inWindow(where.createdAt, row.createdAt) && where.authorId.in.includes(row.authorId)); } },
   financialRecord: { findMany: async ({ where }) => { calls.push('financialRecord'); assert.deepEqual(where.origin, { not: 'IMPORT' }); assert.equal(where.voidedAt, null);
     return [{ createdById: 'u-elisa', notes: null, reference: null, attachmentUrl: null, documents: [{ id: 'd1' }] }, { createdById: 'u-elisa', notes: 'Quincena', reference: null, attachmentUrl: null, documents: [] }]; } },

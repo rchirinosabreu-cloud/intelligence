@@ -29,7 +29,9 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
   const readDocumentation = async ({ start, end, userIds }) => {
     const created = { gte: start, lt: end };
     const [activities, records, payables] = await Promise.all([
-      can(db.crmActivity) ? attempt('las gestiones del CRM', () => db.crmActivity.findMany({ where: { createdAt: created, authorId: { in: userIds }, type: { in: CONTACT_TYPES } }, select: { authorId: true, note: true, result: true } }), []) : [],
+      // La gestión de un toque desde la banda (`aviso-…`) no juega: su nota la escribe la plataforma, no la persona.
+      can(db.crmActivity) ? attempt('las gestiones del CRM', async () => (await db.crmActivity.findMany({ where: { createdAt: created, authorId: { in: userIds }, type: { in: CONTACT_TYPES } }, select: { authorId: true, note: true, result: true, requestId: true } }))
+        .filter((row) => !String(row.requestId || '').startsWith('aviso-')), []) : [],
       can(db.financialRecord) ? attempt('los movimientos de Financiero', () => db.financialRecord.findMany({ where: { createdAt: created, createdById: { in: userIds }, origin: { not: 'IMPORT' }, voidedAt: null },
         select: { createdById: true, notes: true, reference: true, attachmentUrl: true, documents: { where: { voidedAt: null, uploadedAt: { lt: end } }, select: { id: true }, take: 1 } } }), []) : [],
       can(db.accountsPayable) ? attempt('las cuentas por pagar', () => db.accountsPayable.findMany({ where: { createdAt: created, createdById: { in: userIds }, voidedAt: null },

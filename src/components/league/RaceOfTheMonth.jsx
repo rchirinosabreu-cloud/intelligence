@@ -111,6 +111,7 @@ function Rules() {
     <ul className={cn(surface, 'mt-2 list-disc space-y-2 p-4 pl-8 leading-5', muted)}>
       <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
       <li>Al día, A tiempo y Documentado también se leen de tu área: las parrillas de tus cuentas, tus seguimientos del CRM, tus pautas y tus registros de Financiero. Ganas el hábito si todo lo que jugaste ese día salió bien.</li>
+      <li>Documentado mira lo que le pasas a otra persona: un comentario de al menos 20 letras, un archivo o un enlace. Tus recordatorios propios y las tareas que salen de una pieza no cuentan.</li>
       <li>Una jornada de producción vale para Reloj con el tiempo declarado al cerrar el pendiente.</li>
       <li>La semana arranca en cero cada lunes; el mes sigue sumando para la premiación mensual.</li>
       <li>La primera actividad registrada desde las 8:00 am suma {EXTRA_POINTS} puntos.</li>

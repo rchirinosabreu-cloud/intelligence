@@ -9,6 +9,19 @@ import { followUpBucket, isActionableStage } from './crmRules.js';
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 const filled = (value) => Boolean(String(value ?? '').trim());
+
+/**
+ * Contexto real (Rodny, 12 de noviembre de 2026: «algunos para documentar ponen solo un puntico … al menos un
+ * comentario de 20 caracteres»): veinte letras o números, sin contar espacios, puntuación, emojis ni etiquetas. Un
+ * enlace es contexto aunque sea corto: lleva al brief, al Drive o a la referencia.
+ */
+export const MIN_CONTEXT_CHARS = 20;
+const LINK = /(https?:\/\/|www\.)\S+/i;
+export function hasRealContext(value) {
+  const text = String(value ?? '').replace(/<[^>]*>/g, ' ');
+  if (LINK.test(text)) return true;
+  return (text.match(/[\p{L}\p{N}]/gu) || []).length >= MIN_CONTEXT_CHARS;
+}
 const listOf = (names) => names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} y ${names.at(-1)}`;
 
 /** Al día · Parrillas: las cuentas que la persona lleva como community o project manager, con sus piezas atrasadas. */
@@ -45,10 +58,10 @@ export function piecesOnTimeCheck(pieces = []) {
   return { source: 'Parrillas', ok: done === pieces.length, text: `${done} de ${plural(pieces.length, 'pieza de hoy publicada o programada', 'piezas de hoy publicadas o programadas')}.` };
 }
 
-/** Documentado · CRM: las gestiones con el cliente que registró ese día, con nota o resultado. */
+/** Documentado · CRM: las gestiones con el cliente que registró ese día, con una nota o un resultado de contexto real. */
 export function crmNotesCheck(activities = []) {
   if (!activities.length) return null;
-  const documented = activities.filter((activity) => filled(activity.note) || filled(activity.result)).length;
+  const documented = activities.filter((activity) => hasRealContext(activity.note) || hasRealContext(activity.result)).length;
   return { source: 'CRM', ok: documented === activities.length, text: `${documented} de ${plural(activities.length, 'gestión con nota', 'gestiones con nota')}.` };
 }
 

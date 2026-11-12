@@ -116,14 +116,20 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     evidence.A_TIEMPO = `${onTime.length} de ${dated.length} a tiempo.`;
   }
 
-  // Documentado: las tareas creadas por esta persona ese día tienen contexto humano o un archivo.
+  // Documentado: las tareas que la persona creó ese día para otra persona llevan contexto real (Rodny, 12 de noviembre
+  // de 2026: «hay tareas que no requieren documentar»). Un recordatorio propio no lo necesita y una tarea que sale de
+  // una pieza ya trae su guion y su brief: ninguna de las dos juega.
+  const delegated = createdTasks.filter((task) => task.delegated !== false && !task.fromPiece);
   if (!createdTasks.length) {
     habits.DOCUMENTADO = null;
     evidence.DOCUMENTADO = 'Sin tareas creadas ese día.';
+  } else if (!delegated.length) {
+    habits.DOCUMENTADO = null;
+    evidence.DOCUMENTADO = 'Las tareas que creó eran para sí misma o salían de una pieza.';
   } else {
-    const documented = createdTasks.filter((task) => task.documented);
-    habits.DOCUMENTADO = documented.length === createdTasks.length;
-    evidence.DOCUMENTADO = `${documented.length} de ${createdTasks.length} tareas creadas con comentario o archivo.`;
+    const documented = delegated.filter((task) => task.documented).length;
+    habits.DOCUMENTADO = documented === delegated.length;
+    evidence.DOCUMENTADO = `${documented} de ${plural(delegated.length, 'tarea delegada con contexto', 'tareas delegadas con contexto')}.`;
   }
 
   // Sin devolución.

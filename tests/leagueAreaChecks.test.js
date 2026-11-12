@@ -3,8 +3,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  plansOverdueCheck, crmFollowUpCheck, adBudgetsCheck, piecesOnTimeCheck, crmNotesCheck, financialSupportCheck, mergeAreaChecks
+  plansOverdueCheck, crmFollowUpCheck, adBudgetsCheck, piecesOnTimeCheck, crmNotesCheck, financialSupportCheck, mergeAreaChecks, hasRealContext, MIN_CONTEXT_CHARS
 } from '../src/lib/leagueAreaChecks.js';
+
+// Rodny, 12 de noviembre de 2026: «algunos para documentar ponen solo un puntico … al menos un comentario de 20 caracteres».
+test('real context: twenty letters or digits, a file or a link; dots, spaces, emojis and markup do not count', () => {
+  assert.equal(MIN_CONTEXT_CHARS, 20);
+  for (const empty of [null, '', '.', '...', 'ok', '👍👍👍', '<p>.</p>', '   ———   ', 'Listo, ya quedó.']) assert.equal(hasRealContext(empty), false, empty);
+  assert.equal(hasRealContext('Versión vertical para historias'), true);
+  assert.equal(hasRealContext('<p><strong>Ver</strong> el brief del cliente, página 2</p>'), true);
+  assert.equal(hasRealContext('<p>' + 'a'.repeat(19) + '</p>'), false, 'tags never add letters');
+  assert.equal(hasRealContext('Brief: https://drive.google.com/x'), true, 'a link is context even when short');
+  assert.equal(hasRealContext('www.cliente.com'), true);
+});
 
 const NOW = new Date('2026-11-12T20:00:00Z'); // jueves 12, 15:00 de Bogotá
 
@@ -40,8 +51,8 @@ test('pieces of the day: published or scheduled counts as on time; anything else
 
 test('crm notes and financial support: what the person registered carries context', () => {
   assert.equal(crmNotesCheck([]), null);
-  assert.deepEqual(crmNotesCheck([{ note: 'Pidió la propuesta en PDF' }, { note: ' ', result: 'Agenda reunión' }, { note: '', result: null }]),
-    { source: 'CRM', ok: false, text: '2 de 3 gestiones con nota.' });
+  assert.deepEqual(crmNotesCheck([{ note: 'Pidió la propuesta en PDF para el lunes' }, { note: ' ', result: 'Agendó reunión con la gerente el martes' }, { note: '.', result: null }]),
+    { source: 'CRM', ok: false, text: '2 de 3 gestiones con nota.' }, 'a dot is not a note');
   assert.equal(financialSupportCheck([], []), null);
   const records = [{ hasDocument: true }, { notes: 'Pago quincena' }, { reference: 'TRF-88' }];
   assert.deepEqual(financialSupportCheck(records, [{ hasDocument: false, documentNumber: 'FV-12' }]),

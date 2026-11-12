@@ -198,7 +198,7 @@ try {
     'Registraste tu tiempo correctamente, sin sesiones olvidadas.',
     'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.',
     'Entregaste a tiempo: tus pendientes antes de su fecha y las piezas de hoy publicadas o programadas.',
-    'Lo que registraste lleva contexto: tus tareas con comentario o archivo, tus gestiones del CRM con nota y tus movimientos con soporte o nota.',
+    'Lo que delegas lleva contexto real: un comentario de al menos 20 letras, un archivo o un enlace. También cuentan tus gestiones del CRM con nota y tus movimientos con soporte.',
     'Nadie te devolvió un pendiente',
     'Dejaste registro de tu trabajo en la plataforma: un movimiento, una gestión, una pieza, una lectura de pauta, una jornada o una tarea con reloj.',
     'Fuiste el primero en ingresar a la plataforma desde las 8:00 am',

@@ -22,8 +22,8 @@ const fakeDb = () => ({
   task: {
     findMany: async ({ where, select }) => {
       if (where.createdAt) return [
-        { id: 'created-r', creatorId: 'u-rodny', taskComments: [{ content: 'Contexto' }], taskAttachments: [] },
-        { id: 'created-h', creatorId: 'u-helen', taskComments: [], taskAttachments: [] }
+        { id: 'created-r', creatorId: 'u-rodny', assigneeId: 'm-helen', taskComments: [{ content: 'Contexto: el cliente pidió versión vertical' }], taskAttachments: [] },
+        { id: 'created-h', creatorId: 'u-helen', assigneeId: 'm-rodny', taskComments: [], taskAttachments: [] }
       ];
       if (select.returnedAt) return [{ assigneeId: 'm-jesu', returnedAt: at(`${DAY}T18:00:00Z`) }];
       // Lo cerrado el 3: Rodny con reloj y avance, a tiempo; Helen con tiempo declarado y sin avance, tarde.
@@ -236,17 +236,24 @@ test('created context credits the creator, accepts human comments or active file
     if (!args.where.createdAt) return originalFind(args);
     assert.deepEqual(args.select.taskComments.where, { type: 'human', createdAt: { lt: at('2026-11-04T05:00:00Z') } });
     assert.deepEqual(args.select.taskAttachments.where, { purgeState: 'ACTIVE', createdAt: { lt: at('2026-11-04T05:00:00Z') } });
+    assert.ok(args.select.assigneeId && args.select.contentItemId && args.select.referenceUrl, 'who it is for, whether it comes from a piece and its link');
     return [
-      { id: 'new-r', creatorId: 'u-rodny', taskComments: [{ content: 'Contexto del encargo' }], taskAttachments: [] },
-      { id: 'new-h', creatorId: 'u-helen', taskComments: [], taskAttachments: [{ id: 'file' }] },
-      { id: 'new-j', creatorId: 'u-jesu', taskComments: [{ content: '  ' }], taskAttachments: [] },
+      { id: 'new-r', creatorId: 'u-rodny', assigneeId: 'm-helen', taskComments: [{ content: 'Contexto del encargo: usar el logo nuevo' }], taskAttachments: [] },
+      // Un recordatorio para sí mismo y una tarea que sale de una pieza no juegan, aunque no tengan nada.
+      { id: 'own-r', creatorId: 'u-rodny', assigneeId: 'm-rodny', taskComments: [], taskAttachments: [] },
+      { id: 'piece-r', creatorId: 'u-rodny', assigneeId: 'm-jesu', contentItemId: 'piece-1', taskComments: [], taskAttachments: [] },
+      { id: 'new-h', creatorId: 'u-helen', assigneeId: 'm-jesu', taskComments: [], taskAttachments: [{ id: 'file' }] },
+      { id: 'link-h', creatorId: 'u-helen', assigneeId: null, referenceUrl: 'https://drive.google.com/brief', taskComments: [], taskAttachments: [] },
+      { id: 'new-j', creatorId: 'u-jesu', assigneeId: 'm-rodny', taskComments: [{ content: '.' }], taskAttachments: [] },
     ];
   };
   const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T22:00:00Z`) });
   const rows = await service.evaluateDay(DAY);
-  assert.equal(rows.find(r => r.memberId === 'm-rodny').habits.DOCUMENTADO, true);
-  assert.equal(rows.find(r => r.memberId === 'm-helen').habits.DOCUMENTADO, true);
-  assert.equal(rows.find(r => r.memberId === 'm-jesu').habits.DOCUMENTADO, false);
+  const rodny = rows.find(r => r.memberId === 'm-rodny');
+  assert.equal(rodny.habits.DOCUMENTADO, true);
+  assert.equal(rodny.evidence.DOCUMENTADO, '1 de 1 tarea delegada con contexto.');
+  assert.equal(rows.find(r => r.memberId === 'm-helen').habits.DOCUMENTADO, true, 'a file or a link is context; an unassigned task is delegated');
+  assert.equal(rows.find(r => r.memberId === 'm-jesu').habits.DOCUMENTADO, false, 'a dot is not context');
 });
 
 test('the collection changes month at Bogotá midnight and handles a new year', async () => {
@@ -469,7 +476,7 @@ test('area checks join the habits: today asks for the snapshot, a past day does 
   assert.equal(jesu.habits.AL_DIA, false, 'clean tasks do not cover an overdue follow-up');
   assert.equal(jesu.evidence.AL_DIA, 'Tareas: Amaneció sin vencidas. · CRM: 1 seguimiento vencido.');
   const helen = (await service.evaluateDay(DAY)).find((row) => row.memberId === 'm-helen');
-  assert.equal(helen.evidence.DOCUMENTADO, '0 de 1 tareas creadas con comentario o archivo.', 'people without area checks keep their evidence as it was');
+  assert.equal(helen.evidence.DOCUMENTADO, '0 de 1 tarea delegada con contexto.', 'people without area checks keep their evidence as it was');
   await service.evaluateDay('2026-11-02');
   assert.deepEqual(asked.map(({ dayKey, isToday }) => [dayKey, isToday]), [[DAY, true], [DAY, true], ['2026-11-02', false]]);
   assert.equal(asked[0].people, 3);

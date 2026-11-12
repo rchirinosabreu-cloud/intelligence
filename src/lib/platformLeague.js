@@ -9,7 +9,8 @@ export const DAILY_HABITS = [
   // hábitos por área»): Parrillas, el CRM, Pautas y Financiero, además de las tareas. Ver `leagueAreaChecks.js`.
   { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },
   { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Entregaste a tiempo: tus pendientes antes de su fecha y las piezas de hoy publicadas o programadas.', step: 'Cierra hoy lo que vence hoy y deja publicadas o programadas las piezas del día.' },
-  { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Lo que registraste lleva contexto: tus tareas con comentario o archivo, tus gestiones del CRM con nota y tus movimientos con soporte o nota.', step: 'Añade el comentario, la nota o el soporte que le falta a lo que registraste hoy.' },
+  // Contexto real (Rodny, 12 de noviembre de 2026): veinte letras, un archivo o un enlace, y solo en lo que se delega.
+  { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Lo que delegas lleva contexto real: un comentario de al menos 20 letras, un archivo o un enlace. También cuentan tus gestiones del CRM con nota y tus movimientos con soporte.', step: 'Dale contexto a lo que delegaste hoy: un comentario de al menos 20 letras, un archivo o un enlace.' },
   { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nadie te devolvió un pendiente', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' },
   // Rodny, 9 de noviembre de 2026: Elisa registra ingresos y egresos y Brayan sale a jornadas de producción, y la liga no
   // se lo reconocía. El trabajo de cualquier módulo cuenta: lo que se registra en la plataforma, venga de donde venga.

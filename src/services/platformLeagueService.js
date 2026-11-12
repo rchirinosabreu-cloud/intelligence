@@ -18,6 +18,7 @@ import { hasModulePermission } from '../config/security.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 import { createLeagueAreaSources } from './leagueAreaSources.js';
+import { hasRealContext } from '../lib/leagueAreaChecks.js';
 import { AD_BUDGET_INCLUDE, describeBudget } from './adBudgetService.js';
 import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
@@ -97,7 +98,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         db.operationalTraceEvent.findFirst({ where: { occurredAt: { gte: open.start, lt: open.end }, actorId: { in: [...memberOfUser.keys()] }, eventType: { in: PRESENCE_EVENTS } }, orderBy: { occurredAt: 'asc' }, select: { actorId: true, occurredAt: true } })
           .catch((error) => { logger.error('[Liga] Sin lectura de quién abrió primero:', error?.message || error); return undefined; }),
         db.task.findMany({ where: { createdAt: { gte: start, lt: end }, creatorId: { in: [...memberOfUser.keys()] } }, select: {
-          id: true, creatorId: true, comments: true,
+          id: true, creatorId: true, comments: true, assigneeId: true, contentItemId: true, referenceUrl: true,
           taskComments: { where: { type: 'human', createdAt: { lt: end } }, select: { content: true } },
           taskAttachments: { where: { purgeState: 'ACTIVE', createdAt: { lt: end } }, select: { id: true } }
         } }),
@@ -129,9 +130,12 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         if (record) bucket.workRecords.push(record);
       }
       for (const event of productionEvents) for (const memberId of event.memberIds || []) byMember.get(memberId)?.productionDays.push({ id: event.id, title: event.title });
+      // Documentado: contexto real —veinte letras, un archivo o un enlace— en lo que se le pasa a otra persona.
       for (const task of created) {
-        const bucket = byMember.get(memberOfUser.get(task.creatorId)?.id);
-        if (bucket) bucket.createdTasks.push({ id: task.id, documented: Boolean(String(task.comments || '').trim()) || task.taskComments.some(comment => String(comment.content || '').trim()) || task.taskAttachments.length > 0 });
+        const creator = memberOfUser.get(task.creatorId);
+        const bucket = byMember.get(creator?.id);
+        if (bucket) bucket.createdTasks.push({ id: task.id, delegated: task.assigneeId !== creator.id, fromPiece: Boolean(task.contentItemId),
+          documented: hasRealContext(task.comments) || hasRealContext(task.referenceUrl) || (task.taskComments || []).some(comment => hasRealContext(comment.content)) || (task.taskAttachments || []).length > 0 });
       }
       const occurredToday = value => value && new Date(value) >= start && new Date(value) < end;
       for (const task of closed.flatMap(completedTaskParticipationViews).filter(task => occurredToday(task.completedAt))) {
