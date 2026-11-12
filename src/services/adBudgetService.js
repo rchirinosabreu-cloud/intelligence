@@ -12,6 +12,8 @@ import {
 } from '../lib/adBudgets.js';
 import { metaDifference } from '../lib/adBudgetMeta.js';
 
+import { metaForecastExcess } from '../lib/adBudgetMetaBudgets.js';
+
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 const number = (value) => (value === null || value === undefined ? null : Number(value));
@@ -79,7 +81,8 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
         responsible: budget.responsible ? { id: budget.responsible.id, name: budget.responsible.name, avatarUrl: budget.responsible.avatarUrl || null } : null,
         projectManager: budget.client?.projectManager?.isActive === false ? null : (budget.client?.projectManager ? { id: budget.client.projectManager.id, name: budget.client.projectManager.name } : null),
         cutDay, cutSource: source, ownCutDay: budget.cutDay || null, cycle, evaluation, campaigns, pendingClose,
-        carryOverReason: row?.carryOverReason || null, meta: metaOf(budget, row)
+        carryOverReason: row?.carryOverReason || null, today,
+        meta: { ...metaOf(budget, row), excess: metaForecastExcess({ forecast: row?.metaForecast || null, evaluation, status: budget.status, today, currency: budget.currency }) }
     };
 };
 

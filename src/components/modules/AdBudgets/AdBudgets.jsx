@@ -211,7 +211,7 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
           </div>
         </div>
       </div>
-      {(budget.pendingClose || e.reasons.length > 0 || budget.meta?.difference || budget.meta?.problem) && (
+      {(budget.pendingClose || e.reasons.length > 0 || budget.meta?.difference || budget.meta?.problem || budget.meta?.excess) && (
         <div className="space-y-1 px-4 pb-3">
           {budget.pendingClose && (
             <p className="flex flex-wrap items-center gap-2 text-sm text-status-attention-fg">
@@ -219,7 +219,7 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
               {canEdit && <button type="button" data-ad-close-open onClick={() => onOpen('close', budget)} className="min-h-7 rounded font-semibold underline">Registrarlo</button>}
             </p>
           )}
-          <MetaReadingNotes budget={budget} />
+          <MetaReadingNotes budget={budget} onBudget={() => onOpen('meta-budget', budget)} />
           {e.reasons.map((reason) => <p key={reason} data-ad-reason className={cn('text-sm', e.level === 'red' ? 'text-destructive brain-destructive-text' : 'text-zinc-700 dark:text-zinc-200')}>{reason}</p>)}
         </div>
       )}
@@ -260,6 +260,16 @@ export default function AdBudgets() {
   const canEdit = data?.canEdit === true;
 
   useEffect(() => { if (focusId) setExpandedId(focusId); }, [focusId]);
+  // El aviso de «se pasaría» llega con `?meta=presupuesto`: abre la ventana del presupuesto en Meta de esa pauta, una vez.
+  const metaParam = params.get('meta');
+  const focusedBudget = (data?.budgets || []).find((budget) => budget.id === focusId);
+  useEffect(() => {
+    if (metaParam !== 'presupuesto' || !focusedBudget?.meta?.linked) return;
+    setDialog({ kind: 'meta-budget', budget: focusedBudget, subject: null });
+    const next = new URLSearchParams(params);
+    next.delete('meta');
+    setParams(next, { replace: true });
+  }, [metaParam, focusedBudget, params, setParams]);
 
   const budgets = useMemo(() => (data?.budgets || []).map((budget) => ({ ...budget, today: data.today, focused: budget.id === focusId })), [data, focusId]);
   const counts = useMemo(() => Object.fromEntries(Object.entries(FILTERS).map(([key, rule]) => [key, budgets.filter(rule).length])), [budgets]);

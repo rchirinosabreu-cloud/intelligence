@@ -4,16 +4,19 @@
 // - **A quien lleva la pauta, en la banda, solo cuando debe algo**: el gasto sin actualizar (cada tres días y, en los
 //   últimos cinco, cada día), el gasto final de un ciclo que terminó, o una campaña que sigue activa pasada su fecha o que
 //   termina después del cierre. El aviso se cae solo en cuanto lo hace: actualizar el gasto es lo que se le pidió.
+// - **Cuando lo configurado en Meta haría pasarse la pauta** (12 de noviembre de 2026: que nadie rompa lo aprobado, tampoco
+//   desde el Administrador de anuncios). Sale de la lectura de Meta de cada dos horas y se cae al bajar el presupuesto.
 // - **Al project manager, por la campana, una vez por ciclo**: a cinco días del cierre y si la pauta se pasa. La campana
 //   llega al celular, así que no lleva cifras.
 // - **Más de tres pautas de la misma persona salen en un solo aviso.**
 //
 // Lógica pura: la usan el reloj, la banda y las pruebas.
-import { adBudgetName, shortDay } from './adBudgets.js';
+import { adBudgetName, formatAdMoney, shortDay } from './adBudgets.js';
 
 export const AD_REVIEW_KIND = 'PAUTA_REVISION';
 export const AD_CAMPAIGN_KIND = 'PAUTA_CAMPANA';
 export const AD_DIGEST_KIND = 'PAUTA_RESUMEN';
+export const AD_META_KIND = 'PAUTA_META';
 export const AD_DIGEST_THRESHOLD = 3;
 export const AD_BOARD_URL = '/pautas';
 
@@ -21,10 +24,11 @@ export const isAdNotice = (notice) => String(notice?.kind || '').startsWith('PAU
 
 export const adReviewSubject = (budgetId, cycleKey) => `pauta:${budgetId}:${cycleKey}`;
 export const adCampaignSubject = (campaignId) => `pauta-campana:${campaignId}`;
+export const adMetaSubject = (budgetId, cycleKey) => `pauta-meta:${budgetId}:${cycleKey}`;
 export const adDigestSubject = (today) => `pauta-resumen:${String(today).slice(0, 7)}`;
 
 export const parseAdSubject = (subjectId) => {
-    const review = /^pauta:([^:]+):(.+)$/.exec(String(subjectId || ''));
+    const review = /^pauta(?:-meta)?:([^:]+):(.+)$/.exec(String(subjectId || ''));
     if (review) return { budgetId: review[1], cycleKey: review[2] };
     const campaign = /^pauta-campana:(.+)$/.exec(String(subjectId || ''));
     return campaign ? { campaignId: campaign[1] } : null;
@@ -68,6 +72,15 @@ export const adNoticesFor = (budget) => {
         notices.push({
             kind: AD_CAMPAIGN_KIND, subjectId: adCampaignSubject(flag.campaignId), url, level: 'SEGUIMIENTO',
             label: `Pauta · ${adBudgetName(budget)}`, message: flag.code === 'VENCIDA' ? `«${flag.campaignName}» sigue activa: ${detail}` : `«${flag.campaignName}»: ${detail}`
+        });
+    }
+    const excess = budget.meta?.excess;
+    if (excess) {
+        const money = (cents) => formatAdMoney(cents, budget.currency);
+        notices.push({
+            kind: AD_META_KIND, subjectId: adMetaSubject(budget.id, budget.cycle.key), url: `${url}&meta=presupuesto`, level: 'IMPORTANTE',
+            label: `Pauta · ${adBudgetName(budget)}`,
+            message: `Con lo configurado en Meta gastaría unos ${money(excess.totalCents)} de ${money(budget.evaluation.availableCents)} hasta el ${shortDay(excess.deadline)}`,
         });
     }
     return notices.map((notice) => ({ ...notice, budgetId: budget.id }));

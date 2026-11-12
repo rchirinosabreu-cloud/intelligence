@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    centsToMetaMinor, humanizeMetaBudgetError, metaBudgetChange, metaBudgetObject, metaMinorToCents, projectMetaSpend
+    centsToMetaMinor, humanizeMetaBudgetError, metaBudgetChange, metaForecastExcess, metaForecastRecord, metaBudgetObject, metaMinorToCents, projectMetaSpend
 } from '../src/lib/adBudgetMetaBudgets.js';
 
 // Ajustar el presupuesto en Meta desde Pautas (Rodny, 12 de noviembre de 2026: «no tiene sentido ajustar gasto en la
@@ -93,4 +93,28 @@ test('lo que responde Meta al rechazar un cambio se dice en palabras', () => {
     assert.match(humanizeMetaBudgetError(meta(190, 'Invalid OAuth access token')), /llave de Meta/);
     assert.equal(humanizeMetaBudgetError(meta(100, 'x', 'El presupuesto es muy bajo')), 'Meta no aceptó el cambio: El presupuesto es muy bajo');
     assert.match(humanizeMetaBudgetError(Object.assign(new Error('socket'), { code: 'ECONNRESET' })), /no cambió/);
+});
+// El aviso cuando lo configurado en Meta haría pasarse la pauta (Rodny, 12 de noviembre de 2026: que no se pueda romper lo
+// aprobado, tampoco desde el Administrador de anuncios). Se calcula en cada lectura y se guarda en el ciclo.
+test('cada lectura guarda lo que gastaría la pauta con lo configurado en Meta', () => {
+    const objects = [campaign({ daily_budget: '10000' }), campaign({ id: 'c2', daily_budget: '0', lifetime_budget: '0' })];
+    const record = metaForecastRecord({ objects, problems: [], asOf: '2026-11-12', today: '2026-11-12', deadline: '2026-11-28', at: '2026-11-12T17:00:00Z' });
+    assert.equal(record.start, '2026-11-12');
+    assert.equal(record.projectedCents, 17 * 1_000_000);
+    assert.deepEqual(record.objects.map((item) => [item.id, item.projectedCents]), [['c1', 17_000_000]], 'sin presupuesto propio no se guarda');
+});
+
+test('se pasaría: solo con una lectura reciente del mismo ciclo, antes del límite y por encima de la tolerancia', () => {
+    const evaluation = { state: 'AL_DIA', closed: false, deadline: '2026-11-28', spentCents: 10_500_000, availableCents: 20_000_000 };
+    const forecast = { on: '2026-11-12', deadline: '2026-11-28', projectedCents: 14_800_000 };
+    const base = { forecast, evaluation, status: 'ACTIVA', today: '2026-11-12', currency: 'COP' };
+    assert.deepEqual(metaForecastExcess(base), { totalCents: 25_300_000, overCents: 5_300_000, deadline: '2026-11-28', projectedCents: 14_800_000 });
+    assert.equal(metaForecastExcess({ ...base, forecast: { ...forecast, projectedCents: 9_900_000 } }), null, 'dentro de la tolerancia de 5.000');
+    assert.equal(metaForecastExcess({ ...base, today: '2026-11-15' }), null, 'una lectura de hace días ya no dice cómo está Meta');
+    assert.ok(metaForecastExcess({ ...base, today: '2026-11-13' }), 'la de ayer todavía vale');
+    assert.equal(metaForecastExcess({ ...base, forecast: { ...forecast, deadline: '2026-10-28' } }), null, 'otro ciclo');
+    assert.equal(metaForecastExcess({ ...base, evaluation: { ...evaluation, state: 'PASADA' } }), null, 'si ya se pasó, lo dice el otro aviso');
+    assert.equal(metaForecastExcess({ ...base, status: 'PAUSADA' }), null);
+    assert.equal(metaForecastExcess({ ...base, today: '2026-11-29' }), null, 'pasado el límite de gasto');
+    assert.equal(metaForecastExcess({ ...base, forecast: { on: '2026-11-12', problem: 'Meta no respondió' } }), null, 'sin lectura no se avisa nada');
 });

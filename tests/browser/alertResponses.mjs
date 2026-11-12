@@ -28,7 +28,7 @@ test('los 13 avisos tienen respuestas propias; confirmar persiste en su origen s
       await page.screenshot({path:`${out}/${scene}.png`,animations:'disabled'});
     }
     // Pautas llegó a main durante la integración: conserva su acción nativa, nunca cae en CRM.
-    for(const [kind,label] of [['PAUTA_REVISION','Revisar pauta'],['PAUTA_CAMPANA','Revisar campaña'],['PAUTA_RESUMEN','Revisar pautas']]){
+    for(const [kind,label] of [['PAUTA_REVISION','Revisar pauta'],['PAUTA_CAMPANA','Revisar campaña'],['PAUTA_RESUMEN','Revisar pautas'],['PAUTA_META','Revisar presupuesto en Meta']]){
       await page.route('**/api/important-notices/current',route=>route.fulfill({json:{notice:{id:kind,kind,level:'IMPORTANTE',label:'Pauta · muestra',message:'Revisa el gasto o la campaña en su registro.',url:'/pautas?pauta=local'},nextAt:null}}));
       await page.route(`**/api/important-notices/${kind}/shown`,route=>route.fulfill({json:{ok:true}}));
       await page.reload();await card.getByRole('button',{name:label,exact:true}).waitFor();
