@@ -37,6 +37,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import CalendarDateTimePicker from './CalendarDateTimePicker';
 import MailboxConnections from './MailboxConnections';
+import { hasBriaAccess } from '@/lib/platformModules';
 import ProductionDayStatus from './ProductionDayStatus';
 import { suggestedClientIds } from '@/lib/productionDays';
 import {
@@ -914,7 +915,8 @@ const OperationalCalendar = () => {
       )}
 
       {/* Buzones compartidos que lee Bria (11 de octubre de 2026): la lista la ven quienes dirigen; conectar es de administradores. */}
-      {isAdmin && <MailboxConnections isAdmin={currentUser?.role === 'ADMIN'} />}
+      {/* Los buzones los lee Bria: sin Bria la lista respondería «sin permiso» (12 de noviembre de 2026). */}
+      {isAdmin && hasBriaAccess(currentUser) && <MailboxConnections isAdmin={currentUser?.role === 'ADMIN'} />}
 
       <div data-operational-calendar="traditional-month-grid" className="hidden overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900 md:block">
         <div className="grid grid-cols-5 border-b border-zinc-200 bg-zinc-50/80 dark:border-white/10 dark:bg-white/5">

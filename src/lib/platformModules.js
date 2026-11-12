@@ -94,6 +94,11 @@ export const presetModulePermissions = (role) => {
 };
 
 // La misma decisión en la pantalla (menú, rutas, consejos) y en el servidor (guardianes).
+// Lo mismo que exige el servidor para usar Bria (`canUseBria`): rol de dirección o project manager y la casilla
+// Bria marcada, también para un administrador. Las decisiones de Manager las prepara Bria (12 de noviembre de 2026).
+export const hasBriaAccess = (user) => ['ADMIN', 'PROJECT_MANAGER'].includes(String(user?.role || '').toUpperCase())
+    && readModulePermissions(user?.modulePermissions)[BRIA_KEY] === true;
+
 export const hasModuleAccess = (user, key) => {
     if (!user) return false;
     const name = String(key || '').toLowerCase();

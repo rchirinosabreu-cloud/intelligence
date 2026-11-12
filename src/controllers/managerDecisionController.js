@@ -29,6 +29,9 @@ export const createPulseHandler = (service = getManagerDecisionService) => async
   try {
     return res.json(await service().pulse(req.user));
   } catch (error) {
+    // Sin Bria no hay decisiones que avisar (12 de noviembre de 2026): «nada nuevo», no «sin permiso». Un 403 aquí
+    // hacía saltar el aviso global en cada pantalla a quien tiene Manager pero no Bria.
+    if (error.code === 'BRIA_DISABLED') return res.json({ keys: [] });
     return sendError(res, error, 'No pude saber si hay decisiones nuevas.');
   }
 };
