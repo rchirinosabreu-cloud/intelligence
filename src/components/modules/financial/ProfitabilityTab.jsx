@@ -6,6 +6,9 @@ import { BrainMonthPicker } from '@/components/ui/BrainDatePicker';
 import { Loader2 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import InfoHint from '@/components/ui/InfoHint';
+import ProfitabilityCharts from './ProfitabilityCharts';
+import { PROFITABILITY_HINTS } from '@/lib/clientProfitability';
 
 // Rentabilidad por cliente (Rodny, 22 de octubre de 2026): lo facturado del mes frente a lo que costó atender cada
 // cuenta, con un solo costo hora de la agencia. Solo administradores; la cuenta la hace el servidor
@@ -17,13 +20,26 @@ const hours = (ms) => `${new Intl.NumberFormat('es-CO', { maximumFractionDigits:
 const percent = (rate) => (rate === null || rate === undefined ? '—' : `${Math.round(rate * 100)} %`);
 const monthKey = (period) => (period ? `${period.year}-${String(period.month).padStart(2, '0')}-01` : '');
 
-function Figure({ label, value, hint }) {
+function Figure({ label, value, hint, explain }) {
   return (
     <Card className="min-w-0 p-4 dark:bg-zinc-900">
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="min-w-0 truncate">{label}</span>
+        {explain && <InfoHint label={label}>{explain}</InfoHint>}
+      </p>
       <p className="mt-1 truncate text-xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</p>
       {hint && <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>}
     </Card>
+  );
+}
+
+/** La cabecera de una columna de la tabla, con su iconito a la derecha de la palabra. */
+function ColumnHead({ label, explain, className }) {
+  return (
+    <span className={cn('inline-flex items-center gap-1', className)}>
+      {label}
+      <InfoHint label={label} side="bottom">{explain}</InfoHint>
+    </span>
   );
 }
 
@@ -58,11 +74,14 @@ export default function ProfitabilityTab({ enabled, initialMonth = '' }) {
       {agency && (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Figure label="Ingreso de clientes" value={money(agency.revenueCents)} hint={agency.fromIncome ? `${agency.fromIncome} sin cuenta por cobrar: se usó lo que entró` : 'Lo facturado del mes'} />
-            <Figure label="Costo de operación" value={money(agency.costCents)} hint={agency.directCostCents ? `${money(agency.directCostCents)} directo de clientes` : null} />
-            <Figure label="Costo hora de la agencia" value={money(agency.hourCostCents)} />
-            <Figure label="Horas medidas" value={hours(agency.hoursMs)} hint={agency.coverage === null ? null : `${percent(agency.coverage)} de lo cerrado tiene tiempo`} />
+            <Figure label="Ingreso de clientes" value={money(agency.revenueCents)} explain={PROFITABILITY_HINTS.revenue} hint={agency.fromIncome ? `${agency.fromIncome} sin cuenta por cobrar: se usó lo que entró` : 'Lo facturado del mes'} />
+            <Figure label="Costo de operación" value={money(agency.costCents)} explain={PROFITABILITY_HINTS.cost} hint={agency.directCostCents ? `${money(agency.directCostCents)} directo de clientes` : null} />
+            <Figure label="Costo hora de la agencia" value={money(agency.hourCostCents)} explain={PROFITABILITY_HINTS.hourCost} />
+            <Figure label="Horas medidas" value={hours(agency.hoursMs)} explain={PROFITABILITY_HINTS.hoursMeasured} hint={agency.coverage === null ? null : `${percent(agency.coverage)} de lo cerrado tiene tiempo`} />
           </div>
+
+          {/* Los gráficos antes de la tabla: primero quién pesa, después el detalle fila a fila. */}
+          <ProfitabilityCharts clients={data.clients} hourCostCents={agency.hourCostCents} money={money} hours={hours} />
 
           {data.notes?.length > 0 && (
             <ul className="space-y-1 text-sm text-zinc-600 dark:text-zinc-300" data-profitability-notes>
@@ -72,7 +91,12 @@ export default function ProfitabilityTab({ enabled, initialMonth = '' }) {
 
           <Card className="overflow-hidden dark:bg-zinc-900">
             <div className="hidden grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))] gap-3 border-b border-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:border-white/5 dark:text-zinc-400 md:grid">
-              <span>Cliente</span><span className="text-right">Ingreso</span><span className="text-right">Horas</span><span className="text-right">Costo</span><span className="text-right">Margen</span><span className="text-right">Por hora</span>
+              <span>Cliente</span>
+              <ColumnHead label="Ingreso" explain={PROFITABILITY_HINTS.clientRevenue} className="justify-end" />
+              <ColumnHead label="Horas" explain={PROFITABILITY_HINTS.clientHours} className="justify-end" />
+              <ColumnHead label="Costo" explain={PROFITABILITY_HINTS.clientCost} className="justify-end" />
+              <ColumnHead label="Margen" explain={PROFITABILITY_HINTS.clientMargin} className="justify-end" />
+              <ColumnHead label="Por hora" explain={PROFITABILITY_HINTS.perHour} className="justify-end" />
             </div>
             {data.clients.length === 0 && <p className="px-4 py-6 text-sm text-zinc-500 dark:text-zinc-400">No hay facturación ni horas de clientes en este mes.</p>}
             <ul className="divide-y divide-zinc-100 dark:divide-white/5">
