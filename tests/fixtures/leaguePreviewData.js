@@ -2,7 +2,12 @@
 // en píxel (los diseños de OpenAI, recortados de su lámina para la muestra) y puntajes ficticios. Nunca decide nada
 // en producción. Los nombres son los del equipo real porque la muestra es para que Rodny vea cómo se verá; los
 // puntajes y los regalos son inventados.
-import { DAILY_HABITS, leagueNextStep, leagueScore, kudosScore, leagueRank, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
+import { DAILY_HABITS, constancyStandings, leagueNextStep, leagueScore, kudosScore, leagueRank, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
+
+/** La constancia ficticia (12 de noviembre de 2026): ganados, jugados y días jugados de siete días cerrados. Elisa tiene
+ * un 100 % de dos días y David pocos días: no entran. Melissa y Mariceth empatan en el segundo puesto. */
+const CONSTANCY = { helen: [38, 40, 7], melissa: [34, 37, 6], mariceth: [24, 26, 5], keila: [30, 34, 7], rodny: [30, 35, 7], kamila: [29, 34, 6],
+  brayan: [24, 30, 6], jesu: [28, 36, 7], francisco: [24, 32, 6], francys: [26, 36, 7], sara: [21, 30, 5], david: [9, 15, 3], elisa: [8, 8, 2] };
 
 
 export const LEAGUE_ROSTER = [
@@ -81,6 +86,10 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     nextStepUrl: '/gestion',
     podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, pixelAvatarKey: lane.pixelAvatarKey, avatarUrl: null, score: lane.score })),
     winner: winner ? { ...melissa, score: 610, month: '2026-10', note: 'El bono se entrega este mes.' } : null,
+    constancy: constancyStandings(LEAGUE_ROSTER.map(({ id, name, pixelAvatarKey }) => {
+      const [won, played, daysPlayed] = CONSTANCY[id];
+      return { id, name, pixelAvatarKey, avatarUrl: null, isSelf: id === viewerId, won, played, daysPlayed, percent: Math.round((won * 100) / played) };
+    }), { closedDays: 7 }),
     race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
   };
 }
