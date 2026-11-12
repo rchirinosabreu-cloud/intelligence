@@ -43,11 +43,53 @@ export const MODULE_KEYS = Object.freeze(PLATFORM_MODULES.map((module) => module
 // Pautas tiene dos niveles (Rodny, 12 de noviembre de 2026: «ver y editar, siendo editar el ajuste en Meta»): con la
 // casilla de Pautas se ve el módulo; con «Editar pautas» se crean y corrigen pautas, se actualiza el gasto, se ligan
 // campañas y se ajusta el presupuesto en Meta. Nadie la tiene por su cargo, tampoco un administrador.
+// La operación de clientes (Rodny, 12 de noviembre de 2026: «necesito crear un permiso para que quien yo quiera vea
+// los clientes completos»): el semáforo del mes, el avance de cada parrilla y la carga del equipo. Dirección y
+// project managers la ven por su cargo, así que a ellos no se les ofrece la casilla; a los demás, marcándola.
+//
+// Las cuatro viven en `EXTRA_PERMISSIONS` y no escritas a mano en la ventana de Equipo: cada casilla nueva se
+// añadía en cuatro sitios distintos —tres estados iniciales y su etiqueta— y así una se queda sin guardar.
+// `onlyForRoles`, `hideForRoles` y `requiresModule` dicen a quién se le ofrece; `tone`, de qué color se dibuja.
 const BRIA_KEY = 'bria';
 const LEAGUE_KEY = 'liga';
 export const AD_BUDGET_EDIT_KEY = 'pautas_editar';
-export const EXTRA_KEYS = Object.freeze([BRIA_KEY, LEAGUE_KEY, AD_BUDGET_EDIT_KEY]);
+export const CLIENT_OPERATIONS_KEY = 'clientes-operacion';
+
+export const EXTRA_PERMISSIONS = Object.freeze([
+    {
+        key: BRIA_KEY, tone: 'cyan', label: 'Activar Bria para esta persona',
+        onlyForRoles: ['ADMIN', 'PROJECT_MANAGER']
+    },
+    {
+        key: LEAGUE_KEY, tone: 'yellow', label: 'Activar la liga del mes para esta persona',
+        testId: 'data-team-league-toggle'
+    },
+    {
+        key: AD_BUDGET_EDIT_KEY, tone: 'neutral', label: 'Editar pautas y ajustar presupuestos en Meta',
+        requiresModule: 'pautas', testId: 'data-team-ad-edit-toggle'
+    },
+    {
+        key: CLIENT_OPERATIONS_KEY, tone: 'green', label: 'Ver la operación completa de clientes',
+        hint: 'El semáforo del mes, el avance de cada parrilla y la carga del equipo.',
+        requiresModule: 'clientes', hideForRoles: ['ADMIN', 'PROJECT_MANAGER'],
+        testId: 'data-team-client-operations-toggle'
+    }
+].map((extra) => Object.freeze(extra)));
+
+export const EXTRA_KEYS = Object.freeze(EXTRA_PERMISSIONS.map((extra) => extra.key));
 const EXPLICIT_KEYS = new Set([LEAGUE_KEY, AD_BUDGET_EDIT_KEY]);
+
+/** Las casillas sueltas que se le ofrecen a esta persona, con el rol y los módulos que ya tiene marcados. */
+export const extraPermissionsFor = (role, permissions = {}) => {
+    const normalized = String(role || '').toUpperCase();
+    return EXTRA_PERMISSIONS.filter((extra) => {
+        if (extra.onlyForRoles && !extra.onlyForRoles.includes(normalized)) return false;
+        if (extra.hideForRoles && extra.hideForRoles.includes(normalized)) return false;
+        if (extra.requiresModule && normalized !== 'ADMIN' && permissions[extra.requiresModule] !== true) return false;
+        return true;
+    });
+};
+
 
 const KEY_BY_NAME = new Map(PLATFORM_MODULES.flatMap((module) => [
     [module.key, module.key],
@@ -96,6 +138,12 @@ export const presetModulePermissions = (role) => {
         normalized === 'ADMIN' || module.roles.includes(normalized)
     ]));
 };
+
+/** Todas las casillas al elegir un rol: las del cargo encendidas y las sueltas apagadas. */
+export const presetPermissions = (role) => ({
+    ...presetModulePermissions(role),
+    ...Object.fromEntries(EXTRA_KEYS.map((key) => [key, false]))
+});
 
 // La misma decisión en la pantalla (menú, rutas, consejos) y en el servidor (guardianes).
 // Lo mismo que exige el servidor para usar Bria (`canUseBria`): rol de dirección o project manager y la casilla

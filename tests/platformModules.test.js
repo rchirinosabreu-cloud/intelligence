@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import {
     canEditAdBudgets,
+    extraPermissionsFor,
+    EXTRA_KEYS,
     hasModuleAccess,
     MODULE_KEYS,
     PLATFORM_MODULES,
     presetModulePermissions,
+    presetPermissions,
     readModulePermissions,
     sanitizeModulePermissions
 } from '../src/lib/platformModules.js';
@@ -48,7 +51,8 @@ test('los permisos viejos se leen igual: claves con mayúscula, «Tareas», text
     assert.equal(read.manager, true);
     assert.equal(read.clientes, true);
     assert.equal(read.crm, false);
-    assert.deepEqual(Object.keys(readModulePermissions(null)).sort(), [...MODULE_KEYS, 'bria', 'liga', 'pautas_editar'].sort(), 'Bria, la liga del mes y editar pautas viajan como casillas sin módulo');
+    assert.deepEqual(Object.keys(readModulePermissions(null)).sort(), [...MODULE_KEYS, ...EXTRA_KEYS].sort(), 'las casillas sin módulo del menú viajan en el mismo objeto');
+    assert.deepEqual([...EXTRA_KEYS], ['bria', 'liga', 'pautas_editar', 'clientes-operacion'], 'Bria, la liga, editar pautas y ver la operación de clientes');
     assert.equal(readModulePermissions('{roto').gestion, false);
     assert.equal(readModulePermissions({ bria: 'true' }).bria, false, 'Bria solo con un true de verdad');
     assert.equal(readModulePermissions({ bria: true }).bria, true);
@@ -138,7 +142,10 @@ test('Drive se protege con su propia casilla en el menú, la pantalla y el servi
 
 test('la ventana de Equipo, el servidor y la bienvenida no copian la lista', () => {
     assert.match(team, /PLATFORM_MODULES/);
-    assert.match(team, /presetModulePermissions\(/);
+    // Las casillas sueltas también salen de la lista: antes cada una se escribía a mano en cuatro sitios.
+    assert.match(team, /presetPermissions\(/);
+    assert.match(team, /extraPermissionsFor\(/);
+    assert.doesNotMatch(team, /bria: false|liga: false|pautas_editar: false/, 'nada de casillas sueltas escritas a mano');
     assert.match(team, /readModulePermissions\(/);
     assert.doesNotMatch(team, /minutas: (true|false)/, 'nada de listas escritas a mano');
     for (const file of ['src/routes/api/team.js', 'src/services/userService.js']) {
@@ -170,5 +177,7 @@ test('Pautas en dos niveles: ver con su casilla, editar solo con «Editar pautas
     assert.equal(canEditAdBudgets({ role: 'EDITOR', modulePermissions: { pautas_editar: true } }), false, 'editar sin ver no sirve');
     assert.equal(presetModulePermissions('ADMIN').pautas_editar, undefined, 'ningún rol la trae marcada');
     assert.equal(sanitizeModulePermissions({ pautas_editar: true }).pautas_editar, true, 'se guarda');
-    assert.match(source('src/components/modules/Team.jsx'), /data-team-ad-edit-toggle/);
+    // La marca de la casilla vive con la casilla, en la lista única, no en la pantalla.
+    assert.match(source('src/lib/platformModules.js'), /data-team-ad-edit-toggle/);
+    assert.match(source('src/components/modules/Team.jsx'), /extra\.testId/);
 });

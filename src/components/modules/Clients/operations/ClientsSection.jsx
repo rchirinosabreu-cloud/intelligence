@@ -17,7 +17,7 @@ const TRIGGER = 'flex flex-1 items-center gap-2 rounded-xl py-2';
 const Loading = () => <div className="flex min-h-[30vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-cyan" /></div>;
 const LoadError = ({ text }) => <p role="alert" className="brain-alert-surface rounded-xl p-4 text-sm">{text}</p>;
 
-export default function ClientsSection({ canManage, evaluated, team, directory, loading = false, error = '', onOpenClient, onNewClient, onSaveHighlight }) {
+export default function ClientsSection({ canManage, canEdit = false, evaluated, team, directory, loading = false, error = '', onOpenClient, onNewClient, onSaveHighlight }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = MANAGER_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'operacion';
@@ -31,8 +31,10 @@ export default function ClientsSection({ canManage, evaluated, team, directory, 
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-200">
-      <PageHeader title="Clientes" subtitle={canManage ? 'Cómo va cada cliente este mes, calculado con sus parrillas y sus tareas.' : 'Los clientes de la agencia y sus espacios de trabajo.'}>
-        <Button onClick={onNewClient} size="lg"><Plus className="mr-2 h-4 w-4" />Nuevo cliente</Button>
+      {/* «Nuevo cliente» solo a quien el servidor se lo va a aceptar: a los demás se les ofrecía el
+          formulario entero para terminar en un 403 (Rodny, 12 de noviembre de 2026). */}
+      <PageHeader title="Clientes" subtitle={canManage ? 'Cómo va cada cliente este mes, calculado con sus parrillas y sus tareas.' : 'Tus clientes y los de la agencia, con su espacio de trabajo y su parrilla del mes.'}>
+        {canEdit && <Button onClick={onNewClient} size="lg"><Plus className="mr-2 h-4 w-4" />Nuevo cliente</Button>}
       </PageHeader>
 
       {canManage ? (

@@ -23,7 +23,8 @@ import ClientProfileFields from './Clients/ClientProfileFields';
 import ClientsSection from './Clients/operations/ClientsSection';
 import { useClientOperations, useSetTeamHighlight } from './Clients/operations/clientOperationsApi';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
-import { OPERATION_LEVELS } from '@/lib/clientOperations';
+import { OPERATION_LEVELS, canSeeClientOperations } from '@/lib/clientOperations';
+import { isManagerRole } from '@/lib/taskEditPermissions';
 import { useAuth } from '@/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -32,7 +33,6 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 // sustituyen al Excel «PENDIENTES»; el directorio de siempre queda en su propia pestaña y es lo único
 // que ven los demás. La «salud» manual y su bitácora se retiraron: el avance se calcula.
 
-const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 
 function Person({ member }) {
   if (!member?.name) return <span className="text-xs text-zinc-400">—</span>;
@@ -44,7 +44,7 @@ function Person({ member }) {
   );
 }
 
-function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, archivePending }) {
+export function ClientsDirectory({ clients, loading, team, canEdit = false, myMemberId = null, onEdit, onArchiveToggle, archivePending }) {
   const navigate = useNavigateFrom();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -63,6 +63,12 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
   const archived = clients.filter((c) => c.isArchived && matches(c));
   const activeTotal = clients.filter((c) => !c.isArchived).length;
   const archivedTotal = clients.length - activeTotal;
+
+  // Quien no administra abre esta pantalla para encontrar *sus* cuentas: van primero y aparte
+  // (Rodny, 12 de noviembre de 2026: «no debería verse así cuando no tienes permisos de manager»).
+  const isMine = (client) => !!myMemberId && (client.responsible?.id === myMemberId || client.projectManager?.id === myMemberId);
+  const mine = canEdit ? [] : active.filter(isMine);
+  const others = canEdit ? active : active.filter((client) => !isMine(client));
 
   // Cada fila lleva su número (Rodny, 10 de noviembre de 2026: «ponme números … enumerarlos»).
   const row = (client, index) => (
@@ -84,7 +90,9 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
               <ExternalLink className="h-4 w-4" />
             </button>
           )}
-          {client.isArchived ? (
+          {/* Editar, desactivar y reactivar son del cargo: a quien no lo tiene no se le ofrecen, porque el
+              servidor se los va a negar (`requireManagerRole` en /api/clients). */}
+          {!canEdit ? null : client.isArchived ? (
             // Volver a la operación es un clic a la vista: los clientes que regresan no se buscan en un menú.
             <button type="button" onClick={() => onArchiveToggle(client)} disabled={archivePending}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-brand-cyan-deep transition-colors hover:bg-brand-cyan/10 disabled:opacity-50 dark:text-brand-cyan">
@@ -135,6 +143,8 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
           <input type="text" placeholder="Buscar cliente…" value={searchQuery} onChange={(e) => updateFilter('directoryQ', e.target.value)}
             className="min-h-11 w-full rounded-xl border border-transparent bg-zinc-100 pl-10 pr-4 text-sm text-zinc-900 focus:border-primary/40 focus:outline-none dark:bg-white/5 dark:text-zinc-100" />
         </label>
+        {/* Filtrar por community manager es cosa de quien reparte las cuentas. */}
+        {canEdit && (
         <div className="flex items-center gap-2 rounded-xl bg-zinc-100 pl-3 dark:bg-white/5">
           <UserIcon className="h-4 w-4 shrink-0 text-zinc-400" />
           <Select value={responsibleId} onChange={(e) => updateFilter('directoryCM', e.target.value === 'all' ? '' : e.target.value)} aria-label="Community manager" className="min-h-11 border-none bg-transparent pl-0 pr-9 text-sm">
@@ -142,12 +152,26 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
             {team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
           </Select>
         </div>
+        )}
       </div>
 
-      <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" aria-label="Clientes activos">
+      {mine.length > 0 && (
+        <section className="relative overflow-hidden rounded-3xl border border-brand-cyan/30 bg-white dark:bg-zinc-900" aria-label="Tus clientes" data-directory-mine>
+          <div className="border-b border-zinc-100 px-6 py-4 dark:border-white/5">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{mine.length === 1 ? 'Tu cliente' : `Tus clientes (${mine.length})`}</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Las cuentas en las que figuras como community manager o project manager.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">{head}<tbody className="divide-y divide-zinc-100 dark:divide-white/5">{mine.map(row)}</tbody></table>
+          </div>
+        </section>
+      )}
+
+      <section className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" aria-label="Clientes activos">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-zinc-100 px-6 py-4 dark:border-white/5" data-directory-count>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-            {loading ? 'Clientes activos' : `${activeTotal === 1 ? '1 cliente activo' : `${activeTotal} clientes activos`}`}
+            {loading ? 'Clientes activos' : mine.length > 0 ? `Otros clientes de la agencia (${others.length})`
+              : `${activeTotal === 1 ? '1 cliente activo' : `${activeTotal} clientes activos`}`}
           </h2>
           {!loading && <span className="text-sm text-zinc-500 dark:text-zinc-400">{archivedTotal === 1 ? '1 inactivo' : `${archivedTotal} inactivos`} en el historial</span>}
         </div>
@@ -157,7 +181,7 @@ function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle, arc
             <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
               {loading ? (
                 <tr><td colSpan={4} className="p-16 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-cyan" /></td></tr>
-              ) : active.length ? active.map(row) : (
+              ) : others.length ? others.map(row) : (
                 <tr><td colSpan={4} className="p-16 text-center text-sm text-zinc-500">Ningún cliente activo con estos filtros.</td></tr>
               )}
             </tbody>
@@ -193,7 +217,12 @@ const Clients = () => {
   const queryClient = useQueryClient();
   const confirm = useConfirmDialog();
   const { currentUser } = useAuth();
-  const canManage = MANAGER_ROLES.includes(String(currentUser?.role || '').toUpperCase());
+  // La operación completa: dirección y project managers por su cargo, y quien tenga su casilla marcada.
+  const canManage = canSeeClientOperations(currentUser);
+  // Crear, editar y desactivar un cliente sigue siendo del cargo: es lo que exige el servidor
+  // (`requireManagerRole` en /api/clients). La pantalla esconde lo que esa persona no puede usar,
+  // para que nadie llene un formulario y se encuentre un 403 al final.
+  const canEditClients = isManagerRole(currentUser?.role);
   const [clients, setClients] = useState([]);
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -340,14 +369,17 @@ const Clients = () => {
     }
   };
 
+  // Quién es esta persona en el Equipo: con eso el directorio pone sus clientes primero.
+  const myMemberId = team.find((member) => member.userId === currentUser?.id)?.id || null;
+
   const directory = (
-    <ClientsDirectory clients={clients} loading={loading} team={team}
+    <ClientsDirectory clients={clients} loading={loading} team={team} canEdit={canEditClients} myMemberId={myMemberId}
       onEdit={setEditingClient} onArchiveToggle={handleArchiveToggle} archivePending={archivePending} />
   );
 
   return (
     <>
-      <ClientsSection canManage={canManage} evaluated={evaluated} team={team} directory={directory}
+      <ClientsSection canManage={canManage} canEdit={canEditClients} evaluated={evaluated} team={team} directory={directory}
         loading={canManage && operations.isLoading}
         error={canManage && operations.isError ? 'No se pudo cargar la operación de clientes. Recarga la página para intentarlo de nuevo.' : ''}
         onOpenClient={(client) => navigate(`/clientes/operacion/${client.slug}`)}
@@ -415,3 +447,4 @@ const Clients = () => {
 };
 
 export default Clients;
+

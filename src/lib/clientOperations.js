@@ -7,6 +7,23 @@
 import { unbackedWork } from './unbackedWork.js';
 import { sheetIdFromUrl } from './externalPlan.js';
 import { normalizeContractScope } from './clientContractScope.js';
+import { isManagerRole } from './taskEditPermissions.js';
+import { CLIENT_OPERATIONS_KEY, hasModuleAccess } from './platformModules.js';
+
+/**
+ * Quién ve la operación completa de clientes —el semáforo del mes, el avance de cada parrilla, la carga del
+ * equipo y la página de operación de un cliente— (Rodny, 12 de noviembre de 2026: «necesito crear un permiso
+ * para que quien yo quiera vea los clientes completos»).
+ *
+ * Dirección y project managers la siguen viendo por su cargo, como desde el 2 de octubre de 2026; a cualquier
+ * otra persona se le abre marcándole su casilla en Equipo. Nadie pierde nada y la puerta nueva es explícita.
+ * La leen la pantalla y el servidor: la cerradura está en el servidor, la pantalla solo esconde lo que no se
+ * puede usar.
+ */
+export const canSeeClientOperations = (user) => {
+  if (!user) return false;
+  return isManagerRole(user.role) || hasModuleAccess(user, CLIENT_OPERATIONS_KEY);
+};
 
 // Etapas de una pieza, en orden. Cada una cuenta las piezas que llegaron *al menos* hasta ahí.
 export const OPERATION_STAGES = [
