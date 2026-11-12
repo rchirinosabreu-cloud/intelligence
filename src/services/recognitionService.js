@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { recognitionCalendar, recognitionDueDay, isRecognitionOverdue, taskAwardKinds, planIsApproved } from './recognitionRules.js';
+import { recognitionCalendar, recognitionDueDay, taskAwardKinds, planIsApproved } from './recognitionRules.js';
 import { recognitionMessages } from '../lib/recognitionPresentation.js';
 import { hasModulePermission } from '../config/security.js';
 
@@ -24,17 +24,9 @@ export async function recognitionTransaction(db, work) {
   }
 }
 
-async function trackDebt(tx, userId, at) {
-  if (!userId) return;
-  const user = await tx.user.findUnique({ where: { id: userId }, select: { isActive: true } });
-  if (!user?.isActive) return;
-  const tasks = await tx.task.findMany({ where: { assignee: { userId }, status: { not: 'REALIZADA' }, dueDate: { lt: new Date(`${recognitionCalendar(at).day}T00:00:00Z`) } }, select: { id: true } });
-  const debt = await tx.recognitionDebtState.upsert({ where: { userId }, create: { userId }, update: {} });
-  const ids = [...new Set([...debt.taskIds, ...tasks.map(task => task.id)])];
-  if (ids.length) await tx.recognitionDebtState.update({ where: { userId }, data: { taskIds: ids } });
-}
-
-export async function prepareTaskRecognition(tx, taskId, at = new Date()) {
+// «Al día» dejó de ganarse al ponerse al día (12 de noviembre de 2026): ya no se lleva la cuenta de vencidas por
+// persona. La tabla `RecognitionDebtState` queda en la base, sin escritores, como ClientHealth.
+export async function prepareTaskRecognition(tx, taskId) {
   const task = await tx.task.findUnique({ where: { id: taskId }, include: { assignee: { select: identitySelect } } });
   if (!task) return null;
   const calendar = task.completedAt ? recognitionCalendar(task.completedAt) : {};
@@ -42,35 +34,22 @@ export async function prepareTaskRecognition(tx, taskId, at = new Date()) {
     taskId, originalDueDate: task.dueDate, firstCompletedAt: task.completedAt,
     recipientId: task.completedAt ? task.assignee?.userId : null, dayKey: calendar.day, weekKey: calendar.week,
   } });
-  await trackDebt(tx, task.assignee?.userId, at);
   return { task, state };
 }
 
-async function finishDebt(tx, userId, changedTask, at, mayAward) {
-  if (!userId) return false;
-  const debt = await tx.recognitionDebtState.findUnique({ where: { userId } });
-  if (!debt?.taskIds.length) return false;
-  const tracked = await tx.task.findMany({ where: { id: { in: debt.taskIds } }, include: { assignee: { select: identitySelect } } });
-  // Missing/reassigned/postponed tasks cannot silently disappear from an episode.
-  const blocked = debt.blocked || tracked.length !== debt.taskIds.length || tracked.some(task => task.assignee?.userId !== userId
-    || (task.status !== 'REALIZADA' && !isRecognitionOverdue(task, at)));
-  const remaining = await tx.task.count({ where: { assignee: { userId }, status: { not: 'REALIZADA' }, dueDate: { lt: new Date(`${recognitionCalendar(at).day}T00:00:00Z`) } } });
-  const cleared = remaining === 0;
-  const earned = mayAward && !blocked && cleared && debt.taskIds.includes(changedTask?.id) && tracked.every(task => task.status === 'REALIZADA');
-  await tx.recognitionDebtState.update({ where: { userId }, data: cleared ? { taskIds: [], blocked: false } : { blocked } });
-  return earned;
-}
-
-async function insertAward(tx, { kind, recipientId, taskId = null, planId = null, at, evidence }) {
+// La clave de cada insignia: «Al día» sigue siendo una por persona y día, de la regla vieja o de la nueva.
+export async function insertRecognitionAward(tx, { kind, recipientId, taskId = null, planId = null, at, evidence, ruleVersion = 1, actorId = null, seenAt = null }) {
   const { day, week } = recognitionCalendar(at);
   const key = kind === 'FIRST_TASK' ? day : kind === 'EARLY_DELIVERY' ? taskId : kind === 'PLAN_APPROVED' ? planId : `${recipientId}:${kind === 'WEEKLY_FIFTY' ? week : day}`;
   const id = randomUUID();
-  const inserted = await tx.recognitionAward.createMany({ data: [{ id, dedupeKey: `v1:${kind}:${key}`, kind, recipientId, taskId, planId, occurredAt: at, dayKey: day, weekKey: week, evidence }], skipDuplicates: true });
+  const inserted = await tx.recognitionAward.createMany({ data: [{ id, dedupeKey: `v1:${kind}:${key}`, kind, ruleVersion, recipientId, taskId, planId, occurredAt: at, dayKey: day, weekKey: week, evidence, ...(seenAt ? { seenAt } : {}) }], skipDuplicates: true });
   if (inserted.count) await tx.operationalTraceEvent.create({ data: {
-    eventType: 'RECOGNITION_GRANTED', actorId: null, subjectUserId: recipientId, taskId, occurredAt: at,
+    eventType: 'RECOGNITION_GRANTED', actorId, subjectUserId: recipientId, taskId, occurredAt: at,
     metadata: { recognitionId: id, kind, planId },
   } });
+  return inserted.count ? id : null;
 }
+const insertAward = insertRecognitionAward;
 
 export async function finishTaskRecognition(tx, before, after, at = new Date()) {
   if (!before) return;
@@ -86,7 +65,6 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   } else if (!state.originalDueDate && after?.dueDate) {
     await tx.recognitionTaskState.update({ where: { taskId: task.id }, data: { originalDueDate: after.dueDate } });
   }
-  const caughtUp = await finishDebt(tx, userId, after, at, Boolean(eligible && isRecognitionOverdue(task, at)));
   if (!eligible) return;
   const { day, week } = recognitionCalendar(at);
   const [teamDayCount, userDayCount, userWeekCount] = await Promise.all([
@@ -97,9 +75,9 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   const originalDue = recognitionDueDay(state.originalDueDate);
   const currentDue = recognitionDueDay(after.dueDate);
   const early = Boolean(originalDue && currentDue && day < originalDue && day < currentDue);
-  for (const kind of taskAwardKinds({ teamDayCount, userDayCount, userWeekCount, early, caughtUp })) {
+  for (const kind of taskAwardKinds({ teamDayCount, userDayCount, userWeekCount, early })) {
     await insertAward(tx, { kind, recipientId: userId, taskId: task.id, at,
-      evidence: { teamDayCount, userDayCount, userWeekCount, originalDue, completedDay: day, clearedOverdue: caughtUp } });
+      evidence: { teamDayCount, userDayCount, userWeekCount, originalDue, completedDay: day } });
   }
 }
 

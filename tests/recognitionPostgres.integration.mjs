@@ -102,21 +102,13 @@ test('early delivery requires an earlier calendar day and cannot be manufactured
   await mutate(same.id, { dueDate: new Date('2026-12-10T00:00:00Z'), status: 'REALIZADA' }, new Date('2026-12-02T15:00:00Z'));
   assert.equal((await awards({ kind: 'EARLY_DELIVERY', taskId: same.id })).length, 0);
 });
-test('caught up requires completing the overdue set, not deleting, postponing or reassigning it', async () => {
-  const run = async (day, invalidation) => {
-    const a = await task({ dueDate: new Date(`2027-01-${String(day - 1).padStart(2, '0')}T00:00:00Z`) });
-    const b = await task({ dueDate: a.dueDate });
-    const at = new Date(`2027-01-${day}T15:00:00Z`);
-    if (invalidation === 'delete') await recognitionTransaction(db, async tx => { const before = await prepareTaskRecognition(tx, a.id, at); await tx.task.delete({ where: { id: a.id } }); await finishTaskRecognition(tx, before, null, at); });
-    else if (invalidation === 'postpone') await mutate(a.id, { dueDate: new Date('2027-02-01T00:00:00Z') }, at);
-    else if (invalidation === 'reassign') await mutate(a.id, { assigneeId: other.id }, at);
-    else await complete(a.id, at);
-    await complete(b.id, at);
-    assert.equal((await awards({ kind: 'CAUGHT_UP', dayKey: `2027-01-${day}`, recipientId: member.userId })).length, invalidation ? 0 : 1);
-    // Isolated fixtures no longer participate in later episodes.
-    await db.task.deleteMany({ where: { id: { in: [a.id, b.id] } } });
-  };
-  await run(10); await run(11, 'delete'); await run(12, 'postpone'); await run(13, 'reassign');
+// «Al día» dejó de ganarse al ponerse al día (Rodny, 12 de noviembre de 2026): ahora se entrega al cierre de la jornada
+// (`tests/caughtUpAtClose.test.js`). Cerrar la última vencida ya no la concede.
+test('completing the overdue set no longer grants Al día on the spot', async () => {
+  const a = await task({ dueDate: new Date('2027-01-09T00:00:00Z') });
+  await complete(a.id, new Date('2027-01-10T15:00:00Z'));
+  assert.equal((await awards({ kind: 'CAUGHT_UP', dayKey: '2027-01-10', recipientId: member.userId })).length, 0);
+  await db.task.deleteMany({ where: { id: a.id } });
 });
 test('plan approval is persisted once for the owner, never empty/partial/deleted/ownerless', async () => {
   const plan = await db.contentPlan.create({ data: { clientId: client.id, month: 2, year: 2027, ownerId: member.id } });

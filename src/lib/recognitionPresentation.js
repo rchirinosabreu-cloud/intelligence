@@ -12,7 +12,8 @@ export const recognitionMessages = Object.freeze({
   FIRST_TASK: 'Eres el primero del equipo en completar una tarea.\nCada avance cuenta.',
   EARLY_DELIVERY: 'Terminaste ese pendiente antes de lo previsto. Anticiparte también suma.',
   DAILY_EIGHT: 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!',
-  CAUGHT_UP: 'Resolviste todo lo que tenías vencido, buen trabajo.',
+  // Desde el 12 de noviembre de 2026 se entrega al cierre de la jornada a quien terminó sin nada vencido.
+  CAUGHT_UP: 'Cerraste el día sin dejar nada vencido, buen trabajo.',
   PLAN_APPROVED: 'El cliente aprobó tu parrilla, mandemos a producción',
   WEEKLY_FIFTY: 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!',
 });

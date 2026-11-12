@@ -6,7 +6,7 @@ export const recognitionScenarios = [
   { kind: 'FIRST_TASK', button: 'Probar buen comienzo', description: 'Completó la primera tarea del equipo hoy.' },
   { kind: 'EARLY_DELIVERY', button: 'Probar entrega anticipada', description: 'Terminó un pendiente antes de lo previsto.' },
   { kind: 'DAILY_EIGHT', button: 'Probar on fire', description: 'Completó ocho tareas distintas hoy.' },
-  { kind: 'CAUGHT_UP', button: 'Probar ponerse al día', description: 'Completó sus tareas vencidas y se puso al día.' },
+  { kind: 'CAUGHT_UP', button: 'Probar al día', description: 'Cerró el día sin dejar nada vencido.' },
   { kind: 'PLAN_APPROVED', button: 'Probar parrilla aprobada', description: 'Todas las piezas de su parrilla quedaron aprobadas.' },
   { kind: 'WEEKLY_FIFTY', button: 'Probar 50 tareas semanales', description: 'Completó 50 tareas distintas esta semana.' },
 ];

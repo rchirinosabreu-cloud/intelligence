@@ -22,6 +22,7 @@ import { initBriaPulseScheduler } from './src/services/briaPulseService.js';
 import { initDailyCloseScheduler } from './src/services/dailyCloseService.js';
 import { initMonthlyReviewScheduler } from './src/services/monthlyReviewService.js';
 import { initPlatformLeagueScheduler } from './src/services/platformLeagueService.js';
+import { initCaughtUpScheduler } from './src/services/caughtUpAtCloseService.js';
 import { initDailyReadingScheduler } from './src/services/dailyReadingService.js';
 import { initConversationLearningScheduler } from './src/services/conversationLearningService.js';
 import { initCrmFollowUpAlertScheduler } from './src/services/crmFollowUpAlertService.js';
@@ -243,6 +244,7 @@ async function bootstrap() {
         initMonthlyReviewScheduler();
         initDailyReadingScheduler();
         initPlatformLeagueScheduler();
+        initCaughtUpScheduler();
         initConversationLearningScheduler();
         initCrmFollowUpAlertScheduler();
         initCollectionAlertScheduler();

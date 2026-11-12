@@ -159,7 +159,7 @@ test('only six agreed scenarios render the approved copy and remain single demo 
     ['buen comienzo', 'Buen comienzo', 'Eres el primero del equipo en completar una tarea.\nCada avance cuenta.'],
     ['entrega anticipada', 'Entrega anticipada', 'Terminaste ese pendiente antes de lo previsto. Anticiparte también suma.'],
     ['on fire', 'On fire', 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!'],
-    ['ponerse al día', 'Al día', 'Resolviste todo lo que tenías vencido, buen trabajo.'],
+    ['al día', 'Al día', 'Cerraste el día sin dejar nada vencido, buen trabajo.'],
     ['parrilla aprobada', 'Parrilla aprobada', 'El cliente aprobó tu parrilla, mandemos a producción'],
     ['50 tareas semanales', 'Ya son 50', 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!'],
   ];
