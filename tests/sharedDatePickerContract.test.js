@@ -81,16 +81,16 @@ test('no module starts drawing its own calendar', async () => {
     'Si añadiste uno, usa el componente compartido; si migraste uno, quítalo de MODULES_WITH_RAW_PICKER.');
 });
 
-test('the month picker keeps the shared look and a plain date value', async () => {
+test('the month picker is the shared dropdown, like a plan period, and keeps a plain date value', async () => {
   const picker = await readFile('src/components/ui/BrainDatePicker.jsx', 'utf8');
   assert.match(picker, /export function BrainMonthPicker/);
-  // Las dos clases: sin la base, el panel pierde borde, sombra y cabecera.
-  assert.match(picker, /calendarClassName="brain-datepicker brain-datepicker-months"/);
+  // Rodny, 12 de noviembre de 2026: «quiero un estilo global y prefiero el desplegable como en las parrillas».
+  const body = picker.slice(picker.indexOf('export function BrainMonthPicker'));
+  assert.match(body, /<Select\b/, 'el mes se elige con el desplegable compartido');
+  assert.doesNotMatch(body.slice(0, body.indexOf('\n}\n')), /showMonthYearPicker/, 'la rejilla de meses se retiró');
+  assert.match(body, /monthOptions\(/, 'las opciones salen de una sola regla');
   // El valor sigue siendo una fecha normal, para que nada aguas abajo cambie.
-  assert.match(picker, /-01`/);
-  const css = await readFile('src/index.css', 'utf8');
-  assert.match(css, /\.brain-datepicker-months \.react-datepicker__month-text\b/);
-  assert.match(css, /\.dark \.brain-datepicker-months \.react-datepicker__month-text\b/, 'la rejilla también existe en modo oscuro');
+  assert.match(body, /-01`/);
 });
 
 test('the rule is written down for future work', async () => {
