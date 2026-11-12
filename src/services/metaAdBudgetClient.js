@@ -71,10 +71,14 @@ export const createMetaAdBudgetClient = ({ fetchImpl = globalThis.fetch, version
         return results;
     };
 
-    /** Cambia el presupuesto diario o total de una campaña o un conjunto. Meta responde `{ success: true }`. */
-    const setBudget = async ({ objectId, field, minor, token }) => {
+    /**
+     * Cambia el presupuesto diario o total de una campaña o un conjunto. Meta responde `{ success: true }`. Con
+     * `validateOnly` Meta revisa el cambio (permisos y valor) sin aplicarlo (`execution_options=["validate_only"]`).
+     */
+    const setBudget = async ({ objectId, field, minor, token, validateOnly = false }) => {
         if (!['daily_budget', 'lifetime_budget'].includes(field)) throw new Error('Solo se cambia el presupuesto.');
-        return call('POST', encodeURIComponent(String(objectId)), { [field]: Math.round(minor) }, token);
+        const params = { [field]: Math.round(minor), ...(validateOnly ? { execution_options: JSON.stringify(['validate_only']) } : {}) };
+        return call('POST', encodeURIComponent(String(objectId)), params, token);
     };
 
     return { readCampaignBudgets, setBudget };

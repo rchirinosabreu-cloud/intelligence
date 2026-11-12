@@ -40,7 +40,8 @@ Rodny: «no tiene sentido ajustar gasto en la plataforma si en Meta va a tener o
 - **Antes de cambiar se vuelve a leer Meta**: si alguien cambió el presupuesto allá mientras tanto, no se pisa y se pide revisar. Después se lee otra vez para confirmar.
 - **Queda en «Correcciones»** con el antes, el después y quién (`AdBudgetEvent`, acción `META_PRESUPUESTO`). Si Meta no acepta, se dice con sus palabras y no se anota nada.
 - **Solo cambia el valor del presupuesto** (`daily_budget` o `lifetime_budget`, en pesos enteros o centavos de dólar): no pausa, no crea, no borra campañas y no cambia fechas.
-- **Lo que depende de Meta y no se probó contra una cuenta real**: que el usuario del sistema tenga permiso para administrar campañas en cada cuenta. La llave tiene `ads_management`; si a una cuenta le falta el permiso, Meta lo rechaza y la ventana lo dice.
+- **Comprobado contra Meta real el 12 de noviembre de 2026**, con autorización de Rodny: (1) la plataforma leyó los presupuestos de las campañas de las 18 cuentas activas, diarios y totales, de campaña y de conjunto; la llave tiene permiso de anunciar en todas y de administrar en casi todas. (2) En las 9 cuentas con una campaña con presupuesto, Meta revisó un cambio sin aplicarlo (`validate_only`, con el mismo valor) y dijo que lo aceptaría, también en dólares. (3) Un cambio real: el presupuesto total del conjunto «MENSAJES NOVIEMBRE 2026» de «BRAIN CON CONVERSACIONES NOV 2026» subió de 240.000 a 240.100 y volvió a 240.000.
+- **Meta acepta un cambio de presupuesto cada 30 segundos en el mismo conjunto o campaña** (código 613). Devolver el cambio del ensayo falló hasta esperar medio minuto; la ventana lo dice en palabras si pasa.
 
 ## Corregir y deshacer
 

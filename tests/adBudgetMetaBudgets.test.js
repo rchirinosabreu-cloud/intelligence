@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    centsToMetaMinor, metaBudgetChange, metaBudgetObject, metaMinorToCents, projectMetaSpend
+    centsToMetaMinor, humanizeMetaBudgetError, metaBudgetChange, metaBudgetObject, metaMinorToCents, projectMetaSpend
 } from '../src/lib/adBudgetMetaBudgets.js';
 
 // Ajustar el presupuesto en Meta desde Pautas (Rodny, 12 de noviembre de 2026: «no tiene sentido ajustar gasto en la
@@ -83,4 +83,14 @@ test('el gasto desde la última lectura cuenta: si se leyó hace días, se proye
     assert.equal(fresh.beforeCents, 6 * 10_000_000, 'leída hoy: de hoy al 12, hoy completo');
     const stale = metaBudgetChange({ budget: { ...pauta, asOf: '2026-11-03' }, objects, objectId: 'c1', kind: 'DAILY', newCents: 10_000_000, expectedCents: 10_000_000 });
     assert.equal(stale.beforeCents, 9 * 10_000_000, 'leída el 3: del 4 al 12');
+});
+
+test('lo que responde Meta al rechazar un cambio se dice en palabras', () => {
+    const meta = (code, message, userMessage = null) => Object.assign(new Error(message), { name: 'MetaGraphError', code, userMessage });
+    // Visto contra Meta real: dos cambios seguidos al mismo presupuesto, el segundo vuelve con 613.
+    assert.match(humanizeMetaBudgetError(meta(613, '(#613) Calls to this API have exceeded the concurrent request rate limit of 1 calls per 30 seconds.')), /cada 30 segundos.*no se hizo/);
+    assert.match(humanizeMetaBudgetError(meta(200, 'Permissions error')), /permiso para administrar sus campañas/);
+    assert.match(humanizeMetaBudgetError(meta(190, 'Invalid OAuth access token')), /llave de Meta/);
+    assert.equal(humanizeMetaBudgetError(meta(100, 'x', 'El presupuesto es muy bajo')), 'Meta no aceptó el cambio: El presupuesto es muy bajo');
+    assert.match(humanizeMetaBudgetError(Object.assign(new Error('socket'), { code: 'ECONNRESET' })), /no cambió/);
 });

@@ -79,6 +79,9 @@ const KIND_LABEL = { DAILY: 'diario', LIFETIME: 'total' };
  */
 export const humanizeMetaBudgetError = (error) => {
     const code = Number(error?.code);
+    // Comprobado contra Meta real el 12 de noviembre de 2026: un segundo cambio al mismo presupuesto antes de 30 segundos
+    // vuelve con el código 613 («1 calls per 30 seconds»). El primero sí quedó.
+    if (code === 613 || code === 17 || code === 4) return 'Meta acepta un cambio de presupuesto cada 30 segundos en la misma campaña: espera medio minuto y vuelve a intentarlo. Este cambio no se hizo.';
     if (code === 190) return 'La llave de Meta de la plataforma venció o la retiraron: hay que renovarla antes de cambiar presupuestos.';
     if (code === 10 || (code >= 200 && code <= 299)) return 'Meta no deja que la plataforma cambie presupuestos en esa cuenta: el usuario del sistema necesita permiso para administrar sus campañas.';
     if (error?.name === 'AbortError' || ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN'].includes(String(error?.code))) return 'No se pudo llegar a Meta. Inténtalo de nuevo en un momento: el presupuesto no cambió.';
