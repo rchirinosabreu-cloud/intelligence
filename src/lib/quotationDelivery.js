@@ -5,7 +5,12 @@
 // Lógica pura: la usan el servidor (correo) y la pantalla (WhatsApp), y las pruebas.
 import { LEGAL_ENTITY } from '../components/public/legalEntity.js';
 
-export const quotationCode = (consecutive) => `COT-${String(consecutive ?? 0).padStart(4, '0')}`;
+// Rodny, 12 de noviembre de 2026: las propuestas salen de contacto@ (verificado como «Enviar como» en la cuenta labs@
+// del SMTP) y las respuestas del cliente vuelven ahí. Solo las cotizaciones: el resto de correos sigue saliendo de labs@.
+export const QUOTATION_SENDER_ADDRESS = 'contacto@brainstudioagencia.com';
+export const QUOTATION_SENDER = `Brain Studio <${QUOTATION_SENDER_ADDRESS}>`;
+
+export const quotationCode =(consecutive) => `COT-${String(consecutive ?? 0).padStart(4, '0')}`;
 
 /** El enlace público de la propuesta: el mismo de «Copiar enlace», con el dominio de la plataforma. */
 export const quotationPublicUrl = (slug, base = LEGAL_ENTITY.platformUrl) => (slug ? `${String(base).replace(/\/+$/, '')}/cotizaciones/ver/${slug}` : null);
