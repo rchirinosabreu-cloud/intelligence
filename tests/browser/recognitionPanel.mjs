@@ -48,6 +48,16 @@ try {
   assert.ok(await page.getByRole('heading', { name: 'Anuncios' }).isVisible());
   await shot('mi-mes-claro');
   assert.equal(await avatar.evaluate(el => getComputedStyle(el).animationDuration), '4s');
+  // Hábitos por área (Rodny, 12 de noviembre de 2026): la evidencia nombra cada fuente que se jugó.
+  await panel.getByText('Tus hábitos de hoy', { exact: true }).click();
+  const onTime = panel.locator('[data-race-today-habit="A_TIEMPO"]');
+  assert.match(await onTime.innerText(), /Tareas: 1 de 1 a tiempo\. · Parrillas: 1 de 2 piezas de hoy publicadas o programadas\./);
+  assert.equal(await onTime.getAttribute('data-race-today-state'), 'missed');
+  assert.match(await panel.locator('[data-race-today-habit="AL_DIA"]').innerText(), /Parrillas: Sin piezas atrasadas[\s\S]*CRM: Sin seguimientos vencidos/);
+  await onTime.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await shot('habitos-por-area-claro');
+  await panel.getByText('Cómo se cuentan los puntos', { exact: true }).click();
+  assert.match(await panel.innerText(), /Al día, A tiempo y Documentado también se leen de tu área/);
   await page.keyboard.press('Escape');
   await panel.waitFor({ state: 'hidden' });
   await dock.click();
@@ -186,8 +196,9 @@ try {
   await panel.getByText('Tus hábitos de hoy', { exact: true }).click();
   for (const description of [
     'Registraste tu tiempo correctamente, sin sesiones olvidadas.',
-    'Terminaste pendientes antes de la fecha de entrega.',
-    'Las tareas que has creado tienen un comentario o un archivo que da mejor contexto.',
+    'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.',
+    'Entregaste a tiempo: tus pendientes antes de su fecha y las piezas de hoy publicadas o programadas.',
+    'Lo que delegas lleva contexto real: un comentario de al menos 20 letras, un archivo o un enlace. También cuentan tus gestiones del CRM con nota y tus movimientos con soporte.',
     'Nadie te devolvió un pendiente',
     'Dejaste registro de tu trabajo en la plataforma: un movimiento, una gestión, una pieza, una lectura de pauta, una jornada o una tarea con reloj.',
     'Fuiste el primero en ingresar a la plataforma desde las 8:00 am',

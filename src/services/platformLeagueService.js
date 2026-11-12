@@ -17,6 +17,9 @@ import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
 import { hasModulePermission } from '../config/security.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
+import { createLeagueAreaSources } from './leagueAreaSources.js';
+import { hasRealContext } from '../lib/leagueAreaChecks.js';
+import { AD_BUDGET_INCLUDE, describeBudget } from './adBudgetService.js';
 import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
 import { completedTaskParticipationViews, completedTaskParticipationWhere, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
@@ -46,9 +49,15 @@ const weekdayLabel = (dayKey) => new Intl.DateTimeFormat('es-CO', { weekday: 'lo
 const fail = (statusCode, message, code) => Object.assign(new Error(message), { statusCode, code });
 const firstName = (name = '') => String(name).trim().split(/\s+/)[0] || name;
 
-export const createPlatformLeagueService = ({ db = prisma, repository, snapshots, now = () => new Date(), logger = console } = {}) => {
+export const createPlatformLeagueService = ({ db = prisma, repository, snapshots, areaSources, now = () => new Date(), logger = console } = {}) => {
   const repo = repository || createPlatformLeagueRepository({ pool: getSidecarPool() });
   const snaps = snapshots || createDailyReadingRepository({ pool: getSidecarPool() });
+  // Las fuentes de cada área (Rodny, 12 de noviembre de 2026). Parrillas y Pautas se leen con sus reglas de siempre solo
+  // con la base real; una base inyectada (las pruebas) nunca cae por defecto a Operación, que lee la base de `.env`.
+  const area = areaSources || (db === prisma
+    ? createLeagueAreaSources({ db, now, logger, describeBudget, adBudgetInclude: AD_BUDGET_INCLUDE,
+      listOverduePlans: async (args) => (await import('./clientOperationsService.js')).clientOperationsService.listOverduePlans(args) })
+    : createLeagueAreaSources({ db, now, logger }));
   // Quién ve la liga: la casilla «Liga del mes» de Equipo, persona por persona (también un administrador). Sin ella,
   // 404 y la copa no se dibuja. El cálculo de cada día corre para todo el equipo igual: al encenderla, el mes ya está contado.
   const memberAllowed = async (userId) => {
@@ -89,7 +98,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         db.operationalTraceEvent.findFirst({ where: { occurredAt: { gte: open.start, lt: open.end }, actorId: { in: [...memberOfUser.keys()] }, eventType: { in: PRESENCE_EVENTS } }, orderBy: { occurredAt: 'asc' }, select: { actorId: true, occurredAt: true } })
           .catch((error) => { logger.error('[Liga] Sin lectura de quién abrió primero:', error?.message || error); return undefined; }),
         db.task.findMany({ where: { createdAt: { gte: start, lt: end }, creatorId: { in: [...memberOfUser.keys()] } }, select: {
-          id: true, creatorId: true, comments: true,
+          id: true, creatorId: true, comments: true, assigneeId: true, contentItemId: true, referenceUrl: true,
           taskComments: { where: { type: 'human', createdAt: { lt: end } }, select: { content: true } },
           taskAttachments: { where: { purgeState: 'ACTIVE', createdAt: { lt: end } }, select: { id: true } }
         } }),
@@ -121,9 +130,12 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         if (record) bucket.workRecords.push(record);
       }
       for (const event of productionEvents) for (const memberId of event.memberIds || []) byMember.get(memberId)?.productionDays.push({ id: event.id, title: event.title });
+      // Documentado: contexto real —veinte letras, un archivo o un enlace— en lo que se le pasa a otra persona.
       for (const task of created) {
-        const bucket = byMember.get(memberOfUser.get(task.creatorId)?.id);
-        if (bucket) bucket.createdTasks.push({ id: task.id, documented: Boolean(String(task.comments || '').trim()) || task.taskComments.some(comment => String(comment.content || '').trim()) || task.taskAttachments.length > 0 });
+        const creator = memberOfUser.get(task.creatorId);
+        const bucket = byMember.get(creator?.id);
+        if (bucket) bucket.createdTasks.push({ id: task.id, delegated: task.assigneeId !== creator.id, fromPiece: Boolean(task.contentItemId),
+          documented: hasRealContext(task.comments) || hasRealContext(task.referenceUrl) || (task.taskComments || []).some(comment => hasRealContext(comment.content)) || (task.taskAttachments || []).length > 0 });
       }
       const occurredToday = value => value && new Date(value) >= start && new Date(value) < end;
       for (const task of closed.flatMap(completedTaskParticipationViews).filter(task => occurredToday(task.completedAt))) {
@@ -152,6 +164,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       if (launchDay) for (const bucket of byMember.values()) {
         if (!bucket.closedTasks.length && !bucket.createdTasks.length && !bucket.sessions.length && !bucket.returnedToday && !bucket.workRecords.length && !bucket.productionDays.length) bucket.returnedToday = null;
       }
+      // Hábitos por área: lo de Parrillas, el CRM, Pautas y Financiero. La foto del momento solo vale para hoy.
+      const areaChecks = await area.read({ dayKey, isToday: dayKey === bogotaDate(now()), start, end, members })
+        .catch((error) => { logger.error('[Liga] Sin lectura de las áreas:', error?.message || error); return new Map(); });
+      for (const [memberId, bucket] of byMember) bucket.areaChecks = areaChecks.get(memberId) || null;
       return { dayKey, members, byMember };
     },
 

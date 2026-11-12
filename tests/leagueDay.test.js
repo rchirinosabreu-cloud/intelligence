@@ -14,7 +14,18 @@ test('Documentado belongs to tasks created with context, independently of closin
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()] }).habits.DOCUMENTADO, null);
   const mixed = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }, { documented: false }], closedTasks: [task()] });
   assert.equal(mixed.habits.DOCUMENTADO, false);
-  assert.match(mixed.evidence.DOCUMENTADO, /1 de 2 tareas creadas/);
+  assert.equal(mixed.evidence.DOCUMENTADO, '1 de 2 tareas delegadas con contexto.');
+});
+
+// Rodny, 12 de noviembre de 2026: «documentar es al menos un comentario de 20 caracteres … hay tareas que no requieren
+// documentar». Solo juega lo que se le pasa a otra persona y no trae su contexto de una pieza.
+test('Documentado only plays tasks delegated to someone else and not born from a content piece', () => {
+  const own = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: false, delegated: false }, { documented: false, delegated: true, fromPiece: true }] });
+  assert.equal(own.habits.DOCUMENTADO, null, 'a reminder for oneself or a piece task neither earns nor loses');
+  assert.equal(own.evidence.DOCUMENTADO, 'Las tareas que creó eran para sí misma o salían de una pieza.');
+  const delegated = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: false, delegated: false }, { documented: true, delegated: true }] });
+  assert.equal(delegated.habits.DOCUMENTADO, true);
+  assert.equal(delegated.evidence.DOCUMENTADO, '1 de 1 tarea delegada con contexto.');
 });
 
 test('a clean day earns the six points, each with its evidence in Spanish', () => {
