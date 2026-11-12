@@ -68,6 +68,44 @@ export const readings = [
 
 const campaign = (id, budgetId, name, extra = {}) => ({ id, budgetId, name, status: 'ACTIVA', createdAt: new Date('2026-10-20T12:00:00Z'), ...extra });
 
+// Lo que la muestra simula de Meta: cuentas y campañas con un gasto fijo por día. Ningún dato sale de Meta.
+export const metaAccounts = [
+    { id: '273405029', name: 'Francisco Villa', currency: 'COP', isActive: true },
+    { id: '323231997523552', name: 'BONSAI', currency: 'COP', isActive: true },
+    { id: '1694884524909081', name: 'Multimateriales Cartagena -Multik', currency: 'COP', isActive: true },
+    { id: '1971947907549081', name: 'Endova', currency: 'COP', isActive: true },
+    { id: '1991796371377407', name: 'Wine & Wonder', currency: 'USD', isActive: true },
+    { id: '1124220066605324', name: 'FoobeSpain', currency: 'USD', isActive: true }
+];
+
+export const metaCampaignCatalog = {
+    '273405029': [
+        { id: '120100', name: 'PABLO HOFF- MENSAJES INSCRIPCIONES', perDay: 6800 },
+        { id: '120101', name: 'PABLO HOFF-  NUEVA SEDE', perDay: 2000 },
+        { id: '120102', name: 'NEW PUEBLITO  MENSAJES NOV 2026', perDay: 11400 },
+        { id: '120103', name: 'NOV INTERACCIÓN MARTINEZ&NÁJERA.', perDay: 6100 },
+        { id: '120104', name: 'BRAIN -  POSICIONAMIENTO NOV 2026', perDay: 3700 }
+    ],
+    '323231997523552': [{ id: '120200', name: 'BONSAI SEPTIEMBRE 2026', perDay: 26800 }],
+    '1694884524909081': [{ id: '120300', name: 'MULTIK /  OCTUBRE  2026', perDay: 4900 }],
+    '1971947907549081': [{ id: '120400', name: 'CAMPAÑA DE INTERACCION NOVIEMBRE 2026', perDay: 4300 }],
+    '1991796371377407': [
+        { id: '120500', name: 'ANUNCIO VISITAS AL PERFIL NOVIEMBRE 2026', perDay: 5.62 },
+        { id: '120501', name: 'WINE SUMMIT | TRAFICO NOV 2026', perDay: 0.53 }
+    ],
+    '1124220066605324': [{ id: '120600', name: 'VISITAS AL PERFIL NOVIEMBRE 2026', perDay: 1.39 }]
+};
+
+const dayCount = (since, until) => Math.round((new Date(`${until}T12:00:00Z`) - new Date(`${since}T12:00:00Z`)) / 86_400_000) + 1;
+
+/** Un Meta de mentira con la forma del de verdad: `listAdAccounts` y `campaignSpend`. */
+export const previewMeta = {
+    listAdAccounts: async () => metaAccounts,
+    campaignSpend: async ({ adAccountId, since, until, campaignIds }) => (metaCampaignCatalog[adAccountId] || [])
+        .filter((row) => !campaignIds || campaignIds.includes(row.id))
+        .map((row) => ({ id: row.id, name: row.name, spend: Math.round(row.perDay * dayCount(since, until) * 100) / 100 }))
+};
+
 export const campaigns = [
     campaign('k1', 'b-muestra', 'Tiempo récord de pedido', { objective: 'Mensajes de WhatsApp', startDate: '2026-10-21', endDate: '2026-11-18', link: 'https://www.instagram.com/p/Desd3Hgx5Yc/' }),
     campaign('k2', 'b-endova', 'Convocatorias', { objective: 'Interacción', startDate: '2026-10-20', endDate: '2026-11-10', planned: 100000 }),

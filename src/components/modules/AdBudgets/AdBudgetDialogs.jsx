@@ -49,6 +49,8 @@ function Form({ open, title, description, onClose, onSubmit, saving, error, subm
   );
 }
 
+export { Form as AdBudgetForm };
+
 const CUT_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
 const cycleLabel = (day) => (day === 1 ? 'Mes calendario (del 1 al último día)' : `Del ${day} al ${day - 1} del mes siguiente`);
 
@@ -219,6 +221,7 @@ export function AdSpendDialog({ budget, closing, reading, onClose }) {
         <Label text="Hasta el día"><BrainDatePicker required className={field} value={form.readOn} onChange={(readOn) => set({ readOn })} ariaLabel="Fecha de la lectura" /></Label>
       </div>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">Disponible en este ciclo: {formatAdMoney(evaluation.availableCents, budget.currency)}.</p>
+      {budget.meta?.linked && !reading && <p data-ad-spend-meta-hint className="text-xs text-zinc-500 dark:text-zinc-400">Esta pauta se lee de Meta cada dos horas. Escribe aquí solo para corregirla: lo que escribas hoy manda sobre Meta hasta mañana.</p>}
       {!closing && (
         <label className="flex min-h-11 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
           <input type="checkbox" className="h-4 w-4" checked={form.final} onChange={(event) => set({ final: event.target.checked })} />

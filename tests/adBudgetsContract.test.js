@@ -10,9 +10,11 @@ const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'u
 test('las tablas del esquema y las del arranque dicen las mismas columnas', () => {
     const schema = source('prisma/schema.prisma');
     const script = source('scripts/ensure-ad-budgets-schema.js');
-    for (const model of ['AdBudget', 'AdBudgetCycle', 'AdSpendReading', 'AdCampaign', 'AdBudgetAlert']) {
+    for (const model of ['AdBudget', 'AdBudgetCycle', 'AdSpendReading', 'AdCampaign', 'AdBudgetAlert', 'AdMetaAccount', 'AdMetaCampaign']) {
         const body = new RegExp(`^model ${model} \\{([\\s\\S]*?)^\\}`, 'm').exec(schema)[1];
-        const table = new RegExp(`CREATE TABLE IF NOT EXISTS "${model}" \\(([\\s\\S]*?)\\n    \\);`).exec(script)[1];
+        // Las columnas que llegaron después se añaden con ALTER TABLE: cuentan igual que las de la tabla original.
+        const added = [...script.matchAll(new RegExp(`ALTER TABLE "${model}" ADD COLUMN IF NOT EXISTS ([^;]+);`, 'g'))].map((match) => ` ${match[1]}`).join('\n');
+        const table = new RegExp(`CREATE TABLE IF NOT EXISTS "${model}" \\(([\\s\\S]*?)\\n    \\);`).exec(script)[1] + added;
         const columns = body.split('\n').map((line) => line.trim()).filter((line) => /^[a-z]/.test(line))
             .filter((line) => /^\w+\s+(String|Decimal|DateTime|Boolean)\b/.test(line)).map((line) => line.split(/\s+/)[0]);
         assert.ok(columns.length >= 4, model);

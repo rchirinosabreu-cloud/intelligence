@@ -1361,6 +1361,7 @@ model AdBudget {
   cycles        AdBudgetCycle[]
   campaigns     AdCampaign[]
   alerts        AdBudgetAlert[]
+  metaCampaigns AdMetaCampaign[]
 
   @@index([clientId])
   @@index([responsibleId])
@@ -1380,6 +1381,12 @@ model AdBudgetCycle {
   carryOverById   String?
   closedAt        DateTime?       @db.Timestamptz(3)
   closedById      String?
+  spentSource     String?
+  metaSpent       Decimal?        @db.Decimal(14, 2)
+  metaSpentAsOf   String?
+  metaFetchedAt   DateTime?       @db.Timestamptz(3)
+  metaDetail      Json?
+  metaProblem     String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   budget          AdBudget        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
@@ -1397,10 +1404,47 @@ model AdSpendReading {
   isFinal      Boolean       @default(false)
   note         String?
   recordedById String?
+  source       String        @default("MANUAL")
   createdAt    DateTime      @default(now())
   cycle        AdBudgetCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
 
   @@index([cycleId, createdAt])
+}
+
+/// Las cuentas publicitarias de Meta que ve la llave de la plataforma (12 de noviembre de 2026). Se refrescan con la
+/// lectura automática; `problem` dice por qué una no respondió. Solo lectura: nada de esto escribe en Meta.
+model AdMetaAccount {
+  id        String    @id
+  name      String
+  currency  String?
+  isActive  Boolean   @default(true)
+  fetchedAt DateTime? @db.Timestamptz(3)
+  problem   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+/// Cada campaña de Meta vista en la lectura, con lo que gastó en los últimos 30 días. `budgetId` la liga a una pauta: el
+/// gasto de la pauta es la suma de sus campañas. Una campaña es de una sola pauta. `ignoredAt`: no es de ninguna.
+model AdMetaCampaign {
+  id           String    @id
+  adAccountId  String
+  accountName  String
+  currency     String?
+  name         String
+  spend30      Decimal   @default(0) @db.Decimal(14, 2)
+  seenAt       DateTime? @db.Timestamptz(3)
+  budgetId     String?
+  assignedById String?
+  assignedAt   DateTime? @db.Timestamptz(3)
+  ignoredAt    DateTime? @db.Timestamptz(3)
+  ignoredById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  budget       AdBudget? @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+
+  @@index([budgetId])
+  @@index([adAccountId])
 }
 
 /// Lo que corre dentro del presupuesto global. Un anuncio puede terminar antes: el gasto se cierra con el cliente.

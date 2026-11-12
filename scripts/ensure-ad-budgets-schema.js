@@ -99,7 +99,46 @@ try {
       step TEXT NOT NULL,
       "sentAt" TIMESTAMPTZ(3) NOT NULL DEFAULT now()
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS "AdBudgetAlert_budgetId_cycleKey_step_key" ON "AdBudgetAlert"("budgetId", "cycleKey", step);`);
+    CREATE UNIQUE INDEX IF NOT EXISTS "AdBudgetAlert_budgetId_cycleKey_step_key" ON "AdBudgetAlert"("budgetId", "cycleKey", step);
+
+    -- Pautas conectadas a Meta (12 de noviembre de 2026): columnas aditivas, con valor por defecto para lo que ya existe.
+    ALTER TABLE "AdSpendReading" ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'MANUAL';
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "spentSource" TEXT;
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaSpent" DECIMAL(14,2);
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaSpentAsOf" TEXT;
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaFetchedAt" TIMESTAMPTZ(3);
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaDetail" JSONB;
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaProblem" TEXT;
+
+    CREATE TABLE IF NOT EXISTS "AdMetaAccount" (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      currency TEXT,
+      "isActive" BOOLEAN NOT NULL DEFAULT true,
+      "fetchedAt" TIMESTAMPTZ(3),
+      problem TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS "AdMetaCampaign" (
+      id TEXT PRIMARY KEY,
+      "adAccountId" TEXT NOT NULL,
+      "accountName" TEXT NOT NULL,
+      currency TEXT,
+      name TEXT NOT NULL,
+      spend30 DECIMAL(14,2) NOT NULL DEFAULT 0,
+      "seenAt" TIMESTAMPTZ(3),
+      "budgetId" TEXT REFERENCES "AdBudget"(id) ON DELETE SET NULL ON UPDATE CASCADE,
+      "assignedById" TEXT,
+      "assignedAt" TIMESTAMPTZ(3),
+      "ignoredAt" TIMESTAMPTZ(3),
+      "ignoredById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS "AdMetaCampaign_budgetId_idx" ON "AdMetaCampaign"("budgetId");
+    CREATE INDEX IF NOT EXISTS "AdMetaCampaign_adAccountId_idx" ON "AdMetaCampaign"("adAccountId");`);
   console.log('[Ad budgets] tables ready.');
 } catch (error) {
   console.error('[Ad budgets] Failed to ensure the schema:', error.message);

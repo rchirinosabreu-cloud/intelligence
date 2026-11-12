@@ -11,12 +11,24 @@ Se seguía anuncio por anuncio, con fechas distintas en cada uno, y nadie veía 
 - **Una pauta** es el presupuesto global de un cliente, o de una de sus marcas, en una plataforma. Puede ser mensual o específica, en pesos o dólares, y dice quién la lleva y quién paga.
 - **El ciclo es el del cliente**: sale del día de corte propio de la pauta y, si no lo tiene, del contrato en Operación. Es propio porque en producción todos los contratos tienen corte 1, y moverlo cambiaría el semáforo y los avisos de Operación. Sin ninguno de los dos se usa el mes calendario y la pantalla lo dice.
 - **Una sola pauta, dos entradas:** desde la ficha operativa y la página del cliente se añade una pauta, se actualiza el gasto y se edita, con los mismos formularios del módulo. Es el mismo dato: lo que cambia en un lado se ve en el otro. Solo lo ve quien tiene acceso a Pautas; quien no, sigue viendo la ficha sin ese bloque.
-- **El gasto se escribe mirando Meta**: una lectura es el acumulado del ciclo hasta un día. La versión actual no se conecta a Meta, como se decidió en la reunión.
+- **El gasto es el acumulado del ciclo hasta un día**. Si la pauta tiene campañas de Meta ligadas, la plataforma lo lee sola (ver «Conexión con Meta»); si no, lo escribe quien la lleva mirando Meta.
 - **Se gasta hasta dos días antes del cierre**, para hacer el informe con la cifra completa.
 - **El ritmo se mide en el día de la lectura**: una cifra vieja no se llama «atrasada», se pide actualizarla.
 - **Lo que no se gastó pasa al ciclo siguiente** y lo gastado de más se resta. Mientras falte el gasto final del ciclo anterior, ese saldo se muestra como provisional. Se puede ajustar a mano con motivo.
 - **Tolerancia**: 5.000 pesos o 2 dólares arriba o abajo cuentan como gastado.
 - **Las campañas son opcionales**. Sirven para saber qué corre dentro del presupuesto y para señalar una campaña activa pasada su fecha o que termina después del cierre.
+
+## Conexión con Meta (12 de noviembre de 2026)
+
+Rodny: «quiero ver la forma en que pueda conectar esto con las pautas reales en Meta». La lectura de prueba de ese día, solo de consulta, encontró las 19 cuentas publicitarias que ve la llave de la plataforma (`META_SYSTEM_USER_TOKEN`), incluida la de Francisco Villa, y Multik, Endova y FoobeSpain coincidían con lo escrito a mano.
+
+- **Una pauta se liga a campañas, no a cuentas.** Una cuenta no es un cliente: la de Francisco Villa lleva Pablo Hoff, New Pueblito, Martínez y Nájera y Brain, y Wine Summit corre dentro de la cuenta de Wine & Wonder. En «Gasto en Meta» → «Ligar campañas» la plataforma propone las que llevan el nombre del cliente o de la marca, o están en una cuenta con ese nombre sin nombrar a otra marca; una persona confirma. Una campaña es de una sola pauta y en su moneda.
+- **La plataforma lee sola cada dos horas**, de 6:00 a 22:00 de Bogotá, todos los días, y con «Actualizar ahora». Primero las cuentas y lo que gastó cada campaña en los últimos 30 días (`AdMetaAccount`, `AdMetaCampaign`); después, el gasto de cada pauta ligada en los días de su ciclo, sumando sus campañas.
+- **El gasto de Meta es una lectura más**, marcada «Meta» en el historial (`AdSpendReading.source`): una por día, que se actualiza durante el día. **Lo que una persona escribió ese día manda** y Meta no lo pisa hasta el día siguiente; si no coincide (más allá de la tolerancia), la pauta lo dice y ofrece «Usar la de Meta».
+- **El gasto final sigue siendo de una persona.** Durante cinco días tras el cierre la plataforma lee el ciclo que terminó, sin cerrarlo; «Registrar» el gasto final lo trae ya escrito.
+- **Gasto sin pauta:** lo que gastó en 30 días y no está en ninguna pauta se ve en el tablero («N campañas gastan sin pauta»). Se liga a su pauta (viene elegida si una sola lleva su nombre) o se marca «No es de una pauta» (de la agencia, o de un cliente que paga por su cuenta). Las dos cosas se deshacen.
+- **Solo lee.** Nada de esto pausa campañas ni cambia presupuestos en Meta. Un fallo de Meta no borra lo que había: queda dicho en la cuenta o en la pauta.
+- **Lo que no resuelve:** la hora de corte de cada cuenta es la de su zona horaria en Meta, y una cuenta en otra zona puede diferir un día en los bordes del ciclo.
 
 ## Corregir y deshacer
 
@@ -33,6 +45,8 @@ Todo se escribe a mano y todo se corrige. Cada corrección queda en `AdBudgetEve
 | Pausar, terminar y reactivar | Estado en «Editar pauta» |
 | Una campaña | Lápiz: se edita, se apaga o se elimina |
 | Una pauta creada por error | «Eliminar pauta» en «Editar pauta» |
+| Las campañas de Meta de una pauta | «Cambiar campañas»; soltarlas no borra las lecturas ya escritas |
+| Una campaña marcada «No es de una pauta» | Ligarla a una pauta la vuelve a contar |
 
 Lo eliminado no tiene botón de deshacer: se pide confirmación antes y sus datos quedan en el registro para reconstruirlo. Para conservar una pauta se marca como terminada.
 
@@ -55,12 +69,11 @@ Casilla `pautas` en Equipo. Quien tiene Manager entra sin tocar la base (`inheri
 
 ## Lo que falta
 
-- Leer el gasto de Meta. Ya existe la lectura para Reportes (`fetchAdsReport`), pero depende de vincular cada cuenta publicitaria y las que están en la cuenta personal de Francisco no están al alcance del usuario del sistema.
 - Llevar a Cartera lo gastado con la tarjeta de Brain Studio, para cobrarlo.
 - Comparar el gasto del informe con el registrado aquí.
 
 ## Verificación
 
-- Reglas y servicio: `tests/adBudgets.test.js`, `tests/adBudgetService.test.js`, `tests/adBudgetRoutes.test.js`, `tests/adBudgetsContract.test.js`.
-- Recorrido real con capturas: `node scripts/preview-ad-budgets.js --port=3848` y `node --test tests/browser/adBudgets.mjs`. Escribe en la base en memoria de la muestra, así que corre una vez por arranque.
+- Reglas y servicio: `tests/adBudgets.test.js`, `tests/adBudgetService.test.js`, `tests/adBudgetRoutes.test.js`, `tests/adBudgetsContract.test.js`, `tests/adBudgetMeta.test.js`, `tests/adBudgetMetaService.test.js`.
+- Recorrido real con capturas: `node scripts/preview-ad-budgets.js --port=3848 --hoy=2026-11-06` y `node --test tests/browser/adBudgets.mjs`. La muestra vive en ese día y simula Meta con cuentas y campañas de mentira; el recorrido escribe en su base en memoria, así que corre una vez por arranque.
 - Las tablas de `scripts/ensure-ad-budgets-schema.js` no se han ejecutado contra PostgreSQL real al escribir esto: en esa máquina no había base disponible. La prueba de contrato solo compara sus columnas con `schema.prisma`.

@@ -61,6 +61,21 @@ export const useReopenAdCycle = () => useBoardMutation(({ id, cycleKey }) => req
 
 export const useDeleteAdCampaign = () => useBoardMutation(({ budgetId, campaignId }) => request(`/${budgetId}/campaigns/${campaignId}`, { method: 'DELETE' }));
 
+// Meta: lo que la plataforma lee de las cuentas publicitarias. Ligar o descartar espera la respuesta del servidor.
+export function useAdMeta({ enabled = true } = {}) {
+  return useQuery({ queryKey: [...BOARD_KEY, 'meta'], queryFn: () => request('/meta'), enabled, staleTime: 30_000 });
+}
+
+export function useAdMetaSuggestions(id, { enabled = true } = {}) {
+  return useQuery({ queryKey: [...BOARD_KEY, 'meta-suggestions', id], queryFn: () => request(`/${encodeURIComponent(id)}/meta-suggestions`), enabled: enabled && Boolean(id), staleTime: 30_000 });
+}
+
+export const useSyncAdMeta = () => useBoardMutation(() => request('/meta/sync', { method: 'POST' }));
+
+export const useAssignAdMeta = () => useBoardMutation(({ id, campaignIds }) => request(`/${id}/meta-campaigns`, { method: 'PUT', body: JSON.stringify({ campaignIds }) }));
+
+export const useIgnoreAdMeta = () => useBoardMutation(({ campaignId, ignored }) => request(`/meta/campaigns/${campaignId}/ignore`, { method: 'POST', body: JSON.stringify({ ignored }) }));
+
 export const useSaveAdCampaign = () => useBoardMutation(({ budgetId, campaignId, input }) => (campaignId
   ? request(`/${budgetId}/campaigns/${campaignId}`, { method: 'PATCH', body: JSON.stringify(input) })
   : request(`/${budgetId}/campaigns`, { method: 'POST', body: JSON.stringify(input) })));

@@ -7,6 +7,8 @@ import { chromium } from 'playwright-core';
 // rutas y el servicio son los de verdad, sobre una base en memoria; el recorrido escribe en ella, así que corre una vez por
 // arranque. Capturas en output/recorrido-pautas.
 const BASE = process.env.AD_BUDGETS_URL || 'http://127.0.0.1:3848';
+// La muestra se arranca con --hoy=2026-11-06 y el navegador vive en ese mismo día: el recorrido no depende de la fecha real.
+const TODAY = process.env.AD_BUDGETS_TODAY || '2026-11-06';
 const OUT = 'output/recorrido-pautas';
 let browser;
 test.before(async () => {
@@ -20,6 +22,7 @@ const open = async (query = '', options = {}) => {
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.clock.setFixedTime(new Date(`${TODAY}T15:00:00Z`));
   await page.goto(`${BASE}/pautas${query}`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.locator('[data-ad-budget]').first().waitFor({ timeout: 60000 });
   await page.waitForTimeout(500);
@@ -234,6 +237,7 @@ test('la banda lleva a la pauta y un error del servidor se dice sin cerrar el fo
 
 test('desde la ficha se edita la misma pauta del módulo', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  await page.clock.setFixedTime(new Date(`${TODAY}T15:00:00Z`));
   await page.goto(`${BASE}/cliente`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   const block = page.locator('[data-client-ad-budgets]');
   await block.waitFor({ timeout: 60000 });
@@ -260,6 +264,7 @@ test('desde la ficha se edita la misma pauta del módulo', async () => {
 
 test('la pauta va en la ficha operativa, junto al alcance del contrato', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+  await page.clock.setFixedTime(new Date(`${TODAY}T15:00:00Z`));
   await page.goto(`${BASE}/operacion`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   const block = page.locator('#client-operation-profile [data-client-ad-budgets]');
   await block.waitFor({ timeout: 60000 });
@@ -274,6 +279,7 @@ test('la pauta va en la ficha operativa, junto al alcance del contrato', async (
 
 test('dentro de la ficha operativa se añade una pauta sin enviar la ficha', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  await page.clock.setFixedTime(new Date(`${TODAY}T15:00:00Z`));
   await page.goto(`${BASE}/ficha`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   const block = page.locator('[data-client-ad-budgets]');
   await block.waitFor({ timeout: 60000 });
@@ -291,6 +297,93 @@ test('dentro de la ficha operativa se añade una pauta sin enviar la ficha', asy
   await dialog.waitFor({ state: 'detached' });
   await block.getByText('Desde la ficha').waitFor();
   assert.equal(await page.evaluate(() => window.__fichaGuardada || 0), 0, 'guardar la pauta no guarda la ficha');
+  await page.close();
+});
+
+test('Meta: la lectura encuentra las campañas y ligarlas pone el gasto de Meta en la pauta', async () => {
+  const { page, errors } = await open();
+  const status = page.locator('[data-ad-meta-status]');
+  assert.match(await status.innerText(), /todavía no se ha leído/);
+  await status.locator('[data-ad-meta-sync]').click();
+  await status.getByText(/leído hoy/).waitFor();
+  assert.match(await status.locator('[data-ad-meta-unassigned]').innerText(), /11 campañas gastan sin pauta/);
+
+  await row(page, 'b-hoff').locator('[data-ad-toggle]').click();
+  await row(page, 'b-hoff').locator('[data-ad-meta-link]').click();
+  const dialog = page.locator('[data-ad-meta-dialog]');
+  await dialog.locator('[data-ad-meta-option="120100"]').waitFor();
+  await dialog.locator('[data-ad-meta-proposed]').waitFor();
+  assert.equal(await dialog.locator('[data-ad-meta-option="120100"] input').isChecked(), true, 'propone las que llevan el nombre del cliente');
+  assert.equal(await dialog.locator('[data-ad-meta-option="120101"] input').isChecked(), true);
+  assert.equal(await dialog.locator('[data-ad-meta-option="120102"] input').isChecked(), false, 'no la de otro cliente de la misma cuenta');
+  assert.equal(await dialog.locator('[data-ad-meta-option="120500"] input').isDisabled(), true, 'una campaña en dólares no entra en una pauta en pesos');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${OUT}/08-ligar-meta.png` });
+  await dialog.locator('button[type=submit]').click();
+  await dialog.waitFor({ state: 'detached' });
+
+  const hoff = row(page, 'b-hoff');
+  await hoff.getByText(/Según Meta, actualizado hoy/).waitFor();
+  assert.match(await hoff.innerText(), /\$ 52\.800/, 'seis días de las dos campañas');
+  assert.match(await hoff.locator('[data-ad-meta-section]').innerText(), /PABLO HOFF-\s+NUEVA SEDE\s+Francisco Villa\s+\$ 12\.000/);
+  await hoff.locator('[data-ad-history]').first().getByText(/· Meta/).waitFor();
+  assert.match(await status.locator('[data-ad-meta-unassigned]').innerText(), /9 campañas/);
+  await hoff.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  await shot(page, '09-gasto-de-meta');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('Meta: si la cifra escrita a mano no coincide, se dice y se puede usar la de Meta', async () => {
+  const { page, errors } = await open();
+  const bonsai = row(page, 'b-bonsai');
+  await bonsai.locator('[data-ad-spend-open]').click();
+  const spend = page.locator('[data-ad-spend-dialog]');
+  await spend.getByLabel('Gastado en el ciclo', { exact: true }).fill('700000');
+  await spend.locator('button[type=submit]').click();
+  await spend.waitFor({ state: 'detached' });
+
+  await bonsai.locator('[data-ad-toggle]').click();
+  await bonsai.locator('[data-ad-meta-link]').click();
+  const dialog = page.locator('[data-ad-meta-dialog]');
+  await dialog.locator('[data-ad-meta-option="120200"]').waitFor();
+  assert.equal(await dialog.locator('[data-ad-meta-option="120200"] input').isChecked(), true, 'la cuenta se llama como el cliente');
+  await dialog.locator('button[type=submit]').click();
+  await dialog.waitFor({ state: 'detached' });
+
+  const difference = bonsai.locator('[data-ad-meta-difference]');
+  await difference.waitFor();
+  assert.match(await difference.innerText(), /Meta marca \$ 509\.200 hasta el 6 nov; la cifra escrita a mano es \$ 700\.000/, 'lo escrito ese día manda y la diferencia queda a la vista');
+  await bonsai.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  await shot(page, '10-diferencia-con-meta');
+  await difference.locator('[data-ad-meta-use]').click();
+  await difference.waitFor({ state: 'detached' });
+  assert.match(await bonsai.innerText(), /\$ 509\.200/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('Meta: lo que gasta sin pauta se liga a la suya o se marca como que no es de ninguna', async () => {
+  const { page, errors } = await open();
+  await page.locator('[data-ad-meta-unassigned]').click();
+  const dialog = page.locator('[data-ad-meta-unassigned-dialog]');
+  await dialog.locator('[data-ad-meta-unassigned-row="120104"]').waitFor();
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${OUT}/11-sin-pauta.png` });
+  await dialog.locator('[data-ad-meta-unassigned-row="120104"] [data-ad-meta-ignore]').click();
+  await dialog.locator('[data-ad-meta-unassigned-row="120104"]').waitFor({ state: 'detached' });
+  const pueblito = dialog.locator('[data-ad-meta-unassigned-row="120102"]');
+  assert.match(await pueblito.getByRole('combobox').innerText(), /New Pueblito/, 'la única pauta con ese nombre viene elegida');
+  assert.match(await dialog.locator('[data-ad-meta-unassigned-row="120103"]').getByRole('combobox').innerText(), /Elegir la pauta/, 'sin una pauta clara, nada viene elegido');
+  await pueblito.locator('[data-ad-meta-assign]').click();
+  await pueblito.waitFor({ state: 'detached' });
+  await dialog.locator('button[type=submit]').click();
+  await dialog.waitFor({ state: 'detached' });
+  await row(page, 'b-pueblito').getByText(/Según Meta, actualizado hoy/).waitFor();
+  assert.match(await page.locator('[data-ad-meta-unassigned]').innerText(), /6 campañas/);
+  assert.deepEqual(errors, []);
   await page.close();
 });
 
