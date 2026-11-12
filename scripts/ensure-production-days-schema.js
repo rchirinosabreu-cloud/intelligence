@@ -34,6 +34,13 @@ try {
   await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "taskId" TEXT UNIQUE REFERENCES "Task"("id") ON DELETE SET NULL;`);
   await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "autoStartedAt" TIMESTAMPTZ(3);`);
   await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "autoEndedAt" TIMESTAMPTZ(3);`);
+  // 12 de noviembre de 2026: lo que traía el Excel de jornadas (lugar, guion) y la carga de su historial.
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "location" TEXT;`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "scriptUrl" TEXT;`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "responsibleName" TEXT;`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "scheduleText" TEXT;`);
+  await client.query(`ALTER TABLE "ProductionDay" ADD COLUMN IF NOT EXISTS "importKey" TEXT UNIQUE;`);
+  await client.query(`CREATE INDEX IF NOT EXISTS "ProductionDay_date_idx" ON "ProductionDay"("date");`);
   console.log('[ensure-production-days-schema] Listo.');
 } catch (error) {
   console.error('[ensure-production-days-schema] Error:', error.message);

@@ -867,6 +867,14 @@ model ProductionDay {
   taskId         String?           @unique
   autoStartedAt  DateTime?         @db.Timestamptz(3)
   autoEndedAt    DateTime?         @db.Timestamptz(3)
+  // Lo que traía el Excel «Seguimiento jornadas de producción» (12 de noviembre de 2026): el lugar y el guion se
+  // escriben en el evento; responsable y horario en texto solo los traen las jornadas cargadas de ese Excel, que no
+  // tienen evento. `importKey` hace la carga repetible sin duplicar.
+  location        String?
+  scriptUrl       String?
+  responsibleName String?
+  scheduleText    String?
+  importKey       String?          @unique
   clientId       String?
   date           String // AAAA-MM-DD, día de Bogotá del evento
   title          String
@@ -886,6 +894,7 @@ model ProductionDay {
   client         Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, date])
+  @@index([date])
 }
 
 model ClientSuspension {

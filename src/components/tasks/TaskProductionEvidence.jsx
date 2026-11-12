@@ -65,8 +65,13 @@ export default function TaskProductionEvidence({ taskId }) {
         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Jornada de producción</p>
         <span className={cn('rounded-full border px-2 py-0.5 text-xs font-semibold', STATE_TONE[day.state])} title={state.hint} data-task-production-state={day.state}>{state.label}</span>
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          {day.date.split('-').reverse().join('/')}{data.schedule ? `, ${data.schedule}` : ''}{day.client ? ` · ${day.client.name}` : ''}
+          {day.date.split('-').reverse().join('/')}{data.schedule ? `, ${data.schedule}` : ''}{day.location ? ` · ${day.location}` : ''}{day.client ? ` · ${day.client.name}` : ''}
         </span>
+        {day.scriptUrl && (
+          <a href={day.scriptUrl} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan" data-task-production-script>
+            Guion<ExternalLink className="h-3 w-3" />
+          </a>
+        )}
       </div>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         Se cierra con su entrega: sube los archivos en «Entregas» o pega aquí el enlace de la carpeta de Drive con las evidencias.

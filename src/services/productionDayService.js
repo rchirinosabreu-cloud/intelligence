@@ -27,6 +27,7 @@ const TASK_SELECT = { id: true, title: true, status: true, dueDate: true, client
 const DAY_SELECT = {
   id: true, eventId: true, taskId: true, clientId: true, date: true, title: true, evidenceUrl: true, evidenceNote: true, evidenceAt: true,
   evidenceByName: true, linkedByName: true, remindedAt: true, reminders: true, autoStartedAt: true, autoEndedAt: true,
+  location: true, scriptUrl: true, responsibleName: true, scheduleText: true,
   client: { select: { id: true, name: true, slug: true } }, task: { select: TASK_SELECT },
 };
 const DEAD_SYNC = ['DELETED', 'MERGED', 'PENDING_DELETE'];
@@ -43,6 +44,7 @@ export const publicProductionDay = (day, today) => (day ? {
   evidenceAt: day.evidenceAt ? bogotaDate(day.evidenceAt) : null, evidenceBy: day.evidenceByName ?? null,
   deliverables: day.task?._count?.deliverables || 0,
   linkedBy: day.linkedByName ?? null,
+  location: day.location ?? null, scriptUrl: day.scriptUrl ?? null,
 } : null);
 
 const clock = (value) => new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', hour: 'numeric', minute: '2-digit', hour12: false }).format(new Date(value));
@@ -165,6 +167,97 @@ export const createProductionDayService = ({ db = prisma, now = () => new Date()
     }
     await ensureTask(event.id);
     return getByEvent(eventId, user);
+  };
+
+  /**
+   * El lugar y el guion de la jornada, escritos en el formulario del evento (lo que traía el Excel de jornadas, 12 de
+   * noviembre de 2026). Vacío los borra. Si la jornada todavía no tiene fila (sin cliente), la crea.
+   */
+  const setDetails = async (eventId, { location, scriptUrl } = {}, user) => {
+    const actor = await actorOf(user);
+    if (!actor.manager) throw httpError(403, 'El lugar y el guion de una jornada los escriben administradores y project managers.');
+    const event = await productionEvent(eventId);
+    const place = String(location ?? '').trim().slice(0, 200) || null;
+    const script = String(scriptUrl ?? '').trim() || null;
+    if (script) {
+      const problem = evidenceProblem({ url: script });
+      if (problem) throw httpError(400, problem.replace('el enlace de la carpeta de Drive con las evidencias de la jornada', 'el enlace del guion'), 'INVALID_SCRIPT');
+    }
+    const existing = await db.productionDay.findUnique({ where: { eventId: event.id }, select: { id: true, location: true, scriptUrl: true } });
+    if (existing) {
+      if ((existing.location || null) !== place || (existing.scriptUrl || null) !== script) {
+        await db.productionDay.update({ where: { id: existing.id }, data: { location: place, scriptUrl: script } });
+      }
+    } else if (place || script) {
+      await db.productionDay.create({ data: { eventId: event.id, clientId: null, date: bogotaDate(event.startAt), title: event.title, location: place, scriptUrl: script } });
+    }
+    return getByEvent(eventId, user);
+  };
+
+  /**
+   * Todas las jornadas de un mes, de todos los clientes (la vista del Excel «Seguimiento jornadas de producción», 12 de
+   * noviembre de 2026), y lo que cada contrato vigente pide y todavía no está agendado ese mes.
+   */
+  const listMonth = async ({ year, month } = {}, user) => {
+    const actor = await actorOf(user);
+    if (!actor.manager) throw httpError(403, 'Las jornadas del mes son de administradores y project managers.');
+    const y = Number(year); const m = Number(month);
+    if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12 || y < 2020 || y > 2100) throw httpError(400, 'Elige un mes válido.');
+    const from = `${y}-${String(m).padStart(2, '0')}-01`;
+    const to = `${y}-${String(m).padStart(2, '0')}-31`;
+    const rows = await db.productionDay.findMany({
+      where: { date: { gte: from, lte: to } },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        ...DAY_SELECT,
+        event: { select: { startAt: true, endAt: true, isAllDay: true, memberIds: true, googleCancelled: true, googleSyncStatus: true } },
+        task: { select: { ...TASK_SELECT, assignee: { select: { name: true } }, collaborators: { select: { member: { select: { name: true } } } } } },
+      },
+    });
+    const memberIds = [...new Set(rows.flatMap((row) => row.event?.memberIds || []))];
+    const members = memberIds.length ? await db.teamMember.findMany({ where: { id: { in: memberIds } }, select: { id: true, name: true } }) : [];
+    const memberName = new Map(members.map((member) => [member.id, member.name]));
+    const day = today();
+    const items = rows
+      .filter((row) => !row.event || isLiveEvent(row.event))
+      .map((row) => {
+        const people = row.task
+          ? [row.task.assignee?.name, ...(row.task.collaborators || []).map((c) => c.member?.name)]
+          : (row.event?.memberIds || []).map((id) => memberName.get(id));
+        const event = row.event;
+        return {
+          ...publicProductionDay(row, day),
+          clientName: row.client?.name || null,
+          schedule: event?.startAt && event?.endAt && !event.isAllDay ? `${clock(event.startAt)} a ${clock(event.endAt)}` : row.scheduleText || null,
+          responsible: people.filter(Boolean).join(' / ') || row.responsibleName || null,
+          imported: !row.eventId && !row.taskId,
+        };
+      });
+    // Lo que pide cada contrato vigente ese mes frente a lo agendado (la columna «Por realizar» del Excel).
+    const clients = await db.client.findMany({
+      where: { isArchived: false },
+      select: { id: true, name: true, slug: true, contracts: { orderBy: { startDate: 'desc' }, select: { status: true, startDate: true, endDate: true, productionDays: true } } },
+    });
+    const scheduled = new Map();
+    for (const item of items) if (item.client?.id) scheduled.set(item.client.id, (scheduled.get(item.client.id) || 0) + 1);
+    const pending = clients
+      .map((client) => {
+        const contract = (client.contracts || []).find((row) => row.startDate <= to && (!row.endDate || row.endDate >= from));
+        const contracted = contract?.status === 'ACTIVO' ? Number(contract.productionDays) || 0 : 0;
+        const count = scheduled.get(client.id) || 0;
+        return { client: { id: client.id, name: client.name, slug: client.slug }, contracted, scheduled: count, missing: Math.max(0, contracted - count) };
+      })
+      .filter((row) => row.missing > 0)
+      .sort((a, b) => a.client.name.localeCompare(b.client.name, 'es'));
+    return {
+      year: y, month: m, items, pending,
+      summary: {
+        total: items.length,
+        done: items.filter((item) => item.state === 'REALIZADA').length,
+        missingEvidence: items.filter((item) => item.state === 'SIN_EVIDENCIA').length,
+        scheduled: items.filter((item) => item.state === 'AGENDADA').length,
+      },
+    };
   };
 
   const saveEvidence = async (day, { url, note }, actor) => {
@@ -353,7 +446,7 @@ export const createProductionDayService = ({ db = prisma, now = () => new Date()
     return { sent };
   };
 
-  return { getByEvent, getByTask, listClients, linkClient, setEvidence, setEvidenceByTask, ensureTask, syncJornadaTasks, runReminders };
+  return { getByEvent, getByTask, listClients, listMonth, linkClient, setDetails, setEvidence, setEvidenceByTask, ensureTask, syncJornadaTasks, runReminders };
 };
 
 export const productionDayService = createProductionDayService();

@@ -140,7 +140,9 @@ const OperationalCalendar = () => {
     description: '',
     attendeeEmails: [],
     googleConnectionId: '',
-    productionClientId: ''
+    productionClientId: '',
+    productionLocation: '',
+    productionScriptUrl: ''
   });
 
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
@@ -220,7 +222,12 @@ const OperationalCalendar = () => {
     if (!editingEventId || !productionDayView || productionDayView.eventId !== editingEventId) return;
     if (syncedProductionEventRef.current === editingEventId) return;
     syncedProductionEventRef.current = editingEventId;
-    setFormData(current => ({ ...current, productionClientId: productionDayView.productionDay?.client?.id || '' }));
+    setFormData(current => ({
+      ...current,
+      productionClientId: productionDayView.productionDay?.client?.id || '',
+      productionLocation: productionDayView.productionDay?.location || '',
+      productionScriptUrl: productionDayView.productionDay?.scriptUrl || ''
+    }));
   }, [editingEventId, productionDayView]);
   const productionClientOptions = useMemo(() => {
     const suggested = suggestedClientIds(formData.title, productionClients);
@@ -570,7 +577,9 @@ const OperationalCalendar = () => {
       description: '',
       attendeeEmails: [],
       googleConnectionId: googleConnections.find(connection => connection.isActive !== false && !connection.reconnectRequired)?.id || '',
-      productionClientId: ''
+      productionClientId: '',
+      productionLocation: '',
+      productionScriptUrl: ''
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -609,7 +618,9 @@ const OperationalCalendar = () => {
       description: normalizeCalendarDescription(event.description || ''),
       attendeeEmails: getExternalAttendeeEmails(event.attendeeEmails || [], team),
       googleConnectionId: event.googleConnectionId || '',
-      productionClientId: ''
+      productionClientId: '',
+      productionLocation: '',
+      productionScriptUrl: ''
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -1264,6 +1275,23 @@ const OperationalCalendar = () => {
                   {formData.recurrence === 'GOOGLE' && <p className="text-xs text-zinc-500 dark:text-zinc-400">Esta serie conserva su regla avanzada de Google Calendar.</p>}
                 </div>
               </div>
+              {formData.type === 'PRODUCTION' && (
+                // Lugar y guion de la jornada (12 de noviembre de 2026): lo que se anotaba en el Excel de jornadas.
+                <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2" data-production-details>
+                  <div className="space-y-1.5">
+                    <label htmlFor="operational-event-location" className="text-xs font-bold text-zinc-500">Lugar <span className="font-normal text-zinc-400">(opcional)</span></label>
+                    <input id="operational-event-location" type="text" maxLength={200} disabled={!isAdmin} placeholder="Ej.: Laguna Club, Bocagrande"
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 disabled:opacity-70 dark:border-white/10 dark:bg-white/5"
+                      value={formData.productionLocation} onChange={e => setFormData({ ...formData, productionLocation: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="operational-event-script" className="text-xs font-bold text-zinc-500">Guion <span className="font-normal text-zinc-400">(enlace, opcional)</span></label>
+                    <input id="operational-event-script" type="url" disabled={!isAdmin} placeholder="https://docs.google.com/document/d/…"
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 disabled:opacity-70 dark:border-white/10 dark:bg-white/5"
+                      value={formData.productionScriptUrl} onChange={e => setFormData({ ...formData, productionScriptUrl: e.target.value })} />
+                  </div>
+                </div>
+              )}
               {editingEventId && formData.type === 'PRODUCTION' && productionDayView?.productionDay && (
                 <div className="md:col-span-2"><ProductionDayStatus view={productionDayView} /></div>
               )}

@@ -147,6 +147,49 @@ test('a cancelled jornada retires its untouched task, and the title and date fol
   assert.match(state.deleted[0][1], /Se canceló la jornada/);
 });
 
+test('the month lists every jornada with the Excel columns and what each contract still needs scheduled', async () => {
+  const state = {
+    days: [
+      { id: 'd1', eventId: 'ev', taskId: 'task-1', clientId: 'c-multik', date: '2026-11-12', title: 'Jornada de producción Multik', evidenceUrl: null, location: 'Bocagrande', scriptUrl: 'https://docs.google.com/document/d/x', createdAt: at('2026-11-01T00:00:00Z'),
+        client: { id: 'c-multik', name: 'Multik', slug: 'multik' }, event: { startAt: at(START), endAt: at(END), isAllDay: false, memberIds: [], googleCancelled: false, googleSyncStatus: 'SYNCED' },
+        task: { id: 'task-1', status: 'PENDIENTE', _count: { deliverables: 0 }, assignee: { name: 'Brayan' }, collaborators: [{ member: { name: 'Sara' } }] } },
+      { id: 'd2', eventId: null, taskId: null, clientId: 'c-grit', date: '2026-11-03', title: 'Jornada de producción Fundación Grit', evidenceUrl: 'https://drive.google.com/drive/folders/y', responsibleName: 'Francisco', scheduleText: '8:00 a.m', createdAt: at('2026-11-01T00:00:00Z'),
+        client: { id: 'c-grit', name: 'Fundación Grit', slug: 'grit' }, event: null, task: null },
+    ],
+  };
+  const db = {
+    user: { findUnique: async () => ({ id: 'u-pm', name: 'Kamila', role: 'PROJECT_MANAGER', isActive: true }) },
+    teamMember: { findFirst: async () => ({ id: 'm-pm' }), findMany: async () => [] },
+    productionDay: { findMany: async ({ where }) => state.days.filter((d) => d.date >= where.date.gte && d.date <= where.date.lte).sort((a, b) => a.date.localeCompare(b.date)) },
+    client: { findMany: async () => [
+      { id: 'c-multik', name: 'Multik', slug: 'multik', contracts: [{ status: 'ACTIVO', startDate: '2026-08-19', endDate: '2026-12-18', productionDays: 1 }] },
+      { id: 'c-ph', name: 'Pablo Hoff', slug: 'pablo-hoff', contracts: [{ status: 'ACTIVO', startDate: '2025-08-01', endDate: '2027-07-31', productionDays: 1 }] },
+      { id: 'c-np', name: 'New Pueblito', slug: 'new-pueblito', contracts: [{ status: 'STAND_BY', startDate: '2026-03-01', endDate: null, productionDays: 2 }] },
+    ] },
+  };
+  const service = createProductionDayService({ db, now: () => at('2026-11-12T20:00:00Z'), log: () => {} });
+  const month = await service.listMonth({ year: '2026', month: '11' }, { userId: 'u-pm' });
+  assert.deepEqual(month.items.map((i) => [i.date, i.clientName, i.state]), [['2026-11-03', 'Fundación Grit', 'REALIZADA'], ['2026-11-12', 'Multik', 'AGENDADA']]);
+  assert.equal(month.items[1].responsible, 'Brayan / Sara');
+  assert.equal(month.items[1].schedule, '9:00 a 13:00');
+  assert.equal(month.items[1].location, 'Bocagrande');
+  assert.equal(month.items[0].responsible, 'Francisco', 'an imported jornada keeps who did it');
+  assert.equal(month.items[0].imported, true);
+  assert.deepEqual(month.pending.map((p) => [p.client.name, p.missing]), [['Pablo Hoff', 1]], 'Multik is scheduled; a paused contract asks nothing');
+  assert.deepEqual(month.summary, { total: 2, done: 1, missingEvidence: 0, scheduled: 1 });
+  await assert.rejects(service.listMonth({ year: '2026', month: '13' }, { userId: 'u-pm' }), { status: 400 });
+});
+
+test('location and script are saved on the jornada, and a script must be an https link', async () => {
+  const { db, state, tasks } = memoryDb({ clientId: 'c-multik' });
+  const service = createProductionDayService({ db, tasks, log: () => {} });
+  await assert.rejects(service.setDetails('ev', { scriptUrl: 'guion en el drive' }, { userId: 'u-pm' }), { code: 'INVALID_SCRIPT' });
+  await assert.rejects(service.setDetails('ev', { location: 'Calamar' }, { userId: 'u-brayan' }), { status: 403 });
+  await service.setDetails('ev', { location: ' Laguna Club ', scriptUrl: 'https://docs.google.com/document/d/abc' }, { userId: 'u-pm' });
+  assert.equal(state.days[0].location, 'Laguna Club');
+  assert.equal(state.days[0].scriptUrl, 'https://docs.google.com/document/d/abc');
+});
+
 test('the jornada task does not close without its delivery, and closes with files or the Drive link', async () => {
   const { db, state, tasks } = memoryDb({ members: ['m-brayan'] });
   const service = createProductionDayService({ db, tasks, now: () => at('2026-11-12T20:00:00Z'), log: () => {} });

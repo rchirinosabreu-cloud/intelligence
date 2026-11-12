@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BrainToaster from '@/components/ui/BrainToaster';
 import TaskProductionEvidence from '@/components/tasks/TaskProductionEvidence';
 import ProductionDaysSection from '@/components/modules/Clients/operations/ProductionDaysSection';
+import ProductionDaysBoard from '@/components/modules/Clients/operations/ProductionDaysBoard';
 import '@/index.css';
 
 // Muestra local de las jornadas de producción (10–11 de noviembre de 2026): el bloque del pendiente en Gestión y la
@@ -23,7 +24,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false,
 createRoot(document.getElementById('root')).render(
   <QueryClientProvider client={queryClient}><BrowserRouter>
     <main className="min-h-screen space-y-6 bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-3xl space-y-6">
+      {new URLSearchParams(window.location.search).has('mes') ? <ProductionDaysBoard /> : null}
+      <div className="mx-auto max-w-3xl space-y-6" hidden={new URLSearchParams(window.location.search).has('mes')}>
         <div className={CARD}><TaskProductionEvidence taskId="task-b" /></div>
         <ProductionDaysSection production={production} cardClassName={CARD} titleClassName="text-base font-semibold" />
       </div>

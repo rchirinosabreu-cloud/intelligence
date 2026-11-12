@@ -104,16 +104,20 @@ router.get('/events', async (req, res) => {
 const linkProductionClient = async (eventId, body, user) => {
   if (!eventId || !body || body.type !== 'PRODUCTION') return null;
   try {
+    if (Object.hasOwn(body, 'productionClientId')) {
+      const current = await productionDayService.getByEvent(eventId, user);
+      const wanted = body.productionClientId || null;
+      if ((current.productionDay?.client?.id || null) !== wanted) await productionDayService.linkClient(eventId, wanted, user);
+    }
+    // Lugar y guion de la jornada (12 de noviembre de 2026), en el mismo guardado.
+    if (Object.hasOwn(body, 'productionLocation') || Object.hasOwn(body, 'productionScriptUrl')) {
+      await productionDayService.setDetails(eventId, { location: body.productionLocation, scriptUrl: body.productionScriptUrl }, user);
+    }
     // Cada jornada crea su pendiente en Gestión (11 de noviembre de 2026), con o sin cliente.
-    if (!Object.hasOwn(body, 'productionClientId')) { await productionDayService.ensureTask(eventId); return null; }
-    const current = await productionDayService.getByEvent(eventId, user);
-    const wanted = body.productionClientId || null;
-    if ((current.productionDay?.client?.id || null) === wanted) { await productionDayService.ensureTask(eventId); return null; }
-    await productionDayService.linkClient(eventId, wanted, user);
     await productionDayService.ensureTask(eventId);
     return null;
   } catch (error) {
-    console.error('[Activity API] El evento se guardó pero no se pudo ligar la jornada:', error?.message || error);
+    console.error('[Activity API] El evento se guardó pero no se pudo completar la jornada:', error?.message || error);
     return error?.message || 'No se pudo ligar la jornada al cliente.';
   }
 };
