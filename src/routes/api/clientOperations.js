@@ -2,6 +2,7 @@ import express from 'express';
 import { isManagerRole } from '../../config/security.js';
 import { clientOperationsService } from '../../services/clientOperationsService.js';
 import { projectOperationsService } from '../../services/projectOperationsService.js';
+import { productionDayService } from '../../services/productionDayService.js';
 
 // Operación de clientes (2 de octubre de 2026): el tablero global, la página de cada cliente, su ficha
 // operativa y el informe del mes. Solo administradores y project managers (Rodny, 1 de octubre de 2026).
@@ -25,12 +26,18 @@ const reply = (res, error, logger) => {
   return res.status(status).json({ error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.errors ? { errors: error.errors } : {}) });
 };
 
-export const createClientOperationsRouter = ({ service = clientOperationsService, projectService = projectOperationsService, logger = console } = {}) => {
+export const createClientOperationsRouter = ({ service = clientOperationsService, projectService = projectOperationsService, productionDays = productionDayService, logger = console } = {}) => {
   const router = express.Router();
   router.use(requireManager);
 
   router.get('/', async (_req, res) => {
     try { return res.json(await service.listOperations()); } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Las jornadas de producción de un mes, de todos los clientes (reemplaza el Excel de jornadas, 12 de noviembre de 2026).
+  // Va antes de `/:slug`, que si no la tomaría por un cliente.
+  router.get('/jornadas', async (req, res) => {
+    try { return res.json(await productionDays.listMonth({ year: req.query.year, month: req.query.month }, req.user)); } catch (error) { return reply(res, error, logger); }
   });
 
   router.get('/:clientId/projects', async (req, res) => {

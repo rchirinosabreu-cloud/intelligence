@@ -75,9 +75,15 @@ try {
     await page.screenshot({ path: path.join(OUT, `1-formulario-cliente-${theme}.png`) });
     const option = page.getByRole('option', { name: /Martínez y Nájera · sugerido/ });
     if (await option.count()) await option.click(); else await dialog.locator('#operational-event-client').selectOption('c-mn');
+    // Lugar y guion, lo que se anotaba en el Excel de jornadas (12 de noviembre de 2026).
+    await dialog.locator('#operational-event-location').fill('Oficina Bocagrande');
+    await dialog.locator('#operational-event-script').fill('https://docs.google.com/document/d/guion');
+    await page.screenshot({ path: path.join(OUT, `1b-formulario-lugar-guion-${theme}.png`) });
     await dialog.getByRole('button', { name: /Crear evento|Guardar evento/ }).click();
     await page.waitForTimeout(500);
     assert.equal(posts.at(-1)?.productionClientId, 'c-mn', 'el pedido lleva el cliente');
+    assert.equal(posts.at(-1)?.productionLocation, 'Oficina Bocagrande');
+    assert.equal(posts.at(-1)?.productionScriptUrl, 'https://docs.google.com/document/d/guion');
     assert.equal(posts.at(-1)?.type, 'PRODUCTION');
     assert.deepEqual(errors, []);
     await page.close();
@@ -126,6 +132,47 @@ try {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'sin desbordar a lo ancho');
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `3-pendiente-realizada-${name}-${theme}.png`), fullPage: true });
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+  }
+  // 4) La pestaña «Jornadas» de Clientes: el mes de todos los clientes, como el Excel.
+  const month = {
+    year: 2026, month: 11,
+    summary: { total: 3, done: 2, missingEvidence: 0, scheduled: 1 },
+    items: [
+      { id: 'i1', date: '2026-11-05', clientName: 'Félix Finas', title: 'Jornada de producción Félix Finas', schedule: null, location: null, responsible: null, state: 'REALIZADA', evidenceUrl: 'https://drive.google.com/drive/folders/a', imported: true },
+      { id: 'i2', date: '2026-11-06', clientName: 'Desarrollo Económico', title: 'Jornada de producción Desarrollo Económico', schedule: '8:00 a 12:00', location: 'Magangué', responsible: 'Brayan Gómez', state: 'REALIZADA', evidenceUrl: 'https://drive.google.com/drive/folders/b', eventId: 'ev-2' },
+      { id: 'i3', date: '2026-11-20', clientName: 'Multik', title: 'Jornada de producción Multik', schedule: '9:00 a 13:00', location: 'Oficina Bocagrande', responsible: 'Brayan Gómez / Sara Herrera', state: 'AGENDADA', scriptUrl: 'https://docs.google.com/document/d/guion', taskId: 'task-3', eventId: 'ev-3' },
+    ],
+    pending: [{ client: { id: 'c-ph', name: 'Pablo Hoff', slug: 'pablo-hoff' }, contracted: 1, scheduled: 0, missing: 1 }, { client: { id: 'c-lsi', name: 'La Sazón de Iris', slug: 'la-sazon' }, contracted: 1, scheduled: 0, missing: 1 }],
+  };
+  for (const [name, viewport] of [['escritorio', { width: 1360, height: 900 }], ['celular', { width: 390, height: 900 }]]) {
+    for (const theme of ['light', 'dark']) {
+      const page = await browser.newPage({ viewport });
+      page.setDefaultTimeout(10000);
+      page.setDefaultNavigationTimeout(120000);
+      await page.clock.setFixedTime(new Date('2026-11-12T15:00:00Z'));
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      const asked = [];
+      await page.route('**/*', async (route) => {
+        const url = new URL(route.request().url());
+        if (url.origin !== origin) return route.abort();
+        if (!url.pathname.startsWith('/api/')) return route.continue();
+        asked.push(url.pathname + url.search);
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(month) });
+      });
+      await page.goto(`${origin}/tests/fixtures/production-days-preview.html?mes`);
+      await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark');
+      const board = page.locator('[data-production-days-board]');
+      await board.locator('[data-production-month-row]').first().waitFor();
+      assert.ok(asked.some((p) => p === '/api/client-operations/jornadas?year=2026&month=11'), 'pide el mes en curso');
+      assert.equal(await board.locator('[data-production-month-row]').count(), 3);
+      assert.match(await board.locator('[data-production-month-pending]').innerText(), /Pablo Hoff[\s\S]*falta 1 de 1/);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'sin desbordar a lo ancho');
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `4-pestana-jornadas-${name}-${theme}.png`), fullPage: true });
       assert.deepEqual(errors, []);
       await page.close();
     }
