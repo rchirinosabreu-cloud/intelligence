@@ -27,7 +27,12 @@ export const adCampaignSubject = (campaignId) => `pauta-campana:${campaignId}`;
 export const adMetaSubject = (budgetId, cycleKey) => `pauta-meta:${budgetId}:${cycleKey}`;
 export const adDigestSubject = (today) => `pauta-resumen:${String(today).slice(0, 7)}`;
 
+/** Una campaña de Meta no vive en la plataforma: su aviso lleva la pauta para poder releerla. */
+export const adMetaCampaignSubject = (budgetId, objectId) => `pauta-campana-meta:${budgetId}:${objectId}`;
+
 export const parseAdSubject = (subjectId) => {
+    const metaCampaign = /^pauta-campana-meta:([^:]+):(.+)$/.exec(String(subjectId || ''));
+    if (metaCampaign) return { budgetId: metaCampaign[1], objectId: metaCampaign[2] };
     const review = /^pauta(?:-meta)?:([^:]+):(.+)$/.exec(String(subjectId || ''));
     if (review) return { budgetId: review[1], cycleKey: review[2] };
     const campaign = /^pauta-campana:(.+)$/.exec(String(subjectId || ''));
@@ -70,7 +75,7 @@ export const adNoticesFor = (budget) => {
     for (const flag of budget.evaluation.flags) {
         const detail = `${flag.text.charAt(0).toLowerCase()}${flag.text.slice(1).replace(/\.$/, '')}`;
         notices.push({
-            kind: AD_CAMPAIGN_KIND, subjectId: adCampaignSubject(flag.campaignId), url, level: 'SEGUIMIENTO',
+            kind: AD_CAMPAIGN_KIND, subjectId: budget.meta?.linked ? adMetaCampaignSubject(budget.id, flag.campaignId) : adCampaignSubject(flag.campaignId), url, level: 'SEGUIMIENTO',
             label: `Pauta · ${adBudgetName(budget)}`, message: flag.code === 'VENCIDA' ? `«${flag.campaignName}» sigue activa: ${detail}` : `«${flag.campaignName}»: ${detail}`
         });
     }

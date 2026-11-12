@@ -11,7 +11,7 @@ import { LEVEL_META } from '@/components/modules/Clients/operations/operationTon
 import { AD_CAMPAIGN_STATUSES, AD_PAYERS, AD_PLATFORMS, campaignFlags, formatAdMoney, labelOfAd, shortDay, toCents } from '@/lib/adBudgets';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { AdEditContext, useAdBudgetDetail, useAdBudgets, useAdMeta, useCanEditAds, useDeleteAdReading, useReopenAdCycle } from './adBudgetsApi';
+import { AdEditContext, useAdBudgetDetail, useAdBudgets, useAdMeta, useCanEditAds, useDeleteAdReading, useRecordAdSpend, useReopenAdCycle } from './adBudgetsApi';
 import { AdBudgetDialog, AdCampaignDialog, AdCarryOverDialog, AdCycleDialog, AdSpendDialog } from './AdBudgetDialogs';
 import { AdMetaBudgetDialog, AdMetaLinkDialog, MetaBudgetSection, MetaReadingNotes, MetaStatus, MetaUnassignedDialog } from './AdBudgetMeta';
 
@@ -54,12 +54,17 @@ function SpendBar({ evaluation }) {
 
 function Campaigns({ budget, onEdit, onAdd }) {
   const canEdit = useCanEditAds();
+  // Con Meta ligado, las campañas son las de Meta (arriba, en «Gasto en Meta»). Las anotadas a mano antes se conservan para
+  // consultarlas o limpiarlas, pero no se crean nuevas.
+  const linked = Boolean(budget.meta?.linked);
+  if (linked && !budget.campaigns.length) return null;
   return (
     <section aria-label="Campañas" className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Campañas</h4>
-        {canEdit && <button type="button" data-ad-campaign-add onClick={onAdd} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan"><Plus className="h-4 w-4" /> Añadir</button>}
+        <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">{linked ? 'Campañas anotadas a mano' : 'Campañas'}</h4>
+        {canEdit && !linked && <button type="button" data-ad-campaign-add onClick={onAdd} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan"><Plus className="h-4 w-4" /> Añadir</button>}
       </div>
+      {linked && <p data-ad-campaigns-legacy className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Son de antes de ligar Meta. Las que cuentan ahora vienen de Meta.</p>}
       {!budget.campaigns.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Sin campañas registradas. Son opcionales: el seguimiento es del presupuesto global.</p>}
       <ul className="space-y-2">
         {budget.campaigns.map((campaign) => {
@@ -168,6 +173,23 @@ function History({ budget, onOpen }) {
 function BudgetRow({ budget, expanded, onToggle, onOpen }) {
   const rowRef = useRef(null);
   const canEdit = useCanEditAds();
+  const confirm = useConfirmDialog();
+  const record = useRecordAdSpend();
+  // En una pauta ligada manda Meta: el gasto no se escribe a mano mientras Meta lo lea bien (`meta.lock`).
+  const metaRules = Boolean(budget.meta?.lock);
+  const closeLock = budget.pendingClose?.lock;
+  const confirmFinal = async () => {
+    const { cycle } = budget.pendingClose;
+    const amount = formatAdMoney(closeLock.metaCents, budget.currency);
+    const accepted = await confirm({ title: 'Confirmar el gasto final', confirmLabel: 'Cerrar el ciclo', tone: 'neutral', description: `Según Meta, ${String(cycle.label).toLowerCase()} terminó con ${amount}. Al confirmarlo se cierra el ciclo y de ahí sale el saldo de este.` });
+    if (!accepted) return;
+    try {
+      await record.mutateAsync({ id: budget.id, input: { spent: String(closeLock.metaCents / 100), readOn: cycle.end, final: true, cycleKey: cycle.key, note: 'Confirmado con Meta' } });
+      toast.success('Gasto final confirmado: el ciclo quedó cerrado');
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
   const { evaluation: e, cycle, currency } = budget;
   const meta = LEVEL_META[e.level];
   const money = (cents) => formatAdMoney(cents, currency);
@@ -204,7 +226,7 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
         <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
           <span className={cn('inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium', meta.soft, meta.text)}><span className={cn('h-2 w-2 rounded-full', meta.dot)} aria-hidden="true" />{e.label}</span>
           <div className="flex items-center gap-1">
-            {canEdit && <Button size="sm" variant="outline" className="min-h-11" data-ad-spend-open onClick={() => onOpen('spend', budget)}>Actualizar gasto</Button>}
+            {canEdit && !metaRules && <Button size="sm" variant="outline" className="min-h-11" data-ad-spend-open onClick={() => onOpen('spend', budget)}>Actualizar gasto</Button>}
             <button type="button" aria-expanded={expanded} aria-label={expanded ? 'Ocultar el detalle' : 'Ver el detalle'} data-ad-toggle onClick={onToggle} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5">
               <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
             </button>
@@ -216,7 +238,9 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
           {budget.pendingClose && (
             <p className="flex flex-wrap items-center gap-2 text-sm text-status-attention-fg">
               Falta el gasto final de {String(budget.pendingClose.cycle.label).toLowerCase()}.
-              {canEdit && <button type="button" data-ad-close-open onClick={() => onOpen('close', budget)} className="min-h-7 rounded font-semibold underline">Registrarlo</button>}
+              {canEdit && (closeLock?.complete
+                ? <button type="button" data-ad-close-meta disabled={record.isPending} onClick={confirmFinal} className="min-h-7 rounded font-semibold underline">Confirmar con Meta ({formatAdMoney(closeLock.metaCents, budget.currency)})</button>
+                : <button type="button" data-ad-close-open onClick={() => onOpen('close', budget)} className="min-h-7 rounded font-semibold underline">Registrarlo</button>)}
             </p>
           )}
           <MetaReadingNotes budget={budget} onBudget={() => onOpen('meta-budget', budget)} />
@@ -235,7 +259,7 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
             {budget.cutSource === 'CALENDARIO' && <p className="text-xs text-status-attention-fg">Este cliente no tiene contrato cargado: se usa el mes calendario. Puedes fijar el ciclo en «Editar pauta».</p>}
             {canEdit && <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" className="min-h-11" data-ad-edit onClick={() => onOpen('edit', budget)}>Editar pauta</Button>
-              {budget.kind === 'MENSUAL' && <Button size="sm" variant="outline" className="min-h-11" data-ad-carry-open onClick={() => onOpen('carry', budget)}>Ajustar saldo anterior</Button>}
+              {budget.kind === 'MENSUAL' && <Button size="sm" variant="outline" className="min-h-11" data-ad-carry-open onClick={() => onOpen('carry', budget)}>Acuerdo de saldo distinto</Button>}
             </div>}
           </div>
         </div>

@@ -85,7 +85,7 @@ export const metaForecastRecord = ({ objects = [], problems = [], asOf, today, d
         on: today, at, start, deadline, projectedCents: totalCents, problems,
         objects: objects.filter((object) => object.kind).map((object) => ({
             id: object.id, name: object.name, level: object.level, campaignName: object.campaignName || null,
-            status: object.status, kind: object.kind, budgetCents: object.budgetCents, projectedCents: byId.get(object.id) || 0
+            status: object.status, kind: object.kind, budgetCents: object.budgetCents, projectedCents: byId.get(object.id) || 0, endDate: object.endDate || null
         }))
     };
 };

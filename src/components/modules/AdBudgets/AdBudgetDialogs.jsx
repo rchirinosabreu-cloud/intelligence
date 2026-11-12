@@ -7,7 +7,7 @@ import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AD_BUDGET_KINDS, AD_BUDGET_STATUSES, AD_CAMPAIGN_STATUSES, AD_OBJECTIVES, AD_PAYERS, AD_PLATFORMS,
-  adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adSpendProblem, formatAdMoney, shortDay
+  adBudgetApprovalProblem, adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adSpendProblem, formatAdMoney, shortDay, toCents
 } from '@/lib/adBudgets';
 import { memberHasArea } from '@/lib/teamAreas';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -25,6 +25,20 @@ const dangerLink = 'min-h-11 rounded-lg px-2 text-sm font-medium text-destructiv
 
 function Label({ text, children }) {
   return <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">{text}</span>{children}</label>;
+}
+
+/**
+ * Cambiar el presupuesto aprobado pide quién lo aprobó y por qué (12 de noviembre de 2026): es el tope de lo que se gasta y
+ * queda en «Correcciones». Solo aparece cuando la cifra cambió.
+ */
+function ApprovalFields({ value, onChange }) {
+  return (
+    <div data-ad-approval className="grid gap-4 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 p-3 sm:grid-cols-2">
+      <p className="text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Cambia el presupuesto aprobado por el cliente: di quién lo aprobó y por qué.</p>
+      <Label text="Quién lo aprobó"><input required className={field} maxLength={120} value={value.approvedBy} onChange={(event) => onChange({ approvedBy: event.target.value })} placeholder="Ej.: Gema, por WhatsApp" /></Label>
+      <Label text="Motivo"><input required className={field} maxLength={300} value={value.reason} onChange={(event) => onChange({ reason: event.target.value })} placeholder="Ej.: subieron la pauta de noviembre" /></Label>
+    </div>
+  );
 }
 
 function Form({ open, title, description, onClose, onSubmit, saving, error, submitLabel, children, dataAttr, wide, secondary }) {
@@ -71,18 +85,19 @@ export function AdBudgetDialog({ budget, defaultClientId, onClose }) {
   const save = useSaveAdBudget();
   const remove = useDeleteAdBudget();
   const confirm = useConfirmDialog();
-  const [form, setForm] = useState(() => (budget ? fromBudget(budget) : blankBudget(defaultClientId)));
+  const [form, setForm] = useState(() => (budget ? { ...fromBudget(budget), approvedBy: '', reason: '' } : blankBudget(defaultClientId)));
   const [problem, setProblem] = useState('');
   const set = (patch) => { setProblem(''); setForm((current) => ({ ...current, ...patch })); };
   const team = options?.team || [];
   const specialists = team.filter((member) => memberHasArea(member, 'PAUTA'));
   const responsibleId = form.responsibleId || (!budget && specialists.length === 1 ? specialists[0].id : '');
   const specific = form.kind === 'ESPECIFICA';
+  const approvalNeeded = Boolean(budget) && (toCents(form.amount) !== toCents(budget.amount) || form.currency !== budget.currency);
 
   const submit = async (event) => {
     event.preventDefault();
     const input = { ...form, responsibleId: responsibleId || null };
-    const found = adBudgetProblem(input);
+    const found = adBudgetProblem(input) || (approvalNeeded ? adBudgetApprovalProblem(input) : null);
     if (found) { setProblem(found); return; }
     try {
       await save.mutateAsync({ id: budget?.id, input });
@@ -154,6 +169,7 @@ export function AdBudgetDialog({ budget, defaultClientId, onClose }) {
           <MoneyInput required className={field} value={form.amount} onChange={(amount) => set({ amount })} aria-label="Presupuesto" />
         </Label>
       </div>
+      {approvalNeeded && <ApprovalFields value={form} onChange={set} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <Label text="Quién la lleva">
           <Select className={field} value={responsibleId} onChange={(event) => set({ responsibleId: event.target.value })} aria-label="Quién la lleva">
@@ -221,7 +237,7 @@ export function AdSpendDialog({ budget, closing, reading, onClose }) {
         <Label text="Hasta el día"><BrainDatePicker required className={field} value={form.readOn} onChange={(readOn) => set({ readOn })} ariaLabel="Fecha de la lectura" /></Label>
       </div>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">Disponible en este ciclo: {formatAdMoney(evaluation.availableCents, budget.currency)}.</p>
-      {budget.meta?.linked && !reading && <p data-ad-spend-meta-hint className="text-xs text-zinc-500 dark:text-zinc-400">Esta pauta se lee de Meta cada dos horas. Escribe aquí solo para corregirla: lo que escribas hoy manda sobre Meta hasta mañana.</p>}
+      {budget.meta?.linked && !reading && <p data-ad-spend-meta-hint className="text-xs text-zinc-500 dark:text-zinc-400">Meta no ha podido leer esta pauta. Lo que escribas vale hasta que Meta vuelva a leerla: desde ahí manda su cifra.</p>}
       {!closing && (
         <label className="flex min-h-11 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
           <input type="checkbox" className="h-4 w-4" checked={form.final} onChange={(event) => set({ final: event.target.checked })} />
@@ -237,13 +253,15 @@ export function AdSpendDialog({ budget, closing, reading, onClose }) {
 export function AdCycleDialog({ budget, entry, onClose }) {
   const update = useUpdateAdCycle();
   const [amount, setAmount] = useState(String(entry.amount ?? ''));
+  const [approval, setApproval] = useState({ approvedBy: '', reason: '' });
   const [problem, setProblem] = useState('');
+  const approvalNeeded = toCents(amount) !== toCents(entry.amount);
   const submit = async (event) => {
     event.preventDefault();
-    const found = adCycleAmountProblem({ amount });
+    const found = adCycleAmountProblem({ amount }) || (approvalNeeded ? adBudgetApprovalProblem(approval) : null);
     if (found) { setProblem(found); return; }
     try {
-      await update.mutateAsync({ id: budget.id, cycleKey: entry.cycleKey, input: { amount } });
+      await update.mutateAsync({ id: budget.id, cycleKey: entry.cycleKey, input: { amount, ...(approvalNeeded ? approval : {}) } });
       toast.success('Presupuesto del ciclo corregido');
       onClose();
     } catch (error) {
@@ -254,6 +272,7 @@ export function AdCycleDialog({ budget, entry, onClose }) {
     <Form open title={`Presupuesto de ${String(entry.cycle.label).toLowerCase()}`} dataAttr="data-ad-cycle-dialog" onClose={onClose} onSubmit={submit} saving={update.isPending} error={problem} submitLabel="Guardar presupuesto"
       description={`${adBudgetName(budget)}. Solo cambia este ciclo; de ahí se recalcula el saldo que pasa al siguiente.`}>
       <Label text={`Presupuesto (${budget.currency})`}><MoneyInput required className={field} value={amount} onChange={(value) => { setProblem(''); setAmount(value); }} aria-label="Presupuesto del ciclo" /></Label>
+      {approvalNeeded && <ApprovalFields value={approval} onChange={(patch) => { setProblem(''); setApproval((current) => ({ ...current, ...patch })); }} />}
     </Form>
   );
 }
@@ -271,7 +290,7 @@ export function AdCarryOverDialog({ budget, onClose }) {
     if (found) { setProblem(found); return; }
     try {
       await adjust.mutateAsync({ id: budget.id, input: { ...form, cycleKey: budget.cycle.key } });
-      toast.success('Saldo ajustado');
+      toast.success('Acuerdo de saldo guardado');
       onClose();
     } catch (error) {
       setProblem(error.message);
@@ -287,11 +306,18 @@ export function AdCarryOverDialog({ budget, onClose }) {
     }
   };
   return (
-    <Form open title="Ajustar saldo anterior" dataAttr="data-ad-carry-dialog" onClose={onClose} onSubmit={submit} saving={adjust.isPending || clear.isPending} error={problem} submitLabel="Guardar saldo"
+    <Form open title="Acuerdo sobre el saldo anterior" dataAttr="data-ad-carry-dialog" onClose={onClose} onSubmit={submit} saving={adjust.isPending || clear.isPending} error={problem} submitLabel="Guardar acuerdo"
       secondary={budget.evaluation.carryManual && <button type="button" data-ad-carry-clear onClick={backToAutomatic} className="min-h-11 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan">Volver a la cuenta automática</button>}
-      description={`${adBudgetName(budget)}. Lo que no se gastó antes y se suma a este ciclo; si se gastó de más, escríbelo en negativo.`}>
+      description={`${adBudgetName(budget)}. Solo si se acordó con el cliente algo distinto a la cuenta de la plataforma; si se gastó de más, en negativo.`}>
+      {budget.carryAuto && (
+        <p data-ad-carry-auto className="rounded-xl bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:bg-white/5 dark:text-zinc-200">
+          {budget.carryAuto.known
+            ? `La cuenta de la plataforma: pasan ${formatAdMoney(budget.carryAuto.cents, budget.currency)} (lo aprobado menos lo gastado del ciclo anterior${budget.carryAuto.final ? '' : ', todavía provisional'}).`
+            : 'El ciclo anterior no tiene gasto registrado: la plataforma no pasa saldo.'}
+        </p>
+      )}
       <Label text={`Saldo que pasa a este ciclo (${budget.currency})`}><MoneyInput allowNegative required className={field} value={form.carryOver} onChange={(carryOver) => set({ carryOver })} aria-label="Saldo que pasa a este ciclo" /></Label>
-      <Label text="Motivo"><textarea required className={field} rows={2} maxLength={300} value={form.reason} onChange={(event) => set({ reason: event.target.value })} placeholder="Ej.: saldo de octubre según Meta" /></Label>
+      <Label text="Motivo"><textarea required className={field} rows={2} maxLength={300} value={form.reason} onChange={(event) => set({ reason: event.target.value })} placeholder="Ej.: el cliente pidió no acumular lo de octubre" /></Label>
     </Form>
   );
 }

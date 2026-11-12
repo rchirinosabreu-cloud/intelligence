@@ -24,7 +24,9 @@ Rodny: «quiero ver la forma en que pueda conectar esto con las pautas reales en
 
 - **Una pauta se liga a campañas, no a cuentas.** Una cuenta no es un cliente: la de Francisco Villa lleva Pablo Hoff, New Pueblito, Martínez y Nájera y Brain, y Wine Summit corre dentro de la cuenta de Wine & Wonder. En «Gasto en Meta» → «Ligar campañas» la plataforma propone las que llevan el nombre del cliente o de la marca, o están en una cuenta con ese nombre sin nombrar a otra marca; una persona confirma. Una campaña es de una sola pauta y en su moneda.
 - **La plataforma lee sola cada dos horas**, de 6:00 a 22:00 de Bogotá, todos los días, y con «Actualizar ahora». Primero las cuentas y lo que gastó cada campaña en los últimos 30 días (`AdMetaAccount`, `AdMetaCampaign`); después, el gasto de cada pauta ligada en los días de su ciclo, sumando sus campañas.
-- **El gasto de Meta es una lectura más**, marcada «Meta» en el historial (`AdSpendReading.source`): una por día, que se actualiza durante el día. **Lo que una persona escribió ese día manda** y Meta no lo pisa hasta el día siguiente; si no coincide (más allá de la tolerancia), la pauta lo dice y ofrece «Usar la de Meta».
+- **En una pauta ligada manda Meta** (Rodny, 12 de noviembre de 2026: «si ya está ceñido a Meta, eso no crearía cifras diferentes?»). El gasto es una lectura marcada «Meta» (`AdSpendReading.source`), una por día, y no se escribe a mano mientras Meta lo lea bien (hoy o ayer): desaparece «Actualizar gasto» y el servidor lo rechaza (`metaSpendLock`, `manualSpendProblem`). Si Meta falla o lleva días sin leer, vuelve el botón para no quedarse sin dato; en cuanto Meta lee otra vez, su cifra queda como la vigente. Lo escrito a mano antes no se borra: queda en el historial.
+- **El gasto final** de una pauta ligada es el de Meta leído hasta el cierre: «Confirmar con Meta» lo registra tal cual y cierra el ciclo; otra cifra se rechaza.
+- **Las campañas son las de Meta.** En una pauta ligada no se crean campañas a mano; las anotadas antes se conservan como «Campañas anotadas a mano». Los avisos de campaña («termina después del cierre», «no hay ninguna activa») salen del estado y la fecha de fin que Meta tiene en cada campaña o conjunto.
 - **El gasto final sigue siendo de una persona.** Durante cinco días tras el cierre la plataforma lee el ciclo que terminó, sin cerrarlo; «Registrar» el gasto final lo trae ya escrito.
 - **Gasto sin pauta:** lo que gastó en 30 días y no está en ninguna pauta se ve en el tablero («N campañas gastan sin pauta»). Se liga a su pauta (viene elegida si una sola lleva su nombre) o se marca «No es de una pauta» (de la agencia, o de un cliente que paga por su cuenta). Las dos cosas se deshacen.
 - **Solo lee el gasto.** La lectura no pausa campañas ni cambia nada en Meta. Un fallo de Meta no borra lo que había: queda dicho en la cuenta o en la pauta.
@@ -60,6 +62,8 @@ Todo se escribe a mano y todo se corrige. Cada corrección queda en `AdBudgetEve
 | Una campaña | Lápiz: se edita, se apaga o se elimina |
 | Una pauta creada por error | «Eliminar pauta» en «Editar pauta» |
 | Las campañas de Meta de una pauta | «Cambiar campañas»; soltarlas no borra las lecturas ya escritas |
+| El presupuesto aprobado (de la pauta o de un ciclo) | Se cambia en «Editar pauta» o «Corregir presupuesto», diciendo **quién lo aprobó y el motivo**: es el tope de lo que se gasta y queda en «Correcciones» |
+| El saldo que pasa de un ciclo a otro | Lo calcula la plataforma (aprobado menos gastado) y la ventana lo muestra; «Acuerdo de saldo distinto» registra otra cifra solo si se acordó con el cliente, con motivo |
 | Una campaña marcada «No es de una pauta» | Ligarla a una pauta la vuelve a contar |
 | Un presupuesto cambiado en Meta | Se vuelve a cambiar desde la misma ventana; queda en «Correcciones» |
 
@@ -89,6 +93,8 @@ Dos niveles (Rodny, 12 de noviembre de 2026: «ver y editar, siendo editar el aj
 Al desplegarlo nadie tiene «Editar pautas» hasta que un administrador se la marque en Equipo: a quien lleva la pauta (Keila) y a quien deba ajustar presupuestos.
 
 ## Lo que falta
+
+- **Que el presupuesto aprobado salga del contrato del cliente** (ficha operativa) y no se escriba en la pauta. Pendiente de decidir con la dirección (12 de noviembre de 2026).
 
 - Llevar a Cartera lo gastado con la tarjeta de Brain Studio, para cobrarlo.
 - Comparar el gasto del informe con el registrado aquí.
