@@ -10,7 +10,7 @@ const actor = { userId: 'u-keila' };
 const keila = { id: 'm-keila', name: 'Keila', role: 'Pauta', areas: ['PAUTA'], userId: 'u-keila', isActive: true };
 const camila = { id: 'm-camila', name: 'Camila', role: 'Project Manager', areas: ['PROJECT_MANAGEMENT'], userId: 'u-camila', isActive: true };
 const users = [
-    { id: 'u-keila', name: 'Keila', role: 'EDITOR', isActive: true, modulePermissions: { pautas: true } },
+    { id: 'u-keila', name: 'Keila', role: 'EDITOR', isActive: true, modulePermissions: { pautas: true, pautas_editar: true } },
     { id: 'u-camila', name: 'Camila', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { manager: true } }
 ];
 const clients = [
@@ -317,7 +317,12 @@ test('sin responsable la pauta va al área de Pauta; si la persona no tiene acce
     const blocked = newDb({ budgets: [{ ...endova, id: 'b1' }], users: [{ ...users[0], modulePermissions: {} }, users[1]] });
     await runAdBudgetAlerts(blocked, { now: at('2026-11-06'), notify: async () => {}, log: (line) => logged.push(line), info: () => {} });
     assert.equal(blocked.store.notices.length, 0);
-    assert.match(logged[0], /no tiene quién la reciba/);
+    assert.match(logged[0], /nadie que la lleve tiene «Editar pautas»/);
+
+    // Ver Pautas no basta para la banda: lo que pide es actualizar el gasto o cerrar el ciclo, y eso es de quien edita.
+    const viewer = newDb({ budgets: [{ ...endova, id: 'b1' }], users: [{ ...users[0], modulePermissions: { pautas: true } }, users[1]] });
+    await runAdBudgetAlerts(viewer, { now: at('2026-11-06'), notify: async () => {}, log: () => {}, info: () => {} });
+    assert.equal(viewer.store.notices.length, 0);
 });
 
 test('una campaña activa pasada su fecha pide confirmar y se cae al finalizarla', async () => {

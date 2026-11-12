@@ -7,7 +7,7 @@ import { EXTRA_KEYS, hasModuleAccess, readModulePermissions, sanitizeModulePermi
 
 test('the league is a checkbox beside Bria, never a menu module, and only an explicit true opens it', () => {
   assert.equal(LEAGUE_PERMISSION_KEY, 'liga');
-  assert.deepEqual([...EXTRA_KEYS], ['bria', 'liga']);
+  assert.ok(EXTRA_KEYS.includes('bria') && EXTRA_KEYS.includes('liga'), 'Bria y la liga viajan como casillas sin módulo, junto a «Editar pautas»');
   assert.equal(readModulePermissions(null).liga, false);
   assert.equal(readModulePermissions({ liga: 'true' }).liga, false, 'only a real true');
   assert.equal(readModulePermissions({ Liga: true }).liga, true, 'however it was saved');

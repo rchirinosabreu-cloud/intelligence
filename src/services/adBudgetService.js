@@ -10,6 +10,7 @@ import {
     SPECIFIC_CYCLE_KEY, adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adCycleFor, adSpendProblem,
     budgetCutDay, carryOverFor, cycleFromKey, evaluateAdCycle, formatAdMoney, previousCycleKey, shortDay, toCents
 } from '../lib/adBudgets.js';
+import { metaDifference } from '../lib/adBudgetMeta.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
@@ -26,7 +27,23 @@ const INCLUDE = {
     } },
     responsible: { select: { id: true, name: true, avatarUrl: true, userId: true, isActive: true } },
     cycles: { orderBy: { cycleKey: 'asc' } },
-    campaigns: { orderBy: { createdAt: 'desc' } }
+    campaigns: { orderBy: { createdAt: 'desc' } },
+    metaCampaigns: { select: { id: true, name: true, adAccountId: true, accountName: true, currency: true }, orderBy: { name: 'asc' } }
+};
+
+/**
+ * Lo que dice Meta del ciclo, si la pauta tiene campañas ligadas: su cifra, de cuándo es, por campaña y si no coincide con
+ * la que escribió una persona. Sin campañas ligadas la pauta sigue a mano, como siempre.
+ */
+const metaOf = (budget, row) => {
+    const campaigns = (budget.metaCampaigns || []).map((item) => ({ id: item.id, name: item.name, accountName: item.accountName, adAccountId: item.adAccountId, currency: item.currency || null }));
+    const spentCents = row?.metaSpent === null || row?.metaSpent === undefined ? null : Math.round(Number(row.metaSpent) * 100);
+    const vigente = row?.spent === null || row?.spent === undefined ? null : Math.round(Number(row.spent) * 100);
+    return {
+        linked: campaigns.length > 0, campaigns, spentCents, asOf: row?.metaSpentAsOf || null, fetchedAt: row?.metaFetchedAt || null,
+        problem: row?.metaProblem || null, detail: Array.isArray(row?.metaDetail) ? row.metaDetail : [], source: row?.spentSource || null,
+        difference: metaDifference({ currency: budget.currency, spentCents: vigente, source: row?.spentSource || null, metaCents: spentCents })
+    };
 };
 
 const publicCampaign = (campaign) => ({
@@ -62,7 +79,7 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
         responsible: budget.responsible ? { id: budget.responsible.id, name: budget.responsible.name, avatarUrl: budget.responsible.avatarUrl || null } : null,
         projectManager: budget.client?.projectManager?.isActive === false ? null : (budget.client?.projectManager ? { id: budget.client.projectManager.id, name: budget.client.projectManager.name } : null),
         cutDay, cutSource: source, ownCutDay: budget.cutDay || null, cycle, evaluation, campaigns, pendingClose,
-        carryOverReason: row?.carryOverReason || null
+        carryOverReason: row?.carryOverReason || null, meta: metaOf(budget, row)
     };
 };
 
@@ -91,19 +108,19 @@ const budgetData = (input) => ({
     notes: text(input.notes)
 });
 
-const ensureCycle = async (tx, budget, cycle, data = {}) => {
+export const ensureAdCycle = async (tx, budget, cycle, data = {}) => {
     const existing = await tx.adBudgetCycle.findUnique({ where: { budgetId_cycleKey: { budgetId: budget.id, cycleKey: cycle.key } } });
     if (existing) return Object.keys(data).length ? tx.adBudgetCycle.update({ where: { id: existing.id }, data }) : existing;
     return tx.adBudgetCycle.create({ data: { id: randomUUID(), budgetId: budget.id, cycleKey: cycle.key, amount: budget.amount, ...data } });
 };
 
 /** Lo vigente de un ciclo sale siempre de sus lecturas: la más reciente manda, y sin lecturas no hay gasto registrado. */
-const syncCycle = async (tx, cycleId, now) => {
+export const syncAdCycle = async (tx, cycleId, now) => {
     const [last] = await tx.adSpendReading.findMany({ where: { cycleId }, orderBy: [{ readOn: 'desc' }, { createdAt: 'desc' }], take: 1 });
     return tx.adBudgetCycle.update({
         where: { id: cycleId },
         data: {
-            spent: last ? Number(last.spent) : null, spentAsOf: last?.readOn || null,
+            spent: last ? Number(last.spent) : null, spentAsOf: last?.readOn || null, spentSource: last ? last.source || 'MANUAL' : null,
             closedAt: last?.isFinal ? now : null, closedById: last?.isFinal ? last.recordedById || null : null
         }
     });
@@ -184,7 +201,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
                     cycleKey: row.cycleKey, cycle: described.cycle, evaluation: described.evaluation, amount: number(row.amount), carryOverReason: row.carryOverReason || null,
                     readings: readings.filter((reading) => reading.cycleId === row.id).map((reading) => ({
                         id: reading.id, readOn: reading.readOn, spent: number(reading.spent), isFinal: reading.isFinal, note: reading.note || null,
-                        recordedBy: nameOf.get(reading.recordedById) || null, createdAt: reading.createdAt
+                        recordedBy: nameOf.get(reading.recordedById) || null, source: reading.source || 'MANUAL', createdAt: reading.createdAt
                     }))
                 };
             });
@@ -274,11 +291,11 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const { cutDay } = budgetCutDay(budget, day);
             const cycle = input.cycleKey && budget.kind !== 'ESPECIFICA' ? cycleFromKey(input.cycleKey, cutDay) : adCycleFor(budget, { cutDay, today: day });
             await db.$transaction(async (tx) => {
-                const row = await ensureCycle(tx, budget, cycle);
+                const row = await ensureAdCycle(tx, budget, cycle);
                 await tx.adSpendReading.create({
                     data: { id: randomUUID(), cycleId: row.id, readOn: input.readOn, spent: Number(input.spent), isFinal: input.final === true, note: text(input.note), recordedById: actorId(actor) }
                 });
-                await syncCycle(tx, row.id, now);
+                await syncAdCycle(tx, row.id, now);
             });
             return fresh(id, cycleOptions(cycle.key));
         },
@@ -294,7 +311,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const money = (value) => formatAdMoney(toCents(value), budget.currency);
             await db.$transaction(async (tx) => {
                 await tx.adSpendReading.update({ where: { id: readingId }, data: { spent: Number(merged.spent), readOn: merged.readOn, note: text(merged.note), isFinal: merged.final === true } });
-                await syncCycle(tx, reading.cycleId, now);
+                await syncAdCycle(tx, reading.cycleId, now);
                 await logEvent(tx, budget, 'CORREGIR_LECTURA', `Corrigió la lectura del ${shortDay(reading.readOn)}: de ${money(reading.spent)} a ${money(merged.spent)}`, actor, {
                     before: { spent: Number(reading.spent), readOn: reading.readOn, note: reading.note || null, isFinal: reading.isFinal },
                     after: { spent: Number(merged.spent), readOn: merged.readOn, note: text(merged.note), isFinal: merged.final === true }
@@ -309,7 +326,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const reading = await readReading(db, id, readingId);
             await db.$transaction(async (tx) => {
                 await tx.adSpendReading.delete({ where: { id: readingId } });
-                await syncCycle(tx, reading.cycleId, clock());
+                await syncAdCycle(tx, reading.cycleId, clock());
                 await logEvent(tx, budget, 'ELIMINAR_LECTURA', `Eliminó la lectura del ${shortDay(reading.readOn)} por ${formatAdMoney(toCents(reading.spent), budget.currency)}`, actor, {
                     before: { spent: Number(reading.spent), readOn: reading.readOn, note: reading.note || null, isFinal: reading.isFinal }
                 });
@@ -324,7 +341,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const now = clock();
             await db.$transaction(async (tx) => {
                 await tx.adSpendReading.updateMany({ where: { cycleId: row.id }, data: { isFinal: false } });
-                await syncCycle(tx, row.id, now);
+                await syncAdCycle(tx, row.id, now);
                 await logEvent(tx, budget, 'REABRIR', `Reabrió el ciclo ${cycleKey}`, actor);
             });
             return fresh(id, cycleOptions(cycleKey));
@@ -356,7 +373,7 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
             const { cutDay } = budgetCutDay(budget, day);
             const cycle = input.cycleKey ? cycleFromKey(input.cycleKey, cutDay) : adCycleFor(budget, { cutDay, today: day });
             await db.$transaction(async (tx) => {
-                await ensureCycle(tx, budget, cycle, { carryOverManual: Number(input.carryOver), carryOverReason: text(input.reason), carryOverById: actorId(actor) });
+                await ensureAdCycle(tx, budget, cycle, { carryOverManual: Number(input.carryOver), carryOverReason: text(input.reason), carryOverById: actorId(actor) });
                 await logEvent(tx, budget, 'AJUSTAR_SALDO', `Ajustó el saldo anterior a ${formatAdMoney(toCents(input.carryOver), budget.currency)}: ${text(input.reason)}`, actor);
             });
             return fresh(id, cycleOptions(cycle.key));

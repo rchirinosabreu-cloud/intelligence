@@ -11,8 +11,9 @@ import { LEVEL_META } from '@/components/modules/Clients/operations/operationTon
 import { AD_CAMPAIGN_STATUSES, AD_PAYERS, AD_PLATFORMS, campaignFlags, formatAdMoney, labelOfAd, shortDay, toCents } from '@/lib/adBudgets';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useAdBudgetDetail, useAdBudgets, useDeleteAdReading, useReopenAdCycle } from './adBudgetsApi';
+import { AdEditContext, useAdBudgetDetail, useAdBudgets, useAdMeta, useCanEditAds, useDeleteAdReading, useReopenAdCycle } from './adBudgetsApi';
 import { AdBudgetDialog, AdCampaignDialog, AdCarryOverDialog, AdCycleDialog, AdSpendDialog } from './AdBudgetDialogs';
+import { AdMetaBudgetDialog, AdMetaLinkDialog, MetaBudgetSection, MetaReadingNotes, MetaStatus, MetaUnassignedDialog } from './AdBudgetMeta';
 
 // Pautas (reunión del 6 de noviembre de 2026): el presupuesto global de cada cliente contra su cierre. Primero lo que hay
 // que hacer hoy; las campañas y el historial se abren por pauta. Todo lo calculado viene del servidor.
@@ -31,10 +32,11 @@ const closeText = ({ daysToClose, closed }) => {
   return daysToClose === 1 ? 'Cierra mañana' : `Cierra en ${daysToClose} días`;
 };
 
-const readingText = ({ hasReading, asOf, daysSinceReading }) => {
+const readingText = ({ hasReading, asOf, daysSinceReading }, source) => {
   if (!hasReading) return 'Sin gasto registrado';
-  if (daysSinceReading === 0) return 'Actualizado hoy';
-  return daysSinceReading === 1 ? 'Actualizado ayer' : `Actualizado el ${shortDay(asOf)}`;
+  const from = source === 'META' ? 'Según Meta, a' : 'A';
+  if (daysSinceReading === 0) return `${from}ctualizado hoy`;
+  return daysSinceReading === 1 ? `${from}ctualizado ayer` : `${from}ctualizado el ${shortDay(asOf)}`;
 };
 
 /** La barra: lo gastado, y una marca de dónde debería ir hoy. */
@@ -51,11 +53,12 @@ function SpendBar({ evaluation }) {
 }
 
 function Campaigns({ budget, onEdit, onAdd }) {
+  const canEdit = useCanEditAds();
   return (
     <section aria-label="Campañas" className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Campañas</h4>
-        <button type="button" data-ad-campaign-add onClick={onAdd} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan"><Plus className="h-4 w-4" /> Añadir</button>
+        {canEdit && <button type="button" data-ad-campaign-add onClick={onAdd} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep dark:text-brand-cyan"><Plus className="h-4 w-4" /> Añadir</button>}
       </div>
       {!budget.campaigns.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Sin campañas registradas. Son opcionales: el seguimiento es del presupuesto global.</p>}
       <ul className="space-y-2">
@@ -75,7 +78,7 @@ function Campaigns({ budget, onEdit, onAdd }) {
                 </div>
                 <div className="flex shrink-0 items-center">
                   {campaign.link && <a href={campaign.link} target="_blank" rel="noreferrer" aria-label={`Abrir la publicación de ${campaign.name}`} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5"><ExternalLink className="h-4 w-4" /></a>}
-                  <button type="button" aria-label={`Editar ${campaign.name}`} onClick={() => onEdit(campaign)} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5"><Edit className="h-4 w-4" /></button>
+                  {canEdit && <button type="button" aria-label={`Editar ${campaign.name}`} onClick={() => onEdit(campaign)} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5"><Edit className="h-4 w-4" /></button>}
                 </div>
               </div>
               {flags.map((flag) => <p key={flag.code} className="mt-1 text-xs font-medium text-status-attention-fg">{flag.text}</p>)}
@@ -95,6 +98,7 @@ function History({ budget, onOpen }) {
   const confirm = useConfirmDialog();
   const removeReading = useDeleteAdReading();
   const reopen = useReopenAdCycle();
+  const canEdit = useCanEditAds();
   const run = async (work, success) => {
     try {
       await work();
@@ -127,22 +131,22 @@ function History({ budget, onOpen }) {
               {item.cycle.label} · {formatAdMoney(item.evaluation.spentCents, budget.currency)} de {formatAdMoney(item.evaluation.availableCents, budget.currency)}
               {item.evaluation.closed && ` · saldo ${formatAdMoney(item.evaluation.balanceCents, budget.currency)}`}
             </p>
-            <div className="flex flex-wrap items-center gap-x-1">
+            {canEdit && <div className="flex flex-wrap items-center gap-x-1">
               <button type="button" data-ad-cycle-edit className={textAction} onClick={() => onOpen('cycle', budget, item)}>Corregir presupuesto</button>
               {item.evaluation.closed && <button type="button" data-ad-cycle-reopen disabled={reopen.isPending} className={textAction} onClick={() => askReopen(item)}>Reabrir ciclo</button>}
-            </div>
+            </div>}
             <ul>
               {item.readings.map((reading) => (
                 <li key={reading.id} data-ad-reading={reading.id} className="flex items-center justify-between gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span className="min-w-0">
                     {shortDay(reading.readOn)}: {formatAdMoney(toCents(reading.spent), budget.currency)}
-                    {reading.isFinal && ' (final)'}{reading.recordedBy && ` · ${reading.recordedBy}`}{reading.note && ` · ${reading.note}`}
+                    {reading.isFinal && ' (final)'}{reading.source === 'META' ? ' · Meta' : reading.recordedBy && ` · ${reading.recordedBy}`}{reading.note && ` · ${reading.note}`}
                   </span>
-                  <span className="flex shrink-0">
+                  {canEdit && <span className="flex shrink-0">
                     <button type="button" aria-label={`Corregir la lectura del ${shortDay(reading.readOn)}`} data-ad-reading-edit className={iconAction}
                       onClick={() => onOpen('reading', budget, { ...reading, cycle: item.cycle, evaluation: item.evaluation })}><Edit className="h-4 w-4" /></button>
                     <button type="button" aria-label={`Eliminar la lectura del ${shortDay(reading.readOn)}`} data-ad-reading-delete disabled={removeReading.isPending} className={cn(iconAction, 'text-destructive brain-destructive-text')} onClick={() => askRemove(reading)}><Trash2 className="h-4 w-4 text-destructive brain-destructive-text" /></button>
-                  </span>
+                  </span>}
                 </li>
               ))}
             </ul>
@@ -163,6 +167,7 @@ function History({ budget, onOpen }) {
 
 function BudgetRow({ budget, expanded, onToggle, onOpen }) {
   const rowRef = useRef(null);
+  const canEdit = useCanEditAds();
   const { evaluation: e, cycle, currency } = budget;
   const meta = LEVEL_META[e.level];
   const money = (cents) => formatAdMoney(cents, currency);
@@ -188,7 +193,7 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
           </div>
           <SpendBar evaluation={e} />
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {closeText(e)} · gastar hasta el {shortDay(e.deadline)} · {readingText(e)}
+            {closeText(e)} · gastar hasta el {shortDay(e.deadline)} · {readingText(e, budget.meta?.source)}
           </p>
           {e.carryCents !== 0 && (
             <p data-ad-carry className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -199,35 +204,39 @@ function BudgetRow({ budget, expanded, onToggle, onOpen }) {
         <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
           <span className={cn('inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium', meta.soft, meta.text)}><span className={cn('h-2 w-2 rounded-full', meta.dot)} aria-hidden="true" />{e.label}</span>
           <div className="flex items-center gap-1">
-            <Button size="sm" variant="outline" className="min-h-11" data-ad-spend-open onClick={() => onOpen('spend', budget)}>Actualizar gasto</Button>
+            {canEdit && <Button size="sm" variant="outline" className="min-h-11" data-ad-spend-open onClick={() => onOpen('spend', budget)}>Actualizar gasto</Button>}
             <button type="button" aria-expanded={expanded} aria-label={expanded ? 'Ocultar el detalle' : 'Ver el detalle'} data-ad-toggle onClick={onToggle} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5">
               <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
             </button>
           </div>
         </div>
       </div>
-      {(budget.pendingClose || e.reasons.length > 0) && (
+      {(budget.pendingClose || e.reasons.length > 0 || budget.meta?.difference || budget.meta?.problem) && (
         <div className="space-y-1 px-4 pb-3">
           {budget.pendingClose && (
             <p className="flex flex-wrap items-center gap-2 text-sm text-status-attention-fg">
               Falta el gasto final de {String(budget.pendingClose.cycle.label).toLowerCase()}.
-              <button type="button" data-ad-close-open onClick={() => onOpen('close', budget)} className="min-h-7 rounded font-semibold underline">Registrarlo</button>
+              {canEdit && <button type="button" data-ad-close-open onClick={() => onOpen('close', budget)} className="min-h-7 rounded font-semibold underline">Registrarlo</button>}
             </p>
           )}
+          <MetaReadingNotes budget={budget} />
           {e.reasons.map((reason) => <p key={reason} data-ad-reason className={cn('text-sm', e.level === 'red' ? 'text-destructive brain-destructive-text' : 'text-zinc-700 dark:text-zinc-200')}>{reason}</p>)}
         </div>
       )}
       {expanded && (
         <div data-ad-detail className="grid gap-6 border-t border-zinc-200 bg-zinc-50/60 p-4 dark:border-white/10 dark:bg-white/5 lg:grid-cols-2">
-          <Campaigns budget={budget} onAdd={() => onOpen('campaign', budget)} onEdit={(campaign) => onOpen('campaign', budget, campaign)} />
+          <div className="min-w-0 space-y-6">
+            <MetaBudgetSection budget={budget} onLink={() => onOpen('meta', budget)} onBudget={() => onOpen('meta-budget', budget)} />
+            <Campaigns budget={budget} onAdd={() => onOpen('campaign', budget)} onEdit={(campaign) => onOpen('campaign', budget, campaign)} />
+          </div>
           <div className="min-w-0 space-y-4">
             <History budget={budget} onOpen={onOpen} />
             {budget.notes && <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{budget.notes}</p>}
             {budget.cutSource === 'CALENDARIO' && <p className="text-xs text-status-attention-fg">Este cliente no tiene contrato cargado: se usa el mes calendario. Puedes fijar el ciclo en «Editar pauta».</p>}
-            <div className="flex flex-wrap gap-2">
+            {canEdit && <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" className="min-h-11" data-ad-edit onClick={() => onOpen('edit', budget)}>Editar pauta</Button>
               {budget.kind === 'MENSUAL' && <Button size="sm" variant="outline" className="min-h-11" data-ad-carry-open onClick={() => onOpen('carry', budget)}>Ajustar saldo anterior</Button>}
-            </div>
+            </div>}
           </div>
         </div>
       )}
@@ -247,6 +256,8 @@ export default function AdBudgets() {
   const [expandedId, setExpandedId] = useState(focusId);
   const [dialog, setDialog] = useState(null);
   const { data, isLoading, error } = useAdBudgets({ includeFinished: showFinished });
+  const { data: meta } = useAdMeta();
+  const canEdit = data?.canEdit === true;
 
   useEffect(() => { if (focusId) setExpandedId(focusId); }, [focusId]);
 
@@ -284,9 +295,10 @@ export default function AdBudgets() {
   const close = () => setDialog(null);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 pb-10" data-ad-budgets>
+    <AdEditContext.Provider value={canEdit}>
+    <div className="mx-auto w-full max-w-6xl space-y-5 pb-10" data-ad-budgets data-ad-can-edit={canEdit ? 'true' : 'false'}>
       <PageHeader title="Pautas" subtitle="El presupuesto de cada cliente contra su cierre: cuánto va, cuánto falta y qué hay que revisar." icon={Megaphone}>
-        <Button data-ad-new className="min-h-11" onClick={() => open('new', null)}><Plus className="mr-1 h-4 w-4" /> Nueva pauta</Button>
+        {canEdit && <Button data-ad-new className="min-h-11" onClick={() => open('new', null)}><Plus className="mr-1 h-4 w-4" /> Nueva pauta</Button>}
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -295,6 +307,10 @@ export default function AdBudgets() {
         <FinancialSummaryCard label="Van atrasadas" value={counts.atrasadas ?? 0} tone={counts.atrasadas ? 'warning' : 'neutral'} hint="Por debajo del ritmo" onClick={() => toggleFilter('atrasadas')} pressed={filter === 'atrasadas'} data-ad-filter="atrasadas" />
         <FinancialSummaryCard label="Se pasaron" value={counts.pasadas ?? 0} tone={counts.pasadas ? 'danger' : 'neutral'} hint="Más del presupuesto" onClick={() => toggleFilter('pasadas')} pressed={filter === 'pasadas'} data-ad-filter="pasadas" />
       </div>
+
+      {data && !canEdit && <p data-ad-view-only className="text-sm text-zinc-500 dark:text-zinc-400">Puedes ver las pautas. Para editarlas, actualizar el gasto o ajustar el presupuesto en Meta, pide a un administrador que te marque «Editar pautas» en Equipo.</p>}
+
+      <MetaStatus meta={meta} onOpenUnassigned={() => open('unassigned', null)} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente o marca" aria-label="Buscar cliente o marca"
@@ -322,7 +338,7 @@ export default function AdBudgets() {
       {!isLoading && !error && !budgets.length && (
         <div data-ad-empty className="rounded-2xl border border-dashed border-zinc-300 p-8 text-center dark:border-white/15">
           <p className="text-sm font-medium text-zinc-900 dark:text-white">Todavía no hay pautas.</p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Crea la primera con el presupuesto aprobado por el cliente.</p>
+          {canEdit && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Crea la primera con el presupuesto aprobado por el cliente.</p>}
         </div>
       )}
       {!isLoading && !error && budgets.length > 0 && !groups.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Nada coincide con estos filtros.</p>}
@@ -352,6 +368,10 @@ export default function AdBudgets() {
       {dialog?.kind === 'campaign' && <AdCampaignDialog budget={dialog.budget} campaign={dialog.subject} onClose={close} />}
       {dialog?.kind === 'reading' && <AdSpendDialog budget={dialog.budget} reading={dialog.subject} onClose={close} />}
       {dialog?.kind === 'cycle' && <AdCycleDialog budget={dialog.budget} entry={dialog.subject} onClose={close} />}
+      {dialog?.kind === 'meta' && <AdMetaLinkDialog budget={dialog.budget} onClose={close} />}
+      {dialog?.kind === 'meta-budget' && <AdMetaBudgetDialog budget={dialog.budget} onClose={close} />}
+      {dialog?.kind === 'unassigned' && meta && <MetaUnassignedDialog meta={meta} budgets={budgets.filter((budget) => budget.status === 'ACTIVA')} onClose={close} />}
     </div>
+    </AdEditContext.Provider>
   );
 }

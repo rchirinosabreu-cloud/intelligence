@@ -40,10 +40,14 @@ export const MODULE_KEYS = Object.freeze(PLATFORM_MODULES.map((module) => module
 // (Rodny, 3 de noviembre de 2026: «activa más bien la posibilidad de activar la liga para
 // cierta persona, como cuando activo Bria»). La liga se enciende persona por persona, también
 // a un administrador: nadie la tiene por su cargo (`EXPLICIT_KEYS`).
+// Pautas tiene dos niveles (Rodny, 12 de noviembre de 2026: «ver y editar, siendo editar el ajuste en Meta»): con la
+// casilla de Pautas se ve el módulo; con «Editar pautas» se crean y corrigen pautas, se actualiza el gasto, se ligan
+// campañas y se ajusta el presupuesto en Meta. Nadie la tiene por su cargo, tampoco un administrador.
 const BRIA_KEY = 'bria';
 const LEAGUE_KEY = 'liga';
-export const EXTRA_KEYS = Object.freeze([BRIA_KEY, LEAGUE_KEY]);
-const EXPLICIT_KEYS = new Set([LEAGUE_KEY]);
+export const AD_BUDGET_EDIT_KEY = 'pautas_editar';
+export const EXTRA_KEYS = Object.freeze([BRIA_KEY, LEAGUE_KEY, AD_BUDGET_EDIT_KEY]);
+const EXPLICIT_KEYS = new Set([LEAGUE_KEY, AD_BUDGET_EDIT_KEY]);
 
 const KEY_BY_NAME = new Map(PLATFORM_MODULES.flatMap((module) => [
     [module.key, module.key],
@@ -111,3 +115,6 @@ export const hasModuleAccess = (user, key) => {
     return Object.entries(parse(user.modulePermissions))
         .some(([stored, enabled]) => String(stored).toLowerCase() === name && enabled === true);
 };
+
+/** Editar Pautas pide las dos casillas: la del módulo y la de editar. */
+export const canEditAdBudgets = (user) => hasModuleAccess(user, 'pautas') && hasModuleAccess(user, AD_BUDGET_EDIT_KEY);

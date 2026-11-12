@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import {
+    canEditAdBudgets,
     hasModuleAccess,
     MODULE_KEYS,
     PLATFORM_MODULES,
@@ -47,7 +48,7 @@ test('los permisos viejos se leen igual: claves con mayúscula, «Tareas», text
     assert.equal(read.manager, true);
     assert.equal(read.clientes, true);
     assert.equal(read.crm, false);
-    assert.deepEqual(Object.keys(readModulePermissions(null)).sort(), [...MODULE_KEYS, 'bria', 'liga'].sort(), 'Bria y la liga del mes viajan como casillas sin módulo');
+    assert.deepEqual(Object.keys(readModulePermissions(null)).sort(), [...MODULE_KEYS, 'bria', 'liga', 'pautas_editar'].sort(), 'Bria, la liga del mes y editar pautas viajan como casillas sin módulo');
     assert.equal(readModulePermissions('{roto').gestion, false);
     assert.equal(readModulePermissions({ bria: 'true' }).bria, false, 'Bria solo con un true de verdad');
     assert.equal(readModulePermissions({ bria: true }).bria, true);
@@ -157,4 +158,17 @@ test('la bienvenida presenta todos los módulos y respeta la casilla de Drive', 
     assert.ok(visible({ minutas: true }).includes('drive'));
     assert.ok(!visible({ minutas: true, drive: false }).includes('drive'));
     assert.ok(visible({ crm: true }).includes('crm'));
+});
+
+test('Pautas en dos niveles: ver con su casilla, editar solo con «Editar pautas», que nadie trae por su cargo', () => {
+    const admin = { role: 'ADMIN', modulePermissions: {} };
+    assert.equal(hasModuleAccess(admin, 'pautas'), true, 'un administrador ve Pautas');
+    assert.equal(canEditAdBudgets(admin), false, 'pero no edita sin la casilla');
+    assert.equal(canEditAdBudgets({ role: 'ADMIN', modulePermissions: { pautas_editar: true } }), true);
+    assert.equal(canEditAdBudgets({ role: 'PROJECT_MANAGER', modulePermissions: { manager: true } }), false, 'heredar Pautas de Manager no da editar');
+    assert.equal(canEditAdBudgets({ role: 'EDITOR', modulePermissions: { pautas: true, pautas_editar: true } }), true);
+    assert.equal(canEditAdBudgets({ role: 'EDITOR', modulePermissions: { pautas_editar: true } }), false, 'editar sin ver no sirve');
+    assert.equal(presetModulePermissions('ADMIN').pautas_editar, undefined, 'ningún rol la trae marcada');
+    assert.equal(sanitizeModulePermissions({ pautas_editar: true }).pautas_editar, true, 'se guarda');
+    assert.match(source('src/components/modules/Team.jsx'), /data-team-ad-edit-toggle/);
 });

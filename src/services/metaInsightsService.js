@@ -285,6 +285,27 @@ export const createMetaInsightsService = ({
     };
   };
 
+  /**
+   * Lo gastado por campaña en unos días exactos (Pautas, 12 de noviembre de 2026). Con `campaignIds` solo esas campañas,
+   * filtradas por identificador como en el informe; sin ellas, todas las de la cuenta. Solo lee.
+   */
+  const campaignSpend = async ({ adAccountId, token, since, until, campaignIds = null }) => {
+    const path = adAccountPath(adAccountId);
+    const filtering = campaignIds?.length ? JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campaignIds.map(String) }]) : undefined;
+    const rows = [];
+    let params = { level: 'campaign', time_range: JSON.stringify({ since, until }), fields: 'campaign_id,campaign_name,spend', filtering, limit: 500 };
+    for (let guard = 0; guard < 10; guard += 1) {
+      const page = await get(`${path}/insights`, params, token);
+      for (const row of page?.data || []) {
+        if (row?.campaign_id) rows.push({ id: String(row.campaign_id), name: String(row.campaign_name || row.campaign_id), spend: Number(row.spend) || 0 });
+      }
+      const after = page?.paging?.cursors?.after;
+      if (!page?.paging?.next || !after) break;
+      params = { ...params, after };
+    }
+    return rows;
+  };
+
   /** Las cuentas publicitarias que ve la llave, para elegir cuál es la del cliente. */
   const listAdAccounts = async (token) => {
     const accounts = [];
@@ -301,7 +322,7 @@ export const createMetaInsightsService = ({
     return accounts;
   };
 
-  return { fetchInstagramReport, fetchFacebookPageReport, getPageToken, fetchAdsReport, listAdAccounts, listRecentCampaigns };
+  return { fetchInstagramReport, fetchFacebookPageReport, getPageToken, fetchAdsReport, listAdAccounts, listRecentCampaigns, campaignSpend };
 };
 
 export const metaInsightsService = createMetaInsightsService();

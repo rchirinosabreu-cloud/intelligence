@@ -4,9 +4,10 @@ import express from 'express';
 import { createServer } from 'vite';
 import { dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
 import { createAdBudgetsDb } from '../tests/fixtures/adBudgetsMemoryDb.js';
-import { budgets, campaigns, clients, cycles, readings, team, users } from '../tests/fixtures/adBudgetsPreviewData.js';
+import { budgets, campaigns, clients, cycles, previewMeta, previewMetaBudgets, readings, team, users } from '../tests/fixtures/adBudgetsPreviewData.js';
 import { createAdBudgetRouter } from '../src/routes/api/adBudgets.js';
 import { adBudgetService } from '../src/services/adBudgetService.js';
+import { adBudgetMetaService } from '../src/services/adBudgetMetaService.js';
 import { runAdBudgetAlerts } from '../src/services/adBudgetNoticeService.js';
 import { currentImportantNotice } from '../src/services/importantNoticeService.js';
 
@@ -14,17 +15,22 @@ import { currentImportantNotice } from '../src/services/importantNoticeService.j
 // en memoria. Sin .env, sin base de datos y sin contacto con producción. La banda se muestra como la vería Keila.
 const VIEWER = 'u-keila';
 
-export async function createAdBudgetsPreview({ port = 3848 } = {}) {
+export async function createAdBudgetsPreview({ port = 3848, today = null } = {}) {
+  // Con `--hoy=AAAA-MM-DD` la muestra vive en ese día (a media mañana en Bogotá): el recorrido no depende de la fecha real.
+  const clock = () => (today ? new Date(`${today}T15:00:00Z`) : new Date());
   // Tailwind busca las clases relativo a la carpeta de trabajo: desde otra carpeta las clases nuevas no existirían.
   process.chdir(path.resolve(import.meta.dirname, '..'));
   const db = createAdBudgetsDb({ clients, team, users, budgets, cycles, readings, campaigns });
   const silent = { log: () => {}, info: () => {} };
-  await runAdBudgetAlerts(db, { notify: async () => {}, ...silent });
+  // Keila edita. `POST /api/__preview/permisos?editar=0` la deja solo viendo, para revisar la pantalla de quien solo ve.
+  const access = { edit: true };
+  const permissions = () => ({ pautas: true, pautas_editar: access.edit });
+  await runAdBudgetAlerts(db, { now: clock(), notify: async () => {}, ...silent });
 
   const api = express();
   api.use(express.json());
-  api.use((req, _res, next) => { req.user = { userId: VIEWER, name: 'Keila', role: 'EDITOR' }; next(); });
-  api.use(createAdBudgetRouter({ service: adBudgetService(db) }));
+  api.use((req, _res, next) => { req.user = { userId: VIEWER, name: 'Keila', role: 'EDITOR', modulePermissions: permissions() }; next(); });
+  api.use(createAdBudgetRouter({ service: adBudgetService(db, { clock }), metaService: adBudgetMetaService(db, { meta: previewMeta, budgetClient: previewMetaBudgets, token: () => 'muestra', clock, log: () => {} }) }));
 
   const server = await createServer({
     configFile: false,
@@ -45,11 +51,16 @@ export async function createAdBudgetsPreview({ port = 3848 } = {}) {
         if (pathname.startsWith('/api/')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Cache-Control', 'no-store');
-          if (pathname === '/api/important-notices/current') {
-            res.end(JSON.stringify(await currentImportantNotice(db, VIEWER, new Date(), { log: () => {} })));
+          if (pathname === '/api/__preview/permisos' && req.method === 'POST') {
+            access.edit = new URL(req.url, 'http://localhost').searchParams.get('editar') !== '0';
+            res.end(JSON.stringify({ edit: access.edit }));
             return;
           }
-          const user = { ...dashboardDemoUser, modulePermissions: { ...dashboardDemoUser.modulePermissions, pautas: true } };
+          if (pathname === '/api/important-notices/current') {
+            res.end(JSON.stringify(await currentImportantNotice(db, VIEWER, clock(), { log: () => {} })));
+            return;
+          }
+          const user = { ...dashboardDemoUser, modulePermissions: { ...dashboardDemoUser.modulePermissions, ...permissions() } };
           const routes = {
             '/api/auth/me': user,
             '/api/user/profile': user,
@@ -77,7 +88,8 @@ export async function createAdBudgetsPreview({ port = 3848 } = {}) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const portArg = process.argv.find((arg) => arg.startsWith('--port='))?.split('=')[1];
-  const preview = await createAdBudgetsPreview({ port: Number(portArg || 3848) });
+  const todayArg = process.argv.find((arg) => arg.startsWith('--hoy='))?.split('=')[1] || null;
+  const preview = await createAdBudgetsPreview({ port: Number(portArg || 3848), today: todayArg });
   console.log(`Pautas (muestra): ${preview.origin}/pautas\nDatos de ejemplo en memoria. No hay conexión a producción.`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await preview.close(); process.exit(0); });
 }

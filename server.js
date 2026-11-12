@@ -31,6 +31,7 @@ import { initFormalizationScheduler } from './src/services/projectFormalizationS
 import { initContractCycleAlertScheduler } from './src/services/contractCycleAlertService.js';
 import { initPlanCloseNoticeScheduler } from './src/services/planCloseNoticeService.js';
 import { initAdBudgetAlertScheduler } from './src/services/adBudgetNoticeService.js';
+import { initAdMetaSyncScheduler } from './src/services/adBudgetMetaService.js';
 import { initClientSuspensionScheduler } from './src/services/clientSuspensionService.js';
 import { initProductionDayReminderScheduler } from './src/services/productionDayService.js';
 import { initUnbackedWorkAlertScheduler } from './src/services/unbackedWorkAlertService.js';
@@ -252,6 +253,7 @@ async function bootstrap() {
         initContractCycleAlertScheduler();
         initPlanCloseNoticeScheduler();
         initAdBudgetAlertScheduler();
+        initAdMetaSyncScheduler();
         initClientSuspensionScheduler();
         initProductionDayReminderScheduler();
         initUnbackedWorkAlertScheduler();
