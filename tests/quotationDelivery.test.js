@@ -72,6 +72,9 @@ test('al emitir, el correo sale con el PDF y queda como «Propuesta enviada» en
     assert.equal(sent.length, 1);
     assert.equal(sent[0].subject, 'Propuesta COT-0042 de BRAIN STUDIO AGENCIA CREATIVA S.A.S para Café Altura');
     assert.deepEqual(sent[0].attachments.map((file) => [file.filename, file.contentType, file.content.toString()]), [['Propuesta_COT-0042.pdf', 'application/pdf', 'pdf-42']]);
+    // Rodny, 12 de noviembre de 2026: las propuestas salen de contacto@ y las respuestas del cliente vuelven ahí.
+    assert.equal(sent[0].from, 'Brain Studio <contacto@brainstudioagencia.com>');
+    assert.equal(sent[0].replyTo, 'contacto@brainstudioagencia.com');
     assert.equal(db.activities.length, 1);
     assert.equal(db.activities[0].type, 'PROPUESTA_ENVIADA');
     assert.match(db.activities[0].note, /Propuesta COT-0042 enviada por correo a darling@cafealtura\.test/);

@@ -6,7 +6,7 @@ import prisma from '../lib/prisma.js';
 import { sendEmail } from './transactionalEmailService.js';
 import { generateQuotationPdfBuffer } from './quotationPdfService.js';
 import { addActivity } from './crmService.js';
-import { DELIVERY_CHANNELS, proposalEmail, quotationCode, quotationPublicUrl } from '../lib/quotationDelivery.js';
+import { DELIVERY_CHANNELS, QUOTATION_SENDER, QUOTATION_SENDER_ADDRESS, proposalEmail, quotationCode, quotationPublicUrl } from '../lib/quotationDelivery.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
@@ -43,7 +43,7 @@ export const emailQuotation = async (db, quotation, issuer, { send = sendEmail, 
     });
     try {
         const buffer = await pdf(quotation, issuer);
-        const result = await send({ to, subject: email.subject, text: email.text, html: email.html, attachments: [{ filename: email.attachmentName, content: buffer, contentType: 'application/pdf' }] });
+        const result = await send({ to, from: QUOTATION_SENDER, replyTo: QUOTATION_SENDER_ADDRESS, subject: email.subject, text: email.text, html: email.html, attachments: [{ filename: email.attachmentName, content: buffer, contentType: 'application/pdf' }] });
         if (!result?.sent) {
             return { sent: false, reason: result?.reason || 'no-enviado', message: result?.reason === 'smtp-not-configured' ? 'El correo de la plataforma no está configurado.' : 'El correo no salió.' };
         }
