@@ -9,6 +9,7 @@ export const NOTICE_RESPONSE_POLICIES = Object.freeze({
   ANUNCIO_GENERAL: policy('ANNOUNCEMENT', 'GlobalAnnouncement / AnnouncementDelivery / AnnouncementEvent', ['preview', 'dismiss'], 'Ver anuncio', 'Abrir registra la apertura; cerrar solo retira tu aviso. Ninguna acción acredita cumplimiento.'),
   PAUTA_REVISION: policy('ADS', 'AdBudgetCycle / AdSpendReading / AdBudgetEvent', ['open', 'snooze'], 'Revisar pauta', 'La lectura de gasto y el cierre se registran en Pautas. Abrir el aviso no actualiza el gasto.'),
   PAUTA_CAMPANA: policy('ADS', 'AdCampaign / AdBudgetEvent', ['open', 'snooze'], 'Revisar campaña', 'La revisión se resuelve al corregir la campaña en Pautas, conservando su historial.'),
+  PAUTA_META: policy('ADS', 'AdBudgetCycle.metaForecast / AdMetaCampaign / AdBudgetEvent', ['open', 'snooze'], 'Revisar presupuesto en Meta', 'Sale de la lectura de Meta. Se resuelve bajando el presupuesto en Meta o, si el cliente aprobó más, subiendo el de la pauta; abrirlo no cambia nada.'),
   PAUTA_RESUMEN: policy('ADS', 'AdBudgetCycle / AdSpendReading / AdCampaign', ['open', 'snooze'], 'Revisar pautas', 'Cada pendiente se atiende en Pautas. Este resumen no declara revisadas ni cerradas las campañas.'),
   CRM_FOLLOW_UP: crm(), CRM_REVIEW: crm(), CRM_NEXT_FOLLOW_UP: crm(),
   CARTERA_MENSUAL: collection(), CARTERA_UNICO: collection(), CARTERA_SUSPENSION: collection(true),

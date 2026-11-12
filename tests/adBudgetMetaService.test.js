@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { adBudgetMetaService } from '../src/services/adBudgetMetaService.js';
 import { adBudgetService } from '../src/services/adBudgetService.js';
 import { createAdBudgetsDb } from './fixtures/adBudgetsMemoryDb.js';
+import { adNoticeStillNeeded, runAdBudgetAlerts } from '../src/services/adBudgetNoticeService.js';
 
 const at = (day, hour = 15) => new Date(`${day}T${hour}:00:00Z`);
 const actor = { userId: 'u-keila' };
@@ -43,7 +44,7 @@ const fakeMeta = ({ failAccount = null, calls = [] } = {}) => ({
 });
 
 const setup = ({ day = '2026-11-12', meta = fakeMeta(), token = 'llave', budgetClient = undefined } = {}) => {
-    const db = createAdBudgetsDb({ clients, team: [keila], users: [{ id: 'u-keila', name: 'Keila', isActive: true }], budgets: budgets.map((row) => ({ ...row })) });
+    const db = createAdBudgetsDb({ clients, team: [keila], users: [{ id: 'u-keila', name: 'Keila', isActive: true, role: 'EDITOR', modulePermissions: { pautas: true, pautas_editar: true } }], budgets: budgets.map((row) => ({ ...row })) });
     const options = { meta, token: () => token, clock: () => at(day), log: () => {}, ...(budgetClient ? { budgetClient } : {}) };
     return { db, metaService: adBudgetMetaService(db, options), budgetService: adBudgetService(db, { clock: () => at(day) }) };
 };
@@ -264,4 +265,37 @@ test('sin llave de Meta no se ajusta nada', async () => {
     const { metaService } = setup({ token: '', budgetClient: fakeBudgets() });
     await assert.rejects(metaService.metaBudgets('b-hoff'), (error) => error.statusCode === 503);
     await assert.rejects(metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '1', expectedCents: 1 }, actor), (error) => error.statusCode === 503);
+});
+test('si lo configurado en Meta haría pasarse la pauta, a quien la lleva le llega a la banda; bajarlo lo quita', async () => {
+    const client = fakeBudgets();
+    client.state['1001'].daily_budget = '6000';
+    const { metaService, db } = await linkedHoff(client);
+    const cycle = db.store.cycles.find((row) => row.budgetId === 'b-hoff' && row.cycleKey === '2026-11');
+    assert.equal(cycle.metaForecast.projectedCents, (600_000 + 100_000) * 17, 'la lectura guardó lo que gastaría');
+    assert.equal(cycle.metaForecast.deadline, '2026-11-28');
+
+    // Solo esta pauta activa: con más de tres avisos de la misma persona saldría el resumen.
+    for (const row of db.store.budgets) if (row.id !== 'b-hoff') row.status = 'PAUSADA';
+    await runAdBudgetAlerts(db, { now: at('2026-11-12'), notify: async () => {}, log: () => {}, info: () => {} });
+    const notice = db.store.notices.find((row) => row.kind === 'PAUTA_META');
+    assert.equal(notice.userId, 'u-keila');
+    assert.equal(notice.level, 'IMPORTANTE');
+    assert.match(notice.message, /Con lo configurado en Meta gastaría unos \$\s?239\.000 de \$\s?200\.000 hasta el 28 nov/);
+    assert.match(notice.url, /pauta=b-hoff&meta=presupuesto/);
+
+    await metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '3000', expectedCents: 600_000 }, actor);
+    assert.deepEqual(await adNoticeStillNeeded(db, notice, at('2026-11-12')), { reason: 'PAUTA_ATENDIDA', subject: 'Pablo Hoff' }, 'bajarlo desde la plataforma lo resuelve en el acto');
+});
+
+test('un cambio hecho en el Administrador de anuncios se ve en la siguiente lectura', async () => {
+    const client = fakeBudgets();
+    const { metaService, db } = await linkedHoff(client);
+    const cycle = () => db.store.cycles.find((row) => row.budgetId === 'b-hoff' && row.cycleKey === '2026-11');
+    assert.equal(cycle().metaForecast.projectedCents, 400_000 * 17);
+    client.state['1001'].daily_budget = '8000';
+    await metaService.syncBudgets({ budgetId: 'b-hoff' });
+    assert.equal(cycle().metaForecast.projectedCents, 900_000 * 17);
+    const board = await (await import('../src/services/adBudgetService.js')).adBudgetService(db, { clock: () => at('2026-11-12') }).list();
+    const hoff = board.budgets.find((row) => row.id === 'b-hoff');
+    assert.equal(hoff.meta.excess.totalCents, 12_000_000 + 900_000 * 17);
 });

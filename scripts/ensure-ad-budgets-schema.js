@@ -109,6 +109,7 @@ try {
     ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaFetchedAt" TIMESTAMPTZ(3);
     ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaDetail" JSONB;
     ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaProblem" TEXT;
+    ALTER TABLE "AdBudgetCycle" ADD COLUMN IF NOT EXISTS "metaForecast" JSONB;
 
     CREATE TABLE IF NOT EXISTS "AdMetaAccount" (
       id TEXT PRIMARY KEY,

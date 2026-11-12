@@ -328,6 +328,8 @@ test('Meta: la lectura encuentra las campañas y ligarlas pone el gasto de Meta 
   assert.match(await hoff.locator('[data-ad-meta-section]').innerText(), /PABLO HOFF-\s+NUEVA SEDE\s+Francisco Villa\s+\$ 12\.000/);
   await hoff.locator('[data-ad-history]').first().getByText(/· Meta/).waitFor();
   assert.match(await status.locator('[data-ad-meta-unassigned]').innerText(), /9 campañas/);
+  // Lo configurado en Meta (6.800 y 2.000 diarios hasta el 28) haría pasarse los 200.000 aprobados: la fila lo dice.
+  assert.match(await hoff.locator('[data-ad-meta-excess]').innerText(), /Con lo configurado en Meta gastaría unos \$ 255\.200 de \$ 200\.000 hasta el 28 nov/);
   await hoff.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200);
   await shot(page, '09-gasto-de-meta');
@@ -388,9 +390,9 @@ test('Meta: lo que gasta sin pauta se liga a la suya o se marca como que no es d
 });
 
 test('Meta: el presupuesto se ve; subirlo por encima de lo aprobado se frena y bajarlo cambia Meta', async () => {
-  const { page, errors } = await open('?pauta=b-hoff');
+  // Así llega el aviso de la banda: la ventana del presupuesto se abre sola.
+  const { page, errors } = await open('?pauta=b-hoff&meta=presupuesto');
   const hoff = row(page, 'b-hoff');
-  await hoff.locator('[data-ad-meta-budget-open]').click();
   const dialog = page.locator('[data-ad-meta-budget-dialog]');
   await dialog.locator('[data-ad-meta-budget-row="120100"]').waitFor();
   assert.match(await dialog.locator('[data-ad-meta-budget-summary]').innerText(), /Quedan \$ 147\.200 del ciclo.*\$ 202\.400.*se pasaría/s);
@@ -418,6 +420,8 @@ test('Meta: el presupuesto se ve; subirlo por encima de lo aprobado se frena y b
   await page.screenshot({ path: `${OUT}/14-presupuesto-meta-cambiado.png` });
   await page.keyboard.press('Escape');
   await hoff.locator('[data-ad-changes]').getByText(/Presupuesto diario en Meta de «PABLO HOFF- MENSAJES INSCRIPCIONES»: de \$ 6\.800 a \$ 4\.500 · Keila/).waitFor();
+  assert.equal(await hoff.locator('[data-ad-meta-excess]').count(), 0, 'bajarlo quita el aviso de «se pasaría»');
+  assert.equal(new URL(page.url()).searchParams.get('meta'), null, 'el enlace no vuelve a abrir la ventana');
   assert.deepEqual(errors, []);
   await page.close();
 });

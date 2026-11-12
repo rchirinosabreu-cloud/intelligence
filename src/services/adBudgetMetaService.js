@@ -8,12 +8,12 @@
 // 3. **Ajustar el presupuesto** de una campaña ligada (o de sus conjuntos), con el tope de lo aprobado en la pauta. Es lo único que\n//    cambia algo en Meta, y solo el presupuesto (`metaAdBudgetClient`).\n//\n// Un fallo de Meta nunca borra lo que ya había: se anota en la cuenta o en el ciclo y la pantalla lo dice.
 import { randomUUID } from 'node:crypto';
 import prisma from '../lib/prisma.js';
-import { adBudgetName, adCycleFor, budgetCutDay, cycleFromKey, previousCycleKey, addDays, formatAdMoney } from '../lib/adBudgets.js';
+import { adBudgetName, adCycleFor, budgetCutDay, cycleFromKey, previousCycleKey, addDays, formatAdMoney, spendDeadline } from '../lib/adBudgets.js';
 import {
     META_DISCOVERY_DAYS, META_SYNC_EVERY_HOURS, metaCampaignIdsProblem, metaCyclesToSync, metaReadingAction, metaSpendWindow, suggestMetaCampaigns, unassignedMetaCampaigns
 } from '../lib/adBudgetMeta.js';
 import { humanizeMetaReadError } from '../lib/metaReportSources.js';
-import { humanizeMetaBudgetError, metaBudgetChange, metaBudgetObject, projectMetaSpend, projectionStart } from '../lib/adBudgetMetaBudgets.js';
+import { humanizeMetaBudgetError, metaBudgetChange, metaBudgetObject, metaForecastRecord, projectMetaSpend, projectionStart } from '../lib/adBudgetMetaBudgets.js';
 import { metaAdBudgetClient } from './metaAdBudgetClient.js';
 import { metaInsightsService } from './metaInsightsService.js';
 import { AD_BUDGET_INCLUDE, bogotaToday, describeBudget, ensureAdCycle, syncAdCycle } from './adBudgetService.js';
@@ -116,13 +116,15 @@ export const adBudgetMetaService = (db = prisma, {
                 } catch (error) {
                     read = { problem: humanizeMetaReadError(error) };
                 }
+                // Del ciclo que corre, también lo que gastaría con lo configurado en Meta: de ahí sale el aviso de «se pasaría».
+                const forecast = cycle.key === current.key && !read.problem ? await forecastOf(budget, cycle, window.until, today, now) : undefined;
                 const result = await db.$transaction(async (tx) => {
                     const row = await ensureAdCycle(tx, budget, cycle);
                     if (read.problem) {
                         await tx.adBudgetCycle.update({ where: { id: row.id }, data: { metaProblem: read.problem, metaFetchedAt: now } });
                         return { action: 'SKIP', reason: 'PROBLEMA', problem: read.problem };
                     }
-                    await tx.adBudgetCycle.update({ where: { id: row.id }, data: { metaSpent: read.totalCents / 100, metaSpentAsOf: window.until, metaFetchedAt: now, metaDetail: read.detail, metaProblem: null } });
+                    await tx.adBudgetCycle.update({ where: { id: row.id }, data: { metaSpent: read.totalCents / 100, metaSpentAsOf: window.until, metaFetchedAt: now, metaDetail: read.detail, metaProblem: null, ...(forecast !== undefined ? { metaForecast: forecast } : {}) } });
                     const readings = await tx.adSpendReading.findMany({ where: { cycleId: row.id }, orderBy: [{ readOn: 'desc' }, { createdAt: 'desc' }] });
                     const decision = metaReadingAction({ readings, metaCents: read.totalCents, readOn: window.until, closed: Boolean(row.closedAt) });
                     if (decision.action === 'CREATE') {
@@ -190,6 +192,16 @@ export const adBudgetMetaService = (db = prisma, {
             objects.push(metaBudgetObject(item.raw, { level: item.level, currency: row.currency, campaignId: item.campaignId, campaignName: campaign?.name || null, accountName: campaign?.accountName || null }));
         }
         return { objects, problems };
+    };
+
+    /** Lo que gastaría la pauta con lo configurado en Meta hasta su límite de gasto. Un fallo se guarda como tal: no avisa. */
+    const forecastOf = async (budget, cycle, asOf, today, now) => {
+        try {
+            const { objects, problems } = await readObjects(budget);
+            return metaForecastRecord({ objects, problems, asOf, today, deadline: spendDeadline(cycle), at: now.toISOString() });
+        } catch (error) {
+            return { on: today, at: now.toISOString(), problem: humanizeMetaReadError(error) };
+        }
     };
 
     const budgetsById = async () => {
@@ -309,7 +321,7 @@ export const adBudgetMetaService = (db = prisma, {
             if (!configured()) throw httpError(503, 'La conexión con Meta no está configurada en el servidor.');
             const newCents = Math.round(Number(input.amount) * 100);
             if (!Number.isFinite(newCents) || newCents <= 0) throw httpError(422, 'Escribe el nuevo presupuesto.');
-            const { row, view } = await evaluated(budgetId);
+            const { row, view, described } = await evaluated(budgetId);
             const { objects, problems } = await readObjects(row);
             if (!objects.some((object) => object.id === String(input.objectId)) && problems.length) throw httpError(502, problems[0]);
             const decision = metaBudgetChange({ budget: view, objects, objectId: input.objectId, kind: input.kind, newCents, expectedCents: input.expectedCents });
@@ -326,6 +338,10 @@ export const adBudgetMetaService = (db = prisma, {
                 const again = await readObjects(row);
                 const after = again.objects.find((item) => item.id === object.id);
                 confirmed = after ? after.budgetCents === newCents : null;
+                // El aviso de «se pasaría» se cae en cuanto se baja: el pronóstico del ciclo se rehace con lo que Meta tiene ahora.
+                const now = clock();
+                const cycleRow = await ensureAdCycle(db, row, described.cycle);
+                await db.adBudgetCycle.update({ where: { id: cycleRow.id }, data: { metaForecast: metaForecastRecord({ objects: again.objects, problems: again.problems, asOf: view.asOf || view.today, today: view.today, deadline: view.deadline, at: now.toISOString() }) } });
             } catch (error) {
                 log('[Pautas Meta] No se pudo confirmar el cambio de presupuesto:', error?.message || error);
             }

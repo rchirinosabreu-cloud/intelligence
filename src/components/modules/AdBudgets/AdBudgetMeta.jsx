@@ -62,11 +62,12 @@ export function MetaStatus({ meta, onOpenUnassigned }) {
 }
 
 /** La fila de una pauta: de dónde sale el gasto, y si lo escrito a mano no coincide con Meta. */
-export function MetaReadingNotes({ budget }) {
+export function MetaReadingNotes({ budget, onBudget }) {
   const record = useRecordAdSpend();
   const canEdit = useCanEditAds();
   const { meta, currency } = budget;
   if (!meta?.linked) return null;
+  const excess = meta.excess;
   const useMeta = async () => {
     try {
       await record.mutateAsync({ id: budget.id, input: { spent: String(meta.spentCents / 100), readOn: meta.asOf, note: 'Tomado de Meta' } });
@@ -81,6 +82,12 @@ export function MetaReadingNotes({ budget }) {
         <p data-ad-meta-difference className="flex flex-wrap items-center gap-x-2 text-sm text-status-attention-fg">
           Meta marca {formatAdMoney(meta.spentCents, currency)} hasta el {shortDay(meta.asOf)}; la cifra escrita a mano es {formatAdMoney(budget.evaluation.spentCents, currency)}.
           {canEdit && <button type="button" data-ad-meta-use disabled={record.isPending} onClick={useMeta} className="min-h-7 rounded font-semibold underline">Usar la de Meta</button>}
+        </p>
+      )}
+      {excess && (
+        <p data-ad-meta-excess className="flex flex-wrap items-center gap-x-2 text-sm text-destructive brain-destructive-text">
+          Con lo configurado en Meta gastaría unos {formatAdMoney(excess.totalCents, currency)} de {formatAdMoney(budget.evaluation.availableCents, currency)} hasta el {shortDay(excess.deadline)}.
+          {onBudget && <button type="button" data-ad-meta-excess-open onClick={onBudget} className="min-h-7 rounded font-semibold underline">Revisar presupuesto en Meta</button>}
         </p>
       )}
       {meta.problem && <p data-ad-meta-problem className="text-sm text-status-attention-fg">No se pudo leer Meta: {meta.problem}</p>}

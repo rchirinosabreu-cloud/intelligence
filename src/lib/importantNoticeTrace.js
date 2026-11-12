@@ -49,7 +49,7 @@ const CLEARED_REASONS = {
     PUBLICADAS: 'las piezas ya quedaron publicadas',
     FUENTE_ACTUALIZADA: 'ya no hay publicaciones pendientes asignadas a esta persona en el período del aviso',
     ACCESO_ACTUALIZADO: 'el aviso ya no corresponde al acceso vigente de esta persona',
-    PAUTA_ATENDIDA: 'ya se actualizó el gasto o se revisó la campaña',
+    PAUTA_ATENDIDA: 'ya se actualizó el gasto, se revisó la campaña o se ajustó el presupuesto en Meta',
     PAUTA_INACTIVA: 'la pauta ya no está activa'
 };
 

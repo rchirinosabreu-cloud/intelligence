@@ -17,7 +17,7 @@ const fixture = (kind = 'CRM_REVIEW', lead = { stage: 'GANADO', archivedAt: null
 };
 
 test('una parrilla y un tipo nuevo no pueden registrar por descarte una gestión comercial', async () => {
-  for (const kind of ['PARRILLA_SIN_PUBLICAR', 'PAUTA_REVISION', 'PAUTA_CAMPANA', 'PAUTA_RESUMEN', 'NUEVA_ALERTA']) {
+  for (const kind of ['PARRILLA_SIN_PUBLICAR', 'PAUTA_REVISION', 'PAUTA_CAMPANA', 'PAUTA_RESUMEN', 'PAUTA_META', 'NUEVA_ALERTA']) {
     const { db, calls, row } = fixture(kind);
     await assert.rejects(followUpNotice(db, 'notice', { channel: 'WHATSAPP' }, actor, {
       now, crm: { addActivity: async () => calls.push('crm') },
@@ -72,7 +72,7 @@ test('una fuente de publicaciones que falla no acredita resolución ni entrega u
 });
 
 test('el catálogo vigente declara origen y efecto; solo CRM/cartera admiten registrar gestión',()=>{
-  assert.equal(Object.keys(NOTICE_RESPONSE_POLICIES).length,18);
+  assert.equal(Object.keys(NOTICE_RESPONSE_POLICIES).length,19);
   for(const [kind,policy] of Object.entries(NOTICE_RESPONSE_POLICIES)){
     assert.ok(policy.source && policy.explanation && policy.openLabel);
     assert.ok(noticeAllows({kind},policy.family === 'ANNOUNCEMENT' ? 'preview' : 'open'));

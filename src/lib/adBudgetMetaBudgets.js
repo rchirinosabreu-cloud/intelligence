@@ -74,6 +74,37 @@ export const projectionStart = ({ asOf, today }) => (asOf && asOf < today ? addD
 const KIND_LABEL = { DAILY: 'diario', LIFETIME: 'total' };
 
 /**
+ * Lo que la pauta gastaría con lo configurado en Meta, tal como se guarda en el ciclo en cada lectura (cada dos horas y con
+ * «Actualizar ahora»). Así el aviso no tiene que preguntarle a Meta: lo que cambie alguien en el Administrador de anuncios se
+ * ve en la siguiente lectura.
+ */
+export const metaForecastRecord = ({ objects = [], problems = [], asOf, today, deadline, at }) => {
+    const start = projectionStart({ asOf, today });
+    const { byId, totalCents } = projectMetaSpend({ objects, start, deadline });
+    return {
+        on: today, at, start, deadline, projectedCents: totalCents, problems,
+        objects: objects.filter((object) => object.kind).map((object) => ({
+            id: object.id, name: object.name, level: object.level, campaignName: object.campaignName || null,
+            status: object.status, kind: object.kind, budgetCents: object.budgetCents, projectedCents: byId.get(object.id) || 0
+        }))
+    };
+};
+
+/**
+ * ¿Se pasaría la pauta con lo que tiene Meta? Solo con una lectura de hoy o de ayer del mismo ciclo, con la pauta activa y
+ * todavía antes del límite de gasto. Si ya se pasó, eso lo dice otro aviso. Devuelve lo que gastaría en total y por cuánto
+ * se pasaría, o `null`.
+ */
+export const metaForecastExcess = ({ forecast, evaluation: e, status, today, currency }) => {
+    if (!forecast || forecast.problem || !Number.isFinite(forecast.projectedCents)) return null;
+    if (status !== 'ACTIVA' || e.closed || !['AL_DIA', 'ATRASADA', 'RAPIDA', 'SIN_GASTO', 'COMPLETA'].includes(e.state)) return null;
+    if (forecast.deadline !== e.deadline || !today || today > e.deadline || forecast.on < addDays(today, -1)) return null;
+    const totalCents = e.spentCents + forecast.projectedCents;
+    const overCents = totalCents - e.availableCents;
+    return overCents > toleranceCents(currency) ? { totalCents, overCents, deadline: e.deadline, projectedCents: forecast.projectedCents } : null;
+};
+
+/**
  * Cuando Meta no acepta un cambio. Los códigos 10, 190 y 200–299 son de permisos o de la llave; lo demás se dice con las
  * palabras de Meta («Meta no aceptó» solo se dice de lo que dijo Meta).
  */
