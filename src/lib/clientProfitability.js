@@ -39,6 +39,24 @@ const share = (part, whole, total) => (whole > 0 ? Math.round((part / whole) * t
 const money = (value) => `${value < 0 ? '-' : ''}$${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Math.abs(Math.round(value / 100)))}`;
 const hours = (ms) => { const h = ms / H; return `${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 }).format(h)} h`; };
 
+/**
+ * Qué significa cada cifra, en una o dos frases (Rodny, 12 de noviembre de 2026: «no
+ * comprendo qué significa la relación ahí, horas, por hora, qué es eso?»). Dice **qué es
+ * y con qué se compara**; nunca un juicio ni una recomendación, que eso lo pone quien
+ * decide. Vive aquí, junto al cálculo, para que la explicación y la cuenta no se separen.
+ */
+export const PROFITABILITY_HINTS = Object.freeze({
+  revenue: 'Lo que se le facturó a los clientes este mes. De un cliente sin cuenta por cobrar del mes se toma lo que entró de él en Movimientos. No entran préstamos ni reintegros.',
+  cost: 'Todo lo que salió por operar el mes: nómina y gastos. No entran los préstamos otorgados ni las inversiones.',
+  hourCost: 'Un solo valor para toda la agencia: el costo de operar el mes, sin lo que se pagó directamente por un cliente, entre las horas medidas. Es lo que cuesta una hora de trabajo, la haga quien la haga — nunca el sueldo de una persona.',
+  hoursMeasured: 'Las horas que el equipo registró con el cronómetro en las tareas que cerró este mes. Si hay poco medido, el costo hora sale inflado y lo que se le asigna a cada cuenta queda impreciso.',
+  clientRevenue: 'Lo que se le facturó a esta cuenta este mes, o lo que entró de ella si no tiene cuenta por cobrar. Debajo de la cifra dice cuál de las dos es.',
+  clientHours: 'Las horas que el equipo midió trabajando para esta cuenta este mes.',
+  clientCost: 'Sus horas por el costo hora de la agencia, más lo que se pagó directamente por esta cuenta, como su pauta o un proveedor suyo.',
+  clientMargin: 'El ingreso menos el costo. El porcentaje es cuánto de lo que entró quedó: 41 % significa que de cada $100 facturados quedaron $41.',
+  perHour: 'Cuánto ingresó por cada hora trabajada en esta cuenta. Se compara con el costo hora de la agencia: por debajo de ese valor, la cuenta cuesta más de lo que deja.'
+});
+
 const FLAG_TEXT = {
   INGRESOS: (row) => `Sin cuenta por cobrar del mes: se usó lo que entró en Movimientos (${money(row.receivedCents)}).`,
   PIERDE: (row) => `Costó ${money(row.costCents)} y ${row.revenueSource === 'INGRESOS' ? 'entró' : 'se le facturó'} ${money(row.revenueCents)}: ${money(-row.marginCents)} por debajo.`,
