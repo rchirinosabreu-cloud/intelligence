@@ -9,7 +9,52 @@ export const PRODUCTION_DAY_STATES = {
   AGENDADA: { label: 'Agendada', hint: 'Todavía no llega su fecha.' },
   SIN_EVIDENCIA: { label: 'Falta la evidencia', hint: 'Ya pasó la fecha y nadie subió el enlace del Drive.' },
   REALIZADA: { label: 'Realizada', hint: 'Tiene el enlace de sus evidencias.' },
+  // Rodny, 12 de noviembre de 2026: lo que el contrato pide y todavía no está en el calendario va en la misma tabla
+  // que las demás, con su propio estado, y se agenda desde ahí.
+  NO_AGENDADA: { label: 'No agendada', hint: 'El contrato la pide y todavía no está en el calendario. Tócala para agendarla.' },
 };
+
+/**
+ * Las filas de la tabla de Jornadas de un mes: las agendadas, en su orden, y después una fila «No agendada» por cada
+ * jornada que el contrato pide y no está en el calendario (Bonsai con 2 de 2 sin fecha son dos filas). Van al final,
+ * por cliente, porque todavía no tienen fecha.
+ */
+export function monthBoardRows(items = [], pending = []) {
+  const unscheduled = [...pending]
+    .sort((a, b) => String(a.client?.name || '').localeCompare(String(b.client?.name || ''), 'es'))
+    .flatMap((row) => {
+      const contracted = Number(row.contracted) || 0;
+      const missing = Math.max(0, Number(row.missing) || 0);
+      return Array.from({ length: missing }, (_, index) => {
+        const number = contracted - missing + index + 1;
+        return {
+          id: `no-agendada:${row.client?.id}:${number}`,
+          state: 'NO_AGENDADA',
+          date: null,
+          clientId: row.client?.id || null,
+          clientName: row.client?.name || '',
+          clientSlug: row.client?.slug || '',
+          title: contracted > 1 ? `Jornada ${number} de ${contracted} del contrato` : 'Jornada del contrato',
+        };
+      });
+    });
+  return [...items, ...unscheduled];
+}
+
+/**
+ * El día que se le propone al calendario al agendar una jornada del mes `monthKey` (AAAA-MM-01): hoy si el mes es el
+ * de hoy o ya pasó —no se agenda en el pasado—, y si es un mes que viene, su primer día hábil de lunes a viernes.
+ */
+export function proposedJornadaDate(monthKey, today) {
+  const month = String(monthKey || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month) || month <= String(today).slice(0, 7)) return today;
+  let day = `${month}-01`;
+  for (;;) {
+    const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) return day;
+    day = addDays(day, 1);
+  }
+}
 
 export const EVIDENCE_NOTE_MAX = 500;
 export const EVIDENCE_URL_MAX = 1000;

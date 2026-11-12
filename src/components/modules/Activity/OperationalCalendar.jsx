@@ -95,7 +95,11 @@ const getEventTypeStyles = (type) => {
 
 const getTypeLabel = (type) => EVENT_TYPES.find(item => item.value === type)?.label || type;
 
-const OperationalCalendar = () => {
+// `createRequest` (Rodny, 12 de noviembre de 2026: «si le doy click a su estado podría abrirse allí el panel del
+// calendario»): otra pantalla puede abrir **este mismo formulario** de evento —sin el calendario alrededor— para agendar
+// una jornada con el cliente ya elegido ({ date: 'AAAA-MM-DD', clientId, clientName }). Al cerrarlo o guardarlo se
+// llama `onClose`. No hay una segunda copia del formulario.
+const OperationalCalendar = ({ createRequest = null, onClose } = {}) => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
   // Un aviso puede traer `?evento=<id>&fecha=AAAA-MM-DD` (jornadas sin evidencia, 10 de noviembre de 2026): el
@@ -182,6 +186,7 @@ const OperationalCalendar = () => {
       }
       return res.json();
     },
+    enabled: !createRequest,
     refetchInterval: 15_000
   });
 
@@ -498,6 +503,7 @@ const OperationalCalendar = () => {
       createRequestIdentityRef.current.reset();
       queryClient.invalidateQueries({ queryKey: ['client-operations'] });
       queryClient.invalidateQueries({ queryKey: ['production-day'] });
+      queryClient.invalidateQueries({ queryKey: ['production-days-month'] });
       const feedback = getCalendarSaveFeedback(event, Boolean(eventId));
       if (feedback.success) toast.success(feedback.message);
       else toast.error(feedback.message, { duration: 8000 });
@@ -559,7 +565,7 @@ const OperationalCalendar = () => {
     }
   });
 
-  const openCreateModal = (date = currentDate, type = 'PRODUCTION') => {
+  const openCreateModal = (date = currentDate, type = 'PRODUCTION', prefill = {}) => {
     if (saveInFlightRef.current) return;
     createRequestIdentityRef.current.reset();
     originalEventDatesRef.current = null;
@@ -579,7 +585,8 @@ const OperationalCalendar = () => {
       googleConnectionId: googleConnections.find(connection => connection.isActive !== false && !connection.reconnectRequired)?.id || '',
       productionClientId: '',
       productionLocation: '',
-      productionScriptUrl: ''
+      productionScriptUrl: '',
+      ...prefill
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -588,6 +595,23 @@ const OperationalCalendar = () => {
     setEditingEventId(null);
     setIsModalOpen(true);
   };
+
+  // Abierto desde otra pantalla: el formulario sale en cuanto se sabe con qué cuenta de Google se crea, ya con la
+  // jornada, el cliente y el día propuestos; y al cerrarse —guardado o no— devuelve el control a esa pantalla.
+  const embeddedOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!createRequest || embeddedOpenedRef.current) return;
+    if (!googleCalendarStatus && !googleStatusLoadFailed) return;
+    embeddedOpenedRef.current = true;
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(createRequest.date || '') ? toBogotaCalendarDate(new Date(`${createRequest.date}T12:00:00-05:00`)) : currentDate;
+    openCreateModal(day, 'PRODUCTION', {
+      title: createRequest.clientName ? `Jornada de producción ${createRequest.clientName}` : 'Jornada de producción',
+      productionClientId: createRequest.clientId || ''
+    });
+  }, [createRequest, googleCalendarStatus, googleStatusLoadFailed]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (createRequest && embeddedOpenedRef.current && !isModalOpen && !googleErrorConnection) onClose?.();
+  }, [createRequest, isModalOpen, googleErrorConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEmptyDayClick = (day) => {
     if (!isAdmin) return;
@@ -818,6 +842,7 @@ const OperationalCalendar = () => {
 
   return (
     <div className="space-y-6">
+      {!createRequest && (<>
       <div className="flex flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-center dark:border-white/10 dark:bg-white/5">
@@ -1048,6 +1073,7 @@ const OperationalCalendar = () => {
           );
         })}
       </div>
+      </>)}
 
       {selectedDayAgenda && (
         <Dialog open={!!selectedDayAgenda} onOpenChange={open => { if (!open) setSelectedDayAgenda(null); }}>
