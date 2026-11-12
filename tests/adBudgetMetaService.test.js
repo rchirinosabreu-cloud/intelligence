@@ -42,9 +42,9 @@ const fakeMeta = ({ failAccount = null, calls = [] } = {}) => ({
     }
 });
 
-const setup = ({ day = '2026-11-12', meta = fakeMeta(), token = 'llave' } = {}) => {
+const setup = ({ day = '2026-11-12', meta = fakeMeta(), token = 'llave', budgetClient = undefined } = {}) => {
     const db = createAdBudgetsDb({ clients, team: [keila], users: [{ id: 'u-keila', name: 'Keila', isActive: true }], budgets: budgets.map((row) => ({ ...row })) });
-    const options = { meta, token: () => token, clock: () => at(day), log: () => {} };
+    const options = { meta, token: () => token, clock: () => at(day), log: () => {}, ...(budgetClient ? { budgetClient } : {}) };
     return { db, metaService: adBudgetMetaService(db, options), budgetService: adBudgetService(db, { clock: () => at(day) }) };
 };
 
@@ -172,4 +172,96 @@ test('sin la llave de Meta no se lee nada y se dice en palabras', async () => {
     assert.deepEqual(await metaService.run(), { configured: false, accounts: 0, failures: 0, budgets: [] });
     await assert.rejects(metaService.syncNow(), (error) => error.statusCode === 503 && /no está configurada/.test(error.message));
     assert.equal((await metaService.overview()).configured, false);
+});
+
+// Ajustar el presupuesto en Meta (12 de noviembre de 2026). Un Meta de mentira con la campaña 1001 a 3.000 diarios y la 1002
+// sin presupuesto propio: lo lleva su conjunto, a 1.000 diarios.
+const fakeBudgets = ({ fail = null, refuse = null } = {}) => {
+    const state = {
+        '1001': { id: '1001', name: 'PABLO HOFF- MENSAJES INSCRIPCIONES', effective_status: 'ACTIVE', daily_budget: '3000', lifetime_budget: '0' },
+        '1002': { id: '1002', name: 'PABLO HOFF-  NUEVA SEDE', effective_status: 'ACTIVE', daily_budget: '0', lifetime_budget: '0' },
+        'as-1': { id: 'as-1', name: 'Sede · Cartagena', effective_status: 'ACTIVE', daily_budget: '1000', lifetime_budget: '0', campaign_id: '1002' }
+    };
+    const writes = [];
+    return {
+        state, writes,
+        readCampaignBudgets: async ({ campaignIds }) => campaignIds.flatMap((id) => {
+            if (id === fail) return [{ campaignId: id, error: Object.assign(new Error('Unsupported get request'), { name: 'MetaGraphError', code: 100 }) }];
+            const campaign = state[id];
+            if (Number(campaign.daily_budget) || Number(campaign.lifetime_budget)) return [{ campaignId: id, level: 'CAMPAIGN', raw: { ...campaign } }];
+            return Object.values(state).filter((row) => row.campaign_id === id).map((raw) => ({ campaignId: id, level: 'ADSET', raw: { ...raw } }));
+        }),
+        setBudget: async ({ objectId, field, minor }) => {
+            if (refuse) throw Object.assign(new Error(refuse.message), { name: 'MetaGraphError', code: refuse.code });
+            writes.push({ objectId, field, minor });
+            state[objectId][field] = String(minor);
+            return { success: true };
+        }
+    };
+};
+
+const linkedHoff = async (budgetClient) => {
+    const env = setup({ budgetClient });
+    await env.metaService.run();
+    await env.metaService.assign('b-hoff', ['1001', '1002'], actor);
+    return env;
+};
+
+test('los presupuestos de Meta de una pauta: el de la campaña o el de sus conjuntos, con lo que gastaría hasta el límite', async () => {
+    const client = fakeBudgets();
+    const { metaService } = await linkedHoff(client);
+    const view = await metaService.metaBudgets('b-hoff');
+    assert.equal(view.budget.availableCents, 20_000_000);
+    assert.equal(view.budget.spentCents, 12_000_000, '10.000 diarios durante 12 días, leído de Meta');
+    assert.equal(view.budget.deadline, '2026-11-28');
+    assert.deepEqual(view.objects.map((item) => [item.id, item.level, item.kind, item.budgetCents, item.projectedCents]).sort(), [
+        ['1001', 'CAMPAIGN', 'DAILY', 300_000, 300_000 * 17],
+        ['as-1', 'ADSET', 'DAILY', 100_000, 100_000 * 17]
+    ]);
+    assert.equal(view.projectedCents, 6_800_000);
+});
+
+test('subir dentro de lo aprobado cambia Meta, lo confirma y queda en el historial con quién lo hizo', async () => {
+    const client = fakeBudgets();
+    const { metaService, db } = await linkedHoff(client);
+    const result = await metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '4000', expectedCents: 300_000 }, actor);
+    assert.deepEqual(client.writes, [{ objectId: '1001', field: 'daily_budget', minor: 4000 }]);
+    assert.equal(result.confirmed, true);
+    const event = db.store.events.find((row) => row.action === 'META_PRESUPUESTO');
+    assert.equal(event.actorId, 'u-keila');
+    assert.match(event.summary, /Presupuesto diario en Meta de «PABLO HOFF- MENSAJES INSCRIPCIONES»: de \$\s?3\.000 a \$\s?4\.000/);
+    assert.deepEqual([event.before.cents, event.after.cents], [300_000, 400_000]);
+});
+
+test('pasarse de lo aprobado no llega a Meta y dice el máximo; un cambio hecho en Meta mientras tanto tampoco', async () => {
+    const client = fakeBudgets();
+    const { metaService } = await linkedHoff(client);
+    await assert.rejects(metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '4200', expectedCents: 300_000 }, actor), (error) => {
+        assert.equal(error.statusCode, 422);
+        assert.match(error.message, /como máximo \$\s?4\.000 diarios/);
+        return true;
+    });
+    client.state['1001'].daily_budget = '3500';
+    await assert.rejects(metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '3800', expectedCents: 300_000 }, actor), (error) => error.statusCode === 409 && /ahora es \$\s?3\.500/.test(error.message));
+    await assert.rejects(metaService.adjustBudget('b-hoff', { objectId: '2001', kind: 'DAILY', amount: '100', expectedCents: 0 }, actor), (error) => error.statusCode === 404, 'una campaña de otra pauta no se toca');
+    assert.deepEqual(client.writes, []);
+});
+
+test('el conjunto de una campaña se ajusta; si Meta no acepta, se dice con sus palabras y no se anota', async () => {
+    const client = fakeBudgets();
+    const { metaService, db } = await linkedHoff(client);
+    const result = await metaService.adjustBudget('b-hoff', { objectId: 'as-1', kind: 'DAILY', amount: '1500', expectedCents: 100_000 }, actor);
+    assert.match(result.summary, /del conjunto «Sede · Cartagena»/);
+
+    const refusing = fakeBudgets({ refuse: { code: 200, message: 'Permissions error' } });
+    const second = await linkedHoff(refusing);
+    await assert.rejects(second.metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '3500', expectedCents: 300_000 }, actor), (error) => error.statusCode === 502 && /permiso para administrar sus campañas/.test(error.message));
+    assert.equal(second.db.store.events.filter((row) => row.action === 'META_PRESUPUESTO').length, 0);
+    assert.equal(db.store.events.filter((row) => row.action === 'META_PRESUPUESTO').length, 1);
+});
+
+test('sin llave de Meta no se ajusta nada', async () => {
+    const { metaService } = setup({ token: '', budgetClient: fakeBudgets() });
+    await assert.rejects(metaService.metaBudgets('b-hoff'), (error) => error.statusCode === 503);
+    await assert.rejects(metaService.adjustBudget('b-hoff', { objectId: '1001', kind: 'DAILY', amount: '1', expectedCents: 1 }, actor), (error) => error.statusCode === 503);
 });

@@ -1,5 +1,11 @@
+import { createContext, useContext } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+
+// Quien solo ve Pautas no encuentra botones que el servidor le va a rechazar. Lo decide el servidor (`canEdit` de la
+// lista, con «Editar pautas»); la pantalla solo lo refleja.
+export const AdEditContext = createContext(false);
+export const useCanEditAds = () => useContext(AdEditContext);
 
 // Pautas: lecturas y escrituras contra `/api/ad-budgets`. Lo que cambia en pantalla espera la respuesta del servidor.
 
@@ -70,7 +76,14 @@ export function useAdMetaSuggestions(id, { enabled = true } = {}) {
   return useQuery({ queryKey: [...BOARD_KEY, 'meta-suggestions', id], queryFn: () => request(`/${encodeURIComponent(id)}/meta-suggestions`), enabled: enabled && Boolean(id), staleTime: 30_000 });
 }
 
-export const useSyncAdMeta = () => useBoardMutation(() => request('/meta/sync', { method: 'POST' }));
+// El presupuesto que Meta tiene ahora: se pide al abrir la ventana, nunca de memoria.
+export function useAdMetaBudgets(id, { enabled = true } = {}) {
+  return useQuery({ queryKey: [...BOARD_KEY, 'meta-budgets', id], queryFn: () => request(`/${encodeURIComponent(id)}/meta-budgets`), enabled: enabled && Boolean(id), staleTime: 0, retry: false });
+}
+
+export const useAdjustAdMetaBudget = () => useBoardMutation(({ id, input }) => request(`/${id}/meta-budget`, { method: 'POST', body: JSON.stringify(input) }));
+
+export const useSyncAdMeta = () =>useBoardMutation(() => request('/meta/sync', { method: 'POST' }));
 
 export const useAssignAdMeta = () => useBoardMutation(({ id, campaignIds }) => request(`/${id}/meta-campaigns`, { method: 'PUT', body: JSON.stringify({ campaignIds }) }));
 

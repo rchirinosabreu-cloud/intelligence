@@ -5,11 +5,12 @@ import express from 'express';
 import { createAdBudgetRouter } from '../src/routes/api/adBudgets.js';
 
 const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const EDITOR = { userId: 'u1', role: 'EDITOR', modulePermissions: { pautas: true, pautas_editar: true } };
 
-const serve = async (service) => {
+const serve = async (service, user = EDITOR) => {
     const app = express();
     app.use(express.json());
-    app.use((req, _res, next) => { req.user = { userId: 'u1' }; next(); });
+    app.use((req, _res, next) => { req.user = { ...user }; next(); });
     app.use('/ad-budgets', createAdBudgetRouter({ service }));
     const server = await new Promise((resolve) => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
     const url = `http://127.0.0.1:${server.address().port}/ad-budgets`;
@@ -27,7 +28,7 @@ test('las rutas de Meta van antes de «/:id» y llegan a su servicio con la pers
     };
     const app = express();
     app.use(express.json());
-    app.use((req, _res, next) => { req.user = { userId: 'u1' }; next(); });
+    app.use((req, _res, next) => { req.user = { ...EDITOR }; next(); });
     app.use('/ad-budgets', createAdBudgetRouter({ service: { detail: async () => { throw new Error('no debía llegar aquí'); } }, metaService }));
     const server = await new Promise((resolve) => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
     const url = `http://127.0.0.1:${server.address().port}/ad-budgets`;
@@ -82,4 +83,54 @@ test('«options» no se confunde con una pauta y la lectura de gasto llega con q
     } finally {
         await close();
     }
+});
+
+test('ver no es editar: sin «Editar pautas» se lee, pero nada se escribe; tampoco un administrador sin la casilla', async () => {
+    const wrote = [];
+    const service = {
+        list: async () => ({ today: '2026-11-12', budgets: [] }),
+        detail: async () => ({ ok: true }),
+        create: async () => { wrote.push('create'); return {}; },
+        recordSpend: async () => { wrote.push('spend'); return {}; }
+    };
+    const metaService = { overview: async () => ({ configured: true }), syncNow: async () => ({ skipped: true }), assign: async () => { wrote.push('assign'); return {}; } };
+    const people = {
+        viewer: { userId: 'v', role: 'EDITOR', modulePermissions: { pautas: true } },
+        admin: { userId: 'a', role: 'ADMIN', modulePermissions: {} },
+        editor: EDITOR,
+        orphan: { userId: 'o', role: 'EDITOR', modulePermissions: { pautas_editar: true } }
+    };
+    for (const [who, user] of Object.entries(people)) {
+        const app = express();
+        app.use(express.json());
+        app.use((req, _res, next) => { req.user = { ...user }; next(); });
+        app.use('/ad-budgets', createAdBudgetRouter({ service, metaService }));
+        const server = await new Promise((resolve) => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+        const url = `http://127.0.0.1:${server.address().port}/ad-budgets`;
+        try {
+            const list = await (await fetch(url)).json();
+            assert.equal(list.canEdit, who === 'editor', `${who}: canEdit`);
+            assert.equal((await fetch(`${url}/b1`)).status, 200, `${who} lee el detalle`);
+            assert.equal((await fetch(`${url}/meta/sync`, { method: 'POST' })).status, 200, `${who} puede pedir leer Meta`);
+            const post = (path, method = 'POST') => fetch(`${url}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const statuses = [(await post('')).status, (await post('/b1/spend')).status, (await post('/b1/meta-campaigns', 'PUT')).status];
+            if (who === 'editor') assert.deepEqual(statuses, [201, 201, 200]);
+            else {
+                assert.deepEqual(statuses, [403, 403, 403], `${who} no escribe`);
+                assert.match((await (await post('')).json()).error, /Editar pautas/);
+            }
+        } finally {
+            await new Promise((resolve) => server.close(resolve));
+        }
+    }
+    assert.deepEqual(wrote, ['create', 'spend', 'assign'], 'solo el editor llegó a escribir');
+});
+
+test('toda ruta que escribe lleva el guardián de editar; las de leer no', () => {
+    const text = source('src/routes/api/adBudgets.js');
+    for (const line of text.split(/\r?\n/).filter((row) => /router\.(post|patch|put|delete)\(/.test(row))) {
+        if (line.includes("'/meta/sync'")) assert.doesNotMatch(line, /, edit,/, 'leer Meta es de quien ve');
+        else assert.match(line, /, edit, /, line.trim());
+    }
+    for (const line of text.split(/\r?\n/).filter((row) => /router\.get\(/.test(row))) assert.doesNotMatch(line, /, edit, /, line.trim());
 });

@@ -56,6 +56,28 @@ test('la ventana muestra una casilla por módulo, Drive incluida, y quien tenía
     await page.close();
 });
 
+test('«Editar pautas» aparece con Pautas, no viene marcada por el rol y se guarda', async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+    page.setDefaultTimeout(10000);
+    const dialog = await openEditor(page);
+    const edit = dialog.locator('[data-team-ad-edit-toggle]');
+    const pautas = dialog.getByLabel('Pautas', { exact: true });
+    await pautas.check();
+    assert.equal(await edit.isChecked(), false, 'nadie la tiene sin que se la marquen');
+    await pautas.uncheck();
+    assert.equal(await edit.count(), 0, 'sin ver Pautas no hay nada que editar');
+    await dialog.getByLabel('Pautas', { exact: true }).check();
+    await edit.check();
+    await edit.scrollIntoViewIfNeeded();
+    await dialog.screenshot({ path: `${OUT}/03-equipo-editar-pautas.png` });
+    await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    const saved = (await page.evaluate(() => window.__savedBodies)).at(-1);
+    assert.equal(saved.modulePermissions.pautas, true);
+    assert.equal(saved.modulePermissions.pautas_editar, true);
+    await page.close();
+});
+
 test('elegir un rol marca los módulos de ese rol, Drive incluida; se ve bien en móvil oscuro', async () => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     page.setDefaultTimeout(10000);

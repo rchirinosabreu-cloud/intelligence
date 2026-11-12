@@ -6,7 +6,7 @@ export const team = [
 ];
 
 export const users = [
-    { id: 'u-keila', name: 'Keila', role: 'EDITOR', isActive: true, modulePermissions: { pautas: true } },
+    { id: 'u-keila', name: 'Keila', role: 'EDITOR', isActive: true, modulePermissions: { pautas: true, pautas_editar: true } },
     { id: 'u-camila', name: 'Camila', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { manager: true } }
 ];
 
@@ -104,6 +104,33 @@ export const previewMeta = {
     campaignSpend: async ({ adAccountId, since, until, campaignIds }) => (metaCampaignCatalog[adAccountId] || [])
         .filter((row) => !campaignIds || campaignIds.includes(row.id))
         .map((row) => ({ id: row.id, name: row.name, spend: Math.round(row.perDay * dayCount(since, until) * 100) / 100 }))
+};
+
+/**
+ * El presupuesto que Meta tendría en cada campaña: diario cercano a lo que gasta por día, salvo «NUEVA SEDE», que lo lleva
+ * en su conjunto, y «WINE SUMMIT», con presupuesto total. Cambiarlo cambia esta copia en memoria y nada más.
+ */
+const budgetState = new Map([
+    ...Object.values(metaCampaignCatalog).flat().map((row) => [row.id, { id: row.id, name: row.name, effective_status: 'ACTIVE', daily_budget: String(row.perDay >= 100 ? Math.ceil(row.perDay / 100) * 100 : Math.round(row.perDay * 100)), lifetime_budget: '0' }]),
+    ['120101', { id: '120101', name: 'PABLO HOFF-  NUEVA SEDE', effective_status: 'ACTIVE', daily_budget: '0', lifetime_budget: '0' }],
+    ['120101-a', { id: '120101-a', name: 'Sede Manga · públicos similares', effective_status: 'ACTIVE', daily_budget: '2000', lifetime_budget: '0', campaign_id: '120101' }],
+    ['120501', { id: '120501', name: 'WINE SUMMIT | TRAFICO NOV 2026', effective_status: 'ACTIVE', daily_budget: '0', lifetime_budget: '2500', budget_remaining: '1900', stop_time: '2026-11-25T23:59:00-0500' }]
+]);
+
+export const previewMetaBudgets = {
+    readCampaignBudgets: async ({ campaignIds }) => campaignIds.flatMap((id) => {
+        const campaign = budgetState.get(id);
+        if (!campaign) return [{ campaignId: id, error: Object.assign(new Error('Unsupported get request'), { name: 'MetaGraphError', code: 100 }) }];
+        if (Number(campaign.daily_budget) || Number(campaign.lifetime_budget)) return [{ campaignId: id, level: 'CAMPAIGN', raw: { ...campaign } }];
+        return [...budgetState.values()].filter((row) => row.campaign_id === id).map((raw) => ({ campaignId: id, level: 'ADSET', raw: { ...raw } }));
+    }),
+    setBudget: async ({ objectId, field, minor }) => {
+        const row = budgetState.get(objectId);
+        if (!row) throw Object.assign(new Error('Object does not exist'), { name: 'MetaGraphError', code: 100 });
+        if (field === 'lifetime_budget') row.budget_remaining = String(Number(row.budget_remaining || 0) + minor - Number(row.lifetime_budget));
+        row[field] = String(minor);
+        return { success: true };
+    }
 };
 
 export const campaigns = [

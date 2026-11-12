@@ -7,6 +7,7 @@ import { createNotification } from './notificationService.js';
 import { activeAreaUserIds } from './teamAreaService.js';
 import { AD_BUDGET_INCLUDE, bogotaToday, describeBudget } from './adBudgetService.js';
 import { hasModulePermission } from '../config/security.js';
+import { AD_BUDGET_EDIT_KEY, canEditAdBudgets } from '../lib/platformModules.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
     AD_BOARD_URL, AD_DIGEST_THRESHOLD, AD_DIGEST_KIND, adManagerDigest, adManagerSteps, adNoticePlan, adNoticesFor, isAdNotice, parseAdSubject
@@ -28,27 +29,33 @@ const holdersOf = (row, fallback) => {
     return pm?.userId && pm.isActive !== false ? [pm.userId] : [];
 };
 
-/** Quien no puede abrir Pautas no recibe un aviso que no puede atender. */
-const canOpen = async (db, userIds) => {
-    if (!userIds.length) return new Set();
+/**
+ * Quién puede qué: la campana del project manager pide ver Pautas; la banda, que pide actualizar el gasto o cerrar el
+ * ciclo, pide además «Editar pautas». Nadie recibe un aviso que no puede atender.
+ */
+const accessOf = async (db, userIds) => {
+    if (!userIds.length) return { view: new Set(), edit: new Set() };
     const users = await db.user.findMany({ where: { id: { in: userIds }, isActive: true }, select: { id: true, role: true, modulePermissions: true } });
-    return new Set(users.filter((user) => hasModulePermission(user, 'pautas')).map((user) => user.id));
+    return {
+        view: new Set(users.filter((user) => hasModulePermission(user, 'pautas')).map((user) => user.id)),
+        edit: new Set(users.filter((user) => canEditAdBudgets(user)).map((user) => user.id))
+    };
 };
 
 export const runAdBudgetAlerts = async (db = prisma, { now = new Date(), notify = createNotification, queue = queueImportantNotice, log = console.error, info = console.log } = {}) => {
     const today = bogotaToday(now);
     const board = await readBoard(db, today);
-    const fallback = await activeAreaUserIds(db, 'PAUTA', { module: 'pautas' });
+    const fallback = await activeAreaUserIds(db, 'PAUTA', { module: AD_BUDGET_EDIT_KEY });
     const everyone = [...new Set(board.flatMap(({ row }) => [...holdersOf(row, fallback), row.client?.projectManager?.userId].filter(Boolean)))];
-    const allowed = await canOpen(db, everyone);
+    const allowed = await accessOf(db, everyone);
 
     // La banda: lo que cada persona debe hoy.
     const wanted = new Map();
     for (const { row, budget } of board) {
         const notices = adNoticesFor(budget);
         if (!notices.length) continue;
-        const holders = holdersOf(row, fallback).filter((userId) => allowed.has(userId));
-        if (!holders.length) log(`[Pautas] ${budget.client?.name}: la pauta pide revisión y no tiene quién la reciba con acceso a Pautas.`);
+        const holders = holdersOf(row, fallback).filter((userId) => allowed.edit.has(userId));
+        if (!holders.length) log(`[Pautas] ${budget.client?.name}: la pauta pide revisión y nadie que la lleve tiene «Editar pautas».`);
         for (const userId of holders) {
             if (!wanted.has(userId)) wanted.set(userId, []);
             wanted.get(userId).push(...notices);
@@ -80,7 +87,7 @@ export const runAdBudgetAlerts = async (db = prisma, { now = new Date(), notify 
     const outbox = new Map();
     for (const { row, budget } of board) {
         const pm = row.client?.projectManager;
-        if (!pm?.userId || pm.isActive === false || !allowed.has(pm.userId)) continue;
+        if (!pm?.userId || pm.isActive === false || !allowed.view.has(pm.userId)) continue;
         for (const { step, message } of adManagerSteps(budget)) {
             try {
                 await db.adBudgetAlert.create({ data: { budgetId: budget.id, cycleKey: budget.cycle.key, step, sentAt: now } });

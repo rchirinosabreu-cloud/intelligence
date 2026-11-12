@@ -27,8 +27,20 @@ Rodny: «quiero ver la forma en que pueda conectar esto con las pautas reales en
 - **El gasto de Meta es una lectura más**, marcada «Meta» en el historial (`AdSpendReading.source`): una por día, que se actualiza durante el día. **Lo que una persona escribió ese día manda** y Meta no lo pisa hasta el día siguiente; si no coincide (más allá de la tolerancia), la pauta lo dice y ofrece «Usar la de Meta».
 - **El gasto final sigue siendo de una persona.** Durante cinco días tras el cierre la plataforma lee el ciclo que terminó, sin cerrarlo; «Registrar» el gasto final lo trae ya escrito.
 - **Gasto sin pauta:** lo que gastó en 30 días y no está en ninguna pauta se ve en el tablero («N campañas gastan sin pauta»). Se liga a su pauta (viene elegida si una sola lleva su nombre) o se marca «No es de una pauta» (de la agencia, o de un cliente que paga por su cuenta). Las dos cosas se deshacen.
-- **Solo lee.** Nada de esto pausa campañas ni cambia presupuestos en Meta. Un fallo de Meta no borra lo que había: queda dicho en la cuenta o en la pauta.
+- **Solo lee el gasto.** La lectura no pausa campañas ni cambia nada en Meta. Un fallo de Meta no borra lo que había: queda dicho en la cuenta o en la pauta.
 - **Lo que no resuelve:** la hora de corte de cada cuenta es la de su zona horaria en Meta, y una cuenta en otra zona puede diferir un día en los bordes del ciclo.
+
+## Ajustar el presupuesto en Meta (12 de noviembre de 2026)
+
+Rodny: «no tiene sentido ajustar gasto en la plataforma si en Meta va a tener otro». En «Gasto en Meta» → «Ver y ajustar el presupuesto en Meta» se ve lo que Meta tiene configurado ahora en cada campaña ligada y, con «Editar pautas», se cambia.
+
+- **El presupuesto vive en la campaña o en sus conjuntos de anuncios, nunca en los dos** (referencia de Meta). Si la campaña no tiene, se ven y se ajustan sus conjuntos. Diario o total: Meta no deja cambiar el tipo, solo el valor.
+- **Lo que gastaría**: diario por los días que faltan hasta el límite de gasto del ciclo (contando hoy si el gasto se leyó hoy, o desde el día siguiente a la última lectura), total por lo que le queda; si un total sigue después del límite, solo la parte de estos días. Pausada no gasta. Es una estimación con lo configurado en Meta.
+- **El tope** (Rodny: «no lo deja»): un cambio que sube lo que la pauta gastaría por encima de lo que queda del ciclo (más la tolerancia) no se hace, y la ventana dice el máximo para esa campaña. Si el cliente aprobó más, se sube primero el presupuesto de la pauta. Bajar siempre se deja, aunque la pauta ya vaya pasada.
+- **Antes de cambiar se vuelve a leer Meta**: si alguien cambió el presupuesto allá mientras tanto, no se pisa y se pide revisar. Después se lee otra vez para confirmar.
+- **Queda en «Correcciones»** con el antes, el después y quién (`AdBudgetEvent`, acción `META_PRESUPUESTO`). Si Meta no acepta, se dice con sus palabras y no se anota nada.
+- **Solo cambia el valor del presupuesto** (`daily_budget` o `lifetime_budget`, en pesos enteros o centavos de dólar): no pausa, no crea, no borra campañas y no cambia fechas.
+- **Lo que depende de Meta y no se probó contra una cuenta real**: que el usuario del sistema tenga permiso para administrar campañas en cada cuenta. La llave tiene `ads_management`; si a una cuenta le falta el permiso, Meta lo rechaza y la ventana lo dice.
 
 ## Corregir y deshacer
 
@@ -47,6 +59,7 @@ Todo se escribe a mano y todo se corrige. Cada corrección queda en `AdBudgetEve
 | Una pauta creada por error | «Eliminar pauta» en «Editar pauta» |
 | Las campañas de Meta de una pauta | «Cambiar campañas»; soltarlas no borra las lecturas ya escritas |
 | Una campaña marcada «No es de una pauta» | Ligarla a una pauta la vuelve a contar |
+| Un presupuesto cambiado en Meta | Se vuelve a cambiar desde la misma ventana; queda en «Correcciones» |
 
 Lo eliminado no tiene botón de deshacer: se pide confirmación antes y sus datos quedan en el registro para reconstruirlo. Para conservar una pauta se marca como terminada.
 
@@ -61,11 +74,16 @@ No hay importación de los Excel. `scripts/load-ad-budgets.js` crea las pautas d
 | Quien lleva la pauta | Banda | Gasto sin actualizar por 3 días, o 1 día en los últimos 5 del ciclo. Falta el gasto final. Campaña activa pasada su fecha o que termina después del cierre. |
 | Project manager de la cuenta | Campana, sin cifras | Una vez por ciclo a 5 días del cierre y una vez si la pauta se pasa. |
 
-El aviso de la banda se cae solo al actualizar el gasto o cambiar la campaña. Más de tres avisos salen en un resumen. Sin responsable, el aviso va al área Pauta de Equipo y, si no hay nadie, al project manager. Quien no tiene acceso a Pautas no recibe avisos.
+El aviso de la banda se cae solo al actualizar el gasto o cambiar la campaña. Más de tres avisos salen en un resumen. Sin responsable, el aviso va al área Pauta de Equipo y, si no hay nadie, al project manager. La banda pide actualizar el gasto o cerrar el ciclo, así que solo le llega a quien tiene «Editar pautas»; la campana del project manager pide solo ver Pautas.
 
 ## Permisos
 
-Casilla `pautas` en Equipo. Quien tiene Manager entra sin tocar la base (`inheritsFrom`); a quien lleva la pauta se le marca la casilla y el área Pauta.
+Dos niveles (Rodny, 12 de noviembre de 2026: «ver y editar, siendo editar el ajuste en Meta»):
+
+- **Ver**: casilla `pautas` en Equipo. Quien tiene Manager entra sin tocar la base (`inheritsFrom`). Ve el tablero, el historial y el presupuesto en Meta, y puede pedir «Actualizar ahora».
+- **Editar**: casilla «Editar pautas y ajustar presupuestos en Meta» (`pautas_editar`). Crear, corregir y eliminar pautas, actualizar el gasto, cerrar ciclos, ligar campañas y ajustar el presupuesto en Meta. **Nadie la trae por su cargo, tampoco un administrador** (`EXPLICIT_KEYS`): se marca persona por persona, como la liga. El servidor lo comprueba en cada ruta que escribe (`requireAdBudgetEdit`); la pantalla solo esconde los botones.
+
+Al desplegarlo nadie tiene «Editar pautas» hasta que un administrador se la marque en Equipo: a quien lleva la pauta (Keila) y a quien deba ajustar presupuestos.
 
 ## Lo que falta
 
@@ -74,6 +92,6 @@ Casilla `pautas` en Equipo. Quien tiene Manager entra sin tocar la base (`inheri
 
 ## Verificación
 
-- Reglas y servicio: `tests/adBudgets.test.js`, `tests/adBudgetService.test.js`, `tests/adBudgetRoutes.test.js`, `tests/adBudgetsContract.test.js`, `tests/adBudgetMeta.test.js`, `tests/adBudgetMetaService.test.js`.
-- Recorrido real con capturas: `node scripts/preview-ad-budgets.js --port=3848 --hoy=2026-11-06` y `node --test tests/browser/adBudgets.mjs`. La muestra vive en ese día y simula Meta con cuentas y campañas de mentira; el recorrido escribe en su base en memoria, así que corre una vez por arranque.
+- Reglas y servicio: `tests/adBudgets.test.js`, `tests/adBudgetService.test.js`, `tests/adBudgetRoutes.test.js`, `tests/adBudgetsContract.test.js`, `tests/adBudgetMeta.test.js`, `tests/adBudgetMetaService.test.js`, `tests/adBudgetMetaBudgets.test.js`; los dos niveles en `tests/platformModules.test.js`.
+- Recorrido real con capturas: `node scripts/preview-ad-budgets.js --port=3848 --hoy=2026-11-06` y `node --test tests/browser/adBudgets.mjs`. La muestra vive en ese día y simula Meta con cuentas, campañas y presupuestos de mentira (`POST /api/__preview/permisos?editar=0` la deja solo viendo); el recorrido escribe en su base en memoria, así que corre una vez por arranque.
 - Las tablas de `scripts/ensure-ad-budgets-schema.js` no se han ejecutado contra PostgreSQL real al escribir esto: en esa máquina no había base disponible. La prueba de contrato solo compara sus columnas con `schema.prisma`.

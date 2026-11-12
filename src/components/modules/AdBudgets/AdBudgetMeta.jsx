@@ -2,14 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Link2, Loader2, RefreshCw, Search } from '@/components/ui/icons';
 import Select from '@/components/ui/Select';
-import { adBudgetName, formatAdMoney, shortDay } from '@/lib/adBudgets';
+import MoneyInput from '@/components/ui/MoneyInput';
+import { adBudgetName, formatAdMoney, shortDay, toleranceCents } from '@/lib/adBudgets';
+import { metaBudgetChange } from '@/lib/adBudgetMetaBudgets';
 import { suggestMetaCampaigns } from '@/lib/adBudgetMeta';
 import { cn } from '@/lib/utils';
-import { useAdMeta, useAdMetaSuggestions, useAssignAdMeta, useIgnoreAdMeta, useRecordAdSpend, useSyncAdMeta } from './adBudgetsApi';
+import { useAdMeta, useAdMetaBudgets, useAdMetaSuggestions, useAdjustAdMetaBudget, useAssignAdMeta, useCanEditAds, useIgnoreAdMeta, useRecordAdSpend, useSyncAdMeta } from './adBudgetsApi';
 import { AdBudgetForm } from './AdBudgetDialogs';
 
 // Pautas conectadas a Meta (12 de noviembre de 2026). La plataforma lee el gasto de las campañas ligadas a cada pauta; lo
-// que aquí se hace es ligar campañas, ver lo que gasta sin pauta y comparar con lo escrito a mano. Nada cambia en Meta.
+// que aquí se hace es ligar campañas, ver lo que gasta sin pauta, comparar con lo escrito a mano y, con «Editar pautas»,
+// ajustar el presupuesto de las campañas en Meta sin pasarse de lo aprobado.
 
 const textAction = 'inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand-cyan-deep disabled:opacity-50 dark:text-brand-cyan';
 const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
@@ -25,11 +28,13 @@ const timeText = (value) => {
 /** La barra del tablero: si Meta está conectado, cuándo se leyó y cuánto gasta sin estar en ninguna pauta. */
 export function MetaStatus({ meta, onOpenUnassigned }) {
   const sync = useSyncAdMeta();
+  const canEdit = useCanEditAds();
   if (!meta) return null;
   if (!meta.configured) {
     return <p data-ad-meta-status className="text-sm text-zinc-500 dark:text-zinc-400">La conexión con Meta no está configurada en el servidor: el gasto se escribe a mano.</p>;
   }
   const failing = meta.accounts.filter((account) => account.isActive && account.problem);
+  const unassignedText = meta.unassigned.length === 1 ? '1 campaña gasta sin pauta' : `${meta.unassigned.length} campañas gastan sin pauta`;
   const run = async () => {
     try {
       const result = await sync.mutateAsync();
@@ -46,11 +51,11 @@ export function MetaStatus({ meta, onOpenUnassigned }) {
       <button type="button" data-ad-meta-sync disabled={sync.isPending} onClick={run} className={textAction}>
         {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} {sync.isPending ? 'Leyendo Meta…' : 'Actualizar ahora'}
       </button>
-      {meta.unassigned.length > 0 && (
+      {meta.unassigned.length > 0 && (canEdit ? (
         <button type="button" data-ad-meta-unassigned onClick={onOpenUnassigned} className="min-h-11 rounded-lg px-2 text-sm font-semibold text-status-attention-fg underline-offset-2 hover:underline">
-          {meta.unassigned.length === 1 ? '1 campaña gasta sin pauta' : `${meta.unassigned.length} campañas gastan sin pauta`}
+          {unassignedText}
         </button>
-      )}
+      ) : <span data-ad-meta-unassigned-count className="text-sm font-semibold text-status-attention-fg">{unassignedText}</span>)}
       {failing.length > 0 && <span className="text-xs text-status-attention-fg" title={failing.map((account) => `${account.name}: ${account.problem}`).join('\n')}>{failing.length === 1 ? `${failing[0].name} no respondió` : `${failing.length} cuentas no respondieron`}</span>}
     </div>
   );
@@ -59,6 +64,7 @@ export function MetaStatus({ meta, onOpenUnassigned }) {
 /** La fila de una pauta: de dónde sale el gasto, y si lo escrito a mano no coincide con Meta. */
 export function MetaReadingNotes({ budget }) {
   const record = useRecordAdSpend();
+  const canEdit = useCanEditAds();
   const { meta, currency } = budget;
   if (!meta?.linked) return null;
   const useMeta = async () => {
@@ -74,7 +80,7 @@ export function MetaReadingNotes({ budget }) {
       {meta.difference && (
         <p data-ad-meta-difference className="flex flex-wrap items-center gap-x-2 text-sm text-status-attention-fg">
           Meta marca {formatAdMoney(meta.spentCents, currency)} hasta el {shortDay(meta.asOf)}; la cifra escrita a mano es {formatAdMoney(budget.evaluation.spentCents, currency)}.
-          <button type="button" data-ad-meta-use disabled={record.isPending} onClick={useMeta} className="min-h-7 rounded font-semibold underline">Usar la de Meta</button>
+          {canEdit && <button type="button" data-ad-meta-use disabled={record.isPending} onClick={useMeta} className="min-h-7 rounded font-semibold underline">Usar la de Meta</button>}
         </p>
       )}
       {meta.problem && <p data-ad-meta-problem className="text-sm text-status-attention-fg">No se pudo leer Meta: {meta.problem}</p>}
@@ -83,14 +89,15 @@ export function MetaReadingNotes({ budget }) {
 }
 
 /** En el detalle de la pauta: sus campañas de Meta y lo que gastó cada una en el ciclo. */
-export function MetaBudgetSection({ budget, onLink }) {
+export function MetaBudgetSection({ budget, onLink, onBudget }) {
   const { meta, currency } = budget;
   const spentOf = new Map((meta?.detail || []).map((item) => [item.id, item.spendCents]));
+  const canEdit = useCanEditAds();
   return (
     <section aria-label="Gasto en Meta" data-ad-meta-section className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Gasto en Meta</h4>
-        <button type="button" data-ad-meta-link onClick={onLink} className={textAction}><Link2 className="h-4 w-4" /> {meta?.linked ? 'Cambiar campañas' : 'Ligar campañas'}</button>
+        {canEdit && <button type="button" data-ad-meta-link onClick={onLink} className={textAction}><Link2 className="h-4 w-4" /> {meta?.linked ? 'Cambiar campañas' : 'Ligar campañas'}</button>}
       </div>
       {!meta?.linked && <p className="text-sm text-zinc-500 dark:text-zinc-400">Sin campañas de Meta: el gasto se escribe a mano. Al ligarlas, la plataforma lo lee sola.</p>}
       {meta?.linked && (
@@ -103,6 +110,7 @@ export function MetaBudgetSection({ budget, onLink }) {
               </li>
             ))}
           </ul>
+          <button type="button" data-ad-meta-budget-open onClick={onBudget} className={cn(textAction, '-ml-2 mt-1')}>{canEdit ? 'Ver y ajustar el presupuesto en Meta' : 'Ver el presupuesto en Meta'}</button>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {meta.fetchedAt ? `Del ${shortDay(budget.cycle.start)} al ${shortDay(meta.asOf || budget.cycle.start)} · leído ${timeText(meta.fetchedAt)}` : 'Se lee en la próxima lectura de Meta.'}
           </p>
@@ -241,6 +249,109 @@ export function MetaUnassignedDialog({ meta, budgets, onClose }) {
           );
         })}
       </ul>
+    </AdBudgetForm>
+  );
+}
+
+const STATUS_TEXT = { ACTIVE: 'Activa', PAUSED: 'En pausa', CAMPAIGN_PAUSED: 'Campaña en pausa', ADSET_PAUSED: 'Conjunto en pausa', ARCHIVED: 'Archivada', DELETED: 'Eliminada', IN_PROCESS: 'En revisión', WITH_ISSUES: 'Con problemas' };
+
+/**
+ * El presupuesto que Meta tiene en las campañas de la pauta, y su ajuste. Lo que la pauta gastaría se calcula con la misma
+ * regla que usa el servidor (`metaBudgetChange`), así que el tope se ve antes de enviar; el servidor lo vuelve a comprobar
+ * con lo que Meta tenga en ese momento.
+ */
+export function AdMetaBudgetDialog({ budget, onClose }) {
+  const canEdit = useCanEditAds();
+  const { data, isLoading, error, refetch, isFetching } = useAdMetaBudgets(budget.id);
+  const adjust = useAdjustAdMetaBudget();
+  const [editing, setEditing] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [problem, setProblem] = useState('');
+  const currency = budget.currency;
+  const money = (cents) => formatAdMoney(cents, currency);
+  const objects = data?.objects || [];
+  const view = data?.budget;
+  const target = objects.find((item) => item.id === editing) || null;
+  const newCents = Math.round(Number(amount) * 100);
+  const check = target && view && amount !== '' ? metaBudgetChange({ budget: view, objects, objectId: target.id, kind: target.kind, newCents, expectedCents: target.budgetCents }) : null;
+  const left = view ? Math.max(view.availableCents - view.spentCents, 0) : 0;
+  const over = view && data.projectedCents > left + toleranceCents(currency);
+
+  const start = (object) => { setProblem(''); setEditing(object.id); setAmount(String(object.budgetCents / 100)); };
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!target) { onClose(); return; }
+    if (check?.problem) { setProblem(check.problem); return; }
+    if (newCents === target.budgetCents) { setProblem('Es el mismo presupuesto que ya tiene en Meta.'); return; }
+    try {
+      const result = await adjust.mutateAsync({ id: budget.id, input: { objectId: target.id, kind: target.kind, amount, expectedCents: target.budgetCents } });
+      toast.success(result.confirmed === false ? 'Meta recibió el cambio, pero todavía no lo muestra' : 'Presupuesto cambiado en Meta');
+      setEditing(null);
+      setAmount('');
+      await refetch();
+    } catch (failure) {
+      setProblem(failure.message);
+      if (failure.status === 409) refetch();
+    }
+  };
+
+  return (
+    <AdBudgetForm open wide title="Presupuesto en Meta" dataAttr="data-ad-meta-budget-dialog" onClose={onClose} onSubmit={submit} saving={adjust.isPending} error={problem}
+      submitLabel={target ? 'Cambiar en Meta' : 'Listo'}
+      description={`${adBudgetName(budget)} · lo que Meta tiene configurado ahora en sus campañas.`}>
+      {isLoading && <p className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" /> Leyendo Meta…</p>}
+      {error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{error.message}</p>}
+      {view && (
+        <p data-ad-meta-budget-summary className={cn('rounded-xl px-3 py-2 text-sm', over ? 'bg-status-attention/10 text-status-attention-fg' : 'bg-zinc-50 text-zinc-700 dark:bg-white/5 dark:text-zinc-200')}>
+          Quedan {money(left)} del ciclo. Con lo que tiene Meta, las campañas gastarían unos {money(data.projectedCents)} del {shortDay(view.start)} al {shortDay(view.deadline)}
+          {over ? ': la pauta se pasaría. Baja algún presupuesto o sube el de la pauta.' : '.'}
+        </p>
+      )}
+      {(data?.problems || []).map((item) => <p key={item} className="text-sm text-status-attention-fg">{item}</p>)}
+      {view && !objects.length && !data.problems.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Meta no devolvió presupuestos para estas campañas.</p>}
+      <ul className="space-y-2">
+        {objects.map((object) => {
+          const isEditing = editing === object.id;
+          const label = object.level === 'ADSET' ? `Conjunto «${object.name}»` : object.name;
+          return (
+            <li key={object.id} data-ad-meta-budget-row={object.id} className="rounded-xl border border-zinc-200 p-3 dark:border-white/10">
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-zinc-900 dark:text-white">{label}</span>
+                  <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    {[object.level === 'ADSET' && object.campaignName, object.accountName, STATUS_TEXT[object.status] || object.status, object.endDate && `hasta el ${shortDay(object.endDate)}`].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right text-sm text-zinc-900 dark:text-white">
+                  {object.kind === 'DAILY' && <>{money(object.budgetCents)} <span className="text-xs text-zinc-500 dark:text-zinc-400">diarios</span></>}
+                  {object.kind === 'LIFETIME' && <>{money(object.budgetCents)} <span className="text-xs text-zinc-500 dark:text-zinc-400">en total</span></>}
+                  {!object.kind && <span className="text-xs text-zinc-500 dark:text-zinc-400">Sin presupuesto propio</span>}
+                  {object.kind && <span className="block text-xs text-zinc-500 dark:text-zinc-400">gastaría {money(object.projectedCents)}</span>}
+                </span>
+              </div>
+              {canEdit && object.kind && !isEditing && (
+                <button type="button" data-ad-meta-budget-edit onClick={() => start(object)} className={cn(textAction, '-ml-2 mt-1')}>Cambiar presupuesto</button>
+              )}
+              {isEditing && (
+                <div className="mt-2 space-y-2">
+                  <label className="block text-sm text-zinc-700 dark:text-zinc-200">
+                    <span className="block">Nuevo presupuesto {object.kind === 'DAILY' ? 'diario' : 'total'} ({currency})</span>
+                    <MoneyInput className={cn(field, 'mt-1')} decimals={currency === 'COP' ? 0 : 2} value={amount} onChange={(value) => { setProblem(''); setAmount(value); }} aria-label={`Nuevo presupuesto de ${object.name}`} />
+                  </label>
+                  {check && !check.problem && newCents !== object.budgetCents && (
+                    <p data-ad-meta-budget-check className="text-sm text-zinc-600 dark:text-zinc-300">La pauta gastaría unos {money(check.afterCents)} hasta el {shortDay(view.deadline)}; quedan {money(left)}.</p>
+                  )}
+                  {check?.problem && <p data-ad-meta-budget-over className="text-sm text-status-attention-fg">{check.problem}</p>}
+                  <button type="button" onClick={() => { setEditing(null); setProblem(''); }} className="min-h-11 rounded-lg px-2 text-sm text-zinc-600 dark:text-zinc-300">No cambiar</button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        {isFetching && !isLoading ? 'Leyendo Meta… ' : ''}Es una estimación con lo configurado en Meta. Solo cambia el valor del presupuesto: no pausa ni crea campañas.
+      </p>
     </AdBudgetForm>
   );
 }

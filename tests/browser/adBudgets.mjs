@@ -387,6 +387,63 @@ test('Meta: lo que gasta sin pauta se liga a la suya o se marca como que no es d
   await page.close();
 });
 
+test('Meta: el presupuesto se ve; subirlo por encima de lo aprobado se frena y bajarlo cambia Meta', async () => {
+  const { page, errors } = await open('?pauta=b-hoff');
+  const hoff = row(page, 'b-hoff');
+  await hoff.locator('[data-ad-meta-budget-open]').click();
+  const dialog = page.locator('[data-ad-meta-budget-dialog]');
+  await dialog.locator('[data-ad-meta-budget-row="120100"]').waitFor();
+  assert.match(await dialog.locator('[data-ad-meta-budget-summary]').innerText(), /Quedan \$ 147\.200 del ciclo.*\$ 202\.400.*se pasaría/s);
+  assert.match(await dialog.locator('[data-ad-meta-budget-row="120101-a"]').innerText(), /Conjunto «Sede Manga · públicos similares»[\s\S]*\$ 2\.000\s+diarios/);
+
+  const campaign = dialog.locator('[data-ad-meta-budget-row="120100"]');
+  await campaign.locator('[data-ad-meta-budget-edit]').click();
+  const input = campaign.getByRole('textbox');
+  await input.fill('9000');
+  await campaign.locator('[data-ad-meta-budget-over]').waitFor();
+  assert.match(await campaign.locator('[data-ad-meta-budget-over]').innerText(), /como máximo \$ 4\.617 diarios.*sube primero el presupuesto de la pauta/s);
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${OUT}/13-presupuesto-meta-tope.png` });
+  await dialog.locator('button[type=submit]').click();
+  await dialog.getByRole('alert').waitFor();
+  assert.match(await campaign.innerText(), /\$ 6\.800\s+diarios/, 'pasarse no llegó a Meta');
+
+  await input.fill('4500');
+  await campaign.locator('[data-ad-meta-budget-check]').waitFor();
+  await dialog.locator('button[type=submit]').click();
+  await page.getByText('Presupuesto cambiado en Meta').waitFor();
+  await campaign.getByText(/\$ 4\.500\s+diarios/).waitFor();
+  assert.match(await dialog.locator('[data-ad-meta-budget-summary]').innerText(), /\$ 149\.500/);
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${OUT}/14-presupuesto-meta-cambiado.png` });
+  await page.keyboard.press('Escape');
+  await hoff.locator('[data-ad-changes]').getByText(/Presupuesto diario en Meta de «PABLO HOFF- MENSAJES INSCRIPCIONES»: de \$ 6\.800 a \$ 4\.500 · Keila/).waitFor();
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('ver no es editar: sin «Editar pautas» no hay botones para cambiar nada, y se dice cómo pedirlo', async () => {
+  const toggle = (edit) => fetch(`${BASE}/api/__preview/permisos?editar=${edit ? 1 : 0}`, { method: 'POST' });
+  await toggle(false);
+  try {
+    const { page, errors } = await open('?pauta=b-hoff');
+    await page.locator('[data-ad-view-only]').waitFor();
+    assert.equal(await page.locator('[data-ad-new], [data-ad-spend-open], [data-ad-edit], [data-ad-meta-link], [data-ad-reading-edit], [data-ad-campaign-add]').count(), 0);
+    await row(page, 'b-hoff').locator('[data-ad-meta-budget-open]').click();
+    const dialog = page.locator('[data-ad-meta-budget-dialog]');
+    await dialog.locator('[data-ad-meta-budget-row="120100"]').waitFor();
+    assert.equal(await dialog.locator('[data-ad-meta-budget-edit]').count(), 0, 've el presupuesto, no lo cambia');
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUT}/15-solo-ver.png` });
+    const refused = await page.evaluate(() => fetch('/api/ad-budgets/b-hoff/spend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"spent":1}' }).then((r) => r.status));
+    assert.equal(refused, 403, 'el servidor tampoco deja');
+    assert.deepEqual(errors, []);
+    await page.close();
+  } finally {
+    await toggle(true);
+  }
+});
+
 test('se ve bien en oscuro y en celular', async () => {
   const dark = await open('?dark');
   await dark.page.waitForTimeout(300);
