@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { LATER_OPTIONS, DISCARD_REASONS, MAX_DECISIONS_PER_WEEK, NOTE_MAX, openLabel, responseProblem } from '@/lib/managerDecisions';
 import { decisionFingerprint, markSeen } from '@/lib/managerDecisionsSeen';
 import { useAuth } from '@/context/AuthContext';
-import { hasModuleAccess } from '@/lib/platformModules';
+import { hasBriaAccess, hasModuleAccess } from '@/lib/platformModules';
 
 // Las decisiones de Manager (Rodny, 10 de noviembre de 2026): una sola lista con lo que Bria propone y lo que el
 // Observer detectó esta semana, agrupado y repartido por dueño. Siempre las seis primeras: al responder una, entra la
@@ -190,9 +190,23 @@ const Section = ({ title, count, children, defaultOpen = false, testId }) => (
 
 const answerLine = (card) => [card.answer?.label, card.answer?.note].filter(Boolean).join(' · ');
 
+// Las decisiones las prepara Bria (12 de noviembre de 2026): sin Bria no se pide nada al servidor, que respondería «sin
+// permiso» y haría saltar el aviso global en cada pantalla. Se explica qué falta.
 export default function ManagerDecisions() {
-  const request = useRequest();
   const { currentUser } = useAuth();
+  if (!hasBriaAccess(currentUser)) {
+    return (
+      <div data-manager-decisions-without-bria className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-600 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
+        <p className="font-semibold text-zinc-900 dark:text-white">Las decisiones de la semana las prepara Bria</p>
+        <p className="mt-1">Tu cuenta no tiene Bria activado. Un administrador puede marcarlo en Equipo, en la casilla «Bria» de tu ficha.</p>
+      </div>
+    );
+  }
+  return <ManagerDecisionsBoard currentUser={currentUser} />;
+}
+
+function ManagerDecisionsBoard({ currentUser }) {
+  const request = useRequest();
   const canDrive = hasModuleAccess(currentUser, 'drive');
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);

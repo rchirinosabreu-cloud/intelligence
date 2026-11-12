@@ -2,7 +2,7 @@
 import React from 'react';
 import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Wallet, Target, ShieldCheck, Sun, Moon, Megaphone } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-import { hasModuleAccess } from '@/lib/platformModules';
+import { hasBriaAccess, hasModuleAccess } from '@/lib/platformModules';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -138,7 +138,7 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
                       isActive
                         ? "text-primary dark:text-primary-foreground drop-shadow-sm"
                         : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
-                    )} />{item.id === 'brain-core' && <ManagerDecisionsBadge userId={currentUser?.id} enabled={isManagerRole(currentUser?.role)} />}</span>}
+                    )} />{item.id === 'brain-core' && <ManagerDecisionsBadge userId={currentUser?.id} enabled={isManagerRole(currentUser?.role) && hasBriaAccess(currentUser)} />}</span>}
                     <span className={cn(collapsed && "lg:sr-only")}>{item.label}</span>
                   </span>
 
