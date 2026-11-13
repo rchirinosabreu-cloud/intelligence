@@ -34,6 +34,25 @@ export const demoDatabaseProblem = (env = process.env) => {
     return null;
 };
 
+// La demo sin errores (Rodny, 13 de noviembre de 2026): la demo no tiene llaves de correo, Meta, WhatsApp, Fireflies ni
+// OpenAI, y a quien la prueba no se le muestra un error: se le dice, con calma, que esa función depende de una conexión
+// real. Solo toca lo que sale a servicios externos; la lógica del negocio es la misma de producción.
+export const DEMO_CONNECTION_CODE = 'DEMO_CONNECTION';
+export const DEMO_CONNECTION_MESSAGE = 'En la demo esta función no se conecta: depende de una conexión real.';
+
+/** El aviso de la pantalla lo reconoce para mostrarlo como información y no como error. */
+export const isDemoConnectionMessage = (text) => typeof text === 'string' && text.includes(DEMO_CONNECTION_MESSAGE);
+
+/**
+ * Qué responder en la demo cuando el servidor falla (5xx): el mensaje de conexión real en vez de «error inesperado».
+ * Un 4xx no se toca: valida, niega un permiso o avisa de un conflicto, y eso sí le sirve a quien prueba la demo.
+ * Fuera de la demo devuelve `null` y la respuesta sale tal cual.
+ */
+export const demoFriendlyPayload = (status, _body, env = process.env) => {
+    if (!isDemoMode(env) || !(Number(status) >= 500)) return null;
+    return { error: DEMO_CONNECTION_CODE, message: DEMO_CONNECTION_MESSAGE };
+};
+
 /** En modo demo el servidor no arranca sobre una base que no sea de demo; sin modo demo no comprueba nada. */
 export const assertDemoDatabase = (env = process.env) => {
     if (!isDemoMode(env)) return;

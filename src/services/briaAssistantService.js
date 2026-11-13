@@ -9,6 +9,8 @@ import { clientOperationsService } from './clientOperationsService.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { normalizeHistory, normalizeQuestion, runAssistant } from '../lib/briaAssistant.js';
 import { wrapLegacyAction } from '../lib/briaActions.js';
+import { isDemoMode } from '../lib/demoMode.js';
+import { demoBriaAnswer } from '../lib/demoBriaAnswers.js';
 import { briaAssistantTools } from './briaAssistantTools.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { getApplicationKnowledgeService } from './briaKnowledgeApplication.js';
@@ -107,6 +109,11 @@ export const createBriaAssistantService = ({
       const text = normalizeQuestion(question);
       if (!text) throw httpError(400, 'Escribe una pregunta.', 'BRIA_QUESTION_REQUIRED');
       const client = typeof ai === 'function' ? ai() : ai;
+      // En la demo no hay llave de OpenAI: Bria responde con ejemplos sobre la agencia inventada (13 de noviembre de 2026).
+      if (!client && isDemoMode()) {
+        const person = await loadPerson(user);
+        return { answer: demoBriaAnswer(text, person), sources: [], toolsUsed: [], failures: [] };
+      }
       if (!client) throw httpError(503, 'Bria no está disponible en este momento.', 'OPENAI_NOT_AVAILABLE');
       const person = await loadPerson(user);
       const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;

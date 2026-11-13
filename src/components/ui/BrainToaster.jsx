@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Toaster, resolveValue, toast as hotToast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { cleanToastText } from '@/lib/toastText';
+import { isDemoConnectionMessage } from '@/lib/demoMode';
 import { AlertCircle, CheckCircle2, Info, Loader2, X } from '@/components/ui/icons';
 
 /**
@@ -29,7 +30,8 @@ const BrainToast = ({ toast }) => {
   const kind = KINDS[toast.type] || KINDS.blank;
   const message = resolveValue(toast.message, toast);
   const text = typeof message === 'string' || typeof message === 'number' ? cleanToastText(message) : null;
-  const { Icon } = kind;
+  // En la demo, «depende de una conexión real» no es un error: sale con el icono informativo (13 de noviembre de 2026).
+  const { Icon, tone, spin } = isDemoConnectionMessage(text) ? KINDS.blank : kind;
 
   return (
     <div
@@ -42,7 +44,7 @@ const BrainToast = ({ toast }) => {
         toast.visible ? 'animate-in fade-in slide-in-from-top-2 duration-200' : 'animate-out fade-out duration-150 fill-mode-forwards'
       )}
     >
-      <Icon className={cn('h-[18px] w-[18px] shrink-0', kind.tone, kind.spin && 'animate-spin')} aria-hidden="true" />
+      <Icon className={cn('h-[18px] w-[18px] shrink-0', tone, spin && 'animate-spin')} aria-hidden="true" />
       <span
         className={cn('min-w-0 flex-1 font-medium text-zinc-800 dark:text-zinc-100', expanded ? 'whitespace-normal py-1 leading-5' : 'truncate')}
         title={text || undefined}
