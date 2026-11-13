@@ -62,7 +62,20 @@ export function nextPayrollPeriod({ year, month, contractStart, contractEnd = nu
   const end = anchorDay === 1 ? shiftDays(clampDay(after[0], after[1], 1), -1) : shiftDays(clampDay(year, month, anchorDay), -1);
   // `start` y `end` viajan también con `done`: el servicio mira primero si ese tramo ya existe, para devolverlo
   // en vez de crearlo dos veces, y solo después da el contrato por terminado.
-  if ((lastDay && latestEnd && latestEnd >= lastDay) || end < firstDay) return { done: true, start, end };
+  if (lastDay && latestEnd && latestEnd >= lastDay) return { done: true, start, end };
+  if (end < firstDay) {
+    // El período de este mes es anterior al contrato. Casi siempre es que la persona todavía no empezaba (su
+    // primer tramo termina el mes siguiente) y no hay nada que generar. Pero un contrato que empieza este mes y
+    // termina antes de completar su primer ciclo es un tramo suelto, y eso sí se dice: nunca se le cobra el mes
+    // completo ni se le deja en silencio.
+    const [fy, fm] = [Number(firstDay.slice(0, 4)), Number(firstDay.slice(5, 7))];
+    const afterFirst = fm === 12 ? [fy + 1, 1] : [fy, fm + 1];
+    const firstCycleEnd = shiftDays(clampDay(afterFirst[0], afterFirst[1], anchorDay), -1);
+    if (lastDay && lastDay < firstCycleEnd && fy === year && fm === month) {
+      return { start: firstDay, end: lastDay, problem: `El contrato cubre solo una parte del período (del ${spoken(firstDay)} al ${spoken(lastDay)}). Define sus fechas e importe en «Períodos e historial».` };
+    }
+    return { done: true, start, end };
+  }
   const span = `del ${spoken(start)} al ${spoken(end)}`;
   if (firstDay > start || (lastDay && lastDay < end)) {
     return { start, end, problem: `El contrato cubre solo una parte del período (${span}). Define sus fechas e importe en «Períodos e historial».` };

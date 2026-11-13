@@ -89,3 +89,14 @@ test('un ancla a fin de mes no deja días sueltos entre períodos', () => {
   assert.equal(mar.end, '2026-03-27');
 });
 
+
+test('un contrato que empieza y termina dentro del mes sin completar un ciclo se dice, nunca se cobra entero ni se calla', () => {
+  // Del 16 al 30 de noviembre: ni es un mes, ni hay un «mes siguiente» donde vaya a aparecer.
+  const parcial = periods.nextPayrollPeriod({ year: 2026, month: 11, contractStart: '2026-11-16', contractEnd: '2026-11-30', periods: [] });
+  assert.equal(parcial.done, undefined);
+  assert.match(parcial.problem, /cubre solo una parte del período \(del 16 de noviembre al 30 de noviembre\)/);
+  // Pero quien empezó el 14 y sigue en febrero no tiene nada en octubre: su primer tramo es de noviembre.
+  assert.equal(periods.nextPayrollPeriod({ year: 2026, month: 10, contractStart: '2026-10-14', contractEnd: '2027-02-09', periods: [] }).done, true);
+  // Y Francys, de un solo ciclo exacto, tampoco aparece en octubre: su tramo es de noviembre.
+  assert.equal(periods.nextPayrollPeriod({ year: 2026, month: 10, contractStart: '2026-10-26', contractEnd: '2026-11-25', periods: [] }).done, true);
+});
