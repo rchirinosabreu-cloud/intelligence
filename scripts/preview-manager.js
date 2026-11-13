@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import express from 'express';
 import { createServer } from 'vite';
 import { createManagerDecisionService } from '../src/services/managerDecisionService.js';
+import { createMeetingTaskInboxService } from '../src/services/meetingTaskInboxService.js';
 import { visibleReadingDecisions } from '../src/lib/dailyReading.js';
 import { resolveDecisionRef, scorecard } from '../src/lib/decisionLog.js';
 
@@ -32,7 +33,20 @@ const fictitious = () => {
     signals: [
       { id: 's1', status: 'OPEN', category: 'UNEXPLAINED_CHARGE', sourceKind: 'MEETING_MINUTE', severity: 'critical', clientId: null, title: 'Apareció un cobro de pauta que nadie reconoce.', evidence: 'Hay un cobro de cuatrocientos mil que no sé de dónde salió.', suggestedAction: 'Revisar el cobro con administración antes del cierre.', sourceUrl: '/minutas', lastDetectedAt: new Date().toISOString(), updatedAt: 'v1', metadata: { meetingTitle: 'Comité semanal', meetingAt: new Date(Date.now() - 2 * 86400000).toISOString(), owner: 'Ana Ejemplo' } }
     ],
-    dismissed: [], clients: []
+    dismissed: [], clients: [{ id: 'c1', name: 'Cliente Faro' }, { id: 'c2', name: 'Hotel Mar Azul' }],
+    team: [{ id: 'm-rod', name: 'Rodny Chirinos', userId: 'user-rodny', role: 'Director' }, { id: 'm-ana', name: 'Ana Ejemplo', userId: 'u-ana', role: 'Community manager' }, { id: 'm-lau', name: 'Laura Prueba', userId: 'u-lau', role: 'Diseñadora' }, { id: 'm-lu2', name: 'Laura Segunda', userId: 'u-lu2', role: 'Project manager' }],
+    // Reuniones ya analizadas por Fireflies: sus compromisos llegan armados a Manager → Reuniones (13 de noviembre de 2026).
+    minutes: [
+      { id: 'mm-1', title: 'Reunión Hotel Mar Azul · noviembre', meetingAt: new Date(Date.now() - 86400000).toISOString(), status: 'READY', deletedAt: null, updatedAt: new Date().toISOString(), actionItems: [
+        { task: 'Terminar el reel de la terraza', owner: 'Ana', dueDate: 'jueves', priority: 'alta' },
+        { task: 'Ajustar el carrusel que pidió el cliente', owner: 'Laura', dueDate: null, priority: null },
+        { task: 'Mandar las fotos del evento', owner: 'Carlos (cliente)', dueDate: null, priority: null },
+        { task: 'Ya es pendiente', owner: 'Ana', dueDate: null, priority: null, taskId: 't-old' }
+      ] },
+      { id: 'mm-2', title: 'Comité semanal', meetingAt: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'READY', deletedAt: null, updatedAt: new Date().toISOString(), actionItems: [
+        { task: 'Revisar la propuesta de Cliente Faro con Rodny', owner: 'Rodny Chirinos', dueDate: '2026-11-20', priority: null }
+      ] }
+    ]
   };
 };
 
@@ -98,15 +112,31 @@ export async function createManagerPreview({ port = 3120 } = {}) {
       async count() { return 0; }
     },
     briaObserverDetectorState: { async findFirst() { return null; } },
-    client: { async findMany({ where }) { return (data.clients || []).filter((row) => where.id.in.includes(row.id)); } },
-    teamMember: { async findMany() { return (data.team || [{ name: 'Rodny Chirinos' }, { name: 'Ana Ejemplo' }]).map((row) => ({ name: row.name })); } }
+    client: { async findMany({ where }) { return where?.id?.in ? (data.clients || []).filter((row) => where.id.in.includes(row.id)) : (data.clients || []).filter((row) => !row.isArchived); } },
+    teamMember: { async findMany() { return (data.team || [{ name: 'Rodny Chirinos' }, { name: 'Ana Ejemplo' }]).map((row) => ({ ...row })); } },
+    meetingMinute: {
+      async findMany({ where }) { return minutes.filter((row) => !row.deletedAt && row.status === where.status); },
+      async findFirst({ where }) { return minutes.find((row) => row.id === where.id && !row.deletedAt) || null; },
+      async update({ where, data: patch }) { const row = minutes.find((item) => item.id === where.id); Object.assign(row, patch, { updatedAt: new Date().toISOString() }); return row; }
+    }
   };
+  const minutes = (data.minutes || []).map((row) => ({ ...row, actionItems: (row.actionItems || []).map((item) => ({ ...item })) }));
   const service = createManagerDecisionService({ db, reading: readingService, now: NOW, logger: { info: (line) => console.log(line), error: console.error } });
+  let createdTasks = 0;
+  const inbox = createMeetingTaskInboxService({ db, now: NOW, logger: { info: (line) => console.log(line), error: console.error },
+    createTask: async (input) => ({ id: `t-local-${++createdTasks}`, ...input }), notify: async () => {} });
 
   const api = express();
   api.use(express.json());
   api.get('/api/manager/decisions', async (_req, res) => res.json(await service.board(viewer)));
-  api.get('/api/manager/decisions/pulse', async (_req, res) => res.json(await service.pulse(viewer)));
+  api.get('/api/manager/decisions/pulse', async (_req, res) => res.json({ keys: [...(await service.pulse(viewer)).keys, ...(await inbox.pulse(viewer)).keys] }));
+  api.get('/api/manager/meeting-tasks', async (_req, res) => res.json(await inbox.list(viewer)));
+  for (const [route, fn] of [['approve', (body) => inbox.approve(viewer, body)], ['discard', (body) => inbox.discard(viewer, body)]]) {
+    api.post(`/api/manager/meeting-tasks/${route}`, async (req, res) => {
+      try { res.json(await fn(req.body || {})); }
+      catch (error) { res.status(error.status || 500).json({ error: 'MEETING_TASKS_REJECTED', message: error.message }); }
+    });
+  }
   api.post('/api/manager/decisions/respond', async (req, res) => {
     try { res.json(await service.respond(viewer, req.body || {})); }
     catch (error) { res.status(error.status || 500).json({ error: 'MANAGER_DECISION_REJECTED', message: error.message }); }

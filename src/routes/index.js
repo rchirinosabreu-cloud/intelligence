@@ -17,6 +17,7 @@ import * as teamRhythmController from '../controllers/teamRhythmController.js';
 import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import * as briaObserverController from '../controllers/briaObserverController.js';
 import * as managerDecisionController from '../controllers/managerDecisionController.js';
+import * as meetingTaskInboxController from '../controllers/meetingTaskInboxController.js';
 import * as commercialRequestController from '../controllers/commercialRequestController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import { isMfaRequiredForRole } from '../lib/mfaPolicy.js';
@@ -279,6 +280,25 @@ router.post(
     requireModulePermission('manager'),
     requireManagerRole,
     managerDecisionController.respond
+);
+// La bandeja de pendientes de reuniones (13 de noviembre de 2026): lo que Bria armó de cada minuta, para aprobar o descartar.
+router.get(
+    '/manager/meeting-tasks',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    meetingTaskInboxController.list
+);
+router.post(
+    '/manager/meeting-tasks/approve',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    meetingTaskInboxController.approve
+);
+router.post(
+    '/manager/meeting-tasks/discard',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    meetingTaskInboxController.discard
 );
 
 // Tasks

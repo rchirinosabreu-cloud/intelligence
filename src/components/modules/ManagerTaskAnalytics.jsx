@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Database,
   Eye,
@@ -15,6 +16,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import BriaMemoryPanel from './BriaMemoryPanel';
 import BriaObserverInbox from './BriaObserverInbox';
 import ManagerDecisions from './ManagerDecisions';
+import ManagerMeetingTasks from './ManagerMeetingTasks';
 import TeamRhythmPanel from './TeamRhythmPanel';
 import { useNavigationSelection } from '@/hooks/useNavigationSelection';
 import { usePageLabel } from '@/components/layout/BackToOrigin';
@@ -22,8 +24,9 @@ import { usePageLabel } from '@/components/layout/BackToOrigin';
 const PERIODS = [7, 30, 90];
 // «Decisiones» reúne la lectura de Bria y el Observer (Rodny, 10 de noviembre de 2026). La bandeja del Observer sigue
 // abriéndose por enlace (?tab=observer) como historial y auditoría, pero ya no es una pestaña.
-const TABS = ['decisiones', 'ritmo', 'memory', 'observer'];
-const MANAGER_HEADING = { title: 'Manager', description: 'Lo que Bria necesita que decidas, el ritmo del equipo y lo que Bria sabe de la agencia.' };
+// «Reuniones» (13 de noviembre de 2026) es la bandeja de los compromisos que Bria armó de cada minuta de Fireflies.
+const TABS = ['decisiones', 'reuniones', 'ritmo', 'memory', 'observer'];
+const MANAGER_HEADING = { title: 'Manager', description: 'Lo que Bria necesita que decidas, los pendientes de las reuniones, el ritmo del equipo y lo que Bria sabe de la agencia.' };
 
 const formatDuration = (milliseconds) => {
   const totalMinutes = Math.max(0, Math.round(Number(milliseconds || 0) / 60_000));
@@ -128,7 +131,7 @@ export default function ManagerTaskAnalytics() {
   const setActiveTab = tab => updateNavigation({ tab });
   const setRhythmView = rhythmView => updateNavigation({ rhythmView });
   const setPeriodDays = days => updateNavigation({ days });
-  usePageLabel(activeTab === 'ritmo' ? 'Manager · Ritmo' : activeTab === 'decisiones' ? 'Manager · Decisiones' : 'Manager');
+  usePageLabel(activeTab === 'ritmo' ? 'Manager · Ritmo' : activeTab === 'decisiones' ? 'Manager · Decisiones' : activeTab === 'reuniones' ? 'Manager · Reuniones' : 'Manager');
   const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -196,6 +199,19 @@ export default function ManagerTaskAnalytics() {
             Decisiones
           </button>
           <button
+            data-bria-tab="reuniones"
+            type="button"
+            onClick={() => setActiveTab('reuniones')}
+            aria-current={activeTab === 'reuniones' ? 'page' : undefined}
+            className={cn(
+              'inline-flex min-h-11 items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
+              activeTab === 'reuniones' ? 'border-brand-cyan text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+            )}
+          >
+            <ClipboardList className="h-4 w-4" />
+            Reuniones
+          </button>
+          <button
             data-bria-tab="ritmo"
             type="button"
             onClick={() => setActiveTab('ritmo')}
@@ -223,7 +239,7 @@ export default function ManagerTaskAnalytics() {
           </button>
         </nav>
 
-        {activeTab === 'decisiones' ? <ManagerDecisions /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <><div className="inline-flex items-center gap-2 rounded-full bg-brand-cyan/10 px-3 py-1.5 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan"><Eye className="h-3.5 w-3.5" />Observa y explica; no ejecuta acciones</div><BriaObserverInbox /></> : <>
+        {activeTab === 'decisiones' ? <ManagerDecisions /> : activeTab === 'reuniones' ? <ManagerMeetingTasks /> : activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <><div className="inline-flex items-center gap-2 rounded-full bg-brand-cyan/10 px-3 py-1.5 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan"><Eye className="h-3.5 w-3.5" />Observa y explica; no ejecuta acciones</div><BriaObserverInbox /></> : <>
         <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900 w-fit" aria-label="Lectura de Ritmo">
           {[['week', 'Esta semana'], ['history', 'Historial']].map(([value, label]) => <button key={value} type="button" aria-pressed={rhythmView === value} onClick={() => setRhythmView(value)} className={cn('min-h-11 rounded-lg px-4 text-sm font-medium', rhythmView === value ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}
