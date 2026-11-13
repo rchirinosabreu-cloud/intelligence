@@ -1,5 +1,6 @@
 import { AI_MODELS } from '../config/aiConfig.js';
 import { governedFetch as fetch } from '../services/aiEgress.js';
+import { isDemoMode } from '../lib/demoMode.js';
 
 const sendUpstreamError = (res, provider, response) => {
     const requestId = response.headers.get('x-request-id') || response.headers.get('fly-request-id');
@@ -64,6 +65,8 @@ export const openaiProxy = async (req, res) => {
 
 export const firefliesProxy = async (req, res) => {
     try {
+        // En la demo no hay cuenta de Fireflies: Minutas muestra las reuniones de muestra sin llamar afuera ni dar error.
+        if (isDemoMode() && !process.env.FIREFLIES_API_KEY) return res.json({ data: { transcripts: [], user: null } });
         const apiKey = process.env.FIREFLIES_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "Missing Fireflies API Key" });
 

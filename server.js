@@ -44,6 +44,7 @@ import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMi
 import apiRouter from './src/routes/index.js';
 import { createAuthRateLimiters } from './src/lib/authRateLimit.js';
 import { assertDemoDatabase, isDemoMode } from './src/lib/demoMode.js';
+import { demoFriendlyErrors } from './src/middlewares/demoFriendlyErrors.js';
 import {
   configureSecurityHeaders,
   createRateLimiter,
@@ -123,6 +124,8 @@ app.use(loggerMiddleware);
 app.use(operationalAuditMiddleware);
 
 // --- ROUTES ---
+// En la demo, un fallo del servidor dice «depende de una conexión real» en vez de un error (fuera de la demo no hace nada).
+app.use('/api', demoFriendlyErrors);
 app.use('/api', apiRouter);
 
 // --- STATIC FILES & SPA ---
