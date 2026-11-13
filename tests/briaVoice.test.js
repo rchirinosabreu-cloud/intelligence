@@ -33,6 +33,16 @@ test('closing with a generic caution is not Bria\'s voice', () => {
   assert.match(text, /no cierres|sin cierres/i);
 });
 
+// Rodny, 13 de noviembre de 2026: «si yo no sigo un pendiente y retomo después la conversación, me gustaría que Bria
+// me preguntara si queremos seguir con ello … es un asunto de razonar, NO SON PLANTILLAS». Es un principio: el
+// borrador le llega como dato y ella decide si lo recuerda; no hay frase fija ni detector.
+test('an unfinished draft is a judgment call for the model, never a template or an automatic execution', () => {
+  const text = buildInstructions({ person, today: '2026-11-13', tools });
+  assert.match(text, /borrador que la persona dejó a medias no se pierde/);
+  assert.match(text, /decide tú si vale la pena recordárselo/);
+  assert.match(text, /nunca lo ejecutes por tu cuenta ni lo repitas en cada mensaje/);
+});
+
 // Que la sesión de WhatsApp lleve su canal se comprueba en tests/whatsappBridgeService.test.js.
 test('the assistant tells the model the channel it is answering on', async () => {
   const seen = [];

@@ -17,11 +17,19 @@ test('hasBriaAccess pide lo mismo que el servidor: rol de dirección o PM y la c
 });
 
 test('sin Bria, la consulta del punto responde «nada nuevo» y no «sin permiso»', async () => {
-    const handler = createPulseHandler(() => ({ pulse: async () => { throw Object.assign(new Error('Bria ya no está disponible para esta cuenta.'), { status: 403, code: 'BRIA_DISABLED' }); } }));
+    // Los pendientes de reuniones no dependen de Bria (13 de noviembre de 2026): sin Bria, el punto sigue avisando de ellos.
+    const inbox = async () => ({ pulse: async () => ({ keys: ['R:mm-1:2'] }) });
+    const handler = createPulseHandler(() => ({ pulse: async () => { throw Object.assign(new Error('Bria ya no está disponible para esta cuenta.'), { status: 403, code: 'BRIA_DISABLED' }); } }), inbox);
     let statusCode = 200; let body;
     await handler({ user: { id: 'kamila' } }, { status(code) { statusCode = code; return this; }, json(data) { body = data; return this; } });
     assert.equal(statusCode, 200);
-    assert.deepEqual(body, { keys: [] });
+    assert.deepEqual(body, { keys: ['R:mm-1:2'] });
+    const both = createPulseHandler(() => ({ pulse: async () => ({ keys: ['L:1'] }) }), inbox);
+    await both({ user: { id: 'kamila' } }, { status(code) { statusCode = code; return this; }, json(data) { body = data; return this; } });
+    assert.deepEqual(body, { keys: ['L:1', 'R:mm-1:2'] });
+    const broken = createPulseHandler(() => ({ pulse: async () => ({ keys: ['L:1'] }) }), async () => ({ pulse: async () => { throw new Error('sin base'); } }));
+    await broken({ user: { id: 'kamila' } }, { status(code) { statusCode = code; return this; }, json(data) { body = data; return this; } });
+    assert.deepEqual(body, { keys: ['L:1'] }, 'una bandeja que falla no apaga la otra');
 });
 
 test('el menú y la pestaña de Decisiones no consultan nada sin Bria', () => {

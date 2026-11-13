@@ -16,8 +16,9 @@ import { createNotification, processMentionsAndNotifications } from '../services
 import { requestFocusExtension } from '../services/taskFocusService.js';
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
-import { canDeleteTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
+import { canDeleteTask, hasModulePermission, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
 import { canCreatePrivateTask } from '../lib/taskPrivacy.js';
+import { getMeetingTaskInboxService } from '../services/meetingTaskInboxService.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 import { taskWorkCorrectionService } from '../services/taskWorkCorrectionService.js';
@@ -117,9 +118,19 @@ export const correctTaskWorkSessionHandler = async (req, res) => {
     }
 };
 
-export const createNewTask = async (req, res) => {
+// Un pendiente que sale de un compromiso de reunión (Manager → Reuniones, 13 de noviembre de 2026) llega con
+// `source: { kind: 'MINUTE', minuteId, n }`: se crea por aquí mismo, con las mismas puertas, y el compromiso recuerda su
+// `taskId` para no crearse dos veces. Despacharlo pide lo mismo que ver la bandeja: Manager y rol de dirección.
+const dispatchFromMeeting = async (req, source, create, inbox) => {
+    if (!hasModulePermission(req.user, 'manager') || !isManagerRole(req.user?.role)) {
+        throw Object.assign(new Error('Despachar un compromiso de reunión es de Manager, con rol de dirección.'), { status: 403 });
+    }
+    return (await inbox()).dispatch(req.user, source, create);
+};
+
+export const createNewTaskHandler = ({ create = createTask, inbox = getMeetingTaskInboxService } = {}) => async (req, res) => {
     try {
-        const { followOnCreate, initial_references, initial_inputs, initial_insumos, initial_comments, ...rest } = req.body;
+        const { followOnCreate, initial_references, initial_inputs, initial_insumos, initial_comments, source, ...rest } = req.body;
         const taskData = {
             ...rest,
             creatorId: req.user.userId,
@@ -140,7 +151,15 @@ export const createNewTask = async (req, res) => {
         if (taskData.isPrivate && !canCreatePrivateTask(req.user)) {
             return res.status(403).json({ error: 'Solo administradores y project managers pueden crear un pendiente privado.' });
         }
-        const task = await createTask(taskData);
+        let meeting;
+        let task;
+        if (source) {
+            const dispatched = await dispatchFromMeeting(req, source, () => create(taskData), inbox);
+            task = dispatched.task;
+            meeting = { linked: dispatched.linked };
+        } else {
+            task = await create(taskData);
+        }
 
         if (task.assigneeId && (task.isPriority || task.isSpecial)) {
             try {
@@ -173,13 +192,15 @@ export const createNewTask = async (req, res) => {
                 console.error("Error sending task notification:", err);
             }
         }
-        res.status(201).json(task);
+        res.status(201).json(meeting ? { ...task, meeting } : task);
     } catch (error) {
         console.error('[TaskController] Failed to create task:', error.response?.data || error);
         if (error.statusCode === 400) return res.status(400).json({ error: error.message });
+        if (error.status && error.status < 500) return res.status(error.status).json({ error: error.message, code: error.code });
         res.status(500).json({ error: "Failed to create task", details: error.message });
     }
 };
+export const createNewTask = createNewTaskHandler();
 
 export const updateExistingTask = async (req, res) => {
     try {
