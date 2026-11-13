@@ -333,7 +333,7 @@ export const buildDemoDataset = ({ now = new Date() } = {}) => {
         { thirdParty: 'fotografo', concept: 'Sesión de fotos de producto · Café Altura', category: 'OPERATIVO', amount: 650000, receivedAt: bogotaDate(current.year, current.month, Math.min(10, today.day), 9), dueDate: bogotaDate(current.year, current.month, 25, 12), year: current.year, month: current.month, status: 'POR_PAGAR', documentNumber: 'CC-018' }
     ];
 
-    // Pautas: el presupuesto global de tres cuentas con sus lecturas de gasto (escritas mirando Meta) y sus campañas.
+    // Pautas: el presupuesto global de cinco cuentas con sus lecturas de gasto (escritas mirando Meta) y sus campañas.
     // Las fechas de Pautas viajan como texto `YYYY-MM-DD`; el ciclo mensual es el mes calendario (corte 1).
     const dayKey = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
     const agoKey = (days) => { const p = bogotaParts(new Date(now.getTime() - days * 86400000)); return dayKey(p.year, p.month, p.day); };
@@ -368,6 +368,25 @@ export const buildDemoDataset = ({ now = new Date() } = {}) => {
             startDate: agoKey(10), endDate: agoKey(-10), notes: 'Temporada de fin de año del restaurante: la pauta termina con la campaña.',
             cycles: [{ cycleKey: 'UNICO', amount: 300, readings: [{ readOn: agoKey(6), spent: 95 }, { readOn: agoKey(1), spent: 162 }] }],
             campaigns: [{ name: 'Cenas de temporada · La Terraza', objective: 'Alcance', status: 'ACTIVA', startDate: agoKey(10), endDate: agoKey(-10), planned: 300 }]
+        },
+        // Una que se pasó del presupuesto y otra que lo gasta demasiado rápido: así la demo muestra los estados en rojo y amarillo.
+        {
+            client: 'gimnasio-vital', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: 600000, objective: 'Clientes potenciales', payer: 'TARJETA_CLIENTE', responsible: 'juliana',
+            startDate: dayKey(previous.year, previous.month, 1), notes: 'Inscripciones del plan anual. Una campaña quedó sin tope diario y gastó de más.',
+            cycles: [
+                { cycleKey: monthKey(previous), amount: 600000, readings: [{ readOn: dayKey(previous.year, previous.month, previousEnd - 2), spent: 600000, isFinal: true }] },
+                { cycleKey: monthKey(current), amount: 600000, readings: today.day > 1 ? [{ readOn: agoKey(1), spent: 648000 }] : [] }
+            ],
+            campaigns: [{ name: 'Plan anual con matrícula gratis', objective: 'Clientes potenciales', status: 'ACTIVA', startDate: dayKey(current.year, current.month, 1), planned: 600000 }]
+        },
+        {
+            client: 'panaderia-la-espiga', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: 700000, objective: 'Tráfico a la tienda', payer: 'TARJETA_BRAIN', responsible: 'laura',
+            startDate: dayKey(previous.year, previous.month, 1), notes: 'Pedidos de pan de temporada para recoger en la tienda.',
+            cycles: [
+                { cycleKey: monthKey(previous), amount: 700000, readings: [{ readOn: dayKey(previous.year, previous.month, previousEnd - 2), spent: 700000, isFinal: true }] },
+                { cycleKey: monthKey(current), amount: 700000, readings: currentReading(700000, 1.8, 1) }
+            ],
+            campaigns: [{ name: 'Pan de temporada · pedidos', objective: 'Tráfico a la tienda', status: 'ACTIVA', startDate: dayKey(current.year, current.month, 1), planned: 700000 }]
         }
     ];
 
