@@ -301,6 +301,12 @@ const AppLayout = ({ children }) => {
     } else if (notif.type === 'MODULE_ACCESS_GRANTED' && typeof notif.url === 'string' && notif.url.startsWith('/') && !notif.url.startsWith('//')) {
         // Acceso a un módulo recién concedido (15 de octubre de 2026): se abre recargando, para que el menú lea el permiso.
         window.location.assign(notif.url);
+    } else if (typeof notif.url === 'string' && notif.url.startsWith('/') && !notif.url.startsWith('//')) {
+        // Cualquier otro aviso que traiga su destino va a él (Elisa, 13 de noviembre de 2026: «me llega notificación
+        // pero no me redirige a nada»). «Trabajo sin propuesta», el resumen de cartera y los avisos de pautas llegaban
+        // con destino guardado y el clic solo los marcaba como leídos, porque esta lista no los conocía.
+        // Solo direcciones internas: nunca una de fuera.
+        navigateFrom(notif.url);
     }
   };
 

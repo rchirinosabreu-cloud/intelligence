@@ -7,7 +7,7 @@ import {
 } from './financialRecordService.js';
 import { financialAmountFromCents, financialCents } from '../utils/financialMoney.js';
 import { LIVE_PAYROLL_CONTRACT } from './financialQueryFilters.js';
-import { payrollDay, payrollPeriodsOverlap, payrollServiceRange, payrollGenerationRange, payrollUnknownMayOverlap } from '../lib/payrollPeriods.js';
+import { nextPayrollPeriod, payrollServiceRange, payrollUnknownMayOverlap } from '../lib/payrollPeriods.js';
 import { withPayrollMonthlyBasis } from './payrollMonthlyBasis.js';
 
 const toNumber = (value) => {
@@ -55,19 +55,21 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
       const existingPeriods = await tx.payrollTransaction.findMany({ where: { contractId: contract.id, month, year } });
       const related = await withPayrollMonthlyBasis(tx, await tx.payrollTransaction.findMany({ where: { voidedAt: null, ...await relatedPayrollWhere(tx,contract) }, include:{contract:true} }));
       const live = related.filter(row => !row.voidedAt);
-      const intended = payrollGenerationRange(contract,year,month);
-      const serviceStart = intended ? new Date(`${intended.start}T12:00:00Z`) : periodStart, serviceEnd = intended ? new Date(`${intended.end}T12:00:00Z`) : periodEnd;
-      const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === payrollDay(serviceStart) && range.end === payrollDay(serviceEnd); });
+      const name = contract.collaborator?.displayName || contract.sourceLabel;
+      // El ciclo sale del contrato y continúa donde terminó el último período (src/lib/payrollPeriods.js): del 1
+      // al 30 para quien es de mes calendario, del 14 al 13 para quien entró un 14 (Elisa, 13 de noviembre de 2026).
+      // Las liquidaciones sin fechas conocidas no entran al cálculo: se vigilan abajo, como antes.
+      const known = live.map(payrollServiceRange).filter(Boolean);
+      const next = nextPayrollPeriod({ year, month, contractStart: contract.startDate, contractEnd: contract.endDate, periods: known });
+      // Ya generado con este mismo tramo: se devuelve el existente, nunca se duplica.
+      const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === next.start && range.end === next.end; });
       if (covered) { transactions.push(covered); existingCount++; continue; }
-      if (!intended) {
-        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'El contrato cubre solo una parte del mes. Define sus fechas e importe en «Liquidación e historial».' }); continue;
+      if (next.done) continue;
+      if (next.problem) { requiresPeriodReview.push({ contractId: contract.id, name, reason: next.problem }); continue; }
+      if (live.some(row => payrollUnknownMayOverlap(row, next.start, next.end, contract.id))) {
+        requiresPeriodReview.push({ contractId: contract.id, name, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
       }
-      if (live.some(row => payrollUnknownMayOverlap(row,intended.start,intended.end,contract.id))) {
-        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
-      }
-      if (live.some(row => { const range = payrollServiceRange(row); return range && payrollPeriodsOverlap(serviceStart, serviceEnd, range.start, range.end); })) {
-        requiresPeriodReview.push({ contractId: contract.id, name: contract.collaborator?.displayName || contract.sourceLabel, reason: 'Ya hay días de este mes incluidos en otro período. Revisa las liquidaciones antes de crear otra.' }); continue;
-      }
+      const serviceStart = new Date(`${next.start}T12:00:00Z`), serviceEnd = new Date(`${next.end}T12:00:00Z`);
       const baseSalary = toNumber(contract.baseSalary);
       const socialSecurity = toNumber(contract.socialSecurity);
       const grossAmount = baseSalary + socialSecurity;
