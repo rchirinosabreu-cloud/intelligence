@@ -17,7 +17,6 @@ import {
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
 import { clientOperationPlanPath } from '@/lib/clientOperationAlerts';
 import { canSeeClientOperations } from '@/lib/clientOperations';
-import { isManagerRole } from '@/lib/taskEditPermissions';
 import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 
 // `/clientes/operacion/:slug`: la página completa de un cliente (Rodny, 2 de octubre de 2026: «necesito
@@ -79,9 +78,8 @@ export default function ClientOperationRoute() {
 
   return (
     <>
-      {/* Ver no es cambiar: quien entra por la casilla nueva lee la página, y las acciones siguen siendo
-          de dirección y project managers, que es lo que exige el servidor. */}
-      <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage={isManagerRole(currentUser?.role)}
+      {/* Quien llega hasta aquí pasó `canSeeClientOperations`, y eso incluye editar la ficha. */}
+      <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage
         currentUserId={currentUser?.id} isAdmin={String(currentUser?.role || '').toUpperCase() === 'ADMIN'}
         adBudgetsSection={<ClientAdBudgets clientId={client.id} className="mt-4 border-t border-zinc-100 dark:border-white/5 pt-3" />}
         projectsSection={<ClientProjects key={`${client.id}:${viewerId}`} projects={projectQuery.data || []} team={team}
