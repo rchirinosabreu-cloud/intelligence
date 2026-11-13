@@ -76,7 +76,8 @@ test('el recorrido de la banda: escribirle al cliente, el siguiente aviso y «Re
     await shot(page, '04-banda-servicio-puntual');
 
     await band(page).locator('[data-notice-action="snooze"]').click();
-    assert.deepEqual((await band(page).locator('[data-notice-snooze]').allInnerTexts()).map((t) => t.trim()), ['En 10 minutos', 'En 1 hora', 'Mañana a las 8:00']);
+    // «En 7 días» (13 de noviembre de 2026): sin esa opción, Elisa pulsaba «mañana» todos los días sobre la misma deuda.
+    assert.deepEqual((await band(page).locator('[data-notice-snooze]').allInnerTexts()).map((t) => t.trim()), ['En 10 minutos', 'En 1 hora', 'Mañana a las 8:00', 'En 7 días']);
     await shot(page, '05-recordarme');
     await band(page).locator('[data-notice-snooze="tomorrow"]').click();
     await page.getByText('Te lo recuerdo mañana a las 8:00').waitFor();

@@ -21,8 +21,11 @@ test('antes del cierre: revisar a 3 días, informe y facturación a 2, consolida
 });
 
 test('el cierre de un sábado se avisa el lunes; pasada la ventana, ya no', () => {
-    assert.deepEqual(steps(contractCycleAlerts(contract(), '2026-11-02')), ['CIERRE']);
-    assert.equal(contractCycleAlerts(contract(), '2026-11-02')[0].cycleKey, '2026-10-01', 'es el cierre de octubre');
+    // Los avisos de antes del cierre siguen vivos dos días después, por si una corrección tardía del contrato
+    // los dejó sin ventana (Bonsai, 9 de noviembre de 2026); quién ya los recibió lo filtra el servicio.
+    assert.deepEqual(steps(contractCycleAlerts(contract(), '2026-11-02')), ['REVISION', 'FACTURACION', 'CIERRE']);
+    assert.equal(contractCycleAlerts(contract(), '2026-11-02').find((alert) => alert.step === 'CIERRE').cycleKey, '2026-10-01', 'es el cierre de octubre');
+    assert.deepEqual(steps(contractCycleAlerts(contract(), '2026-11-03')), ['CIERRE'], 'a los tres días solo queda el cierre');
     assert.deepEqual(steps(contractCycleAlerts(contract(), '2026-11-04')), []);
 });
 

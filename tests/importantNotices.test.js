@@ -53,11 +53,14 @@ test('un aviso pospuesto vuelve a su hora, y esa hora es la próxima vez que hay
 });
 
 test('«Recordarme»: en 10 minutos, en 1 hora o mañana a las 8:00 de Bogotá', () => {
-    assert.deepEqual(SNOOZE_OPTIONS.map((option) => option.label), ['En 10 minutos', 'En 1 hora', 'Mañana a las 8:00']);
+    assert.deepEqual(SNOOZE_OPTIONS.map((option) => option.label), ['En 10 minutos', 'En 1 hora', 'Mañana a las 8:00', 'En 7 días']);
     const now = at('2026-10-26T22:30:00Z'); // 5:30 p. m. en Bogotá
     assert.equal(snoozeUntil('10m', now).toISOString(), '2026-10-26T22:40:00.000Z');
     assert.equal(snoozeUntil('1h', now).toISOString(), '2026-10-26T23:30:00.000Z');
     assert.equal(snoozeUntil('tomorrow', now).toISOString(), '2026-10-27T13:00:00.000Z');
+    // «En 7 días» (13 de noviembre de 2026): el mismo plazo con el que la cartera se repite, a las 8:00 de Bogotá.
+    assert.equal(snoozeUntil('7d', now).toISOString(), '2026-11-02T13:00:00.000Z');
+    assert.equal(snoozeUntil('una-semana', now), null, 'solo las opciones de la lista');
     // A las 11 p. m. de Bogotá ya es otro día en UTC: «mañana» sigue siendo el día siguiente de Bogotá.
     assert.equal(snoozeUntil('tomorrow', at('2026-10-27T04:00:00Z')).toISOString(), '2026-10-27T13:00:00.000Z');
     assert.equal(snoozeUntil('nunca', now), null);

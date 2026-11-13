@@ -15,10 +15,13 @@ export const NOTICE_LEVELS = Object.freeze({
 
 export const DECISION_GAP_MS = 5 * 60 * 1000;
 
+// «En 7 días» (Elisa, 13 de noviembre de 2026): sin esa opción, pulsaba «mañana» todos los días sobre la misma
+// deuda —14 veces en diez días— y el aviso volvía cada mañana. Es el mismo plazo con el que la cartera se repite.
 export const SNOOZE_OPTIONS = Object.freeze([
     Object.freeze({ value: '10m', label: 'En 10 minutos' }),
     Object.freeze({ value: '1h', label: 'En 1 hora' }),
-    Object.freeze({ value: 'tomorrow', label: 'Mañana a las 8:00' })
+    Object.freeze({ value: 'tomorrow', label: 'Mañana a las 8:00' }),
+    Object.freeze({ value: '7d', label: 'En 7 días' })
 ]);
 
 // Cada opción es una gestión con el cliente del CRM (`CRM_ACTIVITY_TYPES` con `contact: true`): registrarla reinicia la
@@ -60,14 +63,15 @@ const toDate = (value) => {
     return Number.isNaN(date.getTime()) ? null : date;
 };
 
-/** Hasta cuándo se pospone, o null si la opción no existe. «Mañana» es el día siguiente en Bogotá, a las 8:00. */
+/** Hasta cuándo se pospone, o null si la opción no existe. «Mañana» y «en 7 días» son días de Bogotá, a las 8:00. */
 export const snoozeUntil = (option, now = new Date()) => {
     if (option === '10m') return new Date(now.getTime() + 10 * 60 * 1000);
     if (option === '1h') return new Date(now.getTime() + 60 * 60 * 1000);
-    if (option !== 'tomorrow') return null;
+    const days = option === 'tomorrow' ? 1 : option === '7d' ? 7 : null;
+    if (days === null) return null;
     const today = new Date(`${bogotaDateKey(now)}T12:00:00Z`);
-    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    return new Date(`${tomorrow}T08:00:00-05:00`);
+    const target = new Date(today.getTime() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return new Date(`${target}T08:00:00-05:00`);
 };
 
 const isOpen = (notice, now) => !notice.resolvedAt && (!toDate(notice.snoozedUntil) || toDate(notice.snoozedUntil) <= now);
