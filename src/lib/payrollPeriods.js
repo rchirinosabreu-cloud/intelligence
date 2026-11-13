@@ -34,27 +34,35 @@ const spoken = (day) => `${Number(day.slice(8, 10))} de ${MONTHS[Number(day.slic
  * fechas»; Rodny: «haz los ajustes»). Mariceth empezó el 14 de octubre y su mes va del 14 al 13; antes, «Generar»
  * intentaba el 1 al 30, chocaba con los días ya pagados y la saltaba.
  *
- * El siguiente período **continúa donde terminó el anterior** y dura un mes. Sin historial, empieza con el
- * contrato. Así un contrato de mes calendario sigue siendo del 1 al 30, y el primer tramo parcial de quien entró
- * a mitad de mes no tuerce los siguientes. Con un ancla a fin de mes (29–31) el corte se corre al día que exista;
- * lo que importa es que no queden días sueltos entre períodos, y eso se conserva.
+ * Cada período **continúa donde terminó el anterior** y dura un mes; sin historial, el ancla es el día en que
+ * empezó el contrato. **El período pertenece al mes en que termina, que es el mes en que se paga**: generar
+ * noviembre prepara, para quien es del 26, el 26 de octubre → 25 de noviembre; para Mariceth (del 14), diciembre
+ * es el 14 de noviembre → 13 de diciembre. Así un contrato de mes calendario sigue siendo del 1 al 30, y el primer
+ * tramo parcial de quien entró a mitad de mes no tuerce los siguientes. Con un ancla a fin de mes (29–31) el
+ * corte se corre al día que exista; lo que importa es que no queden días sueltos entre períodos.
  *
  * `periods` son los tramos ya liquidados de esa persona con fechas conocidas (`payrollServiceRange`); las
  * liquidaciones sin fechas las vigila el servicio aparte (`payrollUnknownMayOverlap`), y una anulada no cuenta
  * para nada. Lo que no se sabe se dice, nunca se inventa: días ya incluidos en otra liquidación y un contrato que
  * no cubre el período completo devuelven `problem`, y el tramo se define a mano en «Períodos e historial». Un
- * contrato ya liquidado hasta su fin devuelve `done`: no hay nada más que generar y no es un problema.
+ * período anterior al contrato, o un contrato ya liquidado hasta su fin, devuelven `done`: no hay nada que
+ * generar y no es un problema.
  */
 export function nextPayrollPeriod({ year, month, contractStart, contractEnd = null, periods = [] }) {
   const known = periods.map(row => ({ start: payrollDay(row.start), end: payrollDay(row.end) }));
   const latestEnd = known.reduce((max, row) => (row.end > max ? row.end : max), '');
   const firstDay = payrollDay(contractStart);
   const lastDay = contractEnd ? payrollDay(contractEnd) : null;
-  if (lastDay && latestEnd && latestEnd >= lastDay) return { done: true };
   const anchorDay = Number((latestEnd ? shiftDays(latestEnd, 1) : firstDay).slice(8, 10));
-  const start = clampDay(year, month, anchorDay);
+  // Termina el día antes del ancla de este mes y empieza en el ancla del mes anterior. Con ancla 1 es el mes
+  // calendario entero: del 1 al último día.
+  const before = month === 1 ? [year - 1, 12] : [year, month - 1];
   const after = month === 12 ? [year + 1, 1] : [year, month + 1];
-  const end = shiftDays(clampDay(after[0], after[1], anchorDay), -1);
+  const start = anchorDay === 1 ? clampDay(year, month, 1) : clampDay(before[0], before[1], anchorDay);
+  const end = anchorDay === 1 ? shiftDays(clampDay(after[0], after[1], 1), -1) : shiftDays(clampDay(year, month, anchorDay), -1);
+  // `start` y `end` viajan también con `done`: el servicio mira primero si ese tramo ya existe, para devolverlo
+  // en vez de crearlo dos veces, y solo después da el contrato por terminado.
+  if ((lastDay && latestEnd && latestEnd >= lastDay) || end < firstDay) return { done: true, start, end };
   const span = `del ${spoken(start)} al ${spoken(end)}`;
   if (firstDay > start || (lastDay && lastDay < end)) {
     return { start, end, problem: `El contrato cubre solo una parte del período (${span}). Define sus fechas e importe en «Períodos e historial».` };

@@ -61,12 +61,10 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
       // Las liquidaciones sin fechas conocidas no entran al cálculo: se vigilan abajo, como antes.
       const known = live.map(payrollServiceRange).filter(Boolean);
       const next = nextPayrollPeriod({ year, month, contractStart: contract.startDate, contractEnd: contract.endDate, periods: known });
+      // Ya generado con este mismo tramo: se devuelve el existente, nunca se duplica.
+      const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === next.start && range.end === next.end; });
+      if (covered) { transactions.push(covered); existingCount++; continue; }
       if (next.done) continue;
-      // Ya generado en este mes, con este mismo tramo: se devuelve el existente.
-      if (next.start) {
-        const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === next.start && range.end === next.end; });
-        if (covered) { transactions.push(covered); existingCount++; continue; }
-      }
       if (next.problem) { requiresPeriodReview.push({ contractId: contract.id, name, reason: next.problem }); continue; }
       if (live.some(row => payrollUnknownMayOverlap(row, next.start, next.end, contract.id))) {
         requiresPeriodReview.push({ contractId: contract.id, name, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
