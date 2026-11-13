@@ -27,7 +27,7 @@ test('las tarjetas son pequeñas y abren el único creador de pendientes con los
   assert.match(view, /<TaskSidePanel[\s\S]*?prefill=\{prefill\}[\s\S]*?submitLabel="Despachar a Kanban"/);
   assert.match(view, /const prefill = useMemo\(\(\) => \(open \? taskPrefillOf\(open\.minute, open\.item\) : null\), \[open\]\)/, 'el prefill se memoriza: un objeto nuevo por render reiniciaría el formulario');
   assert.match(view, /data-meeting-task-open/);
-  assert.match(view, /grid gap-3 sm:grid-cols-2 xl:grid-cols-3/, 'rejilla de tarjetas pequeñas');
+  assert.match(view, /grid gap-4 sm:grid-cols-2 xl:grid-cols-3/, 'rejilla de tarjetas pequeñas');
   assert.doesNotMatch(view, /<select|type="date"|<textarea|TaskCollaboratorsPicker|BrainDatePicker/, 'la tarjeta no edita: eso lo hace el panel');
   assert.doesNotMatch(view, /meeting-tasks\/approve/, 'ya no hay aprobación en bloque');
 });

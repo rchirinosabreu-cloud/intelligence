@@ -62,7 +62,7 @@ function ItemCard({ item, minute, member, busy, onOpen, onDiscard }) {
 
   return (
     <li data-meeting-task-item={item.key} className="flex min-w-0 flex-col rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <button type="button" data-meeting-task-open onClick={() => onOpen(item)} disabled={busy} className="flex min-w-0 flex-1 flex-col gap-2 rounded-t-2xl p-4 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan disabled:opacity-60 dark:hover:bg-white/5">
+      <button type="button" data-meeting-task-open onClick={() => onOpen(item)} disabled={busy} className="flex min-w-0 flex-1 flex-col gap-3 rounded-t-2xl p-5 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan disabled:opacity-60 dark:hover:bg-white/5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="brain-type-help inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{dayLabel(item.dueDay)}</span>
           {priority && <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', PRIORITY_CHIP[priority.value])}>{priority.label}</span>}
@@ -76,7 +76,7 @@ function ItemCard({ item, minute, member, busy, onOpen, onDiscard }) {
         </span>
         {item.assigneeNote && <span data-meeting-task-note className="brain-type-help">{item.assigneeNote}.</span>}
       </button>
-      <div className="border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
+      <div className="border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
         {mode === null ? (
           <div className="flex items-center justify-between gap-2">
             <button type="button" onClick={() => setMode('discard')} disabled={busy} className={danger}>Descartar</button>
@@ -108,11 +108,11 @@ function ItemCard({ item, minute, member, busy, onOpen, onDiscard }) {
 function MinuteSection({ minute, members, busy, onOpen, onDiscard }) {
   const navigateFrom = useNavigateFrom();
   return (
-    <section data-meeting-minute={minute.minuteId} className="space-y-3">
+    <section data-meeting-minute={minute.minuteId} className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="brain-type-section">{minute.label}</h3>
-          <p className="brain-type-help mt-0.5">
+          <p className="brain-type-help mt-1">
             {plural(minute.pending, 'compromiso por decidir', 'compromisos por decidir')}
             {minute.clientName ? ` · Cliente propuesto: ${minute.clientName} (${minute.clientNote})` : ' · La reunión no nombra a un cliente'}
             {minute.created ? ` · ${plural(minute.created, 'ya es pendiente', 'ya son pendientes')}` : ''}
@@ -120,7 +120,7 @@ function MinuteSection({ minute, members, busy, onOpen, onDiscard }) {
         </div>
         <button type="button" onClick={() => navigateFrom(`/minutas?minute=${encodeURIComponent(minute.minuteId)}`)} className={link}>Abrir la minuta<ExternalLink className="h-3.5 w-3.5" /></button>
       </div>
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {minute.items.map((item) => (
           <ItemCard key={item.key} item={item} minute={minute} member={item.assigneeId ? members.get(String(item.assigneeId)) : null} busy={busy} onOpen={(row) => onOpen(minute, row)} onDiscard={onDiscard} />
         ))}
@@ -192,7 +192,7 @@ export default function ManagerMeetingTasks() {
   }
 
   return (
-    <div data-manager-meeting-tasks className="space-y-6">
+    <div data-manager-meeting-tasks className="space-y-10">
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <div className="brain-ai-header flex items-center gap-4 px-5 py-5 text-white sm:px-7">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/95"><BriaPortrait className="h-12 w-12 object-contain" /></span>
