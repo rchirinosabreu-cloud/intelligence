@@ -281,18 +281,13 @@ router.post(
     requireManagerRole,
     managerDecisionController.respond
 );
-// La bandeja de pendientes de reuniones (13 de noviembre de 2026): lo que Bria armó de cada minuta, para aprobar o descartar.
+// La bandeja de pendientes de reuniones (13 de noviembre de 2026): lo que Bria armó de cada minuta, para despachar o
+// descartar. Despachar es el `POST /tasks` de siempre con la marca `source` del compromiso.
 router.get(
     '/manager/meeting-tasks',
     requireModulePermission('manager'),
     requireManagerRole,
     meetingTaskInboxController.list
-);
-router.post(
-    '/manager/meeting-tasks/approve',
-    requireModulePermission('manager'),
-    requireManagerRole,
-    meetingTaskInboxController.approve
 );
 router.post(
     '/manager/meeting-tasks/discard',

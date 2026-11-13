@@ -1,10 +1,11 @@
 // La bandeja de pendientes de reuniones (Rodny, 13 de noviembre de 2026: «yo quiero tener un lugar donde ya los tenga
 // armados y yo los vea, confirme y apruebe o descarte … prefiero lo de que se reúna por reuniones de Fireflies … debe
 // vivir en Manager»). Cada compromiso que Fireflies anotó en una minuta llega aquí armado como pendiente —título,
-// cliente que nombra la reunión, responsable del equipo, fecha, prioridad y el contexto de dónde salió— y la persona
-// lo corrige, lo aprueba o lo descarta. Bria propone; nunca adivina: dos Melissas es una pregunta, no una elección.
-// Nada se borra: lo aprobado guarda su `taskId` en el compromiso y lo descartado guarda quién, cuándo y por qué.
-// Lógica pura, compartida por la pantalla y el servidor.
+// cliente que nombra la reunión, responsable del equipo, fecha, prioridad y el contexto de dónde salió— en una
+// tarjeta pequeña; abrirla abre el mismo panel con que se crea cualquier pendiente, con los datos ya montados y
+// «Despachar a Kanban» en lugar de «Crear tarea» (Rodny, el mismo día). Bria propone; nunca adivina: dos Melissas
+// es una pregunta, no una elección. Nada se borra: lo despachado guarda su `taskId` en el compromiso y lo
+// descartado guarda quién, cuándo y por qué. Lógica pura, compartida por la pantalla y el servidor.
 
 import { minuteItems, guessClient, matchOwner, minuteLabel, minuteTaskContext } from './minuteTasks.js';
 
@@ -21,14 +22,12 @@ export const INBOX_DISCARD_REASONS = Object.freeze([
   { value: 'OTRO', label: 'Otro motivo' }
 ]);
 
-export const INBOX_TITLE_MAX = 180;
-export const INBOX_COMMENT_MAX = 2000;
 export const INBOX_NOTE_MAX = 300;
-export const INBOX_MAX_ITEMS = 25;
+/** La marca con que un pendiente nuevo dice de qué compromiso de qué minuta sale (`source` del POST /api/tasks). */
+export const MINUTE_SOURCE_KIND = 'MINUTE';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** La huella de un compromiso en la bandeja: la misma que lee el punto del menú de Manager. */
 export const inboxKey = (minuteId, n) => `R:${minuteId}:${n}`;
@@ -74,33 +73,29 @@ export const buildMeetingInbox = ({ minutes = [], clients = [], members = [], to
   .filter((row) => row.pending > 0)
   .sort((a, b) => String(b.meetingAt || '').localeCompare(String(a.meetingAt || '')));
 
-/** Por qué no se puede aprobar lo que llegó, en palabras; null si todo está bien. */
-export const approvalProblem = (body = {}, { members = [], clients = [] } = {}) => {
-  if (!tidy(body.minuteId)) return 'Falta de qué reunión son estos pendientes.';
-  const items = Array.isArray(body.items) ? body.items : [];
-  if (!items.length) return 'No marcaste ningún pendiente para crear.';
-  if (items.length > INBOX_MAX_ITEMS) return `Son demasiados de una vez: como máximo ${INBOX_MAX_ITEMS}.`;
-  const memberIds = new Set(members.map((member) => String(member.id)));
-  const clientIds = new Set(clients.map((client) => String(client.id)));
-  const seen = new Set();
-  for (const item of items) {
-    const n = Number(item?.n);
-    if (!Number.isInteger(n) || n < 1) return 'Uno de los pendientes no dice a qué compromiso corresponde.';
-    if (seen.has(n)) return `El compromiso ${n} está repetido.`;
-    seen.add(n);
-    const title = tidy(item.title);
-    if (!title) return `El compromiso ${n} necesita un título.`;
-    if (title.length > INBOX_TITLE_MAX) return `El título del compromiso ${n} es muy largo: como máximo ${INBOX_TITLE_MAX} caracteres.`;
-    if (!item.assigneeId) return `El compromiso ${n} («${title}») necesita responsable.`;
-    if (!memberIds.has(String(item.assigneeId))) return `El responsable del compromiso ${n} ya no está en el equipo.`;
-    const collaborators = Array.isArray(item.collaboratorIds) ? item.collaboratorIds.map(String) : [];
-    if (collaborators.includes(String(item.assigneeId))) return `El responsable del compromiso ${n} no puede ser también colaborador.`;
-    if (collaborators.some((id) => !memberIds.has(id))) return `Un colaborador del compromiso ${n} ya no está en el equipo.`;
-    if (item.dueDay != null && item.dueDay !== '' && !DAY_RE.test(String(item.dueDay))) return `La fecha del compromiso ${n} no se entiende: elige un día en el calendario.`;
-    if (!INBOX_PRIORITIES.some((p) => p.value === item.priority)) return `La prioridad del compromiso ${n} no es válida.`;
-    if (item.clientId != null && item.clientId !== '' && !clientIds.has(String(item.clientId))) return `El cliente del compromiso ${n} no está activo.`;
-    if (tidy(item.comment).length > INBOX_COMMENT_MAX) return `El contexto del compromiso ${n} es muy largo: como máximo ${INBOX_COMMENT_MAX} caracteres.`;
-  }
+/**
+ * Lo que el panel de crear pendientes recibe ya montado al abrir una tarjeta: título, cliente que nombra la reunión,
+ * responsable propuesto, fecha, prioridad, el contexto como primer comentario y la marca de dónde sale. La persona
+ * corrige ahí lo que haga falta; nada de esto se escribe hasta que pulse «Despachar a Kanban».
+ */
+export const taskPrefillOf = (minute, item) => ({
+  title: item.title,
+  clientId: minute.clientId || '',
+  assigneeId: item.assigneeId || '',
+  collaboratorIds: [],
+  dueDate: item.dueDay || '',
+  priority: INBOX_PRIORITIES.some((p) => p.value === item.priority) ? item.priority : 'NORMAL',
+  comments: item.context ? [item.context] : [],
+  source: { kind: MINUTE_SOURCE_KIND, minuteId: minute.minuteId, n: item.n }
+});
+
+/** Por qué la marca de origen de un pendiente nuevo no sirve, en palabras; null si apunta a un compromiso. */
+export const sourceProblem = (source) => {
+  if (!source || typeof source !== 'object') return 'Falta de qué reunión sale este pendiente.';
+  if (source.kind !== MINUTE_SOURCE_KIND) return 'No conozco ese origen de pendientes.';
+  if (!tidy(source.minuteId)) return 'Falta de qué reunión sale este pendiente.';
+  const n = Number(source.n);
+  if (!Number.isInteger(n) || n < 1) return 'No sé a qué compromiso de la reunión corresponde este pendiente.';
   return null;
 };
 
@@ -121,5 +116,5 @@ export const markDiscarded = (actionItems = [], n, { reason, note, by, byName, a
   ? { ...raw, discarded: { reason, note: tidy(note) || null, by: by || null, byName: byName || null, at } }
   : raw));
 
-/** El compromiso recuerda su pendiente: así nunca se crea dos veces. Devuelve una copia. */
+/** El compromiso recuerda su pendiente: así nunca se despacha dos veces. Devuelve una copia. */
 export const markCreated = (actionItems = [], n, taskId) => actionItems.map((raw, index) => (index === n - 1 ? { ...raw, taskId } : raw));

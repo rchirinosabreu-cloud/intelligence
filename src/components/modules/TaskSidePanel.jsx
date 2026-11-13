@@ -276,7 +276,12 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
     );
 };
 
-const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
+// `prefill` abre el panel de crear con los datos ya montados (Manager → Reuniones, 13 de noviembre de 2026: «es el mismo
+// card del pendiente cuando uno lo crea solo que con los datos ya montados y el botón de "guardar" sería "Despachar a
+// Kanban"»): título, cliente, responsable, colaboradores, fecha, prioridad, comentarios iniciales y `source`, la marca
+// de dónde sale, que viaja en el POST para que el origen quede enlazado. Quien lo pasa lo memoriza: un objeto nuevo en
+// cada render reiniciaría el formulario mientras la persona escribe. Con `prefill` no se toca el borrador de sesión.
+const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null, prefill = null, submitLabel = 'Crear tarea' }) => {
     const { toast } = useToast();
     const confirm = useConfirmDialog();
     const { currentUser } = useAuth();
@@ -544,7 +549,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     // Save draft to sessionStorage on formData changes (Creation mode)
     useEffect(() => {
-        if (isOpen && !isEdition) {
+        if (isOpen && !isEdition && !prefill) {
             if (!isDraftHydratedRef.current) return; // Guard clause: avoid overwriting with empty initial form
             const draftData = {
                 title: formData.title,
@@ -576,7 +581,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     }, [
         formData, tempReferences, tempInputs, tempComments, tempAttachments,
         newComment, newRefUrl, newRefName, newInpUrl, newInpName,
-        isOpen, isEdition
+        isOpen, isEdition, prefill
     ]);
 
     const handleCleanDraftOnly = () => {
@@ -724,6 +729,36 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                 // Completed loading task, no draft hydration needed
                 isDraftHydratedRef.current = true;
+            } else if (!isEdition && prefill) {
+                // Los datos ya vienen montados (un compromiso de reunión); el borrador de sesión no entra ni sale.
+                setIsFollowing(false);
+                setFormData({
+                    ...EMPTY_TASK_FORM,
+                    title: prefill.title || '',
+                    clientId: prefill.clientId || defaultClientId || '',
+                    assigneeId: prefill.assigneeId || '',
+                    collaboratorIds: Array.isArray(prefill.collaboratorIds) ? prefill.collaboratorIds : [],
+                    dueDate: prefill.dueDate || '',
+                    isPriority: Boolean(prefill.priority && prefill.priority !== 'NORMAL'),
+                    priority: prefill.priority && prefill.priority !== 'NORMAL' ? prefill.priority : null,
+                    isSpecial: Boolean(prefill.isSpecial),
+                    status: 'PENDIENTE'
+                });
+                setTempReferences([]);
+                setTempInputs([]);
+                setTempComments((Array.isArray(prefill.comments) ? prefill.comments : []).filter(Boolean).map((content, index) => ({
+                    id: `prefill-comment-${index}`,
+                    content,
+                    createdAt: new Date().toISOString(),
+                    author: { name: 'Tú', avatarUrl: null }
+                })));
+                setTempAttachments([]);
+                setNewComment("");
+                setNewRefUrl("");
+                setNewRefName("");
+                setNewInpUrl("");
+                setNewInpName("");
+                isDraftHydratedRef.current = true;
             } else if (!isEdition) {
                 // Restoration flow for "Nueva Tarea" (isCreationMode)
                 const savedDraft = sessionStorage.getItem('task_focus_draft');
@@ -811,7 +846,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         } else {
             isDraftHydratedRef.current = false;
         }
-    }, [isOpen, taskData, isEdition, defaultClientId, clientsList, toast]);
+    }, [isOpen, taskData, isEdition, defaultClientId, clientsList, toast, prefill]);
 
     // Handle Inline Hot PATCH saving
     const saveInlineField = async (fieldName, finalValue) => {
@@ -957,7 +992,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 initial_references: !isEdition ? tempReferences : undefined,
                 initial_inputs: !isEdition ? tempInputs : undefined,
                 tempAttachments: !isEdition ? tempAttachments : undefined,
-                initial_comments: !isEdition ? tempComments.map(c => ({ content: c.content })) : undefined
+                initial_comments: !isEdition ? tempComments.map(c => ({ content: c.content })) : undefined,
+                // De dónde sale el pendiente (un compromiso de reunión): el servidor enlaza el origen al crearlo.
+                source: !isEdition && prefill?.source ? prefill.source : undefined
             };
 
             const token = localStorage.getItem('authToken');
@@ -977,17 +1014,18 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             });
 
             if (res.ok) {
+                const saved = await res.json().catch(() => null);
                 // Igual que arriba: la celebración es consecuencia de la respuesta, no del clic.
                 if (cierraLaTarea) triggerConfetti();
-                if (cierraLaTarea && isEdition) askDeclaredTimeIfNeeded(await res.json().catch(() => null));
-                toast({ title: isEdition ? 'Tarea actualizada' : 'Tarea creada', description: 'Los cambios se guardaron correctamente.' });
+                if (cierraLaTarea && isEdition) askDeclaredTimeIfNeeded(saved);
+                toast({ title: isEdition ? 'Tarea actualizada' : prefill ? 'Despachado a Kanban' : 'Tarea creada', description: isEdition ? 'Los cambios se guardaron correctamente.' : 'El pendiente ya está en Gestión.' });
 
                 // Clear sessionStorage draft on successful task creation
-                if (!isEdition) {
+                if (!isEdition && !prefill) {
                     sessionStorage.removeItem('task_focus_draft');
                 }
 
-                onSuccess();
+                onSuccess(saved);
                 onClose();
             } else {
                 const failure = await res.json().catch(() => null);
@@ -2738,7 +2776,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     className="flex-[2] bg-primary text-primary-foreground px-6 py-2.5 rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
                                     {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                                    Crear tarea
+                                    {submitLabel}
                                 </button>
                             </div>
                         )}

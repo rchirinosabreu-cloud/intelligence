@@ -122,21 +122,36 @@ export async function createManagerPreview({ port = 3120 } = {}) {
   };
   const minutes = (data.minutes || []).map((row) => ({ ...row, actionItems: (row.actionItems || []).map((item) => ({ ...item })) }));
   const service = createManagerDecisionService({ db, reading: readingService, now: NOW, logger: { info: (line) => console.log(line), error: console.error } });
-  let createdTasks = 0;
-  const inbox = createMeetingTaskInboxService({ db, now: NOW, logger: { info: (line) => console.log(line), error: console.error },
-    createTask: async (input) => ({ id: `t-local-${++createdTasks}`, ...input }), notify: async () => {} });
+  const inbox = createMeetingTaskInboxService({ db, now: NOW, logger: { info: (line) => console.log(line), error: console.error }, notify: async () => {} });
+  // Lo que «Despachar a Kanban» crea desde la bandeja: el POST /api/tasks de siempre, aquí en memoria.
+  const createdTasks = [];
 
   const api = express();
   api.use(express.json());
   api.get('/api/manager/decisions', async (_req, res) => res.json(await service.board(viewer)));
   api.get('/api/manager/decisions/pulse', async (_req, res) => res.json({ keys: [...(await service.pulse(viewer)).keys, ...(await inbox.pulse(viewer)).keys] }));
   api.get('/api/manager/meeting-tasks', async (_req, res) => res.json(await inbox.list(viewer)));
-  for (const [route, fn] of [['approve', (body) => inbox.approve(viewer, body)], ['discard', (body) => inbox.discard(viewer, body)]]) {
-    api.post(`/api/manager/meeting-tasks/${route}`, async (req, res) => {
-      try { res.json(await fn(req.body || {})); }
-      catch (error) { res.status(error.status || 500).json({ error: 'MEETING_TASKS_REJECTED', message: error.message }); }
-    });
-  }
+  api.post('/api/manager/meeting-tasks/discard', async (req, res) => {
+    try { res.json(await inbox.discard(viewer, req.body || {})); }
+    catch (error) { res.status(error.status || 500).json({ error: 'MEETING_TASKS_REJECTED', message: error.message }); }
+  });
+  api.get('/api/team', (_req, res) => res.json((data.team || []).map((row) => ({ ...row, isActive: true }))));
+  api.get('/api/tasks', (_req, res) => res.json(createdTasks));
+  api.post('/api/tasks', async (req, res) => {
+    const { source, ...body } = req.body || {};
+    if (!body.title || !body.clientId) return res.status(400).json({ error: 'Missing required fields (title, clientId)' });
+    const create = async () => {
+      const assignee = (data.team || []).find((row) => row.id === body.assigneeId) || null;
+      const task = { id: `t-local-${createdTasks.length + 1}`, ...body, assignee, createdAt: new Date().toISOString() };
+      createdTasks.push(task);
+      return task;
+    };
+    try {
+      if (!source) return res.status(201).json(await create());
+      const { task, linked } = await inbox.dispatch(viewer, source, create);
+      return res.status(201).json({ ...task, meeting: { linked } });
+    } catch (error) { return res.status(error.status || 500).json({ error: error.message, code: error.code }); }
+  });
   api.post('/api/manager/decisions/respond', async (req, res) => {
     try { res.json(await service.respond(viewer, req.body || {})); }
     catch (error) { res.status(error.status || 500).json({ error: 'MANAGER_DECISION_REJECTED', message: error.message }); }
@@ -153,7 +168,7 @@ export async function createManagerPreview({ port = 3120 } = {}) {
   };
   api.get('/api/manager/rhythm/load', (_req, res) => res.json(ritmo.load));
   api.get('/api/manager/rhythm', (req, res) => res.json(req.query.days === '30' && ritmo.recent ? ritmo.recent : ritmo.rhythm));
-  api.all('/api/*', (req, res) => res.status(404).json({ error: 'NO_DISPONIBLE', message: `Esta muestra local solo trae Decisiones y Ritmo (${req.path}).` }));
+  api.all('/api/*', (req, res) => res.status(404).json({ error: 'NO_DISPONIBLE', message: `Esta muestra local solo trae Decisiones, Reuniones y Ritmo (${req.path}).` }));
 
   const server = await createServer({
     configFile: false,

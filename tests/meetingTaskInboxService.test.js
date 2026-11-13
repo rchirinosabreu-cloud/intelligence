@@ -1,10 +1,10 @@
 // El servicio de la bandeja de pendientes de reuniones (13 de noviembre de 2026): lee las minutas analizadas, arma la
-// bandeja con la regla pura, aprueba creando cada pendiente por el `createTask` de siempre (con el compromiso
-// recordando su tarea) y descarta guardando quién, cuándo y por qué. Nunca dos veces, nunca borra, y un fallo en un
-// pendiente no frena a los demás.
+// bandeja con la regla pura, despacha —el POST /api/tasks de siempre con la marca `source`— dejando al compromiso su
+// `taskId`, y descarta guardando quién, cuándo y por qué. Nunca dos veces, nunca borra.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMeetingTaskInboxService } from '../src/services/meetingTaskInboxService.js';
+import { createNewTaskHandler } from '../src/controllers/taskController.js';
 
 const NOW = () => new Date('2026-11-13T15:00:00.000Z'); // viernes 13 de noviembre, 10:00 de Bogotá
 const rodny = { id: 'u-rod', userId: 'u-rod', name: 'Rodny Chirinos', role: 'ADMIN', teamMember: { name: 'Rodny Chirinos' } };
@@ -34,15 +34,15 @@ const fakeDb = (minutes = [minuteOf()]) => ({
   client: { findMany: async ({ where }) => clients.filter((c) => !where?.isArchived === !c.isArchived || where?.isArchived === c.isArchived) }
 });
 const build = (db, over = {}) => {
-  const created = [], notices = [];
+  const notices = [];
   const service = createMeetingTaskInboxService({
     db, now: NOW, logger: { info() {}, error() {} },
-    createTask: async (input, options) => { const task = { id: `t-${created.length + 1}`, ...input, options }; created.push(task); return task; },
     notify: async (notice) => { notices.push(notice); },
     ...over
   });
-  return { service, created, notices };
+  return { service, notices };
 };
+const source = (n, minuteId = 'mm-1') => ({ kind: 'MINUTE', minuteId, n });
 
 test('the tray lists what is pending with the proposals, the active team and the active clients, and the pulse keys match', async () => {
   const { service } = build(fakeDb());
@@ -55,43 +55,65 @@ test('the tray lists what is pending with the proposals, the active team and the
   assert.deepEqual(await service.pulse(rodny), { keys: ['R:mm-1:1', 'R:mm-1:2', 'R:mm-1:3'] });
 });
 
-test('approving creates each marked task through createTask with the meeting as context and the corrections of the person, writes the task id back, and notifies the assignee', async () => {
+test('dispatching re-reads the commitment, runs the creation the caller brought, writes the task id back and notifies a normal assignee', async () => {
   const db = fakeDb();
-  const { service, created, notices } = build(db);
-  const result = await service.approve(rodny, { minuteId: 'mm-1', items: [
-    { n: 1, title: 'Enviar el guion del reel', clientId: 'c-end', assigneeId: 'm-kam', collaboratorIds: ['m-jar'], dueDay: '2026-11-18', priority: 'URGENTE', comment: 'El cliente lo pidió para el martes.' },
-    { n: 2, title: 'Revisar el logo nuevo con el cliente', clientId: null, assigneeId: 'm-rod', collaboratorIds: [], dueDay: null, priority: 'NORMAL', comment: '' }
-  ] });
-  assert.deepEqual(result.created.map((row) => [row.n, row.taskId]), [[1, 't-1'], [2, 't-2']]);
-  assert.deepEqual(result.failed, []);
-  const [first, second] = created;
-  assert.equal(first.title, 'Enviar el guion del reel', 'the corrected title wins');
-  assert.deepEqual([first.clientId, first.assigneeId, first.collaboratorIds, first.dueDate, first.priority, first.isPriority, first.status, first.creatorId], ['c-end', 'm-kam', ['m-jar'], '2026-11-18T12:00:00.000Z', 'URGENTE', true, 'PENDIENTE', 'u-rod']);
-  assert.match(first.initial_comments[0].content, /De la reunión «Reunión Endova noviembre» del 12 de noviembre\. Responsable según la reunión: Kamila\. Compromiso: Enviar el guion del reel de lanzamiento/);
-  assert.match(first.initial_comments[0].content, /El cliente lo pidió para el martes\.$/);
-  assert.deepEqual(first.options, { requireActiveClient: true });
-  assert.deepEqual([second.clientId, second.dueDate, second.isPriority], [null, null, false]);
-  assert.deepEqual(db.minutes[0].actionItems.map((raw) => raw.taskId || null), ['t-1', 't-2', null], 'each commitment remembers its task');
-  assert.deepEqual(notices.map((n) => [n.userId, n.type, n.relatedId]), [['u-kam', 'TASK_ASSIGNED', 't-1']], 'the approver is not notified about her own task');
-  assert.equal(result.inbox.pending, 1, 'the tray comes back refreshed');
+  const { service, notices } = build(db);
+  let calls = 0;
+  const create = async () => ({ id: `t-${++calls}`, title: 'Enviar el guion del reel', assignee: { userId: 'u-kam' }, isPriority: false, isSpecial: false });
+  const result = await service.dispatch(rodny, source(1), create);
+  assert.deepEqual([result.task.id, result.linked], ['t-1', true]);
+  assert.deepEqual(db.minutes[0].actionItems.map((raw) => raw.taskId || null), ['t-1', null, null], 'the commitment remembers its task');
+  assert.deepEqual(notices.map((n) => [n.userId, n.type, n.relatedId]), [['u-kam', 'TASK_ASSIGNED', 't-1']]);
+  // Un prioritario ya lo avisa el creador de siempre; uno a nombre de quien despacha no se avisa.
+  await service.dispatch(rodny, source(2), async () => ({ id: 't-2', title: 'Urgente', assignee: { userId: 'u-jar' }, isPriority: true }));
+  await service.dispatch(rodny, source(3), async () => ({ id: 't-3', title: 'Mío', assignee: { userId: 'u-rod' } }));
+  assert.equal(notices.length, 1);
+  assert.equal((await service.list(rodny)).pending, 0, 'nothing is left in the tray');
 });
 
-test('approving again creates nothing, a discarded item is refused, one failure does not stop the rest, and the rule rejects what the screen would', async () => {
+test('an already created or discarded commitment is refused before creating; a bad source too; a failed link is said, never undone', async () => {
   const db = fakeDb([minuteOf({ actionItems: [
     { task: 'Ya creado', owner: 'Kamila', taskId: 't-old' },
     { task: 'Descartado', owner: 'Kamila', discarded: { reason: 'YA_HECHO', at: '2026-11-12T20:00:00Z' } },
-    { task: 'Se cae', owner: 'Kamila' },
     { task: 'Sale bien', owner: 'Kamila' }
   ] })]);
-  const { service, created } = build(db, { createTask: async (input) => { if (input.title === 'Se cae') throw new Error('El cliente está archivado.'); const task = { id: 't-new', ...input }; created.push(task); return task; } });
-  const item = (n, title) => ({ n, title, clientId: null, assigneeId: 'm-kam', collaboratorIds: [], dueDay: null, priority: 'NORMAL', comment: '' });
-  const result = await service.approve(rodny, { minuteId: 'mm-1', items: [item(1, 'Ya creado'), item(2, 'Descartado'), item(3, 'Se cae'), item(4, 'Sale bien')] });
-  assert.deepEqual(result.already.map((row) => [row.n, row.taskId]), [[1, 't-old']]);
-  assert.deepEqual(result.failed.map((row) => [row.n, row.reason]), [[2, 'Ese compromiso ya se descartó.'], [3, 'El cliente está archivado.']]);
-  assert.deepEqual(result.created.map((row) => [row.n, row.taskId]), [[4, 't-new']]);
-  assert.equal(created.length, 1);
-  await assert.rejects(service.approve(rodny, { minuteId: 'mm-1', items: [item(4, '')] }), (error) => error.status === 400 && /título/.test(error.message));
-  await assert.rejects(service.approve(rodny, { minuteId: 'mm-9', items: [item(1, 'x')] }), (error) => error.status === 404);
+  const { service } = build(db);
+  let created = 0;
+  const create = async () => ({ id: `t-${++created}`, title: 'x' });
+  await assert.rejects(service.dispatch(rodny, source(1), create), (error) => error.status === 409 && error.code === 'MEETING_TASK_ALREADY_CREATED');
+  await assert.rejects(service.dispatch(rodny, source(2), create), (error) => error.status === 409 && error.code === 'MEETING_TASK_DISCARDED');
+  await assert.rejects(service.dispatch(rodny, source(9), create), (error) => error.status === 404);
+  await assert.rejects(service.dispatch(rodny, source(1, 'mm-9'), create), (error) => error.status === 404);
+  await assert.rejects(service.dispatch(rodny, { kind: 'CHAT', minuteId: 'mm-1', n: 3 }, create), (error) => error.status === 400);
+  assert.equal(created, 0, 'nothing was created for what was refused');
+  const original = db.meetingMinute.update;
+  db.meetingMinute.update = async () => { throw new Error('se cayó la base'); };
+  const result = await service.dispatch(rodny, source(3), create);
+  db.meetingMinute.update = original;
+  assert.deepEqual([result.task.id, result.linked], ['t-1', false]);
+  assert.equal(db.minutes[0].actionItems[2].taskId, undefined);
+});
+
+test('POST /api/tasks with a source creates by the usual path, links the commitment and answers 201 with the task; without Manager it refuses', async () => {
+  // El controlador real, con la creación y el servicio de la bandeja inyectados.
+  const db = fakeDb();
+  const { service } = build(db);
+  const calls = [];
+  const res = () => { const out = { statusCode: 200, body: null, status(code) { out.statusCode = code; return out; }, json(payload) { out.body = payload; return out; } }; return out; };
+  const req = (user, body) => ({ user, body });
+  const admin = { userId: 'u-rod', role: 'ADMIN', modulePermissions: { manager: true } };
+  const viewer = { userId: 'u-vie', role: 'EDITOR', modulePermissions: { manager: true } };
+  const handler = createNewTaskHandler({ create: async (input) => { calls.push(input); return { id: 't-1', ...input, assignee: { userId: 'u-kam' } }; }, inbox: async () => service });
+  const denied = res();
+  await handler(req(viewer, { title: 'x', clientId: 'c-end', source: source(1) }), denied);
+  assert.equal(denied.statusCode, 403);
+  assert.equal(calls.length, 0, 'nothing is created when the person cannot dispatch');
+  const ok = res();
+  await handler(req(admin, { title: 'Enviar el guion', clientId: 'c-end', assigneeId: 'm-kam', source: source(1) }), ok);
+  assert.equal(ok.statusCode, 201);
+  assert.deepEqual(ok.body.meeting, { linked: true });
+  assert.equal(calls[0].source, undefined, 'the mark is not written into the task');
+  assert.equal(db.minutes[0].actionItems[0].taskId, 't-1');
 });
 
 test('discarding keeps the commitment with who, when and why; a created or already discarded one is refused with words', async () => {

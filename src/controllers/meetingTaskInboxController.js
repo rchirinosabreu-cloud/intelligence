@@ -11,13 +11,6 @@ export const createListHandler = (service = getMeetingTaskInboxService) => async
   catch (error) { return sendError(res, error, 'No pude cargar los pendientes de las reuniones.'); }
 };
 
-export const createApproveHandler = (service = getMeetingTaskInboxService) => async (req, res) => {
-  try {
-    const { minuteId, items } = req.body || {};
-    return res.json(await (await service()).approve(req.user, { minuteId, items }));
-  } catch (error) { return sendError(res, error, 'No pude crear los pendientes.'); }
-};
-
 export const createDiscardHandler = (service = getMeetingTaskInboxService) => async (req, res) => {
   try {
     const { minuteId, n, motivo, nota } = req.body || {};
@@ -26,5 +19,4 @@ export const createDiscardHandler = (service = getMeetingTaskInboxService) => as
 };
 
 export const list = createListHandler();
-export const approve = createApproveHandler();
 export const discard = createDiscardHandler();

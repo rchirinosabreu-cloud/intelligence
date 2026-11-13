@@ -1,13 +1,14 @@
 // La bandeja de pendientes de reuniones (Rodny, 13 de noviembre de 2026: «yo quiero tener un lugar donde ya los tenga
 // armados y yo los vea, confirme y apruebe o descarte … prefiero lo de que se reúna por reuniones de Fireflies … debe
 // vivir en Manager»). Bria arma cada compromiso de la minuta con responsable, fecha, prioridad y cliente propuestos;
-// la persona corrige, aprueba o descarta. Lógica pura compartida por pantalla y servidor.
+// la persona lo abre en el creador único de pendientes ya montado, lo despacha o lo descarta. Lógica pura compartida
+// por pantalla y servidor.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rankByName } from '../src/lib/fuzzyMatch.js';
 import {
-  buildMeetingInbox, approvalProblem, discardProblem, markDiscarded, markCreated, inboxKey,
-  INBOX_DISCARD_REASONS, INBOX_PRIORITIES, INBOX_NOTE_MAX, INBOX_TITLE_MAX, INBOX_COMMENT_MAX
+  buildMeetingInbox, discardProblem, markDiscarded, markCreated, inboxKey, sourceProblem, taskPrefillOf,
+  INBOX_DISCARD_REASONS, INBOX_PRIORITIES, INBOX_NOTE_MAX, MINUTE_SOURCE_KIND
 } from '../src/lib/meetingTaskInbox.js';
 
 const today = '2026-11-13';
@@ -58,24 +59,31 @@ test('a minute with nothing pending is not in the tray; the newest meeting goes 
   assert.equal(inbox[1].clientId, null, 'a title without a client proposes none');
 });
 
-test('approving validates each item with the same rule the screen uses', () => {
-  const ok = { minuteId: 'mm-1', items: [{ n: 1, title: 'Enviar el guion', clientId: 'c-end', assigneeId: 'm-kam', collaboratorIds: ['m-jar'], dueDay: '2026-11-17', priority: 'ALTA', comment: 'Con el logo nuevo.' }] };
-  assert.equal(approvalProblem(ok, { members, clients }), null);
-  assert.match(approvalProblem({ minuteId: '', items: [] }, { members, clients }), /reunión/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [] }, { members, clients }), /ningún pendiente/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], title: '  ' }] }, { members, clients }), /título/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], title: 'x'.repeat(INBOX_TITLE_MAX + 1) }] }, { members, clients }), /título/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], assigneeId: null }] }, { members, clients }), /responsable/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], assigneeId: 'm-nadie' }] }, { members, clients }), /equipo/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], collaboratorIds: ['m-kam'] }] }, { members, clients }), /colaborador/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], dueDay: '17/11/2026' }] }, { members, clients }), /fecha/);
-  assert.equal(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], dueDay: null }] }, { members, clients }), null, 'no date is allowed');
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], priority: 'MEDIA' }] }, { members, clients }), /prioridad/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], clientId: 'c-x' }] }, { members, clients }), /cliente/);
-  assert.equal(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], clientId: null }] }, { members, clients }), null, 'no client is allowed');
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [{ ...ok.items[0], comment: 'x'.repeat(INBOX_COMMENT_MAX + 1) }] }, { members, clients }), /contexto/);
-  assert.match(approvalProblem({ minuteId: 'mm-1', items: [ok.items[0], { ...ok.items[0] }] }, { members, clients }), /repetido/);
+test('opening a card hands the single task creator everything already assembled, with the mark of where it comes from', () => {
+  const inbox = buildMeetingInbox({ minutes: [minute()], clients, members, today, rank });
+  const [row] = inbox;
+  const first = taskPrefillOf(row, row.items[0]);
+  assert.deepEqual(first, {
+    title: 'Enviar el guion del reel de lanzamiento', clientId: 'c-end', assigneeId: 'm-kam', collaboratorIds: [], dueDate: '2026-11-17', priority: 'ALTA',
+    comments: [row.items[0].context], source: { kind: MINUTE_SOURCE_KIND, minuteId: 'mm-1', n: 1 }
+  });
+  assert.match(first.comments[0], /De la reunión «Reunión Endova noviembre»/);
+  const third = taskPrefillOf(row, row.items[2]);
+  assert.deepEqual([third.assigneeId, third.dueDate, third.priority, third.source.n], ['', '2026-11-20', 'NORMAL', 3], 'two Melissas: no assignee for the person to choose; «viernes» is the next Friday');
+  const second = taskPrefillOf(row, row.items[1]);
+  assert.deepEqual([second.assigneeId, second.dueDate], ['m-jar', ''], 'what the meeting did not say stays empty');
+  const noClient = taskPrefillOf({ ...row, clientId: null }, row.items[0]);
+  assert.equal(noClient.clientId, '', 'a meeting without a client proposes none; the panel asks for one');
   assert.deepEqual(INBOX_PRIORITIES.map((p) => p.value), ['NORMAL', 'ALTA', 'URGENTE']);
+});
+
+test('the source mark of a new task must point at a commitment of a minute', () => {
+  assert.equal(sourceProblem({ kind: 'MINUTE', minuteId: 'mm-1', n: 2 }), null);
+  assert.match(sourceProblem(null), /reunión/);
+  assert.match(sourceProblem({ kind: 'CHAT', minuteId: 'mm-1', n: 1 }), /origen/);
+  assert.match(sourceProblem({ kind: 'MINUTE', minuteId: ' ', n: 1 }), /reunión/);
+  assert.match(sourceProblem({ kind: 'MINUTE', minuteId: 'mm-1', n: 0 }), /compromiso/);
+  assert.match(sourceProblem({ kind: 'MINUTE', minuteId: 'mm-1', n: '2.5' }), /compromiso/);
 });
 
 test('discarding needs a reason from the list; «Otro motivo» needs the note; nothing is deleted, the item keeps who and why', () => {
