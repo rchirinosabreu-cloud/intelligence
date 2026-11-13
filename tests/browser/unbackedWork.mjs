@@ -31,7 +31,9 @@ test('el tablero lo marca en atención y Dirección autoriza seguir hasta una fe
   await page.goto(`${BASE}/clientes/operacion/promo-group`, { waitUntil: 'domcontentloaded' });
   const block = page.locator('[data-unbacked-work="open"]');
   await block.waitFor({ timeout: 60000 });
-  assert.match(await block.innerText(), /Trabajo sin propuesta aprobada/);
+  // El título cambió al llegar los proyectos: dice en qué estado está el contrato, no «sin propuesta».
+  assert.match(await block.innerText(), /Contrato registrado por revisar/);
+  assert.match(await block.innerText(), /Se está trabajando sin contrato cargado/);
   await shot(page, '02-ficha');
 
   await block.locator('[data-work-authorization-open]').click();

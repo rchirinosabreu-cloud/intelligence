@@ -445,18 +445,10 @@ export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin, projectsSection, adBudgetsSection,
   onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onSuspend, onLiftSuspension, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
-  // `canManage` es poder *cambiar*. Desde el 12 de noviembre de 2026 hay quien ve esta página sin poder
-  // cambiarla —la casilla «Ver la operación completa de clientes»—, así que ninguna acción de escritura se
-  // dibuja sin él: el servidor las rechaza y un botón que no se puede usar es una trampa. Abrir la parrilla,
-  // una pieza, una tarea o el espacio del cliente no cambia nada y se conserva.
-  const ifManager = (handler) => (canManage ? handler : null);
-  onEditProfile = ifManager(onEditProfile); onMarkPublished = ifManager(onMarkPublished);
-  onUndoPublished = ifManager(onUndoPublished); onSaveReport = ifManager(onSaveReport);
-  onConfirmClose = ifManager(onConfirmClose); onReopenClose = ifManager(onReopenClose);
-  onRefreshExternalPlan = ifManager(onRefreshExternalPlan); onAuthorizeWork = ifManager(onAuthorizeWork);
-  onSuspend = ifManager(onSuspend); onLiftSuspension = ifManager(onLiftSuspension);
-  onNewTask = ifManager(onNewTask); onAddObservation = ifManager(onAddObservation);
-  onDeleteObservation = ifManager(onDeleteObservation);
+  // `canManage` es poder trabajar esta página: quien entra, entra a editar (Rodny, 13 de noviembre de 2026:
+  // «necesito que puedan editar la ficha»). Las decisiones que no dependen de esta puerta —suspender por
+  // cartera, autorizar trabajo sin propuesta, la no renovación— llegan ya resueltas del servidor
+  // (`canSuspend`, `canAuthorizeWork`, `canDecideContinuity`) y se siguen respetando.
 
   const measured = isMeasured(client);
   const { current } = client.cycles || {};

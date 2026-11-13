@@ -47,12 +47,22 @@ test('la casilla se le ofrece a quien le sirve, y a nadie viene marcada', () => 
     }
 });
 
-test('el servidor deja leer con la casilla y reserva los cambios para el cargo', () => {
+test('con la casilla se ve y se edita; lo que tiene su propia regla no se abre', () => {
+    // Quien entra, entra a trabajar (Rodny, 13 de noviembre de 2026: «necesito que puedan editar la ficha»).
     assert.match(apiSource, /canSeeClientOperations\(req\.user\)/);
-    assert.match(apiSource, /router\.use\(requireClientOperations, requireManager\)/);
-    // Escribir sigue pidiendo el cargo; leer pasa.
-    assert.match(apiSource, /if \(req\.method === 'GET'\) return next\(\);/);
-    assert.match(apiSource, /isManagerRole\(req\.user\.role\)/);
+    assert.match(apiSource, /router\.use\(requireClientOperations\)/);
+    assert.doesNotMatch(apiSource, /req\.method === 'GET'/, 'ya no hay una puerta aparte para escribir');
+    assert.doesNotMatch(apiSource, /isManagerRole/, 'el cargo no decide dentro de esta ruta');
+
+    // Lo que no depende de esta puerta lo sigue decidiendo el servicio, no el router.
+    const service = read('../src/services/clientOperationsService.js');
+    assert.match(service, /if \(!\(await canAuthorizeWork\(actorUserId\)\)\)/, 'autorizar trabajo sin propuesta');
+    assert.match(service, /canSuspend/, 'suspender por cartera');
+    assert.match(service, /canDecideContractContinuity/, 'la no renovación');
+    // La ficha del proyecto exige el cargo en su propio servicio.
+    assert.match(read('../src/services/projectOperationsService.js'), /isManagerRole\(user\.role\)/);
+    // Y crear, renombrar o desactivar un cliente vive en otra ruta, que sigue pidiendo el cargo.
+    assert.match(read('../src/routes/index.js'), /router\.patch\('\/clients\/:id', requireManagerRole/);
 });
 
 test('la pantalla esconde lo que el servidor va a negar, nunca lo ofrece para fallar', () => {
@@ -63,16 +73,9 @@ test('la pantalla esconde lo que el servidor va a negar, nunca lo ofrece para fa
     assert.match(sectionSource, /\{canEdit && <Button onClick=\{onNewClient\}/);
     assert.match(clientsSource, /\{!canEdit \? null : client\.isArchived \?/);
     assert.match(clientsSource, /\{canEdit && \(\s*\n\s*<div className="flex items-center gap-2 rounded-xl bg-zinc-100/);
-    // En la página de un cliente, ver no es cambiar.
-    assert.match(routeSource, /canManage=\{isManagerRole\(currentUser\?\.role\)\}/);
-    assert.match(pageSource, /const ifManager = \(handler\) => \(canManage \? handler : null\)/);
-    for (const handler of ['onEditProfile', 'onMarkPublished', 'onSaveReport', 'onConfirmClose', 'onSuspend', 'onAddObservation']) {
-        assert.match(pageSource, new RegExp(`${handler} = ifManager\\(${handler}\\)`), handler);
-    }
-    // Abrir la parrilla, una pieza o el espacio del cliente no cambia nada: se conservan.
-    for (const handler of ['onOpenPlan', 'onOpenPiece', 'onOpenTask', 'onOpenWorkspace']) {
-        assert.doesNotMatch(pageSource, new RegExp(`${handler} = ifManager\\(`), handler);
-    }
+    // En la página de un cliente, quien entra edita: la puerta es la misma que para verla.
+    assert.match(routeSource, /<ClientOperationPage [^>]*today=\{today\} canManage\b/);
+    assert.doesNotMatch(pageSource, /ifManager/, 'ya no se anulan las acciones dentro de la página');
 });
 
 test('quien no administra ve sus cuentas primero, no una tabla de administración', () => {
