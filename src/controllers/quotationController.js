@@ -26,7 +26,7 @@ import {
     quotationProposalTotals
 } from '../services/quotationDomainService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
-import { syncLeadStageFromQuotation } from '../services/quotationDraftService.js';
+import { syncLeadStageFromQuotation, supersedeSiblingDrafts } from '../services/quotationDraftService.js';
 import { linkQuotationParty, readQuotationParty } from '../services/quotationPartyService.js';
 import { emailQuotation, sendQuotationByChannel } from '../services/quotationDeliveryService.js';
 
@@ -36,6 +36,16 @@ const syncLeadStage = async (quotation, event) => {
         await syncLeadStageFromQuotation(prisma, quotation, event);
     } catch (error) {
         console.error(`[QuotationController] CRM stage sync (${event}) failed:`, error?.message || error);
+    }
+};
+
+// Al emitir, los otros borradores de la misma oportunidad quedan reemplazados (Elisa, 13 de noviembre de 2026). Un
+// fallo aquí se anota: la cotización ya quedó emitida.
+const supersedeDrafts = async (quotation, actor) => {
+    try {
+        await supersedeSiblingDrafts(prisma, quotation, actor);
+    } catch (error) {
+        console.error('[QuotationController] Borradores de la oportunidad no reemplazados:', error?.message || error);
     }
 };
 
@@ -239,6 +249,7 @@ export const createQuotation = async (req, res) => {
         const formattedConsecutive = `COT-${String(quotation.consecutive).padStart(4, '0')}`;
         const party = await linkParty(quotation, req.user);
         const linked = { ...quotation, lead_id: party?.leadId || quotation.lead_id };
+        if (quotation.status === 'ACTIVA') await supersedeDrafts(linked, req.user);
         // Una propuesta que nace emitida sale sola por correo, igual que al emitir un borrador.
         const delivery = quotation.status === 'ACTIVA' ? await emailQuotation(prisma, linked, EMISORES_DATA[quotation.emisor_type], { actor: req.user }) : null;
 
@@ -369,6 +380,7 @@ export const updateQuotation = async (req, res) => {
         const linked = { ...quotation, lead_id: party?.leadId || quotation.lead_id };
         const issued = existing.status !== 'ACTIVA' && targetStatus === 'ACTIVA';
         if (existing.status === 'BORRADOR' && targetStatus === 'ACTIVA') await syncLeadStage(linked, 'ISSUED');
+        if (issued) await supersedeDrafts(linked, req.user);
         // Al emitir (o reactivar) sale sola por correo con el enlace y el PDF; si no sale, se dice y se puede reenviar.
         const delivery = issued ? await emailQuotation(prisma, linked, EMISORES_DATA[quotation.emisor_type], { actor: req.user }) : null;
 

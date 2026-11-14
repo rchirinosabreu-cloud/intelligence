@@ -26,7 +26,7 @@ import { attachReceivablePaymentDocument, openReceivablePaymentDocument } from '
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { refreshFormalizationsForReceivable } from '../services/projectFormalizationService.js';
 import { clientSuspensionService } from '../services/clientSuspensionService.js';
-import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
+import { issueReceivableDocument, correctReceivableDocument, recordExternalReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import { createFinancialAccount, listFinancialAccounts, updateFinancialAccount } from '../services/financialAccountService.js';
@@ -484,6 +484,22 @@ export const issueReceivableDocumentHandler = async (req, res, dependencies = {}
     } catch (error) {
         console.error('[Receivables API] Issue failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_ISSUE_FAILED', 'No fue posible emitir la cuenta de cobro.');
+    }
+};
+
+// «Ya la emití en Word» (Elisa, 13 de noviembre de 2026): solo número y fecha, sin PDF.
+export const recordExternalReceivableDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const recordDocument = dependencies.recordDocument || recordExternalReceivableDocument;
+    try {
+        const result = await recordDocument(prismaClient, req.params.id, req.body || {}, req.user);
+        return res.json({
+            message: `Cuenta de cobro ${result.document.formattedNumber} anotada. El estado de cuenta ya la nombra por su número.`,
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivables API] External document failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_EXTERNAL_DOCUMENT_FAILED', 'No fue posible anotar la cuenta de cobro.');
     }
 };
 

@@ -91,6 +91,21 @@ export const receivableDocumentFilename = ({ number, clientName, period } = {}) 
     return `${parts.join(' - ').slice(0, 176)}.pdf`;
 };
 
+// Una cuenta de cobro hecha fuera de la plataforma (Elisa, 13 de noviembre de 2026, con Haad: las deudas que
+// vinieron del Excel ya tienen su cuenta de cobro mandada desde Word). De ella se guardan solo el número y la
+// fecha —para que el estado de cuenta la nombre— y se anota que el documento no vive aquí: no hay PDF que ver
+// ni «Corregir» que rehacerlo; su valor se sigue corrigiendo con el lápiz, como una obligación sin emitir.
+export const EXTERNAL_RECEIVABLE_NUMBER_MAX = 99999;
+export const isExternalReceivableDocument = (receivable) => Boolean(receivable?.metadata?.externalDocument) || Boolean(receivable?.externalDocument);
+/** Qué le falta o qué no vale a lo que se escribió; `null` si está bien. Lo leen la pantalla (frena antes) y el servidor. */
+export const externalDocumentProblem = ({ number, issuedAt } = {}) => {
+    const value = Number(String(number ?? '').trim());
+    if (String(number ?? '').trim() === '' || !Number.isInteger(value) || value <= 0) return 'Escribe el número de la cuenta de cobro tal como salió en Word, por ejemplo 380.';
+    if (value > EXTERNAL_RECEIVABLE_NUMBER_MAX) return `El número no puede pasar de ${EXTERNAL_RECEIVABLE_NUMBER_MAX}.`;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(issuedAt || '')) || Number.isNaN(Date.parse(`${issuedAt}T12:00:00Z`))) return 'Indica la fecha en que se emitió.';
+    return null;
+};
+
 // Como lo escribe el documento real: «Cuenta de cobro No. 0389», cuatro dígitos y
 // sin prefijo de letras. No es un formato nuestro, es el que ya reciben los clientes.
 export const formatReceivableNumber = (number) => {

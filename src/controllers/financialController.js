@@ -6,6 +6,7 @@ import { setReceivableCollectionArchive, updateReceivable } from '../services/fi
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { formatReceivableNumber } from '../services/receivableDocumentService.js';
+import { isExternalReceivableDocument } from '../lib/receivableDocument.js';
 import { isCashPayment, isReceivableClosed, isRetentionPayment } from '../lib/receivableSettlement.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 import { receivableCollectionMode, isFormalizationInstallment } from '../lib/receivableCollectionMode.js';
@@ -108,6 +109,8 @@ const serializeReceivable = (receivable) => {
         // saber si ofrece «Emitir cuenta de cobro» o muestra su número.
         number: receivable.number ?? null,
         formattedNumber: formatReceivableNumber(receivable.number),
+        // Hecha en Word (13 de noviembre de 2026): la pantalla no ofrece PDF ni «Corregir», sino «Cambiar número».
+        externalDocument: isExternalReceivableDocument(receivable),
         issuedAt: receivable.issuedAt instanceof Date ? receivable.issuedAt.toISOString() : (receivable.issuedAt || null),
         concept: receivable.concept || null,
         servicePeriod: receivable.servicePeriod || null,

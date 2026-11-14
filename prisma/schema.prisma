@@ -2377,6 +2377,10 @@ enum QuotationStatus {
   BORRADOR
   ACTIVA
   APROBADA
+  // Un borrador que quedó atrás cuando se emitió otra cotización de la misma oportunidad
+  // (Elisa, 13 de noviembre de 2026: «debería quedar solo la que se emite»). Se conserva
+  // con su historial, fuera de la lista. Aditivo: `scripts/ensure-quotation-status-schema.js`.
+  REEMPLAZADA
 }
 
 enum QuotationDiscountType {

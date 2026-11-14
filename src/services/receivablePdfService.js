@@ -555,6 +555,14 @@ export const openReceivablePdf = async (prismaClient, storage, receivableId, env
             409
         );
     }
+    // Una cuenta de cobro hecha en Word (13 de noviembre de 2026): aquí solo están su número y su fecha.
+    if (receivable.metadata?.externalDocument) {
+        throw new FinancialDomainError(
+            'RECEIVABLE_DOCUMENT_EXTERNAL',
+            `La cuenta de cobro ${formatReceivableNumber(receivable.number)} se hizo fuera de la plataforma: no hay PDF que mostrar.`,
+            409
+        );
+    }
     const filename = receivablePdfFilename(receivable);
 
     if (receivable.pdfStorageKey) {

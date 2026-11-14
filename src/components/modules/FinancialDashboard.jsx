@@ -39,6 +39,7 @@ import FinancialOffsetDialog from './financial/FinancialOffsetDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
 import ReceivableAdjustmentsSummary from './financial/ReceivableAdjustmentsSummary';
 import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog';
+import ReceivableExternalDocumentDialog from './financial/ReceivableExternalDocumentDialog';
 import { isCashPayment, isReceivableClosed, isRetentionPayment, paymentKindLabel, settlementKindLabel } from '@/lib/receivableSettlement';
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
@@ -209,6 +210,9 @@ const FinancialDashboard = () => {
     const [isIssuing, setIsIssuing] = useState(false);
     // El mismo formulario emite una cuenta nueva o corrige una ya emitida.
     const [isCorrecting, setIsCorrecting] = useState(false);
+    // «Ya la emití en Word» (Elisa, 13 de noviembre de 2026): número y fecha de una cuenta de cobro hecha fuera.
+    const [externalDocumentDebt, setExternalDocumentDebt] = useState(null);
+    const [isRecordingExternalDocument, setIsRecordingExternalDocument] = useState(false);
     const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
     const [documentPreview, setDocumentPreview] = useState(null);
     // Eliminar una obligación tecleada por error o de prueba: siempre con confirmación
@@ -511,6 +515,27 @@ const FinancialDashboard = () => {
             setNoticeError(error.response?.data?.message || 'No fue posible corregir el abono.');
         } finally {
             setIsEditingPayment(false);
+        }
+    };
+
+    const handleExternalDocument = async (payload) => {
+        const debt = externalDocumentDebt;
+        if (!debt?.id || isRecordingExternalDocument || !canWriteFinancials) return;
+        setIsRecordingExternalDocument(true);
+        setNoticeError('');
+        setNoticeSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${debt.id}/external-document`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setExternalDocumentDebt(null);
+            setNoticeSuccess(result?.message || 'Cuenta de cobro anotada.');
+        } catch (error) {
+            console.error('Error recording external receivable document:', error.response?.data || error);
+            setNoticeError(error.response?.data?.message || 'No fue posible anotar la cuenta de cobro.');
+        } finally {
+            setIsRecordingExternalDocument(false);
         }
     };
 
@@ -1452,7 +1477,7 @@ await invalidateFinancialQueries(queryClient);
                                                                                     va impreso: el lápiz abre la corrección, que rehace el PDF. En una en
                                                                                     dólares el PDF dice dólares y el lápiz ajusta su valor en pesos al que
                                                                                     de verdad entró (Rodny, 30 de septiembre de 2026). */}
-                                                                                {canWriteFinancials && !debt.barterPaymentId && !debt.balanceReviewRequired && (debt.formattedNumber && debt.currency !== 'USD'
+                                                                                {canWriteFinancials && !debt.barterPaymentId && !debt.balanceReviewRequired && (debt.formattedNumber && !debt.externalDocument && debt.currency !== 'USD'
                                                                                     ? <button type="button" title={`Corregir la cuenta de cobro ${debt.formattedNumber}`} aria-label={`Corregir el valor de la cuenta de cobro ${debt.formattedNumber}`} onClick={() => openCorrectDialog(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>
                                                                                     : <button type="button" data-loan-correct={isLoanReceivable(debt) ? '' : undefined} title={isLoanReceivable(debt) ? 'Corregir préstamo: valor, fecha y cuenta' : debt.currency === 'USD' ? 'Ajustar el valor en pesos al que entró' : 'Editar valor'} aria-label={isLoanReceivable(debt) ? `Corregir el préstamo de ${formatFinancialPeriod(debt.period)}` : debt.currency === 'USD' ? `Editar el valor en pesos de la cuenta de cobro ${debt.formattedNumber || ''}` : `Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
                                                                             </p>
@@ -1503,9 +1528,19 @@ await invalidateFinancialQueries(queryClient);
                                                                     <CollectionActivityPanel clientId={debt.clientId} receivableId={debt.id}
                                                                         items={collectionActivities.byClient.get(debt.clientId)} history={collectionActivities} canWrite={canWriteFinancials} />
                                                                 )}
-                                                                {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. */}
+                                                                {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. Si la
+                                                                    cuenta de cobro ya se mandó desde Word, se anota su número (13 de noviembre de 2026). */}
                                                                 <div className="flex flex-wrap items-center gap-2">
-                                                                    {debt.formattedNumber ? (<>
+                                                                    {debt.formattedNumber && debt.externalDocument ? (<>
+                                                                        <span data-receivable-external-document className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                                                                            Cuenta de cobro {debt.formattedNumber}
+                                                                            <span className="font-normal text-zinc-500">· hecha en Word{debt.issuedAt ? ` · ${new Date(debt.issuedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</span>
+                                                                        </span>
+                                                                        {canWriteFinancials && <button type="button" data-receivable-external-change onClick={() => { setNoticeError(''); setExternalDocumentDebt(debt); }}
+                                                                            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
+                                                                            <Edit className="h-3.5 w-3.5" />Cambiar número
+                                                                        </button>}
+                                                                    </>) : debt.formattedNumber ? (<>
                                                                         <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                                                                             Cuenta de cobro {debt.formattedNumber}{debt.currency === 'USD' ? ' · USD' : ''}
                                                                             {debt.issuedAt ? <span className="font-normal text-zinc-500">· {new Date(debt.issuedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</span> : null}
@@ -1522,12 +1557,16 @@ await invalidateFinancialQueries(queryClient);
                                                                             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
                                                                             <Edit className="h-3.5 w-3.5" />Corregir
                                                                         </button>}
-                                                                    </>) : canWriteFinancials && !isLoanReceivable(debt) && debt.kind !== 'BENEFICIARIO' && (
+                                                                    </>) : canWriteFinancials && !isLoanReceivable(debt) && debt.kind !== 'BENEFICIARIO' && (<>
                                                                         <button type="button" onClick={() => openIssueDialog(debt)}
                                                                             className="min-h-11 rounded-lg border border-primary/40 px-3 text-xs font-semibold text-primary transition hover:bg-primary/5">
                                                                             Emitir cuenta de cobro
                                                                         </button>
-                                                                    )}
+                                                                        <button type="button" data-receivable-external-record onClick={() => { setNoticeError(''); setExternalDocumentDebt(debt); }}
+                                                                            className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
+                                                                            Ya la emití en Word
+                                                                        </button>
+                                                                    </>)}
                                                                     {/* Archivar del cobro (11 de noviembre de 2026): sigue aquí, sin avisos ni antigüedad. */}
                                                                     {canWriteFinancials && !debt.collectionArchive && !isReceivableClosed(debt.status) && Number(debt.outstanding) > 0.005 && <button type="button" data-receivable-archive
                                                                         onClick={() => { setNoticeError(''); setArchiveDebt(debt); }}
@@ -1931,6 +1970,7 @@ await invalidateFinancialQueries(queryClient);
             {offsetPaymentId && <FinancialOffsetDialog paymentId={offsetPaymentId} onClose={() => setOffsetPaymentId(null)} />}
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={noticeError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={noticeError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
+            {externalDocumentDebt && <ReceivableExternalDocumentDialog key={externalDocumentDebt.id} debt={externalDocumentDebt} saving={isRecordingExternalDocument} error={noticeError} onClose={() => setExternalDocumentDebt(null)} onSubmit={handleExternalDocument} />}
             {payrollPeriods && <PayrollPeriodsDialog collaborator={payrollPeriods} year={selectedYear} month={payrollMonth} canWrite={canWriteFinancials} canApprove={canApproveFinancials} onClose={() => setPayrollPeriods(null)} onSaved={handlePayrollChanged} />}
             {payrollDeductions && <PayrollDeductionsDialog transaction={payrollDeductions} canApprove={canApproveFinancials} onClose={() => setPayrollDeductions(null)} onSaved={handlePayrollChanged} />}
             {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={noticeError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}

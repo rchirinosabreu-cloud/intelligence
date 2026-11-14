@@ -107,6 +107,7 @@ test('getFinancialReceivablesLedger returns editable receivable rows of the year
         // Documento: esta obligación vino del Excel y todavía no se ha emitido.
         number: null,
         formattedNumber: null,
+        externalDocument: false,
         issuedAt: null,
         concept: null,
         servicePeriod: null,

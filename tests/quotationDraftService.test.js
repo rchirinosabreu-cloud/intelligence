@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { draftItemsFromRequest, buildDraftBody, composeDraftRecord, createQuotationDraftForLead, syncLeadStageFromQuotation, guessBillingType, draftIntroductionText, budgetCeiling, fitItemsToBudget, describeBudgetFit } from '../src/services/quotationDraftService.js';
+import { draftItemsFromRequest, buildDraftBody, composeDraftRecord, createQuotationDraftForLead, supersedeSiblingDrafts, syncLeadStageFromQuotation, guessBillingType, draftIntroductionText, budgetCeiling, fitItemsToBudget, describeBudgetFit } from '../src/services/quotationDraftService.js';
 import { createCrmMemoryDb } from './fixtures/crmMemoryDb.js';
 
 const CATALOG = JSON.parse(await readFile(new URL('../data/service_catalog_2026.json', import.meta.url), 'utf8'))
@@ -139,11 +139,36 @@ test('createQuotationDraftForLead writes the quotation linked to the lead and a 
 
   const again = await createQuotationDraftForLead(db, lead.id, {}, { now: NOW, auto: true, generate: null });
   assert.equal(again.created, false, 'the automatic path never duplicates a draft');
+  // Elisa, 13 de noviembre de 2026: con un borrador abierto, «Crear borrador» abre ese en vez de duplicarlo.
   const manual = await createQuotationDraftForLead(db, lead.id, { userId: 'u-francys' }, { now: NOW, generate: null });
-  assert.equal(manual.created, true);
-  assert.equal(manual.quotation.code, 'COT-0002', 'a manual call adds another version');
+  assert.equal(manual.created, false);
+  assert.deepEqual(manual.quotation, { id: db.state.quotations[0].id, code: 'COT-0001', status: 'BORRADOR' }, 'the caller opens the existing draft');
+  assert.equal(db.state.quotations.length, 1);
+  // Con el borrador emitido sí nace otro: ya no hay ninguno abierto.
+  db.state.quotations[0].status = 'ACTIVA';
+  const next = await createQuotationDraftForLead(db, lead.id, { userId: 'u-francys' }, { now: NOW, generate: null });
+  assert.equal(next.created, true);
+  assert.equal(next.quotation.code, 'COT-0002');
   assert.equal(db.state.activities.at(-1).authorId, 'u-francys');
   await assert.rejects(createQuotationDraftForLead(db, 'missing', {}, { now: NOW, generate: null }), /encontrada/);
+});
+
+test('al emitir una cotización, los otros borradores de la oportunidad quedan reemplazados y la bitácora lo dice', async () => {
+  const db = createCrmMemoryDb({ leads: [lead], quotations: [
+    { id: 'q-auto', consecutive: 55, lead_id: lead.id, status: 'BORRADOR' },
+    { id: 'q-hand', consecutive: 56, lead_id: lead.id, status: 'ACTIVA' },
+    { id: 'q-other', consecutive: 57, lead_id: 'otro-lead', status: 'BORRADOR' },
+    { id: 'q-won', consecutive: 50, lead_id: lead.id, status: 'APROBADA' }
+  ] });
+  const codes = await supersedeSiblingDrafts(db, { id: 'q-hand', consecutive: 56, lead_id: lead.id }, { userId: 'u-francys' }, { now: NOW });
+  assert.deepEqual(codes, ['COT-0055']);
+  assert.equal(db.state.quotations.find(q => q.id === 'q-auto').status, 'REEMPLAZADA');
+  assert.equal(db.state.quotations.find(q => q.id === 'q-other').status, 'BORRADOR', 'otra oportunidad no se toca');
+  assert.equal(db.state.quotations.find(q => q.id === 'q-won').status, 'APROBADA', 'solo los borradores');
+  assert.match(db.state.activities.at(-1).note, /^Al emitir COT-0056 quedó reemplazado el borrador COT-0055\./);
+  assert.equal(db.state.activities.at(-1).authorId, 'u-francys');
+  assert.deepEqual(await supersedeSiblingDrafts(db, { id: 'q-hand', consecutive: 56, lead_id: lead.id }, {}, { now: NOW }), [], 'repetir no escribe nada');
+  assert.deepEqual(await supersedeSiblingDrafts(db, { id: 'q-x', consecutive: 1, lead_id: null }), [], 'sin oportunidad no hay hermanos');
 });
 
 test('a lead without a request still gets an empty draft with its contact data', async () => {

@@ -3,8 +3,10 @@ import { financialCents, financialAmountFromCents } from '../utils/financialMone
 import { dropIncompleteDocument, hasPartyIdentity, normalizePartialPartyIdentity } from '../lib/partyIdentity.js';
 import {
     RECEIVABLE_ITEM_MAX, RECEIVABLE_CONCEPT_MAX, RECEIVABLE_ITEM_DESCRIPTION_MAX,
-    RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber, isReceivableConceptHtml
+    RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber, isReceivableConceptHtml,
+    isExternalReceivableDocument, externalDocumentProblem
 } from '../lib/receivableDocument.js';
+import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { normalizeReceivableCurrency, pesosFromRate, DEFAULT_RECEIVABLE_CURRENCY } from '../lib/receivableCurrency.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import { receivableStatusAfter } from '../lib/receivableSettlement.js';
@@ -163,6 +165,88 @@ export const nextReceivableNumber = (highestIssued, configuredStart) => {
 
 
 /**
+ * Anota el número y la fecha de una cuenta de cobro que ya se mandó desde fuera de la plataforma (Elisa, 13 de
+ * noviembre de 2026, con Haad: «el estado de cuenta trae la deuda del Excel, pero no aparece el consecutivo de la
+ * cuenta de cobro que ya yo le había mandado desde Word»). No genera PDF ni congela conceptos: la obligación
+ * sigue siendo la misma, con su valor editable, y el estado de cuenta la nombra por su número. Se puede volver
+ * a llamar para corregir el número o la fecha de una ya anotada así; nunca sobre una emitida por la plataforma.
+ */
+export const recordExternalReceivableDocument = async (prismaClient, receivableId, input = {}, actor) => {
+    const problem = externalDocumentProblem(input);
+    if (problem) throw new FinancialDomainError('RECEIVABLE_EXTERNAL_DOCUMENT_INVALID', problem);
+    const number = Number(String(input.number).trim());
+    const { date: issuedAt } = parseFinancialDateInput(input.issuedAt);
+    const servicePeriod = String(input.servicePeriod ?? '').trim().slice(0, RECEIVABLE_SERVICE_PERIOD_MAX) || null;
+    const actorId = actor?.id || actor?.userId || null;
+    const now = new Date();
+
+    try {
+        return await prismaClient.$transaction(async (tx) => {
+            const receivable = await tx.accountsReceivable.findUnique({
+                where: { id: receivableId },
+                include: { client: { select: { id: true, name: true } } }
+            });
+            if (!receivable) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+            if (receivable.barterPaymentId) throw new FinancialDomainError('BARTER_DOCUMENT_UNAVAILABLE', 'La obligación del beneficiario procede del canje; no lleva cuenta de cobro.', 409);
+            if (isLoanReceivable(receivable)) throw new FinancialDomainError('RECEIVABLE_LOAN_NO_DOCUMENT', 'Un préstamo no lleva cuenta de cobro.', 409);
+            if (receivable.number && !isExternalReceivableDocument(receivable)) {
+                throw new FinancialDomainError(
+                    'RECEIVABLE_ALREADY_ISSUED',
+                    `La cuenta de cobro ${formatReceivableNumber(receivable.number)} la emitió la plataforma: su número no se cambia. Para ajustar sus datos usa «Corregir».`,
+                    409
+                );
+            }
+            const taken = number === receivable.number ? null : await tx.accountsReceivable.findFirst({
+                where: { number, id: { not: receivableId } },
+                select: { id: true, client: { select: { name: true } }, counterpartyName: true }
+            });
+            if (taken) {
+                throw new FinancialDomainError(
+                    'RECEIVABLE_NUMBER_TAKEN',
+                    `La cuenta de cobro ${formatReceivableNumber(number)} ya es de ${taken.client?.name || taken.counterpartyName || 'otra obligación'}. Revisa el consecutivo.`,
+                    409
+                );
+            }
+            const periodDate = new Date(receivable.period);
+            await assertOpenFinancialPeriod(tx, receivable.year || periodDate.getUTCFullYear(), receivable.month || periodDate.getUTCMonth() + 1);
+
+            const previous = isExternalReceivableDocument(receivable) ? receivable.metadata.externalDocument : null;
+            const metadata = {
+                ...(receivable.metadata && typeof receivable.metadata === 'object' ? receivable.metadata : {}),
+                externalDocument: {
+                    recordedById: previous?.recordedById || actorId,
+                    recordedAt: previous?.recordedAt || now.toISOString(),
+                    ...(previous ? { changedById: actorId, changedAt: now.toISOString(), previousNumber: receivable.number, previousIssuedAt: receivable.issuedAt } : {})
+                }
+            };
+            const updated = await tx.accountsReceivable.update({
+                where: { id: receivableId },
+                data: { number, issuedAt, issuedById: previous ? receivable.issuedById : actorId, servicePeriod, metadata }
+            });
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'AccountsReceivable',
+                    entityId: receivableId,
+                    action: 'UPDATE',
+                    before: cloneForAudit({ number: receivable.number ?? null, issuedAt: receivable.issuedAt ?? null, servicePeriod: receivable.servicePeriod ?? null }),
+                    after: cloneForAudit({ operation: 'EXTERNAL_DOCUMENT', number, issuedAt, servicePeriod }),
+                    actorId
+                }
+            });
+            return {
+                receivable: updated,
+                document: { number, formattedNumber: formatReceivableNumber(number), issuedAt, external: true, clientName: receivable.client?.name || null }
+            };
+        });
+    } catch (error) {
+        if (error?.code === 'P2002') {
+            throw new FinancialDomainError('RECEIVABLE_NUMBER_TAKEN', `La cuenta de cobro ${formatReceivableNumber(number)} ya existe. Revisa el consecutivo.`, 409);
+        }
+        throw error;
+    }
+};
+
+/**
  * Emite la cuenta de cobro de una obligación: le pone número, fecha y conceptos, y
  * ajusta su importe al total del documento. Lo que se le manda al cliente y lo que
  * queda en cartera tienen que ser la misma cifra.
@@ -245,7 +329,9 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
             if (receivable.number) {
                 throw new FinancialDomainError(
                     'RECEIVABLE_ALREADY_ISSUED',
-                    `Esta obligación ya tiene la cuenta de cobro ${formatReceivableNumber(receivable.number)}. Para cambiar sus conceptos o su valor, usa «Corregir». Si el cliente pidió algo más, emite una cuenta de cobro aparte por ese concepto.`,
+                    isExternalReceivableDocument(receivable)
+                        ? `Esta obligación ya tiene la cuenta de cobro ${formatReceivableNumber(receivable.number)}, hecha fuera de la plataforma. Si el número está mal, cámbialo con «Cambiar número»; si el cliente pidió algo más, emite una cuenta de cobro aparte.`
+                        : `Esta obligación ya tiene la cuenta de cobro ${formatReceivableNumber(receivable.number)}. Para cambiar sus conceptos o su valor, usa «Corregir». Si el cliente pidió algo más, emite una cuenta de cobro aparte por ese concepto.`,
                     409
                 );
             }
@@ -390,6 +476,13 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
                 throw new FinancialDomainError(
                     'RECEIVABLE_NOT_ISSUED',
                     'Esta obligación todavía no tiene cuenta de cobro, así que no hay nada que corregir. Usa «Emitir cuenta de cobro».',
+                    409
+                );
+            }
+            if (isExternalReceivableDocument(receivable)) {
+                throw new FinancialDomainError(
+                    'RECEIVABLE_DOCUMENT_EXTERNAL',
+                    `La cuenta de cobro ${formatReceivableNumber(receivable.number)} se hizo fuera de la plataforma: aquí no hay conceptos ni PDF que corregir. El número y la fecha se cambian con «Cambiar número»; el valor, con el lápiz.`,
                     409
                 );
             }
