@@ -458,6 +458,25 @@ test('the pilot: only the accounts with the «Liga del mes» box in Equipo get t
   assert.equal(await service.computeAndSave(DAY), 3, 'the three people are evaluated and saved regardless');
 });
 
+// El premio a la constancia (Rodny, 12 de noviembre de 2026: «dale»).
+test('constancy uses only confirmed days: habits won over played, with the 60 % entry rule', async () => {
+  const habits = (values) => Object.fromEntries(['RELOJ', 'AL_DIA', 'A_TIEMPO', 'DOCUMENTADO', 'SIN_DEVOLUCION', 'TRABAJO_REGISTRADO'].map((key, i) => [key, values[i] ?? null]));
+  const repo = fakeRepo([
+    { day_key: '2026-11-02', member_id: 'm-rodny', habits: habits([true, true, true, true, true, true]), extras: {}, evidence: {} },
+    { day_key: '2026-11-02', member_id: 'm-helen', habits: habits([true, false, true, null, true, true]), extras: {}, evidence: {} },
+    { day_key: '2026-11-02', member_id: 'm-jesu', habits: habits([]), extras: {}, evidence: {} }
+  ]);
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
+  const { constancy } = await service.leagueFor({ userId: 'u-rodny' });
+  assert.equal(constancy.closedDays, 1, 'today is still live and does not count');
+  assert.equal(constancy.minDays, 1);
+  const by = Object.fromEntries(constancy.lanes.map((lane) => [lane.id, lane]));
+  assert.deepEqual([by['m-rodny'].percent, by['m-rodny'].rank, by['m-rodny'].isSelf], [100, 1, true]);
+  assert.deepEqual([by['m-helen'].won, by['m-helen'].played, by['m-helen'].percent, by['m-helen'].rank], [4, 5, 80, 2]);
+  assert.equal(by['m-jesu'].qualifies, false, 'a day without played habits does not enter');
+  assert.equal(by['m-rodny'].pixelAvatarKey, 'rodny');
+});
+
 // Hábitos por área (Rodny, 12 de noviembre de 2026: «Sí, hábitos por área»).
 test('area checks join the habits: today asks for the snapshot, a past day does not, and a failing read never sinks the day', async () => {
   const asked = [];

@@ -121,6 +121,32 @@ export function leaguePodiumGroups(lanes = []) {
   return groups;
 }
 
+/**
+ * El premio a la constancia (Rodny, 12 de noviembre de 2026: «dale» al segundo premio del mes). El puntaje premia el
+ * volumen —quien registra más cosas juega más hábitos—; la constancia mide qué parte de lo jugado se cumplió. Se calcula
+ * solo con días confirmados en el cierre diario. Para entrar hay que haber jugado al menos el 60 % de los días cerrados
+ * del mes: un solo día perfecto no adelanta a un mes parejo. Se ordena por el porcentaje redondeado y los empates
+ * comparten puesto.
+ */
+export const CONSTANCY_MIN_SHARE = 0.6;
+const playedOn = (entry) => DAILY_HABITS.some((habit) => entry?.habits?.[habit.key] === true || entry?.habits?.[habit.key] === false);
+export function constancyOf(days = []) {
+  const { earned, possible } = summarizeDays(days);
+  return { won: earned, played: possible, daysPlayed: days.filter(playedOn).length, percent: possible ? Math.round((earned * 100) / possible) : null };
+}
+export const constancyMinDays = (closedDays) => (closedDays > 0 ? Math.max(1, Math.ceil(closedDays * CONSTANCY_MIN_SHARE)) : 0);
+export function constancyStandings(people = [], { closedDays = 0 } = {}) {
+  const minDays = constancyMinDays(closedDays);
+  const scored = people.map((person) => {
+    const qualifies = minDays > 0 && person.percent !== null && person.daysPlayed >= minDays;
+    return { ...person, qualifies, score: qualifies ? person.percent : 0 };
+  });
+  const ranked = scored.filter((person) => person.qualifies);
+  const lanes = scored.map((person) => ({ ...person, rank: person.qualifies ? leagueRank(person.score, ranked) : null }))
+    .sort((a, b) => Number(b.qualifies) - Number(a.qualifies) || b.score - a.score || (b.percent ?? -1) - (a.percent ?? -1) || a.name.localeCompare(b.name, 'es'));
+  return { closedDays, minDays, lanes };
+}
+
 /** La tasa de cada hábito en el mes (días ganados sobre días jugados), con su insignia. */
 export function habitRates(days = []) {
   const { perHabit } = summarizeDays(days);
