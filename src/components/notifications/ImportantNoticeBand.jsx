@@ -14,9 +14,10 @@ import { announcementRequest, openAnnouncementPreview } from '@/lib/announcement
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { bogotaDateKey } from '@/lib/crmNextFollowUp';
 
-// Avisos importantes: tarjeta inferior con halo suave, por encima del menú. Un aviso
-// a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
-// importante. «Recordarme» va al final. Tocar fuera o Esc devuelve a los botones sin resolver el aviso.
+// Avisos importantes: la cúpula de abajo, de borde a borde y por encima del menú (Rodny, 13 de noviembre de 2026; la
+// superficie vive en `.brain-notice-*` de src/index.css). Un aviso a la vez; el siguiente sale cinco minutos después de
+// decidir. Verde para el seguimiento, salmón solo para lo más importante. «Recordarme» va al final. Tocar fuera o Esc
+// devuelve a los botones sin resolver el aviso.
 // Las decisiones de negocio muestran consecuencias y confirmación; el registro nativo determina su resolución.
 const NOTICE_KEY = ['important-notice'];
 const POLL_MS = 60 * 1000;
@@ -53,7 +54,7 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
   />
 );
 
-function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance = 'halo' }) {
+function NoticeBody({ notice, onDecided, onRefresh, onHeightChange }) {
   const navigate = useNavigate();
   const navigateFrom = useNavigateFrom();
   const [mode, setMode] = useState('base'); // base | channels | close | confirm | snooze
@@ -66,12 +67,14 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   const scheduleRevision = useRef(null);
   const changeSchedule = (setter, value) => { setter(value); scheduleRequest.current = crypto.randomUUID(); };
   const contentRef = useRef(null);
-  const bandRef = useRef(null);
+  const boxRef = useRef(null);
+  // Lo que tapa de verdad es el bloque de texto y botones, no la cúpula entera (su parte alta es casi transparente): la
+  // página reserva abajo la altura de ese bloque, medida en vivo, también con el texto ampliado.
   useEffect(() => {
-    if (!onHeightChange || !bandRef.current) return undefined;
-    const measure = () => onHeightChange(Math.ceil(bandRef.current.getBoundingClientRect().height));
+    if (!onHeightChange || !boxRef.current) return undefined;
+    const measure = () => onHeightChange(Math.ceil(boxRef.current.getBoundingClientRect().height));
     const observer = new ResizeObserver(measure);
-    observer.observe(bandRef.current);
+    observer.observe(boxRef.current);
     measure();
     return () => { observer.disconnect(); onHeightChange(0); };
   }, [onHeightChange]);
@@ -106,6 +109,9 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   const isPlan = policy?.family === 'PLAN';
   const isAd = policy?.family === 'ADS';
   const isOperational = policy?.family === 'OPERATION';
+  // Cierre de mes para Administrativa (Elisa, 13 de noviembre de 2026: «que me invadan la pantalla, en la campanita si
+  // no entro no lo veo»): facturación y renovación. «Ya la revisé» es un acuse personal; no emite ni renueva nada.
+  const isCycle = policy?.family === 'CYCLE';
   const selectOutcome = (value, action) => {
     // Descartar es una decisión directa pedida por Comercial; conserva revisión e historial nativos.
     if (value === 'DESCARTADO') {
@@ -185,9 +191,9 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
   };
 
   return (
-    <div ref={bandRef} className="brain-notice-band" data-important-notice={notice.id} data-appearance={appearance} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'}>
+    <div className="brain-notice-band" data-important-notice={notice.id} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'}>
       <div className="brain-notice-wash" aria-hidden="true" />
-      <div className="brain-notice-content">
+      <div ref={boxRef} className="brain-notice-content">
         <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite">
           <p className="brain-notice-label"><span className="brain-notice-dot" aria-hidden="true" />{notice.label}</p>
           {isAnnouncement && notice.pendingAnnouncements > 1 && <p className="mb-2 text-xs text-zinc-500">{notice.pendingAnnouncements} anuncios pendientes · uno a la vez</p>}
@@ -237,6 +243,10 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
                   <NoticeButton primary disabled={busy} data-notice-action="open-ad-budget" onClick={() => navigateFrom(notice.url || '/pautas')}>
                     {policy.openLabel}
                   </NoticeButton>
+                ) : isCycle ? (
+                  <NoticeButton primary disabled={busy} data-notice-action="open-cycle" onClick={() => navigateFrom(notice.url || '/financiero?tab=cartera')}>
+                    {policy.openLabel}
+                  </NoticeButton>
                 ) : noticeAllows(notice, 'follow-up') ? (
                   <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => openOptions('channels', 'follow-up')}>
                     {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
@@ -263,7 +273,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
                     Archivar
                   </NoticeButton>
                 )}
-                {noticeAllows(notice, 'acknowledge') && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, 'Aviso recibido')}>Recibido</NoticeButton>}
+                {noticeAllows(notice, 'acknowledge') && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, isCycle ? 'Revisión anotada' : 'Aviso recibido')}>{isCycle ? 'Ya la revisé' : 'Recibido'}</NoticeButton>}
                 {isOperational && notice.continuity && <ContractContinuityDecision clientId={notice.continuity.clientId}
                   clientName={notice.label.split(' · ').slice(1).join(' · ')} onDecided={onDecided}
                   contract={{ id: notice.continuity.contractId, endDate: notice.continuity.endDate, updatedAt: notice.continuity.expectedUpdatedAt }} />}
@@ -312,7 +322,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange, appearance =
 }
 
 /** La banda de avisos importantes. `onVisibleChange` deja espacio abajo en la página para que nada quede tapado. */
-export default function ImportantNoticeBand({ enabled = true, onVisibleChange, onHeightChange, appearance = 'halo' }) {
+export default function ImportantNoticeBand({ enabled = true, onVisibleChange, onHeightChange }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: NOTICE_KEY,
@@ -341,7 +351,6 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange, o
     <><AnnouncementPreview />{notice && <NoticeBody
       key={notice.id}
       notice={notice}
-      appearance={appearance}
       onHeightChange={onHeightChange}
       onRefresh={() => queryClient.invalidateQueries({ queryKey: NOTICE_KEY })}
       onDecided={() => {

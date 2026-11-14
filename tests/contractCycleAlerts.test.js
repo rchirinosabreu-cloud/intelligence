@@ -94,9 +94,38 @@ const fakeDb = (contracts) => {
 };
 const run = async (db) => {
     const bells = [];
-    const result = await runContractCycleAlerts(db, { now: NOW, notify: async (data) => { bells.push(data); return { id: bells.length }; }, log: () => {}, info: () => {} });
-    return { result, bells };
+    const band = [];
+    const result = await runContractCycleAlerts(db, { now: NOW, notify: async (data) => { bells.push(data); return { id: bells.length }; },
+        queueBand: async (_db, data) => { band.push(data); return data; }, log: () => {}, info: () => {} });
+    return { result, bells, band };
 };
+
+// Elisa, 13 de noviembre de 2026: «que me invadan la pantalla, en la campanita si no entro no lo veo». Lo de Administrativa
+// va además a la banda; lo del project manager ya está ahí por los avisos operativos y no se duplica.
+test('la facturación y la renovación se quedan en la banda de Administrativa, ligadas a su campana', async () => {
+    const { bells, band } = await run(fakeDb([contract({ client: clientOf('c-1'), endDate: '2026-11-20' })]));
+    assert.deepEqual(band.map((item) => [item.userId, item.kind, item.level, item.subjectId]),
+        [['u-elisa', 'CICLO_FACTURACION', 'IMPORTANTE', 'CICLO:k-1'], ['u-elisa', 'CICLO_RENOVACION', 'SEGUIMIENTO', 'RENOV:k-1']], 'a 22 días la renovación va en verde');
+    assert.equal(band[0].url, '/financiero?tab=cartera');
+    assert.match(band[0].message, /^El mes de Cliente c-1 cierra el 31 de octubre: revisa su facturación/);
+    assert.equal(band[1].url, '/clientes/operacion/cliente-c-1');
+    for (const item of band) assert.equal(item.notificationId, bells.findIndex((bell) => bell.userId === item.userId && bell.message === item.message) + 1, 'decidir en la banda deja leída su campana');
+    assert.equal(band.some((item) => item.userId !== 'u-elisa'), false, 'el project manager no recibe una segunda banda');
+});
+
+test('más de tres cuentas van a la banda en un solo aviso del mes; un aviso de banda que falla no frena la campana', async () => {
+    const db = fakeDb(['a', 'b', 'c', 'd', 'e'].map((id) => contract({ id: `k-${id}`, clientId: id, client: clientOf(id) })));
+    const { bells, band } = await run(db);
+    assert.deepEqual(band.map((item) => [item.kind, item.subjectId]), [['CICLO_FACTURACION', 'CICLO:RESUMEN:2026-10']]);
+    assert.match(band[0].message, /^5 cuentas cierran el mes en dos días: revisa su facturación/);
+    assert.equal(bells.filter((bell) => bell.userId === 'u-elisa').length, 1);
+
+    const failing = fakeDb([contract({ client: clientOf('c-1') })]);
+    const logs = [];
+    const result = await runContractCycleAlerts(failing, { now: NOW, notify: async () => ({ id: 1 }), queueBand: async () => { throw new Error('sin tabla'); }, log: (...args) => logs.push(args.join(' ')), info: () => {} });
+    assert.equal(result.sent, 2);
+    assert.ok(logs.some((line) => /Aviso de banda no guardado/.test(line)));
+});
 
 test('no renovación confirmada conserva campanas de cierre y facturación sin solicitar renovar', async () => {
     const c = clientOf('c-final');

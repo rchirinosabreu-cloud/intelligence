@@ -6,7 +6,8 @@ import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
 import { activeAreaUserIds } from './teamAreaService.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
-import { contractCycleAlerts, cycleAlertText, cycleDigestText, addDays } from '../lib/contractCycleAlerts.js';
+import { contractCycleAlerts, cycleAlertText, cycleDigestText, cycleBandNotice, cycleBandDigest, addDays } from '../lib/contractCycleAlerts.js';
+import { queueImportantNotice } from './importantNoticeService.js';
 
 export const CYCLE_CLOSE_TYPE = 'CIERRE_MENSUAL';
 export const BILLING_REVIEW_TYPE = 'FACTURACION_MENSUAL';
@@ -30,7 +31,7 @@ export const currentContracts = (contracts, today) => {
 };
 
 /** Una pasada del reloj. Primero se anota el paso (la fila única es la cerradura) y después se avisa. */
-export const runContractCycleAlerts = async (db = prisma, { now = new Date(), notify = createNotification, log = console.error, info = console.log } = {}) => {
+export const runContractCycleAlerts = async (db = prisma, { now = new Date(), notify = createNotification, queueBand = queueImportantNotice, log = console.error, info = console.log } = {}) => {
     const today = bogotaToday(now);
     const contracts = await db.clientContract.findMany({
         select: {
@@ -90,7 +91,8 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
             if (alert.audience.includes('CM') && cm?.userId && cm.isActive !== false && !recipients.has(cm.userId)) recipients.set(cm.userId, operationUrl);
             if (alert.audience.includes('ADMINISTRATIVA')) for (const userId of administrative) if (!recipients.has(userId)) recipients.set(userId, BILLING_URL);
             if (!recipients.size) log(`[Cierre mensual] ${contract.client?.name || contract.clientId}: el aviso ${alert.step} no tiene a quién llegar.`);
-            for (const [userId, url] of recipients) queue(userId, alert.step, { message, url, relatedId: contract.clientId });
+            const band = cycleBandNotice(alert, contract, { clientName: contract.client?.name, operationUrl });
+            for (const [userId, url] of recipients) queue(userId, alert.step, { message, url, relatedId: contract.clientId, band });
         }
     }
 
@@ -102,14 +104,29 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
             return null;
         }
     };
+    // Además de la campana, a Administrativa se le queda en la banda hasta que decida (Elisa, 13 de noviembre de
+    // 2026). Un aviso de banda que no se guarda nunca frena la campana ni a los demás.
+    const administrativeSet = new Set(administrative);
+    const toBand = async (userId, data, bell) => {
+        if (!data || !administrativeSet.has(userId)) return;
+        try {
+            await queueBand(db, { userId, ...data, notificationId: bell?.id || null }, now);
+        } catch (error) {
+            log('[Cierre mensual] Aviso de banda no guardado:', error?.message || error);
+        }
+    };
     for (const [userId, bySteps] of outbox) {
         for (const [step, items] of bySteps) {
             const type = typeOf(step);
             if (items.length > DIGEST_THRESHOLD) {
-                await deliver({ userId, type, url: type === BILLING_REVIEW_TYPE ? BILLING_URL : '/clientes', message: cycleDigestText(step, items.length) });
+                const bell = await deliver({ userId, type, url: type === BILLING_REVIEW_TYPE ? BILLING_URL : '/clientes', message: cycleDigestText(step, items.length) });
+                await toBand(userId, cycleBandDigest(step, items.length, today), bell);
                 continue;
             }
-            for (const item of items) await deliver({ userId, type, ...item });
+            for (const { band, ...item } of items) {
+                const bell = await deliver({ userId, type, ...item });
+                await toBand(userId, band, bell);
+            }
         }
     }
     if (sent) info(`[Cierre mensual] ${sent} ${sent === 1 ? 'aviso' : 'avisos'} de cierre o renovación en este pase.`);

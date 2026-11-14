@@ -35,7 +35,7 @@ export const NOTICE_TRACE_LABELS = Object.freeze({
 });
 
 const CHANNEL_PHRASES = { WHATSAPP: 'por WhatsApp', LLAMADA: 'por llamada', CORREO: 'por correo', REUNION: 'en una reunión' };
-const SNOOZE_PHRASES = { '10m': 'por 10 minutos', '1h': 'por 1 hora', tomorrow: 'hasta mañana a las 8:00' };
+const SNOOZE_PHRASES = { '10m': 'por 10 minutos', '1h': 'por 1 hora', tomorrow: 'hasta mañana a las 8:00', '7d': 'por 7 días' };
 const OUTCOME_PHRASES = { PERDIDO: 'perdida', DESCARTADO: 'descartada', GANADO: 'ganada' };
 const CLEARED_REASONS = {
     ANUNCIO_ATENDIDO: 'el anuncio fue archivado o su aviso personal ya fue atendido',
@@ -50,7 +50,9 @@ const CLEARED_REASONS = {
     FUENTE_ACTUALIZADA: 'ya no hay publicaciones pendientes asignadas a esta persona en el período del aviso',
     ACCESO_ACTUALIZADO: 'el aviso ya no corresponde al acceso vigente de esta persona',
     PAUTA_ATENDIDA: 'ya se actualizó el gasto, se revisó la campaña o se ajustó el presupuesto en Meta',
-    PAUTA_INACTIVA: 'la pauta ya no está activa'
+    PAUTA_INACTIVA: 'la pauta ya no está activa',
+    // Cierre de mes y renovación en la banda de Administrativa (13 de noviembre de 2026).
+    CONTRATO_ACTUALIZADO: 'el contrato ya no está vigente, se renovó o el cliente no continúa'
 };
 
 const isCollectionNotice = (meta) => String(meta?.kind || '').startsWith('CARTERA_');
@@ -111,6 +113,7 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
         case NOTICE_TRACE_EVENTS.CLOSED:
             if (meta.outcome === 'PERDIDO') return `${actor} registró que el cliente no aprobó la oportunidad ${who}.`;
             if (meta.outcome === 'RECIBIDO') return `${actor} confirmó que recibió el aviso operativo de ${who}.`;
+            if (meta.outcome === 'REVISADO') return `${actor} anotó desde la banda que revisó ${who}.`;
             if (meta.outcome === 'ARCHIVAR') return `${actor} archivó ${who} desde el aviso.`;
             return `${actor} marcó ${who} como ${OUTCOME_PHRASES[meta.outcome] || 'cerrada'} desde el aviso de revisión${meta.outcome === 'GANADO' ? ': ya es cliente' : ''}.`;
         case NOTICE_TRACE_EVENTS.CLEARED: {

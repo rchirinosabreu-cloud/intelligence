@@ -72,12 +72,13 @@ test('una fuente de publicaciones que falla no acredita resolución ni entrega u
 });
 
 test('el catálogo vigente declara origen y efecto; solo CRM/cartera admiten registrar gestión',()=>{
-  assert.equal(Object.keys(NOTICE_RESPONSE_POLICIES).length,19);
+  assert.equal(Object.keys(NOTICE_RESPONSE_POLICIES).length,21);
   for(const [kind,policy] of Object.entries(NOTICE_RESPONSE_POLICIES)){
     assert.ok(policy.source && policy.explanation && policy.openLabel);
     assert.ok(noticeAllows({kind},policy.family === 'ANNOUNCEMENT' ? 'preview' : 'open'));
     assert.equal(noticeAllows({kind},'follow-up'),['CRM','COLLECTION'].includes(policy.family));
     assert.equal(noticeAllows({kind},'close'),policy.family==='CRM');
-    assert.equal(noticeAllows({kind},'acknowledge'),['OPERACION_SUSPENSION','OPERACION_REACTIVACION'].includes(kind));
+    // El acuse personal: «Recibido» en suspensión/reactivación y «Ya la revisé» en el cierre de mes de Administrativa.
+    assert.equal(noticeAllows({kind},'acknowledge'),['OPERACION_SUSPENSION','OPERACION_REACTIVACION'].includes(kind) || policy.family==='CYCLE');
   }
 });
