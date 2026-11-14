@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
+import sharp from 'sharp';
 import { createOperationalNoticePreview } from '../../scripts/preview-operational-notices.mjs';
 
 test('avisos: contraste blanco, teclado, errores recuperables, movimiento reducido y reflujo',async()=>{
@@ -10,8 +11,14 @@ test('avisos: contraste blanco, teclado, errores recuperables, movimiento reduci
     const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
     await page.goto(preview.origin);const card=page.locator('[data-important-notice]');await card.waitFor();
     const primary=card.locator('.brain-notice-primary');
-    // La cúpula (13 de noviembre de 2026): el botón principal es blanco con el texto en la variante profunda de la
-    // paleta —ni blanco ni negro—, con contraste AA en claro, oscuro y al pasar el ratón (el fondo blanco se atenúa).
+    const title=card.locator('.brain-notice-title');
+    // Los botones llevan `transition-colors`: se miden los colores finales, no uno a medio camino tras cambiar de tema.
+    await page.addStyleTag({content:'.brain-notice-content * { transition: none !important; }'});
+    const lum=c=>c.map(x=>x/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((sum,x,i)=>sum+x*[.2126,.7152,.0722][i],0);
+    const contrast=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
+    // La cúpula de vidrio (Rodny, 14 de noviembre de 2026, opción B): en claro el texto es oscuro y el botón principal
+    // lleva el color profundo de la paleta con texto blanco; en oscuro el texto es blanco y el botón principal, blanco con
+    // el texto en la variante profunda —ni blanco ni negro—. Contraste AA en los dos temas y al pasar el ratón.
     for(const dark of [false,true]){
       await page.evaluate(d=>document.documentElement.classList.toggle('dark',d),dark);
       await page.mouse.move(0,0);
@@ -20,17 +27,33 @@ test('avisos: contraste blanco, teclado, errores recuperables, movimiento reduci
         const colors=await primary.evaluate(e=>{
           const s=getComputedStyle(e),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
           const rgb=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3);};
-          const lum=c=>c.map(x=>x/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((sum,x,i)=>sum+x*[.2126,.7152,.0722][i],0);
-          const fg=rgb(s.color),bg=rgb(s.backgroundColor);return {fg,bg,ratio:(Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05)};
+          return {fg:rgb(s.color),bg:rgb(s.backgroundColor)};
         });
-        assert.deepEqual(colors.bg,[255,255,255],'el botón principal va blanco sobre la cúpula');
-        assert.notDeepEqual(colors.fg,[255,255,255]);assert.notDeepEqual(colors.fg,[0,0,0]);
-        assert.ok(colors.ratio>=4.5,`contraste ${colors.ratio} oscuro=${dark} hover=${hover}`);
+        if(dark){
+          assert.deepEqual(colors.bg,[255,255,255],'en oscuro el botón principal va blanco sobre la cúpula');
+          assert.notDeepEqual(colors.fg,[255,255,255]);assert.notDeepEqual(colors.fg,[0,0,0]);
+        } else {
+          assert.deepEqual(colors.fg,[255,255,255],'en claro el botón principal lleva texto blanco sobre el color');
+          assert.notDeepEqual(colors.bg,[255,255,255]);assert.notDeepEqual(colors.bg,[0,0,0]);
+        }
+        const ratio=contrast(colors.fg,colors.bg);
+        assert.ok(ratio>=4.5,`contraste del botón ${ratio} oscuro=${dark} hover=${hover}`);
       }
+      // El título, sin sombra, se lee sobre el vidrio de verdad: se mide el píxel más desfavorable del fondo que queda
+      // justo debajo del texto (con el bloque oculto), no un color teórico. Es lo que descartó el texto blanco en claro.
+      assert.equal(await title.evaluate(e=>getComputedStyle(e).color),dark?'rgb(255, 255, 255)':'rgb(24, 24, 27)');
+      assert.equal(await title.evaluate(e=>getComputedStyle(e).textShadow),'none');
+      const ink=await title.evaluate(e=>getComputedStyle(e).color.match(/\d+/g).slice(0,3).map(Number));
+      const box=await title.boundingBox();
+      await card.locator('.brain-notice-content').evaluate(e=>{e.style.visibility='hidden';});
+      const shot=await page.screenshot({clip:{x:box.x,y:box.y,width:box.width,height:box.height}});
+      await card.locator('.brain-notice-content').evaluate(e=>{e.style.visibility='';});
+      const pixels=await sharp(shot).removeAlpha().raw().toBuffer();
+      let worst=Infinity;for(let i=0;i<pixels.length;i+=3)worst=Math.min(worst,contrast(ink,[pixels[i],pixels[i+1],pixels[i+2]]));
+      assert.ok(worst>=4.5,`contraste real del título ${worst.toFixed(2)} oscuro=${dark}`);
     }
-    // El título es blanco, sin sombra, y la cúpula no tiene caja: va de borde a borde.
-    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
-    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).textShadow),'none');
+    await page.evaluate(()=>document.documentElement.classList.remove('dark'));
+    // La cúpula no tiene caja: va de borde a borde.
     assert.equal((await card.boundingBox()).width,1440);
     await page.mouse.move(0,0);
     await card.locator('[data-notice-title-link]').focus();await page.keyboard.press('Tab');

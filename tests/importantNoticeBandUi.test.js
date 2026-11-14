@@ -27,16 +27,42 @@ test('la cúpula: de borde a borde, encima del menú y debajo de los diálogos, 
     assert.match(block, /\[data-level="IMPORTANTE"\] \{\s*--notice-hue: var\(--brand-coral\)/);
     assert.doesNotMatch(block, /--brand-cyan|--brand-magenta/, 'un solo tono por nivel: sin azul y sin magenta');
     assert.doesNotMatch(block, /#[0-9a-f]{6}/i, 'los colores salen de los tokens de marca');
-    // Texto blanco sin sombra; botón principal blanco con el texto en la variante profunda (no rojo sobre rojo).
-    assert.match(block, /--notice-ink: 255 255 255/);
+    // Vidrio, no pintura (Rodny, 14 de noviembre de 2026, opción B): el velo no pasa de la mitad de opacidad en claro y
+    // deja ver lo de atrás desenfocado; color y desenfoque van en la misma capa, bajo la misma máscara, para que ningún
+    // borde tenga dónde aparecer. Chrome sí aplica `backdrop-filter` bajo `mask-image` (medido píxel a píxel ese día);
+    // no volver a sacar el desenfoque a una elipse recortada aparte.
+    const washStart = block.indexOf('.brain-notice-wash {');
+    const wash = block.slice(washStart, block.indexOf('.brain-notice-content {', washStart));
+    assert.match(wash, /backdrop-filter: blur\(22px\)/);
+    assert.match(wash, /mask-image: radial-gradient\(var\(--notice-mask\)[^;]*#000 50%/, 'el vidrio va completo hasta donde caen etiqueta, título y botones');
+    assert.doesNotMatch(block, /::after|clip-path/);
+    assert.match(block, /--notice-glass: \.5;/);
+    assert.match(block, /\.dark \.brain-notice-band \{\s*--notice-ink: 255 255 255;\s*--notice-glass: \.62;/);
+    // Sin saltos de color: cada parada mezcla un poco menos de tono hundido, sin cambiar de color de golpe (la franja).
+    assert.match(wash, /var\(--notice-deep\) 78%, rgb\(var\(--notice-hue\)\)[\s\S]*var\(--notice-deep\) 48%[\s\S]*var\(--notice-deep\) 20%/);
+    // El coral y el verde son claros: en claro el texto va oscuro sin sombra y el botón principal lleva el color con
+    // texto blanco; en oscuro el texto es blanco y el principal, blanco con el texto en la variante profunda (no rojo
+    // sobre rojo). Lo mide de verdad tests/browser/noticeAccessibility.mjs.
+    assert.match(block, /\.brain-notice-band \{\s*--notice-hue: var\(--brand-green\);\s*--notice-ink: 24 24 27;/);
     assert.doesNotMatch(block, /text-shadow/);
-    assert.match(block, /\.brain-notice-band \.brain-notice-primary \{ background: white; color: var\(--notice-action\)/);
-    // Chrome apaga el desenfoque de fondo bajo una máscara: va aparte, solo bajo el pie.
-    assert.match(block, /\.brain-notice-band::after \{[^}]*clip-path: ellipse[^}]*backdrop-filter: blur\(8px\)/s);
-    assert.doesNotMatch(block.slice(block.indexOf('.brain-notice-wash {'), block.indexOf('.brain-notice-band::after')), /backdrop-filter/);
+    assert.match(block, /\.brain-notice-primary \{ background: var\(--notice-action\); color: white; \}/);
+    assert.doesNotMatch(block, /(?<!\.dark )\.brain-notice-band \.brain-notice-primary \{ background: white/, 'en claro el principal no es blanco sobre vidrio claro');
+    assert.match(block, /\.dark \.brain-notice-band \.brain-notice-primary \{ background: white; color: var\(--notice-action\)/);
+    assert.match(block, /\.brain-notice-dot \{[^}]*background: var\(--notice-action\)/);
     assert.match(block, /@media \(max-width: 639px\) \{[^}]*min-height: 360px; padding-top: 180px; --notice-spread: 125%; --notice-mask: 140%/s, 'en el celular se ensancha');
     assert.match(block, /min-height: 300px; padding-top: 160px/, 'la cúpula crece con su contenido y el bloque queda en la parte hundida');
-    assert.match(block, /prefers-reduced-motion/);
+    // Entra subiendo con fundido y se va bajando con fundido (Rodny, 14 de noviembre de 2026: «fade up y fade low, que
+    // sea suave»): la salida existe porque la banda conserva el último aviso marcado `data-leaving` hasta que termina.
+    assert.match(block, /animation: brain-notice-in 480ms cubic-bezier/);
+    assert.match(block, /\.brain-notice-band\[data-leaving\] \{ animation: brain-notice-out 320ms/);
+    assert.match(block, /@keyframes brain-notice-in \{ from \{ opacity: 0; translate: 0 28px; \} to \{ opacity: 1; translate: 0 0; \} \}/);
+    assert.match(block, /@keyframes brain-notice-out \{ from \{ opacity: 1; translate: 0 0; \} to \{ opacity: 0; translate: 0 28px; \} \}/);
+    assert.match(block, /\[data-leaving\] \.brain-notice-content \{ pointer-events: none; \}/, 'un aviso que se va no recibe clics');
+    assert.match(block, /prefers-reduced-motion: reduce\) \{ \.brain-notice-band, \.brain-notice-band\[data-leaving\] \{ animation: none; \}/);
+    assert.match(band, /export const NOTICE_EXIT_MS = 320;/);
+    assert.match(band, /data-leaving=\{leaving \|\| undefined\}/);
+    assert.match(band, /setTimeout\(\(\) => setShown\(null\), reduce \? 0 : NOTICE_EXIT_MS\)/, 'con movimiento reducido se retira en el acto');
+    assert.match(band, /key=\{shown\.notice\.id\}/, 'otro aviso que llegue mientras uno se va lo reemplaza y entra');
     assert.doesNotMatch(band, /appearance|data-appearance/, 'una sola superficie, sin variantes');
     assert.match(band, /observer\.observe\(boxRef\.current\)/, 'se reserva lo que tapa: el bloque de texto y botones');
 });

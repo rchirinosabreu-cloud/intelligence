@@ -187,45 +187,65 @@
   }
   /* Avisos importantes: la cúpula (Rodny, 13 de noviembre de 2026; Elisa: «me gustaba más el difuminado de antes, este
      cuadro blanco pierde la esencia de Brain»). Sustituye a la tarjeta blanca con halo del 6 de noviembre. Un degradado
-     radial del tono puro de la marca —verde para el seguimiento, coral solo para lo importante—, traslúcido, que sube
-     desde el centro del borde inferior y se apaga hacia arriba y hacia los lados; sin caja ni borde, texto blanco y
-     centrado, el velo hundido solo en el pie (donde caen la etiqueta, el título y los botones) para que el blanco se lea
-     sin sombra. Sobre navegación (60) y bajo los diálogos (70). */
+     radial del tono de la marca —verde para el seguimiento, coral solo para lo importante— que sube desde el centro del
+     borde inferior y se apaga hacia arriba y hacia los lados; sin caja ni borde, texto centrado. Sobre navegación (60) y
+     bajo los diálogos (70).
+     Vidrio, no pintura (Rodny, 14 de noviembre de 2026: «el degradado se ve el borde, el color sigue siendo muy sólido,
+     no es tan traslúcido o glass»): el velo deja ver lo de atrás desenfocado, como los paneles `brain-glass`. El coral y
+     el verde de la marca son claros, así que en modo claro el texto va oscuro —blanco sobre vidrio de esos tonos no pasa
+     de 2:1 sobre una página blanca— y el botón principal lleva el color; en modo oscuro hay negro detrás, el velo se
+     hunde un poco y el texto es blanco. Rodny eligió esta opción (B) frente al texto blanco en los dos temas. */
   .brain-notice-band {
     --notice-hue: var(--brand-green);
-    --notice-ink: 255 255 255;
-    /* Variante profunda de la paleta: el texto del botón principal blanco y el contraste AA de los botones sueltos. */
+    --notice-ink: 24 24 27;
+    /* Variante profunda de la paleta: la etiqueta, el punto, el botón principal y el contraste AA de los botones sueltos. */
     --notice-action: color-mix(in srgb, theme('colors.brand.green.deep') 96%, black);
-    --notice-veil: .84;
-    --notice-deep: color-mix(in srgb, rgb(var(--notice-hue)) 76%, black);
+    /* `--notice-glass` es la opacidad máxima del velo, en el pie; `--notice-deep` el tono del pie (en claro, el puro). */
+    --notice-glass: .5;
+    --notice-deep: rgb(var(--notice-hue));
     --notice-spread: 72%; --notice-mask: 70%;
     /* La cúpula crece con su contenido: el relleno superior fijo deja el bloque siempre en la parte hundida del velo. */
     position: fixed; inset: auto 0 0 0; z-index: 65; min-height: 300px; padding-top: 160px;
     display: flex; flex-direction: column; justify-content: flex-end;
-    color: rgb(var(--notice-ink)); pointer-events: none; animation: brain-notice-in 180ms ease-out;
+    color: rgb(var(--notice-ink)); pointer-events: none;
+    /* Entra subiendo con fundido y se va bajando con fundido, suave (Rodny, 14 de noviembre de 2026: «fade up y fade
+       low»): `ImportantNoticeBand` conserva el aviso marcado `data-leaving` hasta que termina la salida (NOTICE_EXIT_MS). */
+    animation: brain-notice-in 480ms cubic-bezier(.22, 1, .36, 1) both;
   }
+  .brain-notice-band[data-leaving] { animation: brain-notice-out 320ms cubic-bezier(.4, 0, .7, 1) both; }
+  .brain-notice-band[data-leaving] .brain-notice-content { pointer-events: none; }
   .brain-notice-band[data-level="IMPORTANTE"] {
     --notice-hue: var(--brand-coral);
     --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black);
   }
-  .dark .brain-notice-band { --notice-veil: .8; }
-  /* El velo solo pone el color: Chrome apaga `backdrop-filter` en un elemento con `mask-image`. */
+  .dark .brain-notice-band {
+    --notice-ink: 255 255 255;
+    --notice-glass: .62;
+    --notice-deep: color-mix(in srgb, rgb(var(--notice-hue)) 76%, black);
+  }
+  /* Color y desenfoque van en la misma capa y se apagan con la misma máscara, así ninguno tiene dónde terminar: el
+     vidrio se desvanece hacia arriba y hacia los lados igual que el tono. (Chrome respeta la máscara al aplicar
+     `backdrop-filter`; se comprobó midiendo píxeles el 14 de noviembre de 2026.) El degradado pasa del tono hundido del
+     pie al tono puro sin saltos: cada parada mezcla un poco menos de hundido, nunca cambia de color de golpe, que es lo
+     que dibujaba una franja a media altura. */
   .brain-notice-wash {
     position: absolute; inset: 0; pointer-events: none; z-index: 1;
     background-image:
       radial-gradient(var(--notice-spread) 100% at 50% 100%,
-        color-mix(in srgb, var(--notice-deep) 92%, transparent) 0%, color-mix(in srgb, var(--notice-deep) 90%, transparent) 36%,
-        rgb(var(--notice-hue) / var(--notice-veil)) 54%, rgb(var(--notice-hue) / calc(var(--notice-veil) * .7)) 70%,
-        rgb(var(--notice-hue) / calc(var(--notice-veil) * .3)) 84%, transparent 96%);
-    -webkit-mask-image: radial-gradient(var(--notice-mask) 100% at 50% 100%, #000 0%, #000 42%, rgb(0 0 0 / .7) 60%, rgb(0 0 0 / .25) 80%, transparent 100%);
-    mask-image: radial-gradient(var(--notice-mask) 100% at 50% 100%, #000 0%, #000 42%, rgb(0 0 0 / .7) 60%, rgb(0 0 0 / .25) 80%, transparent 100%);
-  }
-  /* El desenfoque de lo que hay detrás vive aparte y solo bajo el pie, donde el velo ya tapa casi todo: así su borde
-     queda escondido bajo el color. Un desenfoque más amplio, por leve que sea, deja ver dónde termina sobre el texto. */
-  .brain-notice-band::after {
-    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-    clip-path: ellipse(calc(var(--notice-mask) * .72) 58% at 50% 100%);
-    backdrop-filter: blur(8px) saturate(1.1);
+        color-mix(in srgb, var(--notice-deep) calc(var(--notice-glass) * 100%), transparent) 0%,
+        color-mix(in srgb, color-mix(in srgb, var(--notice-deep) 78%, rgb(var(--notice-hue))) calc(var(--notice-glass) * 98%), transparent) 18%,
+        color-mix(in srgb, color-mix(in srgb, var(--notice-deep) 48%, rgb(var(--notice-hue))) calc(var(--notice-glass) * 92%), transparent) 34%,
+        color-mix(in srgb, color-mix(in srgb, var(--notice-deep) 20%, rgb(var(--notice-hue))) calc(var(--notice-glass) * 82%), transparent) 48%,
+        rgb(var(--notice-hue) / calc(var(--notice-glass) * .66)) 60%,
+        rgb(var(--notice-hue) / calc(var(--notice-glass) * .44)) 72%,
+        rgb(var(--notice-hue) / calc(var(--notice-glass) * .22)) 84%,
+        rgb(var(--notice-hue) / calc(var(--notice-glass) * .06)) 94%,
+        transparent 100%);
+    backdrop-filter: blur(22px) saturate(1.2);
+    /* La máscara va entera hasta la mitad de la altura, que es donde caen la etiqueta, el título y los botones: ahí el
+       vidrio tiene que estar completo; de ahí hacia arriba se apaga. */
+    -webkit-mask-image: radial-gradient(var(--notice-mask) 100% at 50% 100%, #000 0%, #000 50%, rgb(0 0 0 / .78) 64%, rgb(0 0 0 / .45) 78%, rgb(0 0 0 / .15) 90%, transparent 100%);
+    mask-image: radial-gradient(var(--notice-mask) 100% at 50% 100%, #000 0%, #000 50%, rgb(0 0 0 / .78) 64%, rgb(0 0 0 / .45) 78%, rgb(0 0 0 / .15) 90%, transparent 100%);
   }
   .brain-notice-content {
     position: relative; z-index: 2; width: 100%; max-width: 620px; margin: 0 auto; pointer-events: auto;
@@ -234,8 +254,12 @@
   }
   .brain-notice-content :is(p, span, div, label):not([role="alert"]) { color: inherit; }
   .brain-notice-content :is(textarea, input) { color: hsl(var(--foreground)); }
-  .brain-notice-label { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; line-height: 1.5; font-weight: 600; margin-bottom: 6px; opacity: .92; }
-  .brain-notice-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--notice-ink)); }
+  .brain-notice-label { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; line-height: 1.5; font-weight: 600; margin-bottom: 6px; }
+  /* En claro la etiqueta y el punto llevan el color profundo del aviso; en oscuro, el blanco del texto. */
+  .brain-notice-band .brain-notice-label { color: var(--notice-action); }
+  .brain-notice-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--notice-action); }
+  .dark .brain-notice-band .brain-notice-label { color: rgb(var(--notice-ink)); opacity: .92; }
+  .dark .brain-notice-band .brain-notice-dot { background: rgb(var(--notice-ink)); }
   .brain-notice-title { margin: 0 auto 8px; font-size: 15px; font-weight: 600; line-height: 1.5; white-space: pre-line; text-wrap: pretty; overflow-wrap: anywhere; }
   .brain-notice-content [data-notice-effect] { margin: 0 auto 12px; font-size: 12px; opacity: .88; }
   .brain-notice-content [role="group"] { justify-content: center; }
@@ -247,14 +271,17 @@
   .brain-notice-ghost { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px rgb(212 212 216); }
   .brain-notice-ghost:hover { background: rgb(113 113 122 / .08); }
   .dark .brain-notice-ghost { box-shadow: inset 0 0 0 1px rgb(82 82 91); }
-  /* Sobre el fondo del mismo color, el botón principal va blanco con el texto en la variante profunda de la paleta
-     (brand-coral-deep, brand-green-deep): un botón rojo sobre rojo no se distingue (Rodny, 13 de noviembre de 2026). */
-  .brain-notice-band .brain-notice-primary { background: white; color: var(--notice-action); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
-  .brain-notice-band .brain-notice-primary:hover { background: rgb(255 255 255 / .92); }
-  .brain-notice-band .brain-notice-primary:active { background: rgb(255 255 255 / .84); }
-  .brain-notice-band .brain-notice-ghost { background: rgb(255 255 255 / .16); color: white; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .6); }
-  .brain-notice-band .brain-notice-ghost:hover { background: rgb(255 255 255 / .26); }
-  .dark .brain-notice-band .brain-notice-ghost { background: rgb(255 255 255 / .14); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55); }
+  /* En la banda, modo claro: el vidrio es claro, así que el botón principal lleva el color profundo con texto blanco
+     (como fuera de la banda) y los sueltos van sobre blanco traslúcido con borde oscuro. En oscuro el velo es del mismo
+     tono y hundido, así que el principal va blanco con el texto en la variante profunda —un botón rojo sobre rojo no se
+     distingue (Rodny, 13 de noviembre de 2026)— y los sueltos, blancos traslúcidos. */
+  .brain-notice-band .brain-notice-primary { box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .brain-notice-band .brain-notice-ghost { background: rgb(255 255 255 / .6); color: rgb(var(--notice-ink)); box-shadow: inset 0 0 0 1px rgb(24 24 27 / .22); }
+  .brain-notice-band .brain-notice-ghost:hover { background: rgb(255 255 255 / .78); }
+  .dark .brain-notice-band .brain-notice-primary { background: white; color: var(--notice-action); }
+  .dark .brain-notice-band .brain-notice-primary:hover { background: rgb(255 255 255 / .92); }
+  .dark .brain-notice-band .brain-notice-primary:active { background: rgb(255 255 255 / .84); }
+  .dark .brain-notice-band .brain-notice-ghost { background: rgb(255 255 255 / .14); color: white; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55); }
   .dark .brain-notice-band .brain-notice-ghost:hover { background: rgb(255 255 255 / .24); }
   .brain-notice-content :is(button, a):focus-visible { outline: 2px solid rgb(var(--notice-ink)); outline-offset: 3px; }
   .brain-notice-content button:disabled { cursor: not-allowed; }
@@ -263,8 +290,9 @@
     /* En el celular la cúpula se ensancha para que todo el texto quede sobre el color. */
     .brain-notice-band { min-height: 360px; padding-top: 180px; --notice-spread: 125%; --notice-mask: 140%; }
   }
-  @keyframes brain-notice-in { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
-  @media (prefers-reduced-motion: reduce) { .brain-notice-band { animation: none; } }
+  @keyframes brain-notice-in { from { opacity: 0; translate: 0 28px; } to { opacity: 1; translate: 0 0; } }
+  @keyframes brain-notice-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 28px; } }
+  @media (prefers-reduced-motion: reduce) { .brain-notice-band, .brain-notice-band[data-leaving] { animation: none; } }
 
   .brain-popover-surface {
     @apply rounded-xl border border-zinc-200/80 bg-white text-zinc-900 shadow-lg shadow-zinc-950/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-black/20;
