@@ -294,14 +294,16 @@ const bulletList = (title, lines = []) => (lines.length ? [`${title}:`, ...lines
 
 /**
  * Creates a BORRADOR quotation linked to the lead and logs it in the lead's bitácora.
- * `auto: true` (intake) creates nothing when the lead already has a draft; a manual call always adds a new version.
- * `generate` is the model transport (injected by tests); it is only used when the lead has a request to read.
+ * With an open draft already on the lead nothing is created, automatic or manual: the caller opens that one
+ * (Elisa, 13 de noviembre de 2026: Party Planner ended up with the automatic COT-0055 and a hand-made COT-0056).
+ * A second alternative is created from Cotizaciones. `generate` is the model transport (injected by tests).
  */
 export const createQuotationDraftForLead = async (db, leadId, actor = {}, { now = new Date(), auto = false, generate = generateQuotationDraft } = {}) => {
   const lead = await db.crmLead.findUnique({ where: { id: leadId }, include: { request: true, quotations: { select: { id: true, status: true, consecutive: true } } } });
   if (!lead || lead.archivedAt) throw notFound();
-  if (auto && (lead.quotations || []).some(quotation => quotation.status === 'BORRADOR')) {
-    return { created: false, reason: 'already-has-draft', quotation: null };
+  const open = (lead.quotations || []).find(quotation => quotation.status === 'BORRADOR');
+  if (open) {
+    return { created: false, reason: 'already-has-draft', quotation: { id: open.id, code: formatQuotationCode(open.consecutive), status: open.status } };
   }
   const catalog = await db.serviceCatalog.findMany({ where: { activo: true } });
   const { ai, failure } = await readRequestWithModel({ lead, request: lead.request, catalog, generate });
@@ -338,6 +340,29 @@ export const createQuotationDraftForLead = async (db, leadId, actor = {}, { now 
       ai: { used: Boolean(ai), model: ai?.model || null, pending: ai?.pending || [], failure }
     };
   });
+};
+
+/**
+ * Al emitir una cotización, los otros borradores de la misma oportunidad quedan reemplazados (Elisa, 13 de noviembre
+ * de 2026: «si se hace un primer borrador y luego se edita y se emite, debería quedar solo la que se emite»). No se
+ * borran: pasan a `REEMPLAZADA`, salen de la lista y la bitácora dice cuáles y por cuál. Devuelve sus códigos.
+ */
+export const supersedeSiblingDrafts = async (db, quotation, actor = {}, { now = new Date() } = {}) => {
+  if (!quotation?.id || !quotation?.lead_id) return [];
+  const drafts = await db.quotation.findMany({ where: { lead_id: quotation.lead_id, status: 'BORRADOR', id: { not: quotation.id } }, select: { id: true, consecutive: true } });
+  if (!drafts.length) return [];
+  await db.quotation.updateMany({ where: { id: { in: drafts.map(draft => draft.id) }, status: 'BORRADOR' }, data: { status: 'REEMPLAZADA' } });
+  const codes = drafts.map(draft => formatQuotationCode(draft.consecutive)).sort();
+  const issued = formatQuotationCode(quotation.consecutive);
+  await db.crmActivity.create({
+    data: {
+      leadId: quotation.lead_id, type: 'NOTA', occurredAt: now, authorId: actor.userId || actor.id || null,
+      note: codes.length === 1
+        ? `Al emitir ${issued} quedó reemplazado el borrador ${codes[0]}. Se conserva con su historial, fuera de la lista.`
+        : `Al emitir ${issued} quedaron reemplazados los borradores ${codes.join(', ')}. Se conservan con su historial, fuera de la lista.`
+    }
+  });
+  return codes;
 };
 
 /** Keeps the lead in step with its quotation: issued → PROPUESTA_ENVIADA, accepted → APROBADA. Never moves it backwards. */

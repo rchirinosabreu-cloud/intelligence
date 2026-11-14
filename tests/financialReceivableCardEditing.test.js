@@ -67,7 +67,8 @@ test('the document currency is chosen in the form, and a dollar account keeps a 
     assert.match(dashboard, /\.\.\.issueMoneyPayload\(\)/);
     // On the card, a dollar account shows its document in USD and its pencil edits the peso value.
     assert.match(dashboard, /data-receivable-usd-summary/);
-    assert.match(dashboard, /debt\.formattedNumber && debt\.currency !== 'USD'/);
+    // Una hecha en Word (13 de noviembre de 2026) no tiene conceptos: su lápiz edita el valor, no abre «Corregir».
+    assert.match(dashboard, /debt\.formattedNumber && !debt\.externalDocument && debt\.currency !== 'USD'/);
     const paymentDialog = read('../src/components/modules/financial/ReceivablePaymentDialog.jsx');
     assert.match(paymentDialog, /Registra los pesos que entraron/);
 });
