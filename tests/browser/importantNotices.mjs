@@ -6,7 +6,9 @@ import { createCrmPreview } from '../../scripts/preview-crm.js';
 
 // Avisos importantes (Rodny, 26 de octubre de 2026), sobre la muestra del CRM con el servicio real en memoria: la
 // revisión en salmón sale primero; «Ya hice seguimiento» registra la gestión en el CRM; el siguiente aviso, en verde,
-// espera cinco minutos. Capturas en output/avisos-importantes.
+// espera cinco minutos. Los botones y las frases son los vigentes desde noviembre de 2026: la cúpula de borde a borde
+// (13 de noviembre), «Próximo seguimiento» y «Descartar» de un clic (9 de noviembre), «Resolver oportunidad» con
+// confirmación y «Cliente no aprobó» como nombre del estado PERDIDO. Capturas en output/avisos-importantes.
 const OUT = 'output/avisos-importantes';
 let browser;
 test.before(async () => {
@@ -28,6 +30,8 @@ const open = async (preview, { width = 1440, height = 900, dark = false, mobile 
   return { page, errors, shown };
 };
 const band = (page) => page.locator('[data-important-notice]');
+// Los botones de todo aviso comercial, en este orden: el seguimiento primero, «Recordarme» siempre al final.
+const CRM_ACTIONS = ['Ya hice seguimiento', 'Próximo seguimiento', 'Descartar', 'Resolver oportunidad', 'Abrir', 'Archivar', 'Recordarme'];
 // La banda entra con una animación corta: la captura se toma ya asentada.
 const settled = (page) => page.waitForTimeout(500);
 
@@ -42,15 +46,15 @@ test('la revisión sale primero, se decide sin salir de la pantalla y el seguimi
     assert.equal(await band(page).getAttribute('data-level'), 'IMPORTANTE');
     assert.match(await band(page).innerText(), /Centro Andino lleva 30 días sin responder: ¿sigue o no\?/);
     const labels = await band(page).locator('[data-notice-action]').allInnerTexts();
-    assert.deepEqual(labels.map((label) => label.trim()), ['Ya hice seguimiento', 'No sigue', 'Archivar', 'Recordarme']);
-    // Tarjeta centrada por encima del menú y debajo de los diálogos.
+    assert.deepEqual(labels.map((label) => label.trim()), CRM_ACTIONS);
+    // La cúpula va de borde a borde, por encima del menú y debajo de los diálogos.
     const box = await band(page).evaluate((node) => ({ z: getComputedStyle(node).zIndex, left: node.getBoundingClientRect().left, width: node.getBoundingClientRect().width }));
-    assert.deepEqual(box, { z: '65', left: 380, width: 680 });
+    assert.deepEqual(box, { z: '65', left: 0, width: 1440 });
     await settled(page);
     await page.screenshot({ path: `${OUT}/1-revision-claro.png` });
 
     await band(page).locator('[data-notice-action="snooze"]').click();
-    assert.deepEqual((await band(page).locator('[data-notice-snooze]').allInnerTexts()).map((t) => t.trim()), ['En 10 minutos', 'En 1 hora', 'Mañana a las 8:00']);
+    assert.deepEqual((await band(page).locator('[data-notice-snooze]').allInnerTexts()).map((t) => t.trim()), ['En 10 minutos', 'En 1 hora', 'Mañana a las 8:00', 'En 7 días']);
     await page.screenshot({ path: `${OUT}/2-recordarme.png` });
     await page.keyboard.press('Escape');
     await band(page).locator('[data-notice-action="follow-up"]').waitFor();
@@ -75,7 +79,7 @@ test('la revisión sale primero, se decide sin salir de la pantalla y el seguimi
     await page.reload();
     await band(page).waitFor();
     assert.equal(await band(page).getAttribute('data-level'), 'SEGUIMIENTO');
-    assert.deepEqual((await band(page).locator('[data-notice-action]').allInnerTexts()).map((t) => t.trim()), ['Ya hice seguimiento', 'Abrir', 'Archivar', 'Recordarme']);
+    assert.deepEqual((await band(page).locator('[data-notice-action]').allInnerTexts()).map((t) => t.trim()), CRM_ACTIONS);
     await page.getByText('Calzado Andino').locator('visible=true').first().waitFor();
     await settled(page);
     await page.screenshot({ path: `${OUT}/4-seguimiento-claro.png` });
@@ -94,25 +98,36 @@ test('la revisión sale primero, se decide sin salir de la pantalla y el seguimi
   }
 });
 
-test('«No sigue» pregunta cómo se cierra y la oportunidad pasa a Perdido o Descartado', async () => {
+test('«Resolver oportunidad» pregunta el resultado real; «Cliente no aprobó» exige motivo y confirmación', async () => {
   const preview = await createCrmPreview({ port: 0 });
   const { page, errors } = await open(preview);
   try {
     await band(page).waitFor();
     await band(page).locator('[data-notice-action="close"]').click();
-    assert.match(await band(page).innerText(), /¿Cómo la cerramos\?/);
-    assert.deepEqual((await band(page).locator('[data-notice-outcome]').allInnerTexts()).map((t) => t.trim()), ['Perdida', 'Descartada', 'Ya es cliente']);
+    assert.match(await band(page).innerText(), /¿Qué resultado confirmó el cliente o el equipo\?/);
+    // «Cliente no aprobó» es el nombre del estado PERDIDO (Rodny, 9 de noviembre de 2026): mismo valor, otra etiqueta.
+    assert.deepEqual((await band(page).locator('[data-notice-outcome]').allInnerTexts()).map((t) => t.trim()), ['Cliente no aprobó', 'Descartada', 'Ya es cliente']);
+    assert.equal(await band(page).locator('[data-notice-outcome="PERDIDO"]').innerText(), 'Cliente no aprobó');
     await settled(page);
-    await page.screenshot({ path: `${OUT}/7-no-sigue.png` });
+    await page.screenshot({ path: `${OUT}/7-resolver-oportunidad.png` });
     // Esc vuelve a los botones sin cerrar nada.
     await page.keyboard.press('Escape');
+    await band(page).locator('[data-notice-action="close"]').waitFor();
     await band(page).locator('[data-notice-action="close"]').click();
     await band(page).locator('[data-notice-outcome="PERDIDO"]').click();
-    await page.getByText('La oportunidad pasó a Perdido').waitFor();
+    // Confirmar exige el motivo: el botón no hace nada sin él, y nada se escribe hasta confirmar.
+    const confirm = band(page).getByRole('button', { name: 'Confirmar decisión', exact: true });
+    assert.equal(await confirm.isDisabled(), true, 'sin motivo no se confirma');
+    assert.equal((await page.evaluate(async () => (await fetch('/api/crm/leads/lead-centro')).json())).stage !== 'PERDIDO', true, 'elegir el resultado no cierra nada');
+    await band(page).getByLabel('Motivo de la decisión', { exact: true }).fill('Prefirió seguir con su agencia actual.');
+    await settled(page);
+    await page.screenshot({ path: `${OUT}/8-confirmar-decision.png` });
+    await confirm.click();
+    await page.getByText('Decisión registrada en el CRM').waitFor();
     await band(page).waitFor({ state: 'detached' });
     const lead = await page.evaluate(async () => (await fetch('/api/crm/leads/lead-centro')).json());
     assert.equal(lead.stage, 'PERDIDO');
-    assert.equal(lead.lostReason, 'Sin respuesta del cliente.');
+    assert.equal(lead.lostReason, 'Prefirió seguir con su agencia actual.');
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
