@@ -185,29 +185,61 @@
       radial-gradient(56rem 36rem at 60% 100%, rgb(var(--brand-coral) / 0.07), transparent 62%),
       radial-gradient(48rem 34rem at 18% 96%, rgb(var(--brand-green) / 0.09), transparent 62%);
   }
-  /* Avisos persistentes: tarjeta compacta, sobre navegación y bajo los diálogos. */
+  /* Avisos importantes: la cúpula (Rodny, 13 de noviembre de 2026; Elisa: «me gustaba más el difuminado de antes, este
+     cuadro blanco pierde la esencia de Brain»). Sustituye a la tarjeta blanca con halo del 6 de noviembre. Un degradado
+     radial del tono puro de la marca —verde para el seguimiento, coral solo para lo importante—, traslúcido, que sube
+     desde el centro del borde inferior y se apaga hacia arriba y hacia los lados; sin caja ni borde, texto blanco y
+     centrado, el velo hundido solo en el pie (donde caen la etiqueta, el título y los botones) para que el blanco se lea
+     sin sombra. Sobre navegación (60) y bajo los diálogos (70). */
   .brain-notice-band {
+    --notice-hue: var(--brand-green);
+    --notice-ink: 255 255 255;
+    /* Variante profunda de la paleta: el texto del botón principal blanco y el contraste AA de los botones sueltos. */
+    --notice-action: color-mix(in srgb, theme('colors.brand.green.deep') 96%, black);
+    --notice-veil: .84;
+    --notice-deep: color-mix(in srgb, rgb(var(--notice-hue)) 76%, black);
+    --notice-spread: 72%; --notice-mask: 70%;
+    /* La cúpula crece con su contenido: el relleno superior fijo deja el bloque siempre en la parte hundida del velo. */
+    position: fixed; inset: auto 0 0 0; z-index: 65; min-height: 300px; padding-top: 160px;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    color: rgb(var(--notice-ink)); pointer-events: none; animation: brain-notice-in 180ms ease-out;
+  }
+  .brain-notice-band[data-level="IMPORTANTE"] {
     --notice-hue: var(--brand-coral);
-    --notice-ink: color-mix(in srgb, rgb(var(--notice-hue)) 60%, black);
-    /* Variante coral de la paleta: contraste AA para texto blanco de botones pequeños. */
     --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black);
-    --notice-surface: 255 255 255;
-    position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%;
-    transform: translateX(-50%); width: min(680px, calc(100vw - 32px)); z-index: 65;
-    color: rgb(39 39 42); pointer-events: none; animation: brain-notice-in 180ms ease-out;
   }
-  .brain-notice-band[data-level="IMPORTANTE"] { --notice-hue: var(--brand-coral); }
-  .dark .brain-notice-band { --notice-surface: 24 24 27; color: rgb(244 244 245); }
+  .dark .brain-notice-band { --notice-veil: .8; }
+  /* El velo solo pone el color: Chrome apaga `backdrop-filter` en un elemento con `mask-image`. */
+  .brain-notice-wash {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background-image:
+      radial-gradient(var(--notice-spread) 100% at 50% 100%,
+        color-mix(in srgb, var(--notice-deep) 92%, transparent) 0%, color-mix(in srgb, var(--notice-deep) 90%, transparent) 36%,
+        rgb(var(--notice-hue) / var(--notice-veil)) 54%, rgb(var(--notice-hue) / calc(var(--notice-veil) * .7)) 70%,
+        rgb(var(--notice-hue) / calc(var(--notice-veil) * .3)) 84%, transparent 96%);
+    -webkit-mask-image: radial-gradient(var(--notice-mask) 100% at 50% 100%, #000 0%, #000 42%, rgb(0 0 0 / .7) 60%, rgb(0 0 0 / .25) 80%, transparent 100%);
+    mask-image: radial-gradient(var(--notice-mask) 100% at 50% 100%, #000 0%, #000 42%, rgb(0 0 0 / .7) 60%, rgb(0 0 0 / .25) 80%, transparent 100%);
+  }
+  /* El desenfoque de lo que hay detrás vive aparte y solo bajo el pie, donde el velo ya tapa casi todo: así su borde
+     queda escondido bajo el color. Un desenfoque más amplio, por leve que sea, deja ver dónde termina sobre el texto. */
+  .brain-notice-band::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    clip-path: ellipse(calc(var(--notice-mask) * .72) 58% at 50% 100%);
+    backdrop-filter: blur(8px) saturate(1.1);
+  }
   .brain-notice-content {
-    position: relative; padding: 24px 32px; border-radius: 20px; pointer-events: auto;
-    background: rgb(var(--notice-surface)); border: 1px solid rgb(var(--notice-hue));
-    box-shadow: 0 12px 40px rgb(24 24 27 / .12), 0 2px 6px rgb(24 24 27 / .05);
-    max-height: calc(100dvh - 48px); overflow-y: auto; text-align: left;
+    position: relative; z-index: 2; width: 100%; max-width: 620px; margin: 0 auto; pointer-events: auto;
+    padding: 0 16px calc(22px + env(safe-area-inset-bottom)); text-align: center;
+    max-height: calc(100dvh - 48px); overflow-y: auto;
   }
-  .dark .brain-notice-content { box-shadow: 0 12px 40px rgb(0 0 0 / .35); }
-  .brain-notice-label { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.5; font-weight: 600; margin-bottom: 10px; }
-  .brain-notice-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--notice-hue)); }
-  .brain-notice-title { max-width: 68ch; font-size: 16px; font-weight: 500; line-height: 1.5; margin-bottom: 16px; white-space: pre-line; text-wrap: pretty; overflow-wrap: anywhere; }
+  .brain-notice-content :is(p, span, div, label):not([role="alert"]) { color: inherit; }
+  .brain-notice-content :is(textarea, input) { color: hsl(var(--foreground)); }
+  .brain-notice-label { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; line-height: 1.5; font-weight: 600; margin-bottom: 6px; opacity: .92; }
+  .brain-notice-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--notice-ink)); }
+  .brain-notice-title { margin: 0 auto 8px; font-size: 15px; font-weight: 600; line-height: 1.5; white-space: pre-line; text-wrap: pretty; overflow-wrap: anywhere; }
+  .brain-notice-content [data-notice-effect] { margin: 0 auto 12px; font-size: 12px; opacity: .88; }
+  .brain-notice-content [role="group"] { justify-content: center; }
+  /* Fuera de la banda (la confirmación de continuidad) el botón principal sigue siendo de color con texto blanco. */
   .brain-notice-primary { background: var(--notice-action); color: white; }
   .contract-continuity-dialog { --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black); }
   .brain-notice-primary:hover { background: color-mix(in srgb, var(--notice-action) 92%, black); }
@@ -215,28 +247,21 @@
   .brain-notice-ghost { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px rgb(212 212 216); }
   .brain-notice-ghost:hover { background: rgb(113 113 122 / .08); }
   .dark .brain-notice-ghost { box-shadow: inset 0 0 0 1px rgb(82 82 91); }
-  .brain-notice-content :is(button, a):focus-visible { outline: 2px solid rgb(39 39 42); outline-offset: 3px; }
-  .dark .brain-notice-content :is(button, a):focus-visible { outline-color: rgb(244 244 245); }
+  /* Sobre el fondo del mismo color, el botón principal va blanco con el texto en la variante profunda de la paleta
+     (brand-coral-deep, brand-green-deep): un botón rojo sobre rojo no se distingue (Rodny, 13 de noviembre de 2026). */
+  .brain-notice-band .brain-notice-primary { background: white; color: var(--notice-action); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .brain-notice-band .brain-notice-primary:hover { background: rgb(255 255 255 / .92); }
+  .brain-notice-band .brain-notice-primary:active { background: rgb(255 255 255 / .84); }
+  .brain-notice-band .brain-notice-ghost { background: rgb(255 255 255 / .16); color: white; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .6); }
+  .brain-notice-band .brain-notice-ghost:hover { background: rgb(255 255 255 / .26); }
+  .dark .brain-notice-band .brain-notice-ghost { background: rgb(255 255 255 / .14); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55); }
+  .dark .brain-notice-band .brain-notice-ghost:hover { background: rgb(255 255 255 / .24); }
+  .brain-notice-content :is(button, a):focus-visible { outline: 2px solid rgb(var(--notice-ink)); outline-offset: 3px; }
   .brain-notice-content button:disabled { cursor: not-allowed; }
   .brain-notice-content [aria-busy="true"] button:disabled { cursor: wait; }
-  .brain-notice-wash { display: none; }
-  .brain-notice-band[data-appearance="accent"] .brain-notice-label {
-    margin: -24px -32px 16px; padding: 13px 32px; color: white;
-    background: linear-gradient(115deg, var(--notice-ink), color-mix(in srgb, rgb(var(--notice-hue)) 80%, black));
-  }
-  .brain-notice-band[data-appearance="accent"] .brain-notice-dot { background: white; }
-  .brain-notice-band[data-appearance="halo"] .brain-notice-wash {
-    display: block; position: absolute; inset: -64px; border-radius: 84px; pointer-events: none;
-    backdrop-filter: blur(10px);
-    background: radial-gradient(ellipse, rgb(var(--notice-hue) / .18) 15%, rgb(var(--notice-surface) / .35) 50%, transparent 76%);
-    mask-image: radial-gradient(ellipse, black 45%, transparent 78%);
-  }
-  .brain-notice-band[data-appearance="halo"] .brain-notice-content { border-color: rgb(var(--notice-hue) / .8); }
   @media (max-width: 639px) {
-    .brain-notice-band { bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
-    .brain-notice-content { padding: 20px; border-radius: 16px; }
-    .brain-notice-band[data-appearance="halo"] .brain-notice-wash { inset: -36px; border-radius: 52px; }
-    .brain-notice-band[data-appearance="accent"] .brain-notice-label { margin: -20px -20px 14px; padding: 12px 20px; }
+    /* En el celular la cúpula se ensancha para que todo el texto quede sobre el color. */
+    .brain-notice-band { min-height: 360px; padding-top: 180px; --notice-spread: 125%; --notice-mask: 140%; }
   }
   @keyframes brain-notice-in { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
   @media (prefers-reduced-motion: reduce) { .brain-notice-band { animation: none; } }

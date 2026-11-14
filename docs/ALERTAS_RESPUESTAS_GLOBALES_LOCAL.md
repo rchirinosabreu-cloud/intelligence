@@ -23,6 +23,8 @@ La revisión comprende los 13 tipos persistentes de la banda, campana/push y los
 | OPERACION_SUSPENSION | Revisar suspensión; «Recibido»; posponer. `ClientSuspension` y acuse personal en `ImportantNotice`. | El acuse retira ese evento para esa persona; solo levantar la suspensión por su recorrido nativo reactiva la operación. |
 | OPERACION_REACTIVACION | Revisar planificación; «Recibido»; posponer. | Acuse personal del levantamiento registrado. No declara trabajo realizado. |
 | OPERACION_CICLO | Revisar cierre y avance; posponer. `ClientMonthlyClose`, `ClientMonthlyReport`, piezas. | Cierre/informe en sus registros y vigencia de la ventana de revisión. El cierre conserva pendientes; el aviso tiene ventana temporal y no sustituye el seguimiento operativo. |
+| CICLO_FACTURACION | Abrir Cuentas por cobrar; «Ya la revisé» (acuse personal, `REVISADO`); posponer. Solo Administrativa con Financiero. `ClientContract`/`ContractCycleAlert`. | El acuse retira el aviso para esa persona; nada acredita que la cuenta de cobro se emitió. Se cae solo si el contrato deja de estar vigente o el cliente se archiva; el mes siguiente reemplaza al anterior. |
+| CICLO_RENOVACION | Abrir el cliente; «Ya la revisé»; posponer. Misma destinataria. | Contrato siguiente registrado, no renovación confirmada o contrato ya no vigente. El aviso de 15 días reemplaza al de 30. |
 
 La revisión de ciclo reúne períodos cubiertos por el aviso operativo para no pedir dos veces la misma revisión al PM. El community conserva su aviso de publicaciones con enlace a Parrillas, no a una ruta de Clientes reservada a responsables de operación.
 

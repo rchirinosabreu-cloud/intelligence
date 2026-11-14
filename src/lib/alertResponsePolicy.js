@@ -21,6 +21,9 @@ export const NOTICE_RESPONSE_POLICIES = Object.freeze({
   OPERACION_SUSPENSION: operation('ClientSuspension', 'Revisar suspensión', '«Recibido» confirma que viste la suspensión; no la levanta ni cierra pendientes.', ['open', 'acknowledge', 'snooze']),
   OPERACION_REACTIVACION: operation('ClientSuspension', 'Revisar reactivación', '«Recibido» confirma que viste la reactivación; no declara el trabajo cumplido.', ['open', 'acknowledge', 'snooze']),
   OPERACION_CICLO: operation('ClientMonthlyClose / ClientMonthlyReport / ContentItem', 'Revisar cierre y avance', 'El cierre y el envío del informe se confirman en sus registros, conservando lo pendiente.'),
+  // Cierre de mes para Administrativa (Elisa, 13 de noviembre de 2026): lo que antes iba solo a la campana.
+  CICLO_FACTURACION: policy('CYCLE', 'ClientContract / ContractCycleAlert / AccountsReceivable', ['open', 'acknowledge', 'snooze'], 'Abrir Cuentas por cobrar', '«Ya la revisé» es un acuse personal: no emite la cuenta de cobro ni cierra el mes.'),
+  CICLO_RENOVACION: policy('CYCLE', 'ClientContract / ContractCycleAlert', ['open', 'acknowledge', 'snooze'], 'Abrir el cliente', '«Ya la revisé» es un acuse personal: la renovación se registra en la ficha del cliente.'),
 });
 export const noticeResponsePolicy = notice => NOTICE_RESPONSE_POLICIES[notice?.kind] || null;
 export const noticeAllows = (notice, action) => Boolean(noticeResponsePolicy(notice)?.actions.includes(action));

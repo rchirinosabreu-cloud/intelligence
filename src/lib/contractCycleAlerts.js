@@ -89,6 +89,42 @@ export const cycleAlertText = (alert, clientName) => {
     }
 };
 
+// Lo de Administrativa va además a la banda de abajo (Elisa, 13 de noviembre de 2026: «que me invadan la pantalla, en la
+// campanita si no entro no lo veo»): la facturación del mes y la renovación del contrato. El project manager ya tiene
+// los suyos en la banda por los avisos operativos; aquí no se duplican. El asunto es el contrato, así que el aviso de
+// los 15 días reemplaza al de los 30 y el mes siguiente al anterior. «Ya la revisé» es un acuse personal.
+export const CYCLE_BAND_KINDS = Object.freeze({ FACTURACION: 'CICLO_FACTURACION', RENOVACION_30: 'CICLO_RENOVACION', RENOVACION_15: 'CICLO_RENOVACION' });
+export const CYCLE_BILLING_URL = '/financiero?tab=cartera';
+export const isCycleNotice = (notice) => String(notice?.kind || '').startsWith('CICLO_');
+/** El contrato del que habla un aviso de la banda; `null` en los resúmenes, que los decide la persona. */
+export const parseCycleSubject = (subjectId) => {
+    const match = /^(CICLO|RENOV):(.+)$/.exec(String(subjectId || ''));
+    if (!match || match[2].startsWith('RESUMEN:')) return null;
+    return { contractId: match[2], renewal: match[1] === 'RENOV' };
+};
+export const cycleBandNotice = (alert, contract, { clientName, operationUrl } = {}) => {
+    const kind = CYCLE_BAND_KINDS[alert.step];
+    if (!kind) return null;
+    const name = clientName || 'un cliente';
+    if (alert.step === 'FACTURACION') return {
+        kind, level: 'IMPORTANTE', subjectId: `CICLO:${contract.id}`, label: `Facturación · ${name}`,
+        message: cycleAlertText(alert, name), url: CYCLE_BILLING_URL
+    };
+    return {
+        kind, level: alert.step === 'RENOVACION_15' ? 'IMPORTANTE' : 'SEGUIMIENTO', subjectId: `RENOV:${contract.id}`,
+        label: `Renovación · ${name}`, message: cycleAlertText(alert, name), url: operationUrl || '/clientes'
+    };
+};
+/** Más de tres del mismo paso en un pase: un solo aviso en la banda, uno por mes de Bogotá. */
+export const cycleBandDigest = (step, count, today) => {
+    const kind = CYCLE_BAND_KINDS[step];
+    if (!kind) return null;
+    const month = String(today).slice(0, 7);
+    return step === 'FACTURACION'
+        ? { kind, level: 'IMPORTANTE', subjectId: `CICLO:RESUMEN:${month}`, label: `Facturación · ${count} cuentas`, message: cycleDigestText(step, count), url: CYCLE_BILLING_URL }
+        : { kind, level: step === 'RENOVACION_15' ? 'IMPORTANTE' : 'SEGUIMIENTO', subjectId: `RENOV:RESUMEN:${step}:${month}`, label: `Renovaciones · ${count} contratos`, message: cycleDigestText(step, count), url: '/clientes' };
+};
+
 /** Más de tres avisos del mismo paso para una persona salen en uno solo. */
 export const cycleDigestText = (step, count) => {
     switch (step) {

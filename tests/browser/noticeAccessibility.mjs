@@ -10,6 +10,8 @@ test('avisos: contraste blanco, teclado, errores recuperables, movimiento reduci
     const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
     await page.goto(preview.origin);const card=page.locator('[data-important-notice]');await card.waitFor();
     const primary=card.locator('.brain-notice-primary');
+    // La cúpula (13 de noviembre de 2026): el botón principal es blanco con el texto en la variante profunda de la
+    // paleta —ni blanco ni negro—, con contraste AA en claro, oscuro y al pasar el ratón (el fondo blanco se atenúa).
     for(const dark of [false,true]){
       await page.evaluate(d=>document.documentElement.classList.toggle('dark',d),dark);
       await page.mouse.move(0,0);
@@ -19,12 +21,17 @@ test('avisos: contraste blanco, teclado, errores recuperables, movimiento reduci
           const s=getComputedStyle(e),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
           const rgb=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3);};
           const lum=c=>c.map(x=>x/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((sum,x,i)=>sum+x*[.2126,.7152,.0722][i],0);
-          const fg=rgb(s.color),bg=rgb(s.backgroundColor);return {fg,ratio:(Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05)};
+          const fg=rgb(s.color),bg=rgb(s.backgroundColor);return {fg,bg,ratio:(Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05)};
         });
-        assert.deepEqual(colors.fg,[255,255,255]);
+        assert.deepEqual(colors.bg,[255,255,255],'el botón principal va blanco sobre la cúpula');
+        assert.notDeepEqual(colors.fg,[255,255,255]);assert.notDeepEqual(colors.fg,[0,0,0]);
         assert.ok(colors.ratio>=4.5,`contraste ${colors.ratio} oscuro=${dark} hover=${hover}`);
       }
     }
+    // El título es blanco, sin sombra, y la cúpula no tiene caja: va de borde a borde.
+    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
+    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).textShadow),'none');
+    assert.equal((await card.boundingBox()).width,1440);
     await page.mouse.move(0,0);
     await card.locator('[data-notice-title-link]').focus();await page.keyboard.press('Tab');
     assert.equal(await primary.evaluate(e=>e===document.activeElement),true);
@@ -33,7 +40,8 @@ test('avisos: contraste blanco, teclado, errores recuperables, movimiento reduci
     assert.equal(await card.locator('[data-notice-snooze="10m"]').evaluate(e=>e===document.activeElement),true,'abrir opciones conserva el foco');
     await page.waitForFunction(()=>Number(document.querySelector('main').dataset.noticeHeight)>0);
     const reserved=await page.locator('main').evaluate(e=>parseFloat(getComputedStyle(e).paddingBottom));
-    assert.ok(reserved>=(await card.boundingBox()).height+24,'se reserva espacio según la altura real');
+    // Lo que tapa es el bloque de texto y botones; la parte alta de la cúpula es casi transparente.
+    assert.ok(reserved>=(await card.locator('.brain-notice-content').boundingBox()).height+24,'se reserva espacio según la altura real del bloque');
     await page.keyboard.press('Escape');
     assert.equal(await card.locator('[data-notice-action="snooze"]').evaluate(e=>e===document.activeElement),true,'Esc vuelve al botón que abrió las opciones');
     await page.route('**/api/important-notices/*/snooze',route=>route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'No se pudo guardar. Inténtalo otra vez.'})}));

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { createOperationalNoticePreview } from '../../scripts/preview-operational-notices.mjs';
 
-test('el aviso es compacto, permanece tras Esc y clic exterior y conserva la decisión Recordarme', async () => {
+// La cúpula (Rodny, 13 de noviembre de 2026): de borde a borde, sin caja, texto blanco centrado; verde para el
+// seguimiento y coral solo para lo importante; el botón principal blanco con el texto en la variante profunda.
+test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conserva la decisión Recordarme', async () => {
   const preview=await createOperationalNoticePreview({port:0});
   const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
   try {
@@ -12,24 +14,28 @@ test('el aviso es compacto, permanece tras Esc y clic exterior y conserva la dec
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     const card=page.locator('[data-important-notice]'); await card.waitFor();
     const bounds=await card.boundingBox();
-    assert.ok(bounds.width>=660 && bounds.width<=700,`ancho ${bounds.width}`);
-    assert.equal(await card.getAttribute('data-appearance'),'halo');
-    assert.ok(bounds.height<300,`alto ${bounds.height}`);
-    const style=await card.locator('.brain-notice-content').evaluate(e=>({background:getComputedStyle(e).backgroundColor,padding:getComputedStyle(e).paddingLeft}));
-    assert.equal(style.background,'rgb(255, 255, 255)');
-    for(const selector of ['.brain-notice-dot']) {
-      assert.equal(await card.locator(selector).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 106, 104)');
-    }
-    assert.equal(await card.locator('.brain-notice-primary').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
-    const halo=await card.locator('.brain-notice-wash').boundingBox();
-    assert.ok(halo.width>=bounds.width+100,'halo más extendido alrededor');
-    assert.equal(style.padding,'32px');
+    assert.equal(bounds.width,1440,'sin caja: ocupa el ancho de la ventana');
+    assert.equal(bounds.x,0);
+    assert.ok(bounds.height>=300 && bounds.height<400,`alto ${bounds.height}`);
+    const content=card.locator('.brain-notice-content');
+    const style=await content.evaluate(e=>({background:getComputedStyle(e).backgroundColor,width:e.getBoundingClientRect().width,align:getComputedStyle(e).textAlign}));
+    assert.equal(style.background,'rgba(0, 0, 0, 0)','el bloque no tiene fondo propio');
+    assert.ok(style.width<=620);assert.equal(style.align,'center');
+    assert.equal(await card.locator('.brain-notice-dot').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');
+    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
+    const primary=await card.locator('.brain-notice-primary').evaluate(e=>({color:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor}));
+    assert.equal(primary.background,'rgb(255, 255, 255)');
+    assert.notEqual(primary.color,'rgb(255, 255, 255)');
+    // El tono lo da el nivel: coral en lo importante, verde en el seguimiento.
+    assert.equal(await card.getAttribute('data-level'),'IMPORTANTE');
+    assert.equal(await card.evaluate(e=>getComputedStyle(e).getPropertyValue('--notice-hue').trim()),'255 106 104');
+    assert.equal(await card.evaluate(e=>{e.dataset.level='SEGUIMIENTO';const v=getComputedStyle(e).getPropertyValue('--notice-hue').trim();e.dataset.level='IMPORTANTE';return v;}),'49 170 138');
     assert.match(await card.locator('.brain-notice-title').textContent(),/\nEl informe/);
     assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).whiteSpace),'pre-line');
-    await page.screenshot({path:'output/avisos-operativos-local/halo-ancho-claro.png',animations:'disabled'});
+    await page.screenshot({path:'output/avisos-operativos-local/cupula-claro.png',animations:'disabled'});
     await page.getByRole('button',{name:'Tema oscuro',exact:true}).click();
-    await page.screenshot({path:'output/avisos-operativos-local/halo-ancho-oscuro.png',animations:'disabled'});
-    assert.equal(await card.locator('.brain-notice-title a').evaluate(e=>getComputedStyle(e).color),'rgb(244, 244, 245)');
+    await page.screenshot({path:'output/avisos-operativos-local/cupula-oscuro.png',animations:'disabled'});
+    assert.equal(await card.locator('.brain-notice-title a').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
     await page.getByRole('button',{name:'Tema claro',exact:true}).click();
     await card.getByRole('button',{name:'Revisar cierre y avance',exact:true}).click();
     await page.waitForURL(/clientes\/operacion\/faro/);
@@ -47,8 +53,8 @@ test('el aviso es compacto, permanece tras Esc y clic exterior y conserva la dec
     await page.getByLabel('Caso',{exact:true}).selectOption('suspension');await card.waitFor();
     await page.setViewportSize({width:390,height:844});
     const mobile=await card.boundingBox();assert.ok(mobile.x>=0 && mobile.x+mobile.width<=390);
-    assert.ok(mobile.height<400);
-    await page.screenshot({path:'output/avisos-operativos-local/halo-ancho-movil.png',animations:'disabled'});
+    assert.ok(mobile.height<480);
+    await page.screenshot({path:'output/avisos-operativos-local/cupula-movil.png',animations:'disabled'});
     for(const button of await card.getByRole('button').all())assert.ok((await button.boundingBox()).height>=44);
     await card.getByRole('button',{name:'Recibido',exact:true}).click();await card.waitFor({state:'detached'});
     await page.setViewportSize({width:1440,height:1000});
@@ -57,7 +63,7 @@ test('el aviso es compacto, permanece tras Esc y clic exterior y conserva la dec
       const result=await page.evaluate(async()=> (await fetch('/api/important-notices/current')).json());
       assert.equal(result.notice.kind,`OPERACION_${kind}`);
       assert.doesNotMatch(await card.innerText(),/NO debe mostrarse|cartera privada|\$|saldo/i);
-      await page.screenshot({path:`output/avisos-operativos-local/halo-${scene}.png`,animations:'disabled'});
+      await page.screenshot({path:`output/avisos-operativos-local/cupula-${scene}.png`,animations:'disabled'});
     }
     assert.deepEqual(errors,[]);
   } finally {await browser.close();await preview.close();}
