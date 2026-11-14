@@ -375,6 +375,13 @@ axios.defaults.adapter = async config => {
       return acc;
     }, { income: 0, expense: 0 });
     data = { items: selection.slice((page - 1) * pageSize, page * pageSize), total: selection.length, page, pageSize, totals: { ...totals, net: totals.income - totals.expense } };
+  } else if (path.includes('/receivables/') && path.endsWith('/external-document')) {
+    // «Ya la emití en Word» (13 de noviembre de 2026): como el servidor, solo número y fecha, sin PDF ni conceptos.
+    const number = Number(body.number);
+    if (!Number.isInteger(number) || number <= 0) throw Object.assign(new Error('Número inválido'), { response: { data: { message: 'Escribe el número de la cuenta de cobro tal como salió en Word, por ejemplo 380.' } } });
+    (window.__externalDocuments ||= []).push(body);
+    debt = { ...debt, number, formattedNumber: `No. ${String(number).padStart(4, '0')}`, issuedAt: `${body.issuedAt}T12:00:00Z`, servicePeriod: body.servicePeriod || null, externalDocument: true };
+    data = { message: `Cuenta de cobro ${debt.formattedNumber} anotada. El estado de cuenta ya la nombra por su número.`, receivable: debt, document: { number, formattedNumber: debt.formattedNumber, external: true } };
   } else if (path.includes('/receivables/') && path.endsWith('/issue')) {
     // Como el servidor: le pone número, congela conceptos y el total del documento
     // pasa a ser el de la obligación.

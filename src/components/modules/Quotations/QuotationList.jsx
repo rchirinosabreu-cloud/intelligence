@@ -108,7 +108,7 @@ const QuotationList = () => {
     const navigateFrom = useNavigateFrom();
     const [navigation, updateNavigation] = useNavigationSelection();
     const searchTerm = navigation.get('q') || '';
-    const statusFilter = ['ALL', 'ACTIVA', 'EXPIRADA', 'APROBADA', 'BORRADOR'].includes(navigation.get('status')) ? navigation.get('status') : 'ALL';
+    const statusFilter = ['ALL', 'ACTIVA', 'EXPIRADA', 'APROBADA', 'BORRADOR', 'REEMPLAZADA'].includes(navigation.get('status')) ? navigation.get('status') : 'ALL';
     const setSearchTerm = q => updateNavigation({ q });
     const setStatusFilter = status => updateNavigation({ status });
     const [downloadingId, setDownloadingId] = useState(null);
@@ -131,11 +131,15 @@ const QuotationList = () => {
         const matchesSearch = q.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              q.consecutive_formatted?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              (q.client_company && q.client_company.toLowerCase().includes(searchTerm.toLowerCase()));
+        // Un borrador reemplazado al emitir otra de la misma oportunidad (13 de noviembre de 2026) se conserva,
+        // pero no estorba: solo sale con su propio filtro.
         const matchesStatus = statusFilter === 'ALL'
-            || (statusFilter === 'ACTIVA' && q.status === 'ACTIVA' && !q.isExpired)
+            ? q.status !== 'REEMPLAZADA'
+            : (statusFilter === 'ACTIVA' && q.status === 'ACTIVA' && !q.isExpired)
             || (statusFilter === 'EXPIRADA' && q.isExpired)
             || (statusFilter === 'APROBADA' && q.status === 'APROBADA')
-            || (statusFilter === 'BORRADOR' && q.status === 'BORRADOR');
+            || (statusFilter === 'BORRADOR' && q.status === 'BORRADOR')
+            || (statusFilter === 'REEMPLAZADA' && q.status === 'REEMPLAZADA');
         return matchesSearch && matchesStatus;
     });
 
@@ -263,6 +267,7 @@ const QuotationList = () => {
                         <option value="EXPIRADA">Expiradas</option>
                         <option value="APROBADA">Aprobadas</option>
                         <option value="BORRADOR">Borradores</option>
+                        <option value="REEMPLAZADA">Reemplazadas</option>
                     </Select>
                 </div>
             </Card>
@@ -336,6 +341,10 @@ const QuotationList = () => {
                                             ) : q.status === 'BORRADOR' ? (
                                                 <span className="flex items-center gap-1 text-zinc-400 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full w-fit">
                                                     <FileText className="w-3 h-3" /> Borrador
+                                                </span>
+                                            ) : q.status === 'REEMPLAZADA' ? (
+                                                <span data-quotation-replaced className="flex items-center gap-1 text-zinc-400 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full w-fit">
+                                                    <FileText className="w-3 h-3" /> Reemplazada
                                                 </span>
                                             ) : q.isExpired ? (
                                                 <span className="flex items-center gap-1 text-red-500 text-xs font-bold bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded-full w-fit border border-red-100 dark:border-red-900/30">

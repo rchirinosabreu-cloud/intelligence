@@ -5,6 +5,7 @@ import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { resolveDocumentMoney } from './receivableDocumentService.js';
+import { isExternalReceivableDocument } from '../lib/receivableDocument.js';
 import { isFormalizationInstallment, isReceivableCollectionMode } from '../lib/receivableCollectionMode.js';
 import { collectionArchiveProblem, isCollectionArchived } from '../lib/receivableArchive.js';
 import {
@@ -310,8 +311,10 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
             // En una cuenta en dólares el PDF dice dólares y lo que se edita es su valor
             // en pesos en cartera, que sí se ajusta suelto al que de verdad entró (Rodny,
             // 30 de septiembre de 2026).
+            // Una cuenta de cobro hecha en Word (13 de noviembre de 2026) no tiene conceptos ni PDF aquí: su
+            // valor se corrige con el lápiz, como una obligación sin emitir.
             const pesosOnly = normalizeReceivableCurrency(existing.currency) !== 'USD';
-            if (input.amount !== undefined && pesosOnly && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
+            if (input.amount !== undefined && pesosOnly && (existing.number || existing.issuedAt) && !isExternalReceivableDocument(existing) && amountCents !== financialCents(existing.amount)) {
                 const label = existing.number ? `No. ${String(existing.number).padStart(4, '0')}` : 'emitida';
                 throw new FinancialDomainError(
                     'RECEIVABLE_ISSUED_IMMUTABLE',

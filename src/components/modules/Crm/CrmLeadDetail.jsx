@@ -43,7 +43,7 @@ const ExternalText = ({ href, children }) => href
   ? <a href={href} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-primary hover:underline">{children} <ExternalLink className="h-3 w-3 shrink-0" /></a>
   : <span className="text-zinc-400">—</span>;
 
-const QUOTATION_STATUS_LABELS = { BORRADOR: 'Borrador', ACTIVA: 'Emitida', APROBADA: 'Aprobada', VENCIDA: 'Vencida', RECHAZADA: 'Rechazada' };
+const QUOTATION_STATUS_LABELS = { BORRADOR: 'Borrador', ACTIVA: 'Emitida', APROBADA: 'Aprobada', VENCIDA: 'Vencida', RECHAZADA: 'Rechazada', REEMPLAZADA: 'Reemplazada' };
 const quotationStatusLabel = status => QUOTATION_STATUS_LABELS[status] || status;
 
 const StageControl = ({ lead, onChange, pending }) => (
@@ -122,9 +122,16 @@ const CrmLeadDetail = () => {
   };
 
   // Only after the server confirms: the toast names the real code and the editor opens on the saved draft.
+  // Si la oportunidad ya tiene un borrador abierto, se abre ese en vez de crear otro (Elisa, 13 de noviembre
+  // de 2026: «debería quedar solo la que se emite»); una alternativa nueva se crea desde Cotizaciones.
   const createQuotationDraft = async () => {
     try {
       const result = await createDraft.mutateAsync({ id: lead.id });
+      if (!result.created && result.quotation?.id) {
+        toast(`Ya hay un borrador abierto: ${result.quotation.code}. Se abre ese.`);
+        navigateFrom(`/cotizaciones/editar/${result.quotation.id}`);
+        return;
+      }
       const adjustments = result.budget?.changes?.length || 0;
       toast.success([
         `Borrador ${result.quotation.code} creado`,

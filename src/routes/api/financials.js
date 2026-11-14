@@ -37,6 +37,7 @@ import {
     generatePayrollPeriodHandler,
     issueReceivableDocumentHandler,
     correctReceivableDocumentHandler,
+    recordExternalReceivableDocumentHandler,
     getFinancialExchangeRateHandler,
     createFinancialRecordHandler,
     listFinancialAccountsHandler,
@@ -154,6 +155,9 @@ router.get('/receivables/:id/document', requireFinancialAccess, streamReceivable
 // Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026): conserva su número,
 // ajusta conceptos y valor, y rehace el PDF sin borrar el que se había mandado.
 router.put('/receivables/:id/document', requireFinancialWrite, correctReceivableDocumentHandler);
+// Una cuenta de cobro que ya se mandó desde Word (Elisa, 13 de noviembre de 2026): se anotan su número y su
+// fecha para que el estado de cuenta la nombre; no se genera PDF ni se congelan conceptos.
+router.post('/receivables/:id/external-document', requireFinancialWrite, recordExternalReceivableDocumentHandler);
 // TRM oficial para las cuentas de cobro en dólares; la misma fuente que Cotizaciones.
 router.get('/exchange-rate', requireFinancialAccess, getFinancialExchangeRateHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
