@@ -72,7 +72,10 @@ test('avisos: contraste blanco, teclado, errores recuperables, movimiento reduci
     await page.getByText('No se pudo guardar. Inténtalo otra vez.',{exact:true}).waitFor();
     assert.ok(await card.isVisible());assert.equal(await card.locator('button:disabled').count(),0,'el fallo permite reintentar');
     await page.keyboard.press('Escape');
+    // Con «menos movimiento» la banda no se desplaza, pero el vidrio y el texto se funden (Rodny, 14 de noviembre de 2026).
     assert.equal(await card.evaluate(e=>getComputedStyle(e).animationName),'none');
+    assert.equal(await card.locator('.brain-notice-wash').evaluate(e=>getComputedStyle(e).animationName),'brain-notice-fade-in');
+    assert.equal(await card.locator('.brain-notice-content').evaluate(e=>getComputedStyle(e).animationName),'brain-notice-fade-in');
     for(const width of [320,390,768,1440]){
       await page.setViewportSize({width,height:900});
       const bounds=await card.boundingBox();assert.ok(bounds.x>=0 && bounds.x+bounds.width<=width);

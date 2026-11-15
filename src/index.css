@@ -209,10 +209,15 @@
     display: flex; flex-direction: column; justify-content: flex-end;
     color: rgb(var(--notice-ink)); pointer-events: none;
     /* Entra subiendo con fundido y se va bajando con fundido, suave (Rodny, 14 de noviembre de 2026: «fade up y fade
-       low»): `ImportantNoticeBand` conserva el aviso marcado `data-leaving` hasta que termina la salida (NOTICE_EXIT_MS). */
-    animation: brain-notice-in 480ms cubic-bezier(.22, 1, .36, 1) both;
+       low»): `ImportantNoticeBand` conserva el aviso marcado `data-leaving` hasta que termina la salida (NOTICE_EXIT_MS).
+       La banda solo sube y baja; el fundido va en cada hija. Una opacidad animada en la banda la vuelve «raíz del
+       fondo» para Chrome y el vidrio deja de desenfocar lo que hay detrás, incluso con la animación ya terminada (se
+       midió el 14 de noviembre de 2026: la cúpula salía teñida y nítida). */
+    animation: brain-notice-rise 480ms cubic-bezier(.22, 1, .36, 1) backwards;
   }
-  .brain-notice-band[data-leaving] { animation: brain-notice-out 320ms cubic-bezier(.4, 0, .7, 1) both; }
+  .brain-notice-band > .brain-notice-wash, .brain-notice-band > .brain-notice-content { animation: brain-notice-fade-in 480ms cubic-bezier(.22, 1, .36, 1) backwards; }
+  .brain-notice-band[data-leaving] { animation: brain-notice-sink 320ms cubic-bezier(.4, 0, .7, 1) forwards; }
+  .brain-notice-band[data-leaving] > .brain-notice-wash, .brain-notice-band[data-leaving] > .brain-notice-content { animation: brain-notice-fade-out 320ms cubic-bezier(.4, 0, .7, 1) forwards; }
   .brain-notice-band[data-leaving] .brain-notice-content { pointer-events: none; }
   .brain-notice-band[data-level="IMPORTANTE"] {
     --notice-hue: var(--brand-coral);
@@ -290,8 +295,13 @@
     /* En el celular la cúpula se ensancha para que todo el texto quede sobre el color. */
     .brain-notice-band { min-height: 360px; padding-top: 180px; --notice-spread: 125%; --notice-mask: 140%; }
   }
-  @keyframes brain-notice-in { from { opacity: 0; translate: 0 28px; } to { opacity: 1; translate: 0 0; } }
-  @keyframes brain-notice-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 28px; } }
+  @keyframes brain-notice-rise { from { translate: 0 28px; } to { translate: 0 0; } }
+  @keyframes brain-notice-sink { from { translate: 0 0; } to { translate: 0 28px; } }
+  @keyframes brain-notice-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes brain-notice-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  /* Con «menos movimiento» (en Windows, los efectos de animación apagados) la banda no se desplaza, pero el fundido
+     se queda: un cambio de opacidad no es movimiento, y sin él el aviso aparecía y se iba de golpe (Rodny, 14 de
+     noviembre de 2026). */
   @media (prefers-reduced-motion: reduce) { .brain-notice-band, .brain-notice-band[data-leaving] { animation: none; } }
 
   .brain-popover-surface {

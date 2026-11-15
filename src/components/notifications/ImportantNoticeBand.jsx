@@ -353,8 +353,8 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange, o
   useEffect(() => {
     if (notice) { setShown({ notice, leaving: false }); return undefined; }
     setShown((current) => (current && !current.leaving ? { ...current, leaving: true } : current));
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const timer = setTimeout(() => setShown(null), reduce ? 0 : NOTICE_EXIT_MS);
+    // Con «menos movimiento» la banda no se desplaza, pero el fundido de salida sigue: se espera igual.
+    const timer = setTimeout(() => setShown(null), NOTICE_EXIT_MS);
     return () => clearTimeout(timer);
   }, [notice]);
 

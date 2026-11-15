@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
+import sharp from 'sharp';
 import { createOperationalNoticePreview } from '../../scripts/preview-operational-notices.mjs';
 
 // La cúpula (Rodny, 13 de noviembre de 2026): de borde a borde, sin caja, texto centrado; verde para el seguimiento y
@@ -32,6 +33,21 @@ test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conse
     assert.equal(primary.color,'rgb(255, 255, 255)');
     assert.equal(primary.background,dot,'el botón principal lleva el mismo color profundo que el punto');
     assert.equal(await card.locator('.brain-notice-wash').evaluate(e=>getComputedStyle(e).backdropFilter),'blur(22px) saturate(1.2)','vidrio: lo de atrás se ve desenfocado');
+    // Y desenfoca de verdad, ya terminada la entrada: con la opacidad animada en la banda, Chrome dejaba la cúpula
+    // teñida pero nítida (14 de noviembre de 2026). Se ponen rayas detrás y se mide cuánto cambia cada píxel del vecino.
+    await page.waitForTimeout(600);
+    await page.evaluate(()=>{const d=document.createElement('div');d.id='rayas-de-prueba';d.style.cssText='position:fixed;inset:auto 0 0 0;height:420px;z-index:50;background:repeating-linear-gradient(90deg,#000 0 3px,#fff 3px 9px)';document.body.appendChild(d);});
+    const sharpness=async()=>{
+      const shot=await page.screenshot({clip:{x:620,y:Math.round(bounds.y+115),width:200,height:35}});
+      const {data,info}=await sharp(shot).removeAlpha().greyscale().raw().toBuffer({resolveWithObject:true});
+      let sum=0;for(let y=0;y<info.height;y++)for(let x=1;x<info.width;x++)sum+=Math.abs(data[y*info.width+x]-data[y*info.width+x-1]);
+      return sum/(info.height*(info.width-1));
+    };
+    const blurred=await sharpness();
+    const unblur=await page.addStyleTag({content:'.brain-notice-wash { backdrop-filter: none !important; }'});
+    const crisp=await sharpness();
+    assert.ok(blurred<crisp/2,`el vidrio desenfoca lo de atrás (${blurred.toFixed(1)} frente a ${crisp.toFixed(1)} sin desenfoque)`);
+    await unblur.evaluate(e=>e.remove());await page.evaluate(()=>document.getElementById('rayas-de-prueba').remove());
     // El tono lo da el nivel: coral en lo importante, verde en el seguimiento.
     assert.equal(await card.getAttribute('data-level'),'IMPORTANTE');
     assert.equal(await card.evaluate(e=>getComputedStyle(e).getPropertyValue('--notice-hue').trim()),'255 106 104');
@@ -59,7 +75,9 @@ test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conse
     await card.getByRole('button',{name:'En 1 hora',exact:true}).click();
     // Se va bajando con fundido: un instante marcada `data-leaving`, sin recibir clics, y después se retira.
     const leaving=page.locator('[data-important-notice][data-leaving]');await leaving.waitFor();
-    assert.equal(await leaving.evaluate(e=>getComputedStyle(e).animationName),'brain-notice-out');
+    assert.equal(await leaving.evaluate(e=>getComputedStyle(e).animationName),'brain-notice-sink');
+    assert.equal(await leaving.locator('.brain-notice-wash').evaluate(e=>getComputedStyle(e).animationName),'brain-notice-fade-out');
+    assert.equal(await leaving.locator('.brain-notice-content').evaluate(e=>getComputedStyle(e).animationName),'brain-notice-fade-out');
     assert.equal(await leaving.locator('.brain-notice-content').evaluate(e=>getComputedStyle(e).pointerEvents),'none');
     await card.waitFor({state:'detached'});
     await page.reload();assert.equal(await card.count(),0,'la pausa sobrevive la recarga');
