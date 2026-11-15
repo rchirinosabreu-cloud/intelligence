@@ -53,15 +53,24 @@ test('la cúpula: de borde a borde, encima del menú y debajo de los diálogos, 
     assert.match(block, /min-height: 300px; padding-top: 160px/, 'la cúpula crece con su contenido y el bloque queda en la parte hundida');
     // Entra subiendo con fundido y se va bajando con fundido (Rodny, 14 de noviembre de 2026: «fade up y fade low, que
     // sea suave»): la salida existe porque la banda conserva el último aviso marcado `data-leaving` hasta que termina.
-    assert.match(block, /animation: brain-notice-in 480ms cubic-bezier/);
-    assert.match(block, /\.brain-notice-band\[data-leaving\] \{ animation: brain-notice-out 320ms/);
-    assert.match(block, /@keyframes brain-notice-in \{ from \{ opacity: 0; translate: 0 28px; \} to \{ opacity: 1; translate: 0 0; \} \}/);
-    assert.match(block, /@keyframes brain-notice-out \{ from \{ opacity: 1; translate: 0 0; \} to \{ opacity: 0; translate: 0 28px; \} \}/);
+    // La banda solo sube y baja; el fundido va en cada hija. Una opacidad animada en la banda apaga el desenfoque del
+    // vidrio en Chrome, incluso con la animación ya terminada (medido el 14 de noviembre de 2026).
+    assert.match(block, /animation: brain-notice-rise 480ms cubic-bezier\(\.22, 1, \.36, 1\) backwards;/);
+    assert.match(block, /\.brain-notice-band > \.brain-notice-wash, \.brain-notice-band > \.brain-notice-content \{ animation: brain-notice-fade-in 480ms/);
+    assert.match(block, /\.brain-notice-band\[data-leaving\] \{ animation: brain-notice-sink 320ms/);
+    assert.match(block, /\.brain-notice-band\[data-leaving\] > \.brain-notice-wash, \.brain-notice-band\[data-leaving\] > \.brain-notice-content \{ animation: brain-notice-fade-out 320ms/);
+    assert.match(block, /@keyframes brain-notice-rise \{ from \{ translate: 0 28px; \} to \{ translate: 0 0; \} \}/);
+    assert.match(block, /@keyframes brain-notice-sink \{ from \{ translate: 0 0; \} to \{ translate: 0 28px; \} \}/);
+    assert.match(block, /@keyframes brain-notice-fade-in \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}/);
+    assert.match(block, /@keyframes brain-notice-fade-out \{ from \{ opacity: 1; \} to \{ opacity: 0; \} \}/);
+    assert.doesNotMatch(block, /@keyframes brain-notice-(rise|sink) \{[^}]*opacity/, 'la banda nunca anima su opacidad');
     assert.match(block, /\[data-leaving\] \.brain-notice-content \{ pointer-events: none; \}/, 'un aviso que se va no recibe clics');
-    assert.match(block, /prefers-reduced-motion: reduce\) \{ \.brain-notice-band, \.brain-notice-band\[data-leaving\] \{ animation: none; \}/);
+    // Con «menos movimiento» la banda no se desplaza, pero el fundido de las hijas se queda.
+    assert.match(block, /prefers-reduced-motion: reduce\) \{ \.brain-notice-band, \.brain-notice-band\[data-leaving\] \{ animation: none; \} \}/);
     assert.match(band, /export const NOTICE_EXIT_MS = 320;/);
     assert.match(band, /data-leaving=\{leaving \|\| undefined\}/);
-    assert.match(band, /setTimeout\(\(\) => setShown\(null\), reduce \? 0 : NOTICE_EXIT_MS\)/, 'con movimiento reducido se retira en el acto');
+    assert.match(band, /setTimeout\(\(\) => setShown\(null\), NOTICE_EXIT_MS\)/, 'también con «menos movimiento» espera el fundido de salida');
+    assert.doesNotMatch(band, /reduce \? 0/);
     assert.match(band, /key=\{shown\.notice\.id\}/, 'otro aviso que llegue mientras uno se va lo reemplaza y entra');
     assert.doesNotMatch(band, /appearance|data-appearance/, 'una sola superficie, sin variantes');
     assert.match(band, /observer\.observe\(boxRef\.current\)/, 'se reserva lo que tapa: el bloque de texto y botones');
