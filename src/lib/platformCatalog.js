@@ -440,6 +440,7 @@ export const PLATFORM_OPERATIONS = {
   'PATCH /ai-governance/:kind/:id': { que: 'Edita un registro de gobierno.', campos: 'según el tipo' },
   // Salud de servicios
   'GET /service-health': { que: 'El semáforo de servicios externos (administradores).' },
+  'GET /platform-health': { que: 'La salud de la plataforma por dentro: la nota de cada área (producto, pruebas, permisos, seguridad, código, operación, lista para otro cliente) y qué criterio falta en cada una (administradores).' },
   'GET /ad-budgets': { que: 'Las pautas de todos los clientes: presupuesto global, ciclo del cliente, gasto registrado, saldo y cómo va cada una. Las cifras terminadas en Cents van en centavos: para hablar usa formatos con su moneda, y `evaluation.reasons` ya lo dice en palabras. El gasto lo escribe quien lleva la pauta mirando Meta: la fecha de la lectura dice hasta cuándo es cierto.', campos: 'clientId (opcional), terminadas=1 (opcional)' },
   'GET /ad-budgets/options': { que: 'Los clientes y las personas del equipo que se pueden elegir al crear una pauta.' },
   'GET /ad-budgets/meta': { que: 'La conexión de Pautas con Meta: las cuentas publicitarias que ve la plataforma, cada campaña que gastó en los últimos 30 días con la pauta a la que está ligada, y las que gastan sin estar en ninguna pauta (unassigned). Solo lectura; spend30Cents va en centavos de la moneda de su cuenta.' },

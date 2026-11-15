@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '@/context/AuthContext';
 import ServiceHealthPanel from '@/components/modules/ServiceHealthPanel';
+import PlatformHealthScorePanel from '@/components/modules/PlatformHealthScorePanel';
 import '@/index.css';
 
 // Muestra local del semáforo de servicios: el panel real contra la ruta real con datos simulados
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')).render(
       <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-8">
         <h1 className="mb-6 text-3xl font-bold text-zinc-950 dark:text-white">Salud Operativa</h1>
         <ServiceHealthPanel />
+        <PlatformHealthScorePanel />
       </main>
       <Toaster />
     </AuthProvider>

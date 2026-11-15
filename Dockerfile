@@ -24,6 +24,9 @@ RUN npx prisma generate
 # CONSTRUIR EL FRONTEND (Indispensable para que aparezca el dashboard)
 RUN npm run build
 
+# Medir el health score de esta versión para Salud operativa. Nunca tumba la construcción.
+RUN node scripts/health-score.mjs --snapshot || true
+
 # Exponer el puerto configurado
 EXPOSE 3000
 

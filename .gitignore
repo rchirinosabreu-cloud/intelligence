@@ -51,3 +51,6 @@ artifacts/
 /docs/audits/reports-2026-09-15/
 # Andamio local de agentes: configuración y copias de trabajo en paralelo. Nunca se versiona.
 .claude/
+
+# La medición del health score que escribe el Dockerfile al construir; no se versiona.
+/health-score-snapshot.json
