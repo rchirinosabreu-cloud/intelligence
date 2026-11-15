@@ -77,12 +77,18 @@ test('el formulario frena lo que falta y deja la pauta creada', async () => {
   await page.locator('[data-ad-new]').click();
   const dialog = page.locator('[data-ad-budget-dialog]');
   await dialog.waitFor();
-  await page.waitForTimeout(250);
-  await shot(page, '03-nueva-pauta');
-  await dialog.getByPlaceholder('Ej.: Wine Summit').fill('Prueba');
+  // La pauta nace de lo aprobado en el contrato: con todas las de Bonsai ya creadas no hay nada que elegir, y se dice.
+  await dialog.getByRole('combobox', { name: 'Cliente' }).click();
+  await page.getByRole('option', { name: 'Bonsai' }).click();
+  await dialog.locator('[data-ad-approved-missing]').waitFor();
+  assert.match(await dialog.locator('[data-ad-approved-missing]').innerText(), /ya tienen su pauta/);
   await dialog.getByRole('combobox', { name: 'Cliente' }).click();
   await page.getByRole('option', { name: 'Martínez y Nájera' }).click();
-  await dialog.getByLabel('Presupuesto', { exact: true }).pressSequentially('200000');
+  await dialog.getByRole('combobox', { name: 'Pauta aprobada en el contrato' }).click();
+  await page.getByRole('option', { name: 'Meta · $ 200.000' }).click();
+  await page.waitForTimeout(250);
+  await shot(page, '03-nueva-pauta');
+  assert.equal(await dialog.getByLabel('Presupuesto', { exact: true }).count(), 0, 'la cifra no se escribe aquí');
   await dialog.getByRole('combobox', { name: 'Día de corte' }).click();
   await page.getByRole('option', { name: 'Del 19 al 18 del mes siguiente' }).click();
   await dialog.locator('button[type=submit]').click();
@@ -167,30 +173,12 @@ test('todo se corrige y se deshace: lectura, cierre, presupuesto, saldo, campañ
   await page.getByRole('button', { name: 'Eliminar', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[data-ad-budget="b-muestra"]').innerText.includes('$ 512.000 de'));
 
-  // Reabrir un ciclo cerrado y corregir su presupuesto.
+  // Reabrir un ciclo cerrado. El presupuesto no se corrige por ciclo: lo aprobado vive en la ficha del cliente.
   const september = detail.locator('[data-ad-history="2026-09"]');
   await september.locator('[data-ad-cycle-reopen]').click();
   await page.getByRole('button', { name: 'Reabrir', exact: true }).click();
   await september.locator('[data-ad-cycle-reopen]').waitFor({ state: 'detached' });
-  await september.locator('[data-ad-cycle-edit]').click();
-  const cycle = page.locator('[data-ad-cycle-dialog]');
-  await cycle.waitFor();
-  const budget = cycle.getByLabel('Presupuesto del ciclo');
-  await budget.fill('');
-  await budget.pressSequentially('1200000');
-  // Cambiar lo aprobado pide quién lo aprobó y por qué: sin eso no se guarda.
-  await cycle.locator('[data-ad-approval]').waitFor();
-  await cycle.locator('button[type=submit]').click();
-  assert.equal(await cycle.getByLabel('Quién lo aprobó').evaluate((input) => input.validity.valueMissing), true, 'el formulario no se envía sin decir quién aprobó');
-  assert.equal(await cycle.isVisible(), true);
-  await page.waitForTimeout(150);
-  await page.screenshot({ path: `${OUT}/16-aprobacion.png` });
-  await cycle.getByLabel('Quién lo aprobó').fill('Gema, por WhatsApp');
-  await cycle.getByLabel('Motivo').fill('Septiembre se amplió');
-  await cycle.locator('button[type=submit]').click();
-  await cycle.waitFor({ state: 'detached' });
-  await detail.locator('[data-ad-changes]').getByText(/Aprobó: Gema, por WhatsApp\. Motivo: Septiembre se amplió/).waitFor();
-  await page.waitForFunction(() => document.querySelector('[data-ad-history="2026-09"]').innerText.includes('$ 1.200.000'));
+  assert.equal(await detail.locator('[data-ad-cycle-edit]').count(), 0, 'no hay «Corregir presupuesto»: se aprueba en la ficha');
 
   // Un saldo ajustado vuelve a la cuenta automática.
   await detail.locator('[data-ad-carry-open]').click();
@@ -260,18 +248,16 @@ test('desde la ficha se edita la misma pauta del módulo', async () => {
   await block.locator('[data-client-ad-budget="b-foobe"] [data-client-ad-edit]').click();
   const dialog = page.locator('[data-ad-budget-dialog]');
   await dialog.waitFor();
-  const amount = dialog.getByLabel('Presupuesto', { exact: true });
-  await amount.fill('');
-  await amount.pressSequentially('150');
-  await dialog.getByLabel('Quién lo aprobó').fill('Lina, por correo');
-  await dialog.getByLabel('Motivo').fill('Aprobó USD 150 para noviembre');
+  assert.match(await dialog.locator('[data-ad-approved]').inputValue(), /Meta · FoobeSpain · USD 100/, 'la cifra viene del contrato y aquí solo se ve');
+  assert.equal(await dialog.getByLabel('Presupuesto', { exact: true }).count(), 0);
+  await dialog.getByRole('combobox', { name: 'Objetivo' }).click();
+  await page.getByRole('option', { name: 'Ventas' }).click();
   await dialog.locator('button[type=submit]').click();
   await dialog.waitFor({ state: 'detached' });
-  await page.waitForFunction(() => document.querySelector('[data-client-ad-budget="b-foobe"]').innerText.includes('USD 246,47'));
 
   await page.goto(`${BASE}/pautas`, { waitUntil: 'domcontentloaded' });
   await row(page, 'b-foobe').waitFor({ timeout: 60000 });
-  assert.match(await row(page, 'b-foobe').innerText(), /USD 246,47/, 'el módulo dice lo mismo que la ficha');
+  assert.match(await row(page, 'b-foobe').innerText(), /Ventas/, 'el módulo dice lo mismo que la ficha');
   await page.close();
 });
 
@@ -304,11 +290,12 @@ test('dentro de la ficha operativa se añade una pauta sin enviar la ficha', asy
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${OUT}/11-pauta-en-ficha.png` });
   assert.match(await dialog.getByRole('combobox', { name: 'Cliente' }).innerText(), /Martínez/, 'el cliente ya viene elegido');
-  await dialog.getByPlaceholder('Ej.: Wine Summit').fill('Desde la ficha');
-  await dialog.getByLabel('Presupuesto', { exact: true }).pressSequentially('250000');
+  await dialog.getByRole('combobox', { name: 'Pauta aprobada en el contrato' }).click();
+  await page.getByRole('option', { name: 'Meta · Sede norte · $ 250.000' }).click();
   await dialog.locator('button[type=submit]').click();
   await dialog.waitFor({ state: 'detached' });
-  await block.getByText('Desde la ficha').waitFor();
+  await block.getByText('Sede norte').waitFor();
+  assert.match(await block.innerText(), /de \$ 250\.000/, 'la cifra aprobada en el contrato');
   assert.equal(await page.evaluate(() => window.__fichaGuardada || 0), 0, 'guardar la pauta no guarda la ficha');
   await page.close();
 });
@@ -400,39 +387,32 @@ test('Meta: lo que gasta sin pauta se liga a la suya o se marca como que no es d
   await page.close();
 });
 
-test('Meta: el presupuesto se ve; subirlo por encima de lo aprobado se frena y bajarlo cambia Meta', async () => {
+test('Meta: el presupuesto solo se ve; bajarlo en el Administrador de anuncios se refleja en la siguiente lectura', async () => {
   // Así llega el aviso de la banda: la ventana del presupuesto se abre sola.
   const { page, errors } = await open('?pauta=b-hoff&meta=presupuesto');
   const hoff = row(page, 'b-hoff');
   const dialog = page.locator('[data-ad-meta-budget-dialog]');
   await dialog.locator('[data-ad-meta-budget-row="120100"]').waitFor();
-  assert.match(await dialog.locator('[data-ad-meta-budget-summary]').innerText(), /Quedan \$ 147\.200 del ciclo.*\$ 202\.400.*se pasaría/s);
+  assert.match(await dialog.locator('[data-ad-meta-budget-summary]').innerText(), /Quedan \$ 147\.200 del ciclo.*\$ 202\.400.*se pasaría\. Bájalo en el Administrador de anuncios de Meta/s);
   assert.match(await dialog.locator('[data-ad-meta-budget-row="120101-a"]').innerText(), /Conjunto «Sede Manga · públicos similares»[\s\S]*\$ 2\.000\s+diarios/);
-
-  const campaign = dialog.locator('[data-ad-meta-budget-row="120100"]');
-  await campaign.locator('[data-ad-meta-budget-edit]').click();
-  const input = campaign.getByRole('textbox');
-  await input.fill('9000');
-  await campaign.locator('[data-ad-meta-budget-over]').waitFor();
-  assert.match(await campaign.locator('[data-ad-meta-budget-over]').innerText(), /como máximo \$ 4\.617 diarios.*sube primero el presupuesto de la pauta/s);
+  assert.equal(await dialog.locator('[data-ad-meta-budget-edit], [data-ad-meta-budget-dialog] input').count(), 0, 'nadie lo cambia desde la plataforma');
   await page.waitForTimeout(200);
-  await page.screenshot({ path: `${OUT}/13-presupuesto-meta-tope.png` });
-  await dialog.locator('button[type=submit]').click();
-  await dialog.getByRole('alert').waitFor();
-  assert.match(await campaign.innerText(), /\$ 6\.800\s+diarios/, 'pasarse no llegó a Meta');
+  await page.screenshot({ path: `${OUT}/13-presupuesto-meta.png` });
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(new URL(page.url()).searchParams.get('meta'), null, 'el enlace no vuelve a abrir la ventana');
 
-  await input.fill('4500');
-  await campaign.locator('[data-ad-meta-budget-check]').waitFor();
-  await dialog.locator('button[type=submit]').click();
-  await page.getByText('Presupuesto cambiado en Meta').waitFor();
-  await campaign.getByText(/\$ 4\.500\s+diarios/).waitFor();
+  // Alguien lo baja en el Administrador de anuncios: la siguiente lectura (la corre la muestra) lo refleja y el aviso se cae.
+  const changed = await page.evaluate(() => fetch('/api/__preview/meta-presupuesto?campana=120100&diario=4500', { method: 'POST' }).then((r) => r.status));
+  assert.equal(changed, 200);
+  await page.goto(`${BASE}/pautas?pauta=b-hoff`, { waitUntil: 'domcontentloaded' });
+  await hoff.locator('[data-ad-meta-budget-open]').waitFor({ timeout: 60000 });
+  assert.equal(await hoff.locator('[data-ad-meta-excess]').count(), 0, 'bajado en Meta, ya no se pasaría');
+  await hoff.locator('[data-ad-meta-budget-open]').click();
+  await dialog.locator('[data-ad-meta-budget-row="120100"]').getByText(/\$ 4\.500\s+diarios/).waitFor();
   assert.match(await dialog.locator('[data-ad-meta-budget-summary]').innerText(), /\$ 149\.500/);
   await page.waitForTimeout(200);
-  await page.screenshot({ path: `${OUT}/14-presupuesto-meta-cambiado.png` });
-  await page.keyboard.press('Escape');
-  await hoff.locator('[data-ad-changes]').getByText(/Presupuesto diario en Meta de «PABLO HOFF- MENSAJES INSCRIPCIONES»: de \$ 6\.800 a \$ 4\.500 · Keila/).waitFor();
-  assert.equal(await hoff.locator('[data-ad-meta-excess]').count(), 0, 'bajarlo quita el aviso de «se pasaría»');
-  assert.equal(new URL(page.url()).searchParams.get('meta'), null, 'el enlace no vuelve a abrir la ventana');
+  await page.screenshot({ path: `${OUT}/14-presupuesto-meta-bajado.png` });
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -447,7 +427,6 @@ test('ver no es editar: sin «Editar pautas» no hay botones para cambiar nada, 
     await row(page, 'b-hoff').locator('[data-ad-meta-budget-open]').click();
     const dialog = page.locator('[data-ad-meta-budget-dialog]');
     await dialog.locator('[data-ad-meta-budget-row="120100"]').waitFor();
-    assert.equal(await dialog.locator('[data-ad-meta-budget-edit]').count(), 0, 've el presupuesto, no lo cambia');
     await page.waitForTimeout(200);
     await page.screenshot({ path: `${OUT}/15-solo-ver.png` });
     const refused = await page.evaluate(() => fetch('/api/ad-budgets/b-hoff/spend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"spent":1}' }).then((r) => r.status));

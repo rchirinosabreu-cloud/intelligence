@@ -39,13 +39,11 @@ export const createAdBudgetRouter = ({ service = null, metaService = null } = {}
   router.delete('/:id', edit, handle((req) => read().remove(req.params.id, req.user)));
   router.get('/:id/meta-suggestions', handle((req) => meta().suggestions(req.params.id)));
   router.put('/:id/meta-campaigns', edit, handle((req) => meta().assign(req.params.id, req.body?.campaignIds, req.user)));
-  // El presupuesto en Meta: verlo es de quien ve la pauta; cambiarlo, de quien edita, con el tope de lo aprobado.
+  // El presupuesto en Meta solo se ve: se cambia en el Administrador de anuncios de Meta (Rodny, 13 de noviembre de 2026).
   router.get('/:id/meta-budgets', handle((req) => meta().metaBudgets(req.params.id)));
-  router.post('/:id/meta-budget', edit, handle((req) => meta().adjustBudget(req.params.id, req.body || {}, req.user)));
   router.post('/:id/spend', edit, handle((req) => read().recordSpend(req.params.id, req.body || {}, req.user), 201));
   router.patch('/:id/readings/:readingId', edit, handle((req) => read().updateReading(req.params.id, req.params.readingId, req.body || {}, req.user)));
   router.delete('/:id/readings/:readingId', edit, handle((req) => read().deleteReading(req.params.id, req.params.readingId, req.user)));
-  router.patch('/:id/cycles/:cycleKey', edit, handle((req) => read().updateCycle(req.params.id, req.params.cycleKey, req.body || {}, req.user)));
   router.post('/:id/cycles/:cycleKey/reopen', edit, handle((req) => read().reopenCycle(req.params.id, req.params.cycleKey, req.user)));
   router.put('/:id/carry-over', edit, handle((req) => read().adjustCarryOver(req.params.id, req.body || {}, req.user)));
   router.delete('/:id/carry-over', edit, handle((req) => read().clearCarryOver(req.params.id, { cycleKey: req.query.cycleKey || null }, req.user)));

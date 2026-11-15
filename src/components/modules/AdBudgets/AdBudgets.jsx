@@ -12,7 +12,7 @@ import { AD_CAMPAIGN_STATUSES, AD_PAYERS, AD_PLATFORMS, campaignFlags, formatAdM
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdEditContext, useAdBudgetDetail, useAdBudgets, useAdMeta, useCanEditAds, useDeleteAdReading, useRecordAdSpend, useReopenAdCycle } from './adBudgetsApi';
-import { AdBudgetDialog, AdCampaignDialog, AdCarryOverDialog, AdCycleDialog, AdSpendDialog } from './AdBudgetDialogs';
+import { AdBudgetDialog, AdCampaignDialog, AdCarryOverDialog, AdSpendDialog } from './AdBudgetDialogs';
 import { AdMetaBudgetDialog, AdMetaLinkDialog, MetaBudgetSection, MetaReadingNotes, MetaStatus, MetaUnassignedDialog } from './AdBudgetMeta';
 
 // Pautas (reunión del 6 de noviembre de 2026): el presupuesto global de cada cliente contra su cierre. Primero lo que hay
@@ -136,9 +136,8 @@ function History({ budget, onOpen }) {
               {item.cycle.label} · {formatAdMoney(item.evaluation.spentCents, budget.currency)} de {formatAdMoney(item.evaluation.availableCents, budget.currency)}
               {item.evaluation.closed && ` · saldo ${formatAdMoney(item.evaluation.balanceCents, budget.currency)}`}
             </p>
-            {canEdit && <div className="flex flex-wrap items-center gap-x-1">
-              <button type="button" data-ad-cycle-edit className={textAction} onClick={() => onOpen('cycle', budget, item)}>Corregir presupuesto</button>
-              {item.evaluation.closed && <button type="button" data-ad-cycle-reopen disabled={reopen.isPending} className={textAction} onClick={() => askReopen(item)}>Reabrir ciclo</button>}
+            {canEdit && item.evaluation.closed && <div className="flex flex-wrap items-center gap-x-1">
+              <button type="button" data-ad-cycle-reopen disabled={reopen.isPending} className={textAction} onClick={() => askReopen(item)}>Reabrir ciclo</button>
             </div>}
             <ul>
               {item.readings.map((reading) => (
@@ -401,7 +400,6 @@ export default function AdBudgets() {
       {dialog?.kind === 'carry' && <AdCarryOverDialog budget={dialog.budget} onClose={close} />}
       {dialog?.kind === 'campaign' && <AdCampaignDialog budget={dialog.budget} campaign={dialog.subject} onClose={close} />}
       {dialog?.kind === 'reading' && <AdSpendDialog budget={dialog.budget} reading={dialog.subject} onClose={close} />}
-      {dialog?.kind === 'cycle' && <AdCycleDialog budget={dialog.budget} entry={dialog.subject} onClose={close} />}
       {dialog?.kind === 'meta' && <AdMetaLinkDialog budget={dialog.budget} onClose={close} />}
       {dialog?.kind === 'meta-budget' && <AdMetaBudgetDialog budget={dialog.budget} onClose={close} />}
       {dialog?.kind === 'unassigned' && meta && <MetaUnassignedDialog meta={meta} budgets={budgets.filter((budget) => budget.status === 'ACTIVA')} onClose={close} />}

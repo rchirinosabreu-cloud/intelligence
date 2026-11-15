@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import Select from '@/components/ui/Select';
 import MoneyInput from '@/components/ui/MoneyInput';
-import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AD_BUDGET_KINDS, AD_BUDGET_STATUSES, AD_CAMPAIGN_STATUSES, AD_OBJECTIVES, AD_PAYERS, AD_PLATFORMS,
-  adBudgetApprovalProblem, adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adSpendProblem, formatAdMoney, shortDay, toCents
+  adBudgetName, adBudgetProblem, adCampaignProblem, adCarryOverProblem, adSpendProblem, formatAdMoney, shortDay, toCents
 } from '@/lib/adBudgets';
+import { adApprovalKey } from '@/lib/adBudgetApproval';
 import { memberHasArea } from '@/lib/teamAreas';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   useAdBudgetOptions, useAdjustAdCarryOver, useClearAdCarryOver, useDeleteAdBudget, useDeleteAdCampaign, useRecordAdSpend, useSaveAdBudget, useSaveAdCampaign,
-  useUpdateAdCycle, useUpdateAdReading
+  useUpdateAdReading
 } from './adBudgetsApi';
 
 // Los formularios de Pautas. Cada uno frena con la misma regla del servidor y solo se cierra cuando el servidor respondió.
@@ -25,20 +26,6 @@ const dangerLink = 'min-h-11 rounded-lg px-2 text-sm font-medium text-destructiv
 
 function Label({ text, children }) {
   return <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">{text}</span>{children}</label>;
-}
-
-/**
- * Cambiar el presupuesto aprobado pide quién lo aprobó y por qué (12 de noviembre de 2026): es el tope de lo que se gasta y
- * queda en «Correcciones». Solo aparece cuando la cifra cambió.
- */
-function ApprovalFields({ value, onChange }) {
-  return (
-    <div data-ad-approval className="grid gap-4 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 p-3 sm:grid-cols-2">
-      <p className="text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Cambia el presupuesto aprobado por el cliente: di quién lo aprobó y por qué.</p>
-      <Label text="Quién lo aprobó"><input required className={field} maxLength={120} value={value.approvedBy} onChange={(event) => onChange({ approvedBy: event.target.value })} placeholder="Ej.: Gema, por WhatsApp" /></Label>
-      <Label text="Motivo"><input required className={field} maxLength={300} value={value.reason} onChange={(event) => onChange({ reason: event.target.value })} placeholder="Ej.: subieron la pauta de noviembre" /></Label>
-    </div>
-  );
 }
 
 function Form({ open, title, description, onClose, onSubmit, saving, error, submitLabel, children, dataAttr, wide, secondary }) {
@@ -69,35 +56,52 @@ const CUT_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
 const cycleLabel = (day) => (day === 1 ? 'Mes calendario (del 1 al último día)' : `Del ${day} al ${day - 1} del mes siguiente`);
 
 const blankBudget = (clientId) => ({
-  clientId: clientId || '', brand: '', platform: 'META', kind: 'MENSUAL', currency: 'COP', amount: '', cutDay: '', objective: '', payer: 'POR_DEFINIR',
+  clientId: clientId || '', approvedKey: '', kind: 'MENSUAL', cutDay: '', objective: '', payer: 'POR_DEFINIR',
   responsibleId: '', startDate: '', endDate: '', notes: '', status: 'ACTIVA'
 });
 
 const fromBudget = (budget) => ({
-  clientId: budget.clientId, brand: budget.brand || '', platform: budget.platform, kind: budget.kind, currency: budget.currency,
-  amount: String(budget.amount ?? ''), cutDay: budget.ownCutDay ? String(budget.ownCutDay) : '', objective: budget.objective || '', payer: budget.payer, responsibleId: budget.responsible?.id || '',
+  clientId: budget.clientId, approvedKey: adApprovalKey(budget), kind: budget.kind,
+  cutDay: budget.ownCutDay ? String(budget.ownCutDay) : '', objective: budget.objective || '', payer: budget.payer, responsibleId: budget.responsible?.id || '',
   startDate: budget.startDate || '', endDate: budget.endDate || '', notes: budget.notes || '', status: budget.status
 });
 
-/** Crear o corregir una pauta. El responsable viene elegido si solo hay una persona en el área de Pauta. */
+const platformLabel = (value) => AD_PLATFORMS.find((item) => item.value === value)?.label || value;
+const approvedLabel = (entry) => `${[platformLabel(entry.platform), entry.brand].filter(Boolean).join(' · ')} · ${formatAdMoney(toCents(entry.amount), entry.currency)}`;
+
+/**
+ * Crear o corregir una pauta. La pauta nace de una pauta aprobada en el contrato del cliente (13 de noviembre de 2026): de
+ * ahí salen plataforma, marca, moneda y cifra, y aquí no se escriben. El responsable viene elegido si solo hay una persona
+ * en el área de Pauta.
+ */
 export function AdBudgetDialog({ budget, defaultClientId, onClose }) {
   const { data: options } = useAdBudgetOptions();
   const save = useSaveAdBudget();
   const remove = useDeleteAdBudget();
   const confirm = useConfirmDialog();
-  const [form, setForm] = useState(() => (budget ? { ...fromBudget(budget), approvedBy: '', reason: '' } : blankBudget(defaultClientId)));
+  const [form, setForm] = useState(() => (budget ? fromBudget(budget) : blankBudget(defaultClientId)));
   const [problem, setProblem] = useState('');
   const set = (patch) => { setProblem(''); setForm((current) => ({ ...current, ...patch })); };
   const team = options?.team || [];
   const specialists = team.filter((member) => memberHasArea(member, 'PAUTA'));
   const responsibleId = form.responsibleId || (!budget && specialists.length === 1 ? specialists[0].id : '');
   const specific = form.kind === 'ESPECIFICA';
-  const approvalNeeded = Boolean(budget) && (toCents(form.amount) !== toCents(budget.amount) || form.currency !== budget.currency);
+  const client = (options?.clients || []).find((item) => item.id === form.clientId) || null;
+  // Al crear, solo las aprobadas que todavía no tienen pauta; al editar, la que ya es de esta pauta.
+  const available = (client?.approved || []).filter((entry) => !entry.budgetId || entry.budgetId === budget?.id);
+  const chosen = available.find((entry) => adApprovalKey(entry) === form.approvedKey) || null;
+  const approvedNow = budget ? budget.approved : (chosen ? { source: 'CONTRATO', amount: chosen.amount, currency: chosen.currency } : null);
+  const fichaPath = client?.slug ? `/clientes/operacion/${client.slug}` : null;
 
   const submit = async (event) => {
     event.preventDefault();
-    const input = { ...form, responsibleId: responsibleId || null };
-    const found = adBudgetProblem(input) || (approvalNeeded ? adBudgetApprovalProblem(input) : null);
+    if (!budget && !chosen) { setProblem(client ? 'Elige la pauta aprobada en el contrato.' : 'Elige el cliente.'); return; }
+    const source = budget || chosen;
+    const input = {
+      clientId: form.clientId, platform: source.platform, brand: source.brand || '', kind: form.kind, cutDay: form.cutDay, objective: form.objective, payer: form.payer,
+      responsibleId: responsibleId || null, startDate: form.startDate, endDate: form.endDate, notes: form.notes, status: form.status
+    };
+    const found = adBudgetProblem({ ...input, amount: approvedNow?.amount, currency: approvedNow?.currency });
     if (found) { setProblem(found); return; }
     try {
       await save.mutateAsync({ id: budget?.id, input });
@@ -127,28 +131,49 @@ export function AdBudgetDialog({ budget, defaultClientId, onClose }) {
   return (
     <Form open title={budget ? 'Editar pauta' : 'Nueva pauta'} wide dataAttr="data-ad-budget-dialog" onClose={onClose} onSubmit={submit} saving={save.isPending || remove.isPending} error={problem} submitLabel={budget ? 'Guardar cambios' : 'Crear pauta'}
       secondary={budget && <button type="button" data-ad-delete onClick={removeBudget} className={dangerLink}>Eliminar pauta</button>}
-      description="El presupuesto global del cliente. Las fechas salen del cierre de su contrato; un anuncio puede terminar antes.">
+      description="El seguimiento de una pauta aprobada por el cliente. El presupuesto sale de su contrato; las fechas, del cierre del cliente.">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Label text="Cliente">
-          <Select required className={field} value={form.clientId} onChange={(event) => set({ clientId: event.target.value })} aria-label="Cliente">
-            <option value="">Elige un cliente</option>
-            {(options?.clients || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-          </Select>
-        </Label>
-        <Label text={<>Marca o cuenta {optional}</>}>
-          <input className={field} value={form.brand} maxLength={120} onChange={(event) => set({ brand: event.target.value })} placeholder="Ej.: Wine Summit" />
-        </Label>
-        <Label text="Plataforma">
-          <Select required className={field} value={form.platform} onChange={(event) => set({ platform: event.target.value })} aria-label="Plataforma">
-            {AD_PLATFORMS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </Select>
-        </Label>
-        <Label text="Tipo">
-          <Select required className={field} value={form.kind} onChange={(event) => set({ kind: event.target.value })} aria-label="Tipo de pauta">
-            {AD_BUDGET_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </Select>
-        </Label>
+        {budget ? (
+          <Label text="Cliente"><input className={field} value={budget.client?.name || ''} readOnly aria-label="Cliente" /></Label>
+        ) : (
+          <Label text="Cliente">
+            <Select required className={field} value={form.clientId} onChange={(event) => set({ clientId: event.target.value, approvedKey: '' })} aria-label="Cliente">
+              <option value="">Elige un cliente</option>
+              {(options?.clients || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </Select>
+          </Label>
+        )}
+        {budget ? (
+          <Label text="Pauta aprobada en el contrato">
+            <input data-ad-approved className={field} readOnly aria-label="Pauta aprobada en el contrato"
+              value={budget.approved?.source === 'CONTRATO' ? approvedLabel({ platform: budget.platform, brand: budget.brand, amount: budget.approved.amount, currency: budget.approved.currency }) : `${[platformLabel(budget.platform), budget.brand].filter(Boolean).join(' · ')} · sin cifra en el contrato`} />
+          </Label>
+        ) : (
+          <Label text="Pauta aprobada en el contrato">
+            <Select required data-ad-approved-select className={field} value={form.approvedKey} onChange={(event) => set({ approvedKey: event.target.value })} aria-label="Pauta aprobada en el contrato" disabled={!client}>
+              <option value="">{client ? (available.length ? 'Elige la pauta aprobada' : 'El contrato no tiene pautas por crear') : 'Primero elige el cliente'}</option>
+              {available.map((entry) => <option key={adApprovalKey(entry)} value={adApprovalKey(entry)}>{approvedLabel(entry)}</option>)}
+            </Select>
+          </Label>
+        )}
       </div>
+      {!budget && client && !available.length && (
+        <p data-ad-approved-missing className="rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200">
+          {client.approved?.length ? 'Todas las pautas aprobadas de este cliente ya tienen su pauta.' : `El contrato de ${client.name} no tiene pautas aprobadas.`}
+          {fichaPath && <> Se agregan en <Link to={fichaPath} className="font-semibold underline">su ficha operativa</Link>.</>}
+        </p>
+      )}
+      {budget && budget.approved?.source !== 'CONTRATO' && (
+        <p data-ad-approved-missing className="rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200">
+          Esta pauta sigue con {formatAdMoney(toCents(budget.amount), budget.currency)} porque el contrato no tiene su pauta aprobada.
+          {fichaPath && <> Agrégala en <Link to={fichaPath} className="font-semibold underline">la ficha operativa</Link> y la pauta la toma de ahí.</>}
+        </p>
+      )}
+      <Label text="Tipo">
+        <Select required className={field} value={form.kind} onChange={(event) => set({ kind: event.target.value })} aria-label="Tipo de pauta">
+          {AD_BUDGET_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select>
+      </Label>
       {!specific && (
         <Label text="Ciclo">
           <Select className={field} value={form.cutDay} onChange={(event) => set({ cutDay: event.target.value })} aria-label="Día de corte">
@@ -163,13 +188,6 @@ export function AdBudgetDialog({ budget, defaultClientId, onClose }) {
           <Label text="Fin"><BrainDatePicker required className={field} value={form.endDate} onChange={(endDate) => set({ endDate })} ariaLabel="Fecha de fin" /></Label>
         </div>
       )}
-      <div className="grid items-start gap-4 sm:grid-cols-[auto_1fr]">
-        <div className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Moneda</span><CurrencyToggle bordered value={form.currency} onChange={(currency) => set({ currency })} /></div>
-        <Label text={specific ? 'Presupuesto total' : 'Presupuesto del mes'}>
-          <MoneyInput required className={field} value={form.amount} onChange={(amount) => set({ amount })} aria-label="Presupuesto" />
-        </Label>
-      </div>
-      {approvalNeeded && <ApprovalFields value={form} onChange={set} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <Label text="Quién la lleva">
           <Select className={field} value={responsibleId} onChange={(event) => set({ responsibleId: event.target.value })} aria-label="Quién la lleva">
@@ -249,33 +267,6 @@ export function AdSpendDialog({ budget, closing, reading, onClose }) {
   );
 }
 
-/** El presupuesto de un ciclo en particular, también de uno ya cerrado. */
-export function AdCycleDialog({ budget, entry, onClose }) {
-  const update = useUpdateAdCycle();
-  const [amount, setAmount] = useState(String(entry.amount ?? ''));
-  const [approval, setApproval] = useState({ approvedBy: '', reason: '' });
-  const [problem, setProblem] = useState('');
-  const approvalNeeded = toCents(amount) !== toCents(entry.amount);
-  const submit = async (event) => {
-    event.preventDefault();
-    const found = adCycleAmountProblem({ amount }) || (approvalNeeded ? adBudgetApprovalProblem(approval) : null);
-    if (found) { setProblem(found); return; }
-    try {
-      await update.mutateAsync({ id: budget.id, cycleKey: entry.cycleKey, input: { amount, ...(approvalNeeded ? approval : {}) } });
-      toast.success('Presupuesto del ciclo corregido');
-      onClose();
-    } catch (error) {
-      setProblem(error.message);
-    }
-  };
-  return (
-    <Form open title={`Presupuesto de ${String(entry.cycle.label).toLowerCase()}`} dataAttr="data-ad-cycle-dialog" onClose={onClose} onSubmit={submit} saving={update.isPending} error={problem} submitLabel="Guardar presupuesto"
-      description={`${adBudgetName(budget)}. Solo cambia este ciclo; de ahí se recalcula el saldo que pasa al siguiente.`}>
-      <Label text={`Presupuesto (${budget.currency})`}><MoneyInput required className={field} value={amount} onChange={(value) => { setProblem(''); setAmount(value); }} aria-label="Presupuesto del ciclo" /></Label>
-      {approvalNeeded && <ApprovalFields value={approval} onChange={(patch) => { setProblem(''); setApproval((current) => ({ ...current, ...patch })); }} />}
-    </Form>
-  );
-}
 
 /** El saldo que pasa a este ciclo, cuando la cuenta automática no aplica. */
 export function AdCarryOverDialog({ budget, onClose }) {

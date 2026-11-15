@@ -23,6 +23,8 @@ import { clientSuspensionService, createClientSuspensionService } from './client
 import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
 import { canDecideContractContinuity, continuityActorSelect, setContractContinuity } from './contractContinuityService.js';
 import { clientOperationPlanPath } from '../lib/clientOperationAlerts.js';
+import { normalizeContractAdBudgets } from '../lib/adBudgetApproval.js';
+import { adBudgetService } from './adBudgetService.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -105,6 +107,7 @@ function publicContract(row) {
     standBySince: row.standBySince ?? null, cutDay: row.cutDay ?? 1, deliverables: Array.isArray(row.deliverables) ? row.deliverables : [],
     storiesPerWeek: row.storiesPerWeek ?? 0, productionDays: row.productionDays ?? 0, monthlyReport: Boolean(row.monthlyReport), notes: row.notes ?? null,
     scopeDetails: row.scopeDetails ?? null,
+    adBudgets: Array.isArray(row.adBudgets) ? row.adBudgets : [],
     updatedAt: row.updatedAt ?? null,
     renewalDecision: row.renewalDecision || 'PENDIENTE', renewalDecisionAt: row.renewalDecisionAt ?? null,
     renewalDecisionByName: row.renewalDecisionByName ?? null, renewalDecisionNote: row.renewalDecisionNote ?? null,
@@ -409,6 +412,14 @@ export const createClientOperationsService = ({
     const check = normalizeOperationProfile(input);
     if (!check.valid) throw httpError(422, 'Revisa los campos marcados.', { code: 'CLIENT_OPERATION_INVALID', errors: check.errors });
     const profile = check.value;
+    // La pauta aprobada por el cliente (13 de noviembre de 2026): omitirla conserva la guardada; una lista la reemplaza y
+    // llega a sus pautas en Pautas. Un formulario antiguo no la toca.
+    let approvals = null;
+    if (input.contract && Object.hasOwn(input.contract, 'adBudgets')) {
+      const checked = normalizeContractAdBudgets(input.contract.adBudgets);
+      if (!checked.valid) throw httpError(422, 'Revisa los campos marcados.', { code: 'CLIENT_OPERATION_INVALID', errors: checked.errors });
+      approvals = checked.value;
+    }
 
     const today = todayKey();
     const contractSelection = { orderBy: CONTRACT_ORDER, select: { id: true, startDate: true, endDate: true, createdAt: true, renewalDecision: true } };
@@ -451,10 +462,11 @@ export const createClientOperationsService = ({
         },
       });
       if (profile.contract) {
-        const data = { ...profile.contract, updatedById: actorUserId || null };
+        const data = { ...profile.contract, ...(approvals ? { adBudgets: approvals } : {}), updatedById: actorUserId || null };
         if (Object.hasOwn(data, 'scopeDetails') && data.scopeDetails === null) data.scopeDetails = Prisma.DbNull;
         if (current && input.renew !== true) await tx.clientContract.update({ where: { id: current.id }, data });
         else await tx.clientContract.create({ data: { ...data, clientId: client.id, createdById: actorUserId || null } });
+        if (approvals) await adBudgetService(tx, { clock: now }).applyContractApprovals(tx, { clientId: client.id, approvals, actor: { userId: actorUserId } });
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(error => {
       if (error.code === 'P2034') throw httpError(409, 'El contrato cambió mientras guardabas. Actualiza la ficha antes de confirmar.');

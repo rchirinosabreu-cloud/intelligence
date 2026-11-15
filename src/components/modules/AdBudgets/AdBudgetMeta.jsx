@@ -2,12 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Link2, Loader2, RefreshCw, Search } from '@/components/ui/icons';
 import Select from '@/components/ui/Select';
-import MoneyInput from '@/components/ui/MoneyInput';
 import { adBudgetName, formatAdMoney, shortDay, toleranceCents } from '@/lib/adBudgets';
-import { metaBudgetChange } from '@/lib/adBudgetMetaBudgets';
 import { suggestMetaCampaigns } from '@/lib/adBudgetMeta';
 import { cn } from '@/lib/utils';
-import { useAdMeta, useAdMetaBudgets, useAdMetaSuggestions, useAdjustAdMetaBudget, useAssignAdMeta, useCanEditAds, useIgnoreAdMeta, useRecordAdSpend, useSyncAdMeta } from './adBudgetsApi';
+import { useAdMeta, useAdMetaBudgets, useAdMetaSuggestions, useAssignAdMeta, useCanEditAds, useIgnoreAdMeta, useRecordAdSpend, useSyncAdMeta } from './adBudgetsApi';
 import { AdBudgetForm } from './AdBudgetDialogs';
 
 // Pautas conectadas a Meta (12 de noviembre de 2026). La plataforma lee el gasto de las campañas ligadas a cada pauta; lo
@@ -117,7 +115,7 @@ export function MetaBudgetSection({ budget, onLink, onBudget }) {
               </li>
             ))}
           </ul>
-          <button type="button" data-ad-meta-budget-open onClick={onBudget} className={cn(textAction, '-ml-2 mt-1')}>{canEdit ? 'Ver y ajustar el presupuesto en Meta' : 'Ver el presupuesto en Meta'}</button>
+          <button type="button" data-ad-meta-budget-open onClick={onBudget} className={cn(textAction, '-ml-2 mt-1')}>Ver el presupuesto en Meta</button>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {meta.fetchedAt ? `Del ${shortDay(budget.cycle.start)} al ${shortDay(meta.asOf || budget.cycle.start)} · leído ${timeText(meta.fetchedAt)}` : 'Se lee en la próxima lectura de Meta.'}
           </p>
@@ -263,62 +261,34 @@ export function MetaUnassignedDialog({ meta, budgets, onClose }) {
 const STATUS_TEXT = { ACTIVE: 'Activa', PAUSED: 'En pausa', CAMPAIGN_PAUSED: 'Campaña en pausa', ADSET_PAUSED: 'Conjunto en pausa', ARCHIVED: 'Archivada', DELETED: 'Eliminada', IN_PROCESS: 'En revisión', WITH_ISSUES: 'Con problemas' };
 
 /**
- * El presupuesto que Meta tiene en las campañas de la pauta, y su ajuste. Lo que la pauta gastaría se calcula con la misma
- * regla que usa el servidor (`metaBudgetChange`), así que el tope se ve antes de enviar; el servidor lo vuelve a comprobar
- * con lo que Meta tenga en ese momento.
+ * El presupuesto que Meta tiene en las campañas de la pauta, solo para verlo: se cambia en el Administrador de anuncios de
+ * Meta y la plataforma lo refleja en la siguiente lectura (Rodny, 13 de noviembre de 2026). Se construyó el ajuste desde
+ * aquí con tope y se retiró el mismo día.
  */
 export function AdMetaBudgetDialog({ budget, onClose }) {
-  const canEdit = useCanEditAds();
-  const { data, isLoading, error, refetch, isFetching } = useAdMetaBudgets(budget.id);
-  const adjust = useAdjustAdMetaBudget();
-  const [editing, setEditing] = useState(null);
-  const [amount, setAmount] = useState('');
-  const [problem, setProblem] = useState('');
+  const { data, isLoading, error, isFetching } = useAdMetaBudgets(budget.id);
   const currency = budget.currency;
   const money = (cents) => formatAdMoney(cents, currency);
   const objects = data?.objects || [];
   const view = data?.budget;
-  const target = objects.find((item) => item.id === editing) || null;
-  const newCents = Math.round(Number(amount) * 100);
-  const check = target && view && amount !== '' ? metaBudgetChange({ budget: view, objects, objectId: target.id, kind: target.kind, newCents, expectedCents: target.budgetCents }) : null;
   const left = view ? Math.max(view.availableCents - view.spentCents, 0) : 0;
   const over = view && data.projectedCents > left + toleranceCents(currency);
 
-  const start = (object) => { setProblem(''); setEditing(object.id); setAmount(String(object.budgetCents / 100)); };
-  const submit = async (event) => {
-    event.preventDefault();
-    if (!target) { onClose(); return; }
-    if (check?.problem) { setProblem(check.problem); return; }
-    if (newCents === target.budgetCents) { setProblem('Es el mismo presupuesto que ya tiene en Meta.'); return; }
-    try {
-      const result = await adjust.mutateAsync({ id: budget.id, input: { objectId: target.id, kind: target.kind, amount, expectedCents: target.budgetCents } });
-      toast.success(result.confirmed === false ? 'Meta recibió el cambio, pero todavía no lo muestra' : 'Presupuesto cambiado en Meta');
-      setEditing(null);
-      setAmount('');
-      await refetch();
-    } catch (failure) {
-      setProblem(failure.message);
-      if (failure.status === 409) refetch();
-    }
-  };
-
   return (
-    <AdBudgetForm open wide title="Presupuesto en Meta" dataAttr="data-ad-meta-budget-dialog" onClose={onClose} onSubmit={submit} saving={adjust.isPending} error={problem}
-      submitLabel={target ? 'Cambiar en Meta' : 'Listo'}
+    <AdBudgetForm open wide title="Presupuesto en Meta" dataAttr="data-ad-meta-budget-dialog" onClose={onClose} onSubmit={(event) => { event.preventDefault(); onClose(); }} submitLabel="Listo"
       description={`${adBudgetName(budget)} · lo que Meta tiene configurado ahora en sus campañas.`}>
       {isLoading && <p className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" /> Leyendo Meta…</p>}
       {error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{error.message}</p>}
       {view && (
         <p data-ad-meta-budget-summary className={cn('rounded-xl px-3 py-2 text-sm', over ? 'bg-status-attention/10 text-status-attention-fg' : 'bg-zinc-50 text-zinc-700 dark:bg-white/5 dark:text-zinc-200')}>
           Quedan {money(left)} del ciclo. Con lo que tiene Meta, las campañas gastarían unos {money(data.projectedCents)} del {shortDay(view.start)} al {shortDay(view.deadline)}
-          {over ? ': la pauta se pasaría. Baja algún presupuesto o sube el de la pauta.' : '.'}
+          {over ? ': la pauta se pasaría. Bájalo en el Administrador de anuncios de Meta o, si el cliente aprobó más, súbelo en su ficha operativa.' : '.'}
         </p>
       )}
       {(data?.problems || []).map((item) => <p key={item} className="text-sm text-status-attention-fg">{item}</p>)}
       {view && !objects.length && !data.problems.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Meta no devolvió presupuestos para estas campañas.</p>}
       <ul className="space-y-2">
         {objects.map((object) => {
-          const isEditing = editing === object.id;
           const label = object.level === 'ADSET' ? `Conjunto «${object.name}»` : object.name;
           return (
             <li key={object.id} data-ad-meta-budget-row={object.id} className="rounded-xl border border-zinc-200 p-3 dark:border-white/10">
@@ -336,28 +306,12 @@ export function AdMetaBudgetDialog({ budget, onClose }) {
                   {object.kind && <span className="block text-xs text-zinc-500 dark:text-zinc-400">gastaría {money(object.projectedCents)}</span>}
                 </span>
               </div>
-              {canEdit && object.kind && !isEditing && (
-                <button type="button" data-ad-meta-budget-edit onClick={() => start(object)} className={cn(textAction, '-ml-2 mt-1')}>Cambiar presupuesto</button>
-              )}
-              {isEditing && (
-                <div className="mt-2 space-y-2">
-                  <label className="block text-sm text-zinc-700 dark:text-zinc-200">
-                    <span className="block">Nuevo presupuesto {object.kind === 'DAILY' ? 'diario' : 'total'} ({currency})</span>
-                    <MoneyInput className={cn(field, 'mt-1')} decimals={currency === 'COP' ? 0 : 2} value={amount} onChange={(value) => { setProblem(''); setAmount(value); }} aria-label={`Nuevo presupuesto de ${object.name}`} />
-                  </label>
-                  {check && !check.problem && newCents !== object.budgetCents && (
-                    <p data-ad-meta-budget-check className="text-sm text-zinc-600 dark:text-zinc-300">La pauta gastaría unos {money(check.afterCents)} hasta el {shortDay(view.deadline)}; quedan {money(left)}.</p>
-                  )}
-                  {check?.problem && <p data-ad-meta-budget-over className="text-sm text-status-attention-fg">{check.problem}</p>}
-                  <button type="button" onClick={() => { setEditing(null); setProblem(''); }} className="min-h-11 rounded-lg px-2 text-sm text-zinc-600 dark:text-zinc-300">No cambiar</button>
-                </div>
-              )}
             </li>
           );
         })}
       </ul>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        {isFetching && !isLoading ? 'Leyendo Meta… ' : ''}Es una estimación con lo configurado en Meta. Solo cambia el valor del presupuesto: no pausa ni crea campañas.
+        {isFetching && !isLoading ? 'Leyendo Meta… ' : ''}Es una estimación con lo configurado en Meta. El presupuesto se cambia en el Administrador de anuncios de Meta; la plataforma lo refleja en la siguiente lectura.
       </p>
     </AdBudgetForm>
   );

@@ -39,6 +39,8 @@ try {
   await client.query(`CREATE INDEX IF NOT EXISTS "ClientContract_clientId_startDate_idx" ON "ClientContract"("clientId", "startDate");`);
   // Alcance categorizado opcional: no rellena ni modifica contratos o cuotas existentes.
   await client.query(`ALTER TABLE "ClientContract" ADD COLUMN IF NOT EXISTS "scopeDetails" JSONB;`);
+  // La pauta aprobada por el cliente vive en su contrato (13 de noviembre de 2026): una lista por plataforma y marca.
+  await client.query(`ALTER TABLE "ClientContract" ADD COLUMN IF NOT EXISTS "adBudgets" JSONB NOT NULL DEFAULT '[]';`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ClientMonthlyReport" (
       "id" TEXT PRIMARY KEY,

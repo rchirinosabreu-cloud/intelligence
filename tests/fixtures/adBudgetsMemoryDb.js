@@ -124,7 +124,7 @@ export const createAdBudgetsDb = ({ clients = [], team = [], users = [], budgets
         },
         client: {
             findUnique: async ({ where }) => byId(store.clients, where.id),
-            findMany: async () => store.clients.filter((row) => !row.isArchived).map(({ id, name }) => ({ id, name }))
+            findMany: async () => store.clients.filter((row) => !row.isArchived).map(({ id, name, slug, contracts }) => ({ id, name, slug: slug || id, contracts: contracts || [] }))
         },
         teamMember: {
             findUnique: async ({ where }) => byId(store.team, where.id),

@@ -1,16 +1,18 @@
-// Pautas (reunión del 6 de noviembre de 2026): el seguimiento del presupuesto de cada cliente. Lo que se escribe aquí es
-// solo lo que la plataforma no puede saber —cuánto hay aprobado y cuánto marca Meta—; el ciclo sale del contrato del
-// cliente y el ritmo, el saldo y los avisos se calculan (`src/lib/adBudgets.js`).
+// Pautas (reunión del 6 de noviembre de 2026): el seguimiento del presupuesto de cada cliente. El ciclo sale del contrato
+// del cliente y el ritmo, el saldo y los avisos se calculan (`src/lib/adBudgets.js`). **Lo aprobado también sale del contrato**
+// (Rodny, 13 de noviembre de 2026): `ClientContract.adBudgets` manda y `AdBudget.amount` es su espejo, para que los ciclos y los
+// informes lo lean sin cruzar tablas; una pauta sin entrada en el contrato lo dice y sigue con la cifra que traía.
 //
 // Todo se puede corregir y deshacer (Rodny, el mismo día: «debe uno poder editar absolutamente todo, cada cosa, cambiar,
 // modificar, corregir, deshacer»): cada corrección queda en `AdBudgetEvent` con quién y qué había, también al eliminar.
 import { randomUUID } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import {
-    SPECIFIC_CYCLE_KEY, adBudgetApprovalProblem, adBudgetName, adBudgetProblem, addDays, adCampaignProblem, adCarryOverProblem, adCycleAmountProblem, adCycleFor, adSpendProblem,
+    SPECIFIC_CYCLE_KEY, adBudgetName, adBudgetProblem, addDays, adCampaignProblem, adCarryOverProblem, adCycleFor, adSpendProblem,
     budgetCutDay, carryOverFor, cycleFromKey, evaluateAdCycle, formatAdMoney, previousCycleKey, shortDay, toCents
 } from '../lib/adBudgets.js';
 import { manualSpendProblem, metaDifference, metaSpendLock } from '../lib/adBudgetMeta.js';
+import { adApprovalKey, approvedAdBudgetFor, currentContractOf, missingApprovalText } from '../lib/adBudgetApproval.js';
 import { metaForecastExcess } from '../lib/adBudgetMetaBudgets.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -23,7 +25,7 @@ export const bogotaToday = (now = new Date()) => new Date(now.getTime() - 5 * 36
 const INCLUDE = {
     client: { select: {
         id: true, name: true, slug: true, isArchived: true,
-        contracts: { select: { startDate: true, cutDay: true } },
+        contracts: { select: { id: true, startDate: true, cutDay: true, adBudgets: true } },
         projectManager: { select: { id: true, name: true, userId: true, isActive: true } }
     } },
     responsible: { select: { id: true, name: true, avatarUrl: true, userId: true, isActive: true } },
@@ -75,7 +77,14 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
     const carry = specific ? { cents: 0, known: true, final: true } : carryOverFor(cycle.key, rows, cutDay);
     const campaigns = (budget.campaigns || []).map(publicCampaign);
     const linked = (budget.metaCampaigns || []).length > 0;
-    const evaluation = evaluateAdCycle({ budget, cycle, row, carry, campaigns: linked ? metaCampaignsForFlags(row?.metaForecast, today) : campaigns, today });
+    // Lo aprobado es lo del contrato; un ciclo ya cerrado conserva la cifra con la que se cerró.
+    const approved = approvedAdBudgetFor(budget, today);
+    const openRow = row?.closedAt ? row : { ...(row || {}), amount: approved.amount };
+    const evaluation = evaluateAdCycle({ budget, cycle, row: openRow, carry, campaigns: linked ? metaCampaignsForFlags(row?.metaForecast, today) : campaigns, today });
+    if (approved.source === 'PAUTA' && budget.status === 'ACTIVA') {
+        evaluation.reasons.push(missingApprovalText(budget));
+        if (evaluation.level === 'green') evaluation.level = 'yellow';
+    }
     const lock = metaSpendLock({ linked, row, cycle, today });
     // Lo que pasaría solo de un ciclo al otro, sin el acuerdo a mano: se muestra al registrar un acuerdo distinto.
     const carryAuto = specific ? null : carryOverFor(cycle.key, rows.map((item) => (item.cycleKey === cycle.key ? { ...item, carryOverManual: null } : item)), cutDay);
@@ -98,7 +107,7 @@ export const describeBudget = (budget, today, { cycleKey = null } = {}) => {
         client: budget.client ? { id: budget.client.id, name: budget.client.name, slug: budget.client.slug } : null,
         responsible: budget.responsible ? { id: budget.responsible.id, name: budget.responsible.name, avatarUrl: budget.responsible.avatarUrl || null } : null,
         projectManager: budget.client?.projectManager?.isActive === false ? null : (budget.client?.projectManager ? { id: budget.client.projectManager.id, name: budget.client.projectManager.name } : null),
-        cutDay, cutSource: source, ownCutDay: budget.cutDay || null, cycle, evaluation, campaigns, pendingClose,
+        cutDay, cutSource: source, ownCutDay: budget.cutDay || null, cycle, evaluation, campaigns, pendingClose, approved,
         carryOverReason: row?.carryOverReason || null, today, carryAuto,
         meta: {
             ...metaOf(budget, row), ...(lock ? { difference: null } : {}), lock,
@@ -120,8 +129,9 @@ const assertResponsible = async (db, responsibleId) => {
 };
 
 const assertClient = async (db, clientId) => {
-    const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, isArchived: true } });
+    const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, isArchived: true, contracts: { select: { id: true, startDate: true, adBudgets: true } } } });
     if (!client || client.isArchived) throw httpError(422, 'Ese cliente no está activo.');
+    return client;
 };
 
 const budgetData = (input) => ({
@@ -169,15 +179,6 @@ const budgetChanges = (current, next) => {
         after: Object.fromEntries(keys.map((key) => [key, plain(key, next)])),
         changed: keys.length > 0
     };
-};
-
-/** Quién aprobó y por qué, ya revisado. Sin eso el cambio del presupuesto no se guarda. */
-const withApproval = (input) => {
-    const problem = adBudgetApprovalProblem(input);
-    if (problem) throw httpError(422, problem);
-    const approvedBy = input.approvedBy.trim();
-    const reason = input.reason.trim();
-    return { approvedBy, reason, text: `Aprobó: ${approvedBy}. Motivo: ${reason}` };
 };
 
 /** Si en ese ciclo manda Meta (pauta ligada y Meta leyó bien hace poco). */
@@ -251,20 +252,62 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
 
         /** Lo que hace falta para llenar el formulario sin depender de los permisos de Clientes o Equipo. */
         async options() {
-            const [clients, team] = await Promise.all([
-                db.client.findMany({ where: { isArchived: false }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-                db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true, areas: true }, orderBy: { name: 'asc' } })
+            const day = today();
+            const [clients, team, budgets] = await Promise.all([
+                db.client.findMany({ where: { isArchived: false }, select: { id: true, name: true, slug: true, contracts: { select: { id: true, startDate: true, adBudgets: true } } }, orderBy: { name: 'asc' } }),
+                db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true, areas: true }, orderBy: { name: 'asc' } }),
+                db.adBudget.findMany({ where: { status: { not: 'TERMINADA' } }, select: { id: true, clientId: true, platform: true, brand: true } })
             ]);
-            return { clients, team };
+            // Las pautas aprobadas en el contrato vigente de cada cliente, y cuál ya tiene su pauta en Pautas.
+            const taken = new Map(budgets.map((row) => [`${row.clientId}|${adApprovalKey(row)}`, row.id]));
+            return {
+                clients: clients.map((client) => ({
+                    id: client.id, name: client.name, slug: client.slug,
+                    approved: (currentContractOf(client.contracts || [], day)?.adBudgets || []).map((entry) => ({ ...entry, budgetId: taken.get(`${client.id}|${adApprovalKey(entry)}`) || null }))
+                })),
+                team
+            };
         },
 
+        /**
+         * Lo que la ficha del cliente acaba de aprobar llega a sus pautas (el espejo): cifra y moneda de la pauta, el ciclo
+         * abierto, y una línea en «Correcciones». Lo llama la ficha dentro de su propia transacción.
+         */
+        async applyContractApprovals(tx, { clientId, approvals = [], actor = null }) {
+            const day = today();
+            const rows = await tx.adBudget.findMany({
+                where: { clientId, status: { not: 'TERMINADA' } },
+                include: { cycles: { orderBy: { cycleKey: 'asc' } }, client: { select: { contracts: { select: { startDate: true, cutDay: true } } } } }
+            });
+            const changed = [];
+            for (const row of rows) {
+                const entry = approvals.find((item) => adApprovalKey(item) === adApprovalKey(row));
+                if (!entry || (Number(entry.amount) === Number(row.amount) && entry.currency === row.currency)) continue;
+                const { cutDay } = budgetCutDay(row, day);
+                const cycle = adCycleFor(row, { cutDay, today: day });
+                await tx.adBudget.update({ where: { id: row.id }, data: { amount: Number(entry.amount), currency: entry.currency, updatedById: actorId(actor) } });
+                const open = (row.cycles || []).find((item) => item.cycleKey === cycle.key);
+                if (open && !open.closedAt) await tx.adBudgetCycle.update({ where: { id: open.id }, data: { amount: Number(entry.amount) } });
+                await logEvent(tx, row, 'APROBADO_FICHA', `Pauta aprobada en la ficha del cliente: de ${formatAdMoney(toCents(row.amount), row.currency)} a ${formatAdMoney(toCents(entry.amount), entry.currency)}`, actor, {
+                    before: { amount: Number(row.amount), currency: row.currency }, after: { amount: Number(entry.amount), currency: entry.currency }
+                });
+                changed.push(row.id);
+            }
+            return changed;
+        },
+
+        /** Una pauta nace de una entrada del contrato: de ahí salen su moneda y su cifra. Sin entrada no se crea. */
         async create(input, actor) {
-            const problem = adBudgetProblem(input);
+            if (!text(input.clientId)) throw httpError(422, 'Elige el cliente.');
+            const client = await assertClient(db, input.clientId);
+            const approved = approvedAdBudgetFor({ ...input, client }, today());
+            if (approved.source !== 'CONTRATO') throw httpError(422, missingApprovalText({ ...input, client }));
+            const withApproved = { ...input, amount: approved.amount, currency: approved.currency };
+            const problem = adBudgetProblem(withApproved);
             if (problem) throw httpError(422, problem);
-            await assertClient(db, input.clientId);
             await assertResponsible(db, input.responsibleId);
             const saved = await db.adBudget.create({
-                data: { id: randomUUID(), clientId: input.clientId, ...budgetData(input), status: 'ACTIVA', createdById: actorId(actor), updatedById: actorId(actor) }
+                data: { id: randomUUID(), clientId: input.clientId, ...budgetData(withApproved), status: 'ACTIVA', createdById: actorId(actor), updatedById: actorId(actor) }
             });
             return fresh(saved.id);
         },
@@ -276,26 +319,24 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
          */
         async update(id, input, actor) {
             const current = await readBudget(db, id);
+            // El presupuesto y la moneda no se escriben aquí: salen del contrato del cliente (la ficha operativa).
+            const { amount: _amount, currency: _currency, ...edits } = input;
             const merged = {
                 clientId: current.clientId, brand: current.brand, platform: current.platform, kind: current.kind, currency: current.currency,
                 amount: Number(current.amount), cutDay: current.cutDay, objective: current.objective, payer: current.payer, responsibleId: current.responsibleId,
-                startDate: current.startDate, endDate: current.endDate, notes: current.notes, status: current.status, ...input
+                startDate: current.startDate, endDate: current.endDate, notes: current.notes, status: current.status, ...edits
             };
+            const client = merged.clientId !== current.clientId ? await assertClient(db, merged.clientId) : current.client;
+            const approved = approvedAdBudgetFor({ ...merged, client }, today());
+            if (approved.source === 'CONTRATO') { merged.amount = approved.amount; merged.currency = approved.currency; }
             const problem = adBudgetProblem(merged);
             if (problem) throw httpError(422, problem);
-            if (merged.clientId !== current.clientId) await assertClient(db, merged.clientId);
             await assertResponsible(db, merged.responsibleId);
             const day = today();
             const { cutDay } = budgetCutDay({ ...current, cutDay: merged.cutDay }, day);
             const cycle = adCycleFor(merged, { cutDay, today: day });
             const next = { ...budgetData(merged), clientId: merged.clientId, status: merged.status };
             const changes = budgetChanges(current, next);
-            // El presupuesto aprobado es el tope de lo que se gasta: cambiarlo pide quién lo aprobó y por qué.
-            const approval = 'amount' in changes.after || 'currency' in changes.after ? withApproval(input) : null;
-            if (approval) {
-                changes.summary = `${changes.summary}. ${approval.text}`;
-                changes.after = { ...changes.after, approvedBy: approval.approvedBy, reason: approval.reason };
-            }
             await db.$transaction(async (tx) => {
                 await tx.adBudget.update({ where: { id }, data: { ...next, updatedById: actorId(actor) } });
                 const open = await tx.adBudgetCycle.findUnique({ where: { budgetId_cycleKey: { budgetId: id, cycleKey: cycle.key } } });
@@ -398,24 +439,6 @@ export const adBudgetService = (db = prisma, { clock = () => new Date() } = {}) 
                 await tx.adSpendReading.updateMany({ where: { cycleId: row.id }, data: { isFinal: false } });
                 await syncAdCycle(tx, row.id, now);
                 await logEvent(tx, budget, 'REABRIR', `Reabrió el ciclo ${cycleKey}`, actor);
-            });
-            return fresh(id, cycleOptions(cycleKey));
-        },
-
-        /** El presupuesto de un ciclo en particular, también de uno cerrado. */
-        async updateCycle(id, cycleKey, input, actor) {
-            const problem = adCycleAmountProblem(input);
-            if (problem) throw httpError(422, problem);
-            const budget = await readBudget(db, id);
-            const row = await readCycleRow(db, id, cycleKey);
-            const money = (value) => formatAdMoney(toCents(value), budget.currency);
-            const approval = Number(row.amount) !== Number(input.amount) ? withApproval(input) : null;
-            await db.$transaction(async (tx) => {
-                await tx.adBudgetCycle.update({ where: { id: row.id }, data: { amount: Number(input.amount) } });
-                await logEvent(tx, budget, 'CORREGIR_CICLO', `Corrigió el presupuesto del ciclo ${cycleKey}: de ${money(row.amount)} a ${money(input.amount)}${approval ? `. ${approval.text}` : ''}`, actor, {
-                    before: { amount: Number(row.amount) },
-                    after: { amount: Number(input.amount), ...(approval ? { approvedBy: approval.approvedBy, reason: approval.reason } : {}) }
-                });
             });
             return fresh(id, cycleOptions(cycleKey));
         },
