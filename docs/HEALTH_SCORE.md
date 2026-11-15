@@ -60,3 +60,5 @@ Decisiones que son de Rodny antes de cada fase: pasar a migraciones con versión
 ## Dónde se ve
 
 En **Salud operativa**, debajo del semáforo de servicios y solo para administradores: la nota general, un recuadro por área y, al abrir un área, lo cumplido y lo pendiente. Lee `GET /api/platform-health`. La medición viaja con cada versión: el Dockerfile corre `node scripts/health-score.mjs --snapshot` al construir (incluye las vulnerabilidades consultadas en ese momento) y el servidor añade las rutas que de verdad tiene montadas y lo que haya confirmado una persona. En local, sin esa medición, se lee el código al primer pedido.
+
+En la **demo** no se muestra: quien la abre es un cliente potencial y la tarjeta es la lista de pendientes internos de la plataforma.
