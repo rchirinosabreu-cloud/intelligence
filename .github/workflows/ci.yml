@@ -87,6 +87,12 @@ jobs:
       - name: Check Dependency Licenses
         run: npm run licenses:check
 
+      # Fails if the health score got worse against scripts/health-score-baseline.json: a new
+      # file over the line limit, or a new file hard-coding the brand or the time zone.
+      # See docs/HEALTH_SCORE.md.
+      - name: Check Health Score
+        run: npm run health:check
+
       - name: Lint Code
         run: npm run lint
 
