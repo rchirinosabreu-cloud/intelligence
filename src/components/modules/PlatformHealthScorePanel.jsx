@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
@@ -71,6 +71,9 @@ const PlatformHealthScorePanel = () => {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
   const [openAreaId, setOpenAreaId] = useState(null);
+  // En la demo no se muestra (la abre un cliente potencial). El distintivo «Demo» del header ya dejó
+  // leído `/api/health`; el servidor además responde `available: false`.
+  const isDemo = Boolean(useQueryClient().getQueryData(['app-health'])?.demo);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['platform-health'],
@@ -83,11 +86,12 @@ const PlatformHealthScorePanel = () => {
       }
       return payload;
     },
-    enabled: isAdmin,
+    enabled: isAdmin && !isDemo,
     staleTime: 5 * 60_000
   });
 
   if (!isAdmin) return null;
+  if (isDemo || data?.available === false) return null;
 
   const areas = data?.areas || [];
   const openArea = areas.find((area) => area.id === openAreaId) || null;

@@ -65,10 +65,10 @@ test('lo que confirmó una persona se lee de su archivo y un fallo al leer rutas
   assert.match(permissions.criteria.find((criterion) => criterion.id === 'guardian-por-ruta').detail, /sin medir/i);
 });
 
-const serve = async (user, service) => {
+const serve = async (user, service, demo = () => false) => {
   const app = express();
   app.use((req, _res, next) => { req.user = user; next(); });
-  app.use('/api/platform-health', createPlatformHealthRouter({ service, logger: { error() {} } }));
+  app.use('/api/platform-health', createPlatformHealthRouter({ service, demo, logger: { error() {} } }));
   const server = await new Promise((resolve) => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
   const response = await fetch(`http://127.0.0.1:${server.address().port}/api/platform-health`);
   const body = await response.json();
@@ -116,6 +116,15 @@ test('el panel sigue el diseño de la plataforma: tokens compartidos, los dos te
   assert.doesNotMatch(panel, /America\/Bogota|Brain ?Studio/, 'un archivo nuevo no escribe la zona horaria ni la marca');
   assert.match(panel, /aria-expanded/);
   assert.match(panel, /console\.error/);
+});
+
+test('en la demo no se muestra: la abre un cliente potencial y esto es la lista de pendientes internos', async () => {
+  const service = { read: async () => { throw new Error('en la demo no se mide'); } };
+  const demo = await serve({ userId: 'u2', role: 'ADMIN' }, service, () => true);
+  assert.equal(demo.status, 200);
+  assert.deepEqual(demo.body, { available: false });
+  assert.match(panel, /enabled: isAdmin && !isDemo/);
+  assert.match(panel, /if \(isDemo \|\| data\?\.available === false\) return null/);
 });
 
 test('cada criterio se dice en palabras: cumplido o pendiente, nunca solo con un color', () => {
