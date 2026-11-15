@@ -12,7 +12,7 @@ import { createPlatformHealthRouter } from '../src/routes/api/platformHealth.js'
 
 const facts = (overrides = {}) => ({
   files: 900, oversized: { 'src/A.jsx': 3000 }, brand: ['src/a.js'], timezone: [], agentsChars: 20000, ensureScripts: 0,
-  migrationsOnStart: true, healthcheck: true, browserTestsInCi: true, testsInCi: true, coverage: 85, permissionMatrix: true,
+  migrationsOnStart: true, browserTestsInCi: true, testsInCi: true, coverage: 85, permissionMatrix: true,
   moduleList: true, demoSeed: true, platformMap: true, securityExceptions: 0, vulnerabilities: null, routes: null,
   present: { mfa: true, vault: true, auditImmutable: true, rateLimit: true, aiLog: true, taskPrivacy: true, serviceHealth: true, clientErrors: true, demoInstance: true, legalEntity: true, welcome: true, browserTests: true },
   ci: { audit: true, licenses: true, lint: true, deadCode: true, build: true, postgres: true },

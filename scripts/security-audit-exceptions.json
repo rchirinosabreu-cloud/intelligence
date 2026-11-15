@@ -1,8 +1,3 @@
 {
-  "$comentario": "Avisos altos o críticos de npm audit que hoy no tienen un arreglo sin cambio de versión mayor. Los lee scripts/security-audit-gate.mjs. Cada uno lleva su motivo y una fecha «revisarAntesDe»: vencida, la puerta de CI vuelve a fallar. Anotados el 12 de octubre de 2026 al crear la puerta; ninguno es una aprobación definitiva.",
-  "GHSA-ggr8-5vv4-36mx": {
-    "paquete": "deepmerge-ts (vía prisma)",
-    "motivo": "Llega por la configuración de la CLI de Prisma, que solo combina la configuración del propio repositorio, nunca datos de usuarios. El arreglo exige otra versión mayor de Prisma.",
-    "revisarAntesDe": "2026-11-30"
-  }
+  "$comentario": "Avisos altos o críticos de npm audit que hoy no tienen un arreglo sin cambio de versión mayor. Los lee scripts/security-audit-gate.mjs. Cada uno lleva su motivo y una fecha «revisarAntesDe»: vencida, la puerta de CI vuelve a fallar. Hoy no hay ninguno: el de deepmerge-ts (vía Prisma) se cerró el 15 de noviembre de 2026 fijando la versión corregida en «overrides» de package.json."
 }

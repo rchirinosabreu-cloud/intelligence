@@ -88,7 +88,6 @@ export const collectFacts = (root = ROOT) => {
     agentsChars: readText(root, 'AGENTS.md').length,
     ensureScripts: (startup.match(/ensure-[\w-]+\.js/g) || []).length,
     migrationsOnStart: /prisma migrate deploy/.test(startup),
-    healthcheck: /healthcheckPath/.test(readText(root, 'railway.json') + readText(root, 'railway.toml')),
     testsInCi: /npm run test:ci/.test(ci),
     browserTestsInCi: /tests\/browser/.test(ci),
     coverage: Number.isFinite(coverage?.porcentaje) ? coverage.porcentaje : null,
@@ -237,7 +236,9 @@ export const AREAS = [
   { id: 'operacion', name: 'Operación', criteria: [
     piece('semaforo-de-servicios', 'Un semáforo vigila cada servicio externo y avisa si se cae', (f) => f.present?.serviceHealth),
     piece('errores-de-pantalla-registrados', 'Cada error de pantalla queda registrado con su referencia', (f) => f.present?.clientErrors),
-    auto('chequeo-de-salud', 'El despliegue tiene chequeo de salud declarado', (f) => yes(f.healthcheck, 'Falta declarar el chequeo de salud del despliegue.')),
+    // Lo confirma una persona: el chequeo vive en los ajustes del servicio en Railway, no en el código
+    // (el archivo `railway.json` que lo declaraba deja de leerse el 1 de diciembre de 2026).
+    manual('chequeo-de-salud', 'Una versión nueva solo recibe a la gente cuando responde bien (chequeo de salud)'),
     manual('despliegue-automatico', 'El despliegue sale solo al fusionar, sin pasos a mano'),
     manual('vigilante-externo', 'Un vigilante externo avisa si la plataforma se cae'),
     manual('procesos-separados', 'Los procesos automáticos corren aparte del servidor que atiende a la gente'),

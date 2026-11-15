@@ -44,6 +44,11 @@ Cuando algo mejora, `npm run health:update` encoge la línea base. **Nunca se le
 | 3 | Migraciones con versión, procesos automáticos en su propio servidor, dos servidores | Organización del código, Operación |
 | 4 | Partir los archivos grandes, cobertura de pruebas, prueba de permiso por ruta, `AGENTS.md` como índice, revisión de seguridad externa | Organización del código, Pruebas, Permisos, Seguridad |
 
+### Fase 1, lo hecho (15 de noviembre de 2026)
+
+- **La vulnerabilidad anotada se cerró sin saltar a Prisma 7.** El aviso era de `deepmerge-ts`, una librería que usa la herramienta de Prisma para leer su configuración. Prisma lo arregló en su versión 7.10.1 cambiando solo esa librería a la 8.0.2, así que aquí se fija esa misma versión en `overrides` de `package.json`. La lista de excepciones quedó vacía. Cuando se suba Prisma a la 7, se quita el `overrides`.
+- **Chequeo de salud.** Railway pregunta a `/api/health` y solo le pasa la gente a una versión nueva cuando responde; si no responde en cinco minutos, se queda la anterior. Se pone en los ajustes del servicio en Railway (`healthcheckPath`), **no en un archivo del código**: `railway.json` deja de leerse el 1 de diciembre de 2026. Por eso el medidor lo trata como algo que confirma una persona. Probado primero en la demo.
+
 Decisiones que son de Rodny antes de cada fase: pasar a migraciones con versión (hoy las reglas del proyecto dicen `db push`), el servidor aparte para los procesos automáticos (sube el costo mensual) y contratar la revisión de seguridad externa.
 
 ## Cómo se mantiene

@@ -7,13 +7,13 @@ y la política que lo verifica está en `scripts/license-policy.json` (AGENTS.md
 Incluye los binarios opcionales que npm instala según el sistema operativo (marcados «opcional»):
 en producción (Linux) solo se instala el que corresponde.
 
-**823 paquetes.**
+**825 paquetes.**
 
 ## Resumen por licencia
 
 | Licencia | Paquetes |
 | --- | ---: |
-| MIT | 650 |
+| MIT | 652 |
 | Apache-2.0 | 66 |
 | ISC | 45 |
 | BSD-2-Clause | 19 |
@@ -159,7 +159,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @napi-rs/canvas-win32-arm64-msvc | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-win32-x64-msvc | 0.1.80 | MIT | opcional |
 | @napi-rs/canvas-win32-x64-msvc | 1.0.13 | MIT | opcional |
-| @nodable/entities | 2.1.0 | MIT |  |
+| @nodable/entities | 3.1.0 | MIT |  |
 | @nodelib/fs.scandir | 2.1.5 | MIT |  |
 | @nodelib/fs.stat | 2.0.5 | MIT |  |
 | @nodelib/fs.walk | 1.2.8 | MIT |  |
@@ -283,6 +283,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | ansi-styles | 6.2.3 | MIT |  |
 | any-promise | 1.3.0 | MIT |  |
 | anymatch | 3.1.3 | ISC |  |
+| anynum | 1.0.1 | MIT |  |
 | append-field | 1.0.0 | MIT |  |
 | arg | 5.0.2 | MIT |  |
 | argparse | 1.0.10 | MIT |  |
@@ -423,8 +424,8 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | fast-equals | 5.4.0 | MIT |  |
 | fast-glob | 3.3.3 | MIT |  |
 | fast-png | 6.4.0 | MIT |  |
-| fast-xml-builder | 1.2.0 | MIT |  |
-| fast-xml-parser | 5.7.2 | MIT |  |
+| fast-xml-builder | 1.3.1 | MIT |  |
+| fast-xml-parser | 5.12.0 | MIT |  |
 | fastq | 1.20.1 | ISC |  |
 | fdir | 6.5.0 | MIT |  |
 | fetch-blob | 3.2.0 | MIT |  |
@@ -505,6 +506,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | is-plain-obj | 4.1.0 | MIT |  |
 | is-potential-custom-element-name | 1.0.1 | MIT |  |
 | is-stream | 2.0.1 | MIT |  |
+| is-unsafe | 2.0.3 | MIT |  |
 | isarray | 1.0.0 | MIT |  |
 | isexe | 2.0.0 | ISC |  |
 | isomorphic-dompurify | 3.19.0 | MIT |  |
@@ -643,7 +645,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | parseley | 0.13.1 | MIT |  |
 | parseurl | 1.3.3 | MIT |  |
 | path-exists | 4.0.0 | MIT |  |
-| path-expression-matcher | 1.5.0 | MIT |  |
+| path-expression-matcher | 1.6.2 | MIT |  |
 | path-key | 3.1.1 | MIT |  |
 | path-parse | 1.0.7 | MIT |  |
 | path-scurry | 1.11.1 | BlueOak-1.0.0 |  |
@@ -796,7 +798,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | stringify-entities | 4.0.4 | MIT |  |
 | strip-ansi | 6.0.1 | MIT |  |
 | strip-ansi | 7.1.2 | MIT |  |
-| strnum | 2.3.0 | MIT |  |
+| strnum | 2.5.1 | MIT |  |
 | stubs | 3.0.0 | MIT |  |
 | style-to-js | 1.1.21 | MIT |  |
 | style-to-object | 1.0.14 | MIT |  |
@@ -872,7 +874,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | wrappy | 1.0.2 | ISC |  |
 | xlsx | 0.20.3 | Apache-2.0 |  |
 | xml-name-validator | 5.0.0 | Apache-2.0 |  |
-| xml-naming | 0.1.0 | MIT |  |
+| xml-naming | 0.3.0 | MIT |  |
 | xmlbuilder | 10.1.1 | MIT |  |
 | xmlchars | 2.2.0 | MIT |  |
 | xtend | 4.0.2 | MIT |  |
