@@ -1,3 +1,8 @@
 {
-  "$comentario": "Lo que el medidor no puede leer del código y solo confirma una persona. Cada criterio se anota con su identificador (los lista npm run health), la fecha en que se comprobó (AAAA-MM-DD), quién lo comprobó y una nota. Algunos vencen: la restauración de la copia a los 90 días, la revisión externa al año. Ejemplo: \"restauracion-probada\": { \"fecha\": \"2026-12-01\", \"quien\": \"Rodny\", \"nota\": \"Copia de producción restaurada en un entorno aparte\" }. No anotar nada que no se haya hecho de verdad."
+  "$comentario": "Lo que el medidor no puede leer del código y solo confirma una persona. Cada criterio se anota con su identificador (los lista npm run health), la fecha en que se comprobó (AAAA-MM-DD), quién lo comprobó y una nota. Algunos vencen: la restauración de la copia a los 90 días, la revisión externa al año. Ejemplo: \"restauracion-probada\": { \"fecha\": \"2026-12-01\", \"quien\": \"Rodny\", \"nota\": \"Copia de producción restaurada en un entorno aparte\" }. No anotar nada que no se haya hecho de verdad.",
+  "chequeo-de-salud": {
+    "fecha": "2026-11-15",
+    "quien": "Claude, con el visto bueno de Rodny",
+    "nota": "Puesto en los ajustes del servicio en Railway (/api/health, 5 minutos) en producción y en la demo. El despliegue de producción del 15 de noviembre pasó por él: «Healthcheck succeeded»."
+  }
 }

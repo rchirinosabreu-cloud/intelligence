@@ -1,0 +1,83 @@
+# Vigilante externo (fase 1 del health score, 15 de noviembre de 2026).
+#
+# Revisa desde fuera de Railway, cada 10 minutos, que la plataforma responda. Si no responde tras tres
+# intentos abre un aviso (un «issue») que le llega por correo al dueño del repositorio; cuando vuelve,
+# lo cierra. La dirección que revisa es la variable UPTIME_URL del repositorio.
+#
+# Límites que hay que conocer: GitHub no garantiza la hora exacta de las corridas programadas (pueden
+# retrasarse varios minutos) y el aviso depende de las notificaciones de GitHub de quien lo recibe.
+# El semáforo de Salud operativa lee la última corrida de este archivo: no cambiarle el nombre sin
+# cambiar `UPTIME_WORKFLOW_FILE` en `src/services/serviceHealthProbes.js`.
+name: Vigilante externo
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Dirección a revisar (vacío: la de siempre). Sirve para probar el aviso.'
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: vigilante-externo
+  cancel-in-progress: false
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      UPTIME_URL: ${{ inputs.url || vars.UPTIME_URL }}
+      GH_TOKEN: ${{ github.token }}
+      ISSUE_TITLE: La plataforma no responde
+    steps:
+      - name: Revisar que la plataforma responde
+        id: check
+        run: |
+          if [ -z "$UPTIME_URL" ]; then
+            echo "Falta la variable UPTIME_URL del repositorio."
+            exit 1
+          fi
+          ok=0
+          codigo=000
+          for intento in 1 2 3; do
+            codigo=$(curl -sS -o respuesta.json -w '%{http_code}' --max-time 20 "$UPTIME_URL" || true)
+            if [ "$codigo" = "200" ] && grep -q '"status":"ok"' respuesta.json; then
+              ok=1
+              break
+            fi
+            echo "Intento $intento: respondió «$codigo»."
+            if [ "$intento" != "3" ]; then sleep 30; fi
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
+
+      - name: Avisar si no responde
+        if: steps.check.outputs.ok != '1'
+        env:
+          CODIGO: ${{ steps.check.outputs.codigo }}
+        run: |
+          abierto=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.ISSUE_TITLE))[0].number // empty')
+          if [ -z "$abierto" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "@${GITHUB_REPOSITORY_OWNER} el vigilante externo no obtuvo respuesta de la plataforma en tres intentos seguidos (última respuesta: «${CODIGO}»).
+
+          Este aviso se cierra solo cuando la plataforma vuelve a responder."
+          else
+            echo "Ya hay un aviso abierto (#$abierto): no se repite."
+          fi
+          exit 1
+
+      - name: Cerrar el aviso cuando vuelve
+        if: steps.check.outputs.ok == '1'
+        run: |
+          abierto=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.ISSUE_TITLE))[0].number // empty')
+          if [ -n "$abierto" ]; then
+            gh issue close "$abierto" --repo "$GITHUB_REPOSITORY" --comment "La plataforma volvió a responder."
+          fi

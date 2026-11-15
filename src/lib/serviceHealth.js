@@ -141,6 +141,14 @@ export const SERVICE_CATALOG = Object.freeze([
     purpose: 'Tasa del dólar para cotizaciones y cuentas de cobro en USD.',
     impact: 'Si cae, la TRM hay que escribirla a mano.',
     intervalMs: 60 * MIN
+  },
+  {
+    id: 'watcher',
+    label: 'Vigilante externo',
+    purpose: 'Revisa desde fuera, cada 10 minutos, que la plataforma responda.',
+    impact: 'Si se detiene, nadie avisa de una caída completa de la plataforma.',
+    // Se lee la última corrida del vigilante en GitHub; no se le pide que corra otra vez.
+    intervalMs: 15 * MIN
   }
 ]);
 
