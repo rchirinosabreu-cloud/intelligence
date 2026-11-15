@@ -5,6 +5,9 @@ import { createServer } from 'vite';
 import { createServiceHealthRouter } from '../src/routes/api/serviceHealth.js';
 import { createServiceHealthService } from '../src/services/serviceHealthService.js';
 import { SERVICE_CATALOG } from '../src/lib/serviceHealth.js';
+import { createPlatformHealthRouter } from '../src/routes/api/platformHealth.js';
+import { createPlatformHealthScoreService } from '../src/services/platformHealthScoreService.js';
+import { collectFacts } from './health-score.mjs';
 
 // Muestra local del semáforo de servicios (4 de octubre de 2026). La ruta, el servicio y las reglas
 // del color son los reales; la base es una memoria y las comprobaciones son simuladas por escenario.
@@ -101,6 +104,12 @@ export async function createServiceHealthPreview({ port = 3710 } = {}) {
     const scenario = new URL(req.headers.referer || 'http://x/', 'http://x').searchParams.get('escenario');
     return routers[SCENARIOS[scenario] ? scenario : 'problemas'](req, res, next);
   });
+  // La salud de la plataforma: la ruta y la regla reales sobre este mismo repositorio; las rutas y las
+  // vulnerabilidades, que en producción se leen del servidor y de la construcción, van de muestra.
+  api.use('/api/platform-health', createPlatformHealthRouter({ service: createPlatformHealthScoreService({
+    readFacts: (root) => ({ ...collectFacts(root), vulnerabilities: { high: 3, critical: 0 } }),
+    routes: () => ({ total: 549, unguarded: 146 })
+  }) }));
   const demoUser = { id: 'user-rodny', name: 'Rodny Chirinos', role: 'ADMIN' };
   api.get('/api/auth/me', (_req, res) => res.json(demoUser));
   api.get('/api/user/profile', (_req, res) => res.json(demoUser));

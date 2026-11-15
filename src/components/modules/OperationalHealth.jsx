@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import OperationalTracePanel from './OperationalTracePanel';
 import ServiceHealthPanel from './ServiceHealthPanel';
+import PlatformHealthScorePanel from './PlatformHealthScorePanel';
 import {
   Activity,
   AlertCircle,
@@ -303,6 +304,8 @@ const OperationalHealth = () => {
       </header>
 
       <ServiceHealthPanel />
+
+      <PlatformHealthScorePanel />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1.35fr_repeat(3,minmax(0,0.75fr))]">
         <ScorePanel data={data} />

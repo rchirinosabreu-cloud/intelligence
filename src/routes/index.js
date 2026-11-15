@@ -75,6 +75,9 @@ import { createIncidentReportRouter } from './api/incidentReports.js';
 import { createImportantNoticeRouter } from './api/importantNotices.js';
 import { createPlatformLeagueRouter } from './api/platformLeague.js';
 import { createServiceHealthRouter } from './api/serviceHealth.js';
+import { createPlatformHealthRouter } from './api/platformHealth.js';
+import { listApiRoutes } from '../lib/platformRoutes.js';
+import { describeGuards } from '../lib/platformCatalog.js';
 import { createClientProfitabilityRouter } from './api/clientProfitability.js';
 import { createAdBudgetRouter } from './api/adBudgets.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
@@ -413,6 +416,8 @@ router.use('/important-notices', createImportantNoticeRouter());
 router.use('/league', createPlatformLeagueRouter());
 router.use('/ai-governance', createAiGovernanceRouter());
 router.use('/service-health', createServiceHealthRouter());
+// El health score de la plataforma (14 de noviembre de 2026): las rutas se cuentan sobre este mismo router.
+router.use('/platform-health', createPlatformHealthRouter({ routes: () => { const routes = listApiRoutes(router); return { total: routes.length, unguarded: routes.filter((route) => !describeGuards(route.guards)).length }; } }));
 // Rentabilidad por cliente (22 de octubre de 2026): solo administradores, solo lectura.
 router.use('/client-profitability', createClientProfitabilityRouter());
 

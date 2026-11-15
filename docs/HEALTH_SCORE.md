@@ -51,3 +51,7 @@ Decisiones que son de Rodny antes de cada fase: pasar a migraciones con versión
 - La puerta corre en cada cambio y frena lo que empeora.
 - Una vez al mes se corre `npm run health` y se revisan los criterios que vencen.
 - Un criterio nuevo se añade en `AREAS` de `scripts/health-score.mjs` con su prueba en `tests/healthScore.test.js`. Añadir un criterio que ya se cumple para subir la nota sin que algo haya mejorado no vale.
+
+## Dónde se ve
+
+En **Salud operativa**, debajo del semáforo de servicios y solo para administradores: la nota general, un recuadro por área y, al abrir un área, lo cumplido y lo pendiente. Lee `GET /api/platform-health`. La medición viaja con cada versión: el Dockerfile corre `node scripts/health-score.mjs --snapshot` al construir (incluye las vulnerabilidades consultadas en ese momento) y el servidor añade las rutas que de verdad tiene montadas y lo que haya confirmado una persona. En local, sin esa medición, se lee el código al primer pedido.

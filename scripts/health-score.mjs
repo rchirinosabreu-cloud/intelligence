@@ -22,6 +22,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_FILE = path.join('scripts', 'health-score-baseline.json');
 const MANUAL_FILE = path.join('scripts', 'health-score-manual.json');
 const COVERAGE_FILE = path.join('scripts', 'health-score-coverage.json');
+export const MANUAL_ENTRIES_FILE = MANUAL_FILE;
+export const SNAPSHOT_FILE = 'health-score-snapshot.json';
 
 export const LINE_LIMIT = 800;
 export const AGENTS_CHAR_LIMIT = 40000;
@@ -162,7 +164,7 @@ const addDays = (day, days) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 
 
 /** Un criterio que solo puede confirmar una persona: vale desde su fecha y, si tiene vigencia, hasta que vence. */
 export const manualCriterionState = (rule, entry, today) => {
-  if (!entry) return { met: false, detail: 'Falta confirmarlo en scripts/health-score-manual.json.' };
+  if (!entry) return { met: false, detail: 'Todavía no se ha confirmado.' };
   if (!ISO_DAY.test(String(entry.fecha || '')) || Number.isNaN(Date.parse(`${entry.fecha}T00:00:00Z`))) {
     return { met: false, detail: 'La fecha anotada no se entiende (AAAA-MM-DD).' };
   }
@@ -207,7 +209,7 @@ export const AREAS = [
     auto('guardian-por-ruta', 'Cada ruta declara quién puede usarla', (f) => (f.routes == null
       ? { met: false, detail: 'Sin medir: no se pudieron leer las rutas.' }
       : yes(f.routes.unguarded === 0, `${f.routes.unguarded} de ${f.routes.total} rutas solo piden haber iniciado sesión: falta declarar cuáles son de todo el equipo.`))),
-    auto('matriz-de-permisos', 'Matriz de permisos documentada', (f) => yes(f.permissionMatrix, 'Falta docs/MATRIZ_DE_PERMISOS.md.')),
+    auto('matriz-de-permisos', 'Matriz de permisos documentada', (f) => yes(f.permissionMatrix, 'Falta el documento de la matriz de permisos.')),
     manual('prueba-de-permiso-por-ruta', 'Cada ruta tiene una prueba que demuestra que sin permiso responde «no»')
   ] },
   { id: 'seguridad', name: 'Seguridad', criteria: [
@@ -220,7 +222,7 @@ export const AREAS = [
     auto('sin-vulnerabilidades-altas', 'Cero vulnerabilidades altas o críticas en producción', (f) => (f.vulnerabilities == null
       ? { met: false, detail: 'Sin medir: no se pudo consultar npm audit.' }
       : yes(f.vulnerabilities.high + f.vulnerabilities.critical === 0, `${f.vulnerabilities.critical} críticas y ${f.vulnerabilities.high} altas (paquetes afectados).`))),
-    auto('sin-excepciones', 'Ninguna vulnerabilidad aceptada «por ahora»', (f) => yes(f.securityExceptions === 0, `${f.securityExceptions} excepción(es) anotada(s) en scripts/security-audit-exceptions.json.`)),
+    auto('sin-excepciones', 'Ninguna vulnerabilidad aceptada «por ahora»', (f) => yes(f.securityExceptions === 0, `${f.securityExceptions} vulnerabilidad(es) aceptada(s) por ahora, con fecha de revisión.`)),
     manual('revision-externa', 'Revisión de seguridad externa sin hallazgos graves', 365),
     manual('restauracion-probada', 'La copia de la base se restauró con éxito', 90)
   ] },
@@ -228,14 +230,14 @@ export const AREAS = [
     piece('estilo-en-cada-cambio', 'Cada cambio pasa la revisión de estilo y compila', (f) => f.ci?.lint && f.ci?.build),
     piece('sin-codigo-muerto', 'Cada cambio pasa la revisión de código sin uso', (f) => f.ci?.deadCode),
     auto('sin-archivos-gigantes', `Ningún archivo pasa de ${LINE_LIMIT} líneas`, (f) => yes(count(f.oversized) === 0, `${count(f.oversized)} archivos pasan de ${LINE_LIMIT} líneas.`)),
-    auto('reglas-en-indice-corto', 'Las reglas del proyecto son un índice corto con un documento por módulo', (f) => yes(f.agentsChars <= AGENTS_CHAR_LIMIT, `AGENTS.md tiene ${f.agentsChars.toLocaleString('es-CO')} caracteres (meta: ${AGENTS_CHAR_LIMIT.toLocaleString('es-CO')}).`)),
+    auto('reglas-en-indice-corto', 'Las reglas del proyecto son un índice corto con un documento por módulo', (f) => yes(f.agentsChars <= AGENTS_CHAR_LIMIT, `Las reglas del proyecto tienen ${f.agentsChars.toLocaleString('es-CO')} caracteres (meta: ${AGENTS_CHAR_LIMIT.toLocaleString('es-CO')}).`)),
     auto('migraciones-con-version', 'Los cambios de la base van en migraciones con versión', (f) => yes(f.migrationsOnStart, 'El arranque no aplica migraciones con versión.')),
-    auto('sin-scripts-de-arranque', 'Ningún script arregla la base al arrancar', (f) => yes(f.ensureScripts === 0, `${f.ensureScripts} scripts ensure-* corren en cada arranque.`))
+    auto('sin-scripts-de-arranque', 'Ningún script arregla la base al arrancar', (f) => yes(f.ensureScripts === 0, `${f.ensureScripts} scripts corren en cada arranque para ajustar la base.`))
   ] },
   { id: 'operacion', name: 'Operación', criteria: [
     piece('semaforo-de-servicios', 'Un semáforo vigila cada servicio externo y avisa si se cae', (f) => f.present?.serviceHealth),
     piece('errores-de-pantalla-registrados', 'Cada error de pantalla queda registrado con su referencia', (f) => f.present?.clientErrors),
-    auto('chequeo-de-salud', 'El despliegue tiene chequeo de salud declarado', (f) => yes(f.healthcheck, 'Falta declarar el chequeo de salud (railway.json).')),
+    auto('chequeo-de-salud', 'El despliegue tiene chequeo de salud declarado', (f) => yes(f.healthcheck, 'Falta declarar el chequeo de salud del despliegue.')),
     manual('despliegue-automatico', 'El despliegue sale solo al fusionar, sin pasos a mano'),
     manual('vigilante-externo', 'Un vigilante externo avisa si la plataforma se cae'),
     manual('procesos-separados', 'Los procesos automáticos corren aparte del servidor que atiende a la gente'),
@@ -246,7 +248,7 @@ export const AREAS = [
     piece('instalacion-aparte', 'El mismo código corre en una instalación aparte con otros datos (la demo)', (f) => f.present?.demoInstance),
     piece('datos-legales-en-un-sitio', 'Los datos legales de la empresa viven en un solo archivo', (f) => f.present?.legalEntity),
     auto('sin-marca-fija', 'Ningún archivo escribe la marca a mano', (f) => yes(count(f.brand) === 0, `${count(f.brand)} archivos escriben «Brain Studio», «Francisco Villa» o el dominio.`)),
-    auto('sin-zona-horaria-fija', 'Ningún archivo escribe la zona horaria a mano', (f) => yes(count(f.timezone) === 0, `${count(f.timezone)} archivos escriben «America/Bogota».`)),
+    auto('sin-zona-horaria-fija', 'Ningún archivo escribe la zona horaria a mano', (f) => yes(count(f.timezone) === 0, `${count(f.timezone)} archivos escriben la hora de Bogotá a mano.`)),
     manual('plantilla-cliente-nuevo', 'Una plantilla crea el entorno completo de un cliente nuevo'),
     manual('segunda-instancia-sin-codigo', 'Una segunda instancia funciona sin cambiar código', 365)
   ] }
@@ -261,6 +263,9 @@ export const evaluateAreas = (facts, manualEntries = {}, today) => AREAS.map((ar
   const met = criteria.filter((criterion) => criterion.met).length;
   return { id: area.id, name: area.name, criteria, met, total: criteria.length, score: Math.round((met / criteria.length) * 100) / 10 };
 });
+
+/** El promedio de las áreas, con un decimal: la cifra que encabeza el informe y la tarjeta de Salud operativa. */
+export const averageScore = (areas) => (areas.length ? Math.round((areas.reduce((sum, area) => sum + area.score, 0) / areas.length) * 10) / 10 : 0);
 
 const bogotaToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 
@@ -290,8 +295,7 @@ const readRoutes = async () => {
 };
 
 const printReport = (areas, facts) => {
-  const average = Math.round((areas.reduce((sum, area) => sum + area.score, 0) / areas.length) * 10) / 10;
-  console.log(`Health score de la plataforma: ${average} de 10 (promedio de ${areas.length} áreas, ${facts.files} archivos leídos)\n`);
+  console.log(`Health score de la plataforma: ${averageScore(areas)} de 10 (promedio de ${areas.length} áreas, ${facts.files} archivos leídos)\n`);
   for (const area of areas) {
     console.log(`${area.name}: ${area.score} de 10 (${area.met} de ${area.total} criterios)`);
     for (const criterion of area.criteria) {
@@ -313,6 +317,15 @@ const main = async () => {
     const comment = baseline?.$comentario || 'Lo que ya existía cuando se creó el medidor (14 de noviembre de 2026). Lo lee scripts/health-score.mjs: un archivo que no esté aquí no puede pasar del límite de líneas, ni escribir la marca o la zona horaria a mano. Solo se encoge, con npm run health:update; nunca se le añade a mano para que un cambio pase.';
     fs.writeFileSync(baselinePath, `${JSON.stringify({ $comentario: comment, ...next }, null, 2)}\n`);
     console.log(`Línea base guardada: ${count(next.oversized)} archivos grandes, ${next.brand.length} con la marca y ${next.timezone.length} con la zona horaria.`);
+    return;
+  }
+
+  // La medición que viaja con la versión publicada (la escribe el Dockerfile): Salud operativa la lee tal cual,
+  // con las vulnerabilidades consultadas al construir. Las rutas las añade el servidor que está corriendo.
+  if (args.has('--snapshot')) {
+    facts.vulnerabilities = readVulnerabilities();
+    fs.writeFileSync(path.join(ROOT, SNAPSHOT_FILE), `${JSON.stringify({ generatedAt: new Date().toISOString(), facts })}\n`);
+    console.log(`Medición guardada en ${SNAPSHOT_FILE}.`);
     return;
   }
 
