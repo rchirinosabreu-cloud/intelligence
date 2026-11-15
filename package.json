@@ -42,6 +42,9 @@
     "audit:security": "node scripts/security-audit-gate.mjs",
     "licenses": "node scripts/license-inventory.mjs",
     "licenses:check": "node scripts/license-inventory.mjs --check",
+    "health": "node scripts/health-score.mjs",
+    "health:check": "node scripts/health-score.mjs --check",
+    "health:update": "node scripts/health-score.mjs --update",
     "audit:dead-code:exports": "knip --no-progress --include exports,nsExports,types,duplicates",
     "bria:import-research": "node scripts/import-bria-research.js"
   },
