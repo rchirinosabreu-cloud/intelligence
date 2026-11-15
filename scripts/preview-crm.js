@@ -30,6 +30,11 @@ const createImportantNoticeMemory = (crmDb, userId, { cartera = false, now = nul
   const collectionActivities = [];
   const collection = cartera ? {
     teamMember: { findFirst: async () => ({ role: 'Coordinadora Administrativa y Contable', areas: ['ADMINISTRATIVA', 'COMERCIAL'] }) },
+    // Los avisos de cartera exigen permiso financiero vigente, releído de la cuenta (6 de noviembre de 2026): sin
+    // `user.findUnique` el servicio no puede comprobarlo y no muestra ninguno.
+    user: { ...crmDb.user, findUnique: async ({ where }) => (where.id === userId
+      ? { id: userId, isActive: true, role: 'ADMIN', modulePermissions: { dashboard: true, crm: true, financiero: true }, teamMember: { isActive: true } }
+      : null) },
     collectionSetting: { findUnique: async () => null },
     client: { findUnique: async ({ where }) => collectionClients.find(client => client.id === where.id) || null },
     accountsReceivable: { findUnique: async ({ where }) => {
@@ -54,7 +59,11 @@ const createImportantNoticeMemory = (crmDb, userId, { cartera = false, now = nul
       }
     }
   } : {};
-  const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => (value && typeof value === 'object' && 'not' in value ? row[key] !== value.not : row[key] === value));
+  const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => {
+    if (value && typeof value === 'object' && 'not' in value) return row[key] !== value.not;
+    if (value && typeof value === 'object' && Array.isArray(value.in)) return value.in.includes(row[key]);
+    return row[key] === value;
+  });
   const contact = new Set(['LLAMADA', 'CORREO', 'WHATSAPP', 'MENSAJE_LINKEDIN', 'REUNION', 'PROPUESTA_ENVIADA', 'RESPUESTA_CLIENTE']);
   const db = Object.create(crmDb);
   Object.assign(db, {
@@ -62,7 +71,13 @@ const createImportantNoticeMemory = (crmDb, userId, { cartera = false, now = nul
     importantNotice: {
       findMany: async ({ where }) => rows.filter((row) => matches(row, where)),
       findFirst: async ({ where, orderBy }) => rows.filter((row) => matches(row, where)).sort((a, b) => (orderBy?.decidedAt ? b.decidedAt - a.decidedAt : 0))[0] || null,
-      update: async ({ where, data }) => Object.assign(rows.find((row) => row.id === where.id), data)
+      update: async ({ where, data }) => Object.assign(rows.find((row) => row.id === where.id), data),
+      // Una decisión compartida retira los avisos equivalentes de las demás personas (`resolve` en el servicio).
+      updateMany: async ({ where, data }) => {
+        const hits = rows.filter((row) => matches(row, where));
+        hits.forEach((row) => Object.assign(row, data));
+        return { count: hits.length };
+      }
     },
     // The memory CRM ignores relation filters: only contact activities after the notice count as «already handled».
     crmLead: {
