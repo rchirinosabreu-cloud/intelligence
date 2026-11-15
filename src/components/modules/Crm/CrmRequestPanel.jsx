@@ -8,7 +8,7 @@ const BLOCK_LABELS = Object.fromEntries(Object.entries(SERVICE_BLOCKS).flatMap((
 const labelFor = key => LABELS[key] || BLOCK_LABELS[key] || key;
 
 const LABELS = {
-  contactName: 'Nombre', company: 'Empresa', jobTitle: 'Cargo', email: 'Correo', phone: 'WhatsApp / teléfono', location: 'Ciudad y país', website: 'Web o redes',
+  contactName: 'Nombre', company: 'Empresa', jobTitle: 'Cargo', email: 'Correo', phone: 'WhatsApp / teléfono', location: 'Ciudad y país', socialHandles: 'Usuarios en redes', website: 'Web o redes',
   need: 'Qué necesita', hasKeyDate: 'Fecha importante', keyDate: 'Cuál', keyDateNote: 'Qué sucede ese día', startWhen: 'Cuándo quiere iniciar', services: 'Servicios',
   'event.related': 'Relacionado con evento', 'event.needs': 'Para el evento', 'amc.interest': 'Interés en AMC', 'amc.plan': 'Alternativa AMC', 'amc.why': 'Qué le interesó de AMC',
   'budget.has': 'Presupuesto', 'budget.amount': 'Monto', 'budget.currency': 'Moneda', 'budget.scope': 'Corresponde a', 'budget.adsIncluded': 'Pauta incluida', 'budget.adsExtra': 'Presupuesto adicional de pauta',

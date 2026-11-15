@@ -96,8 +96,10 @@ test('the introduction only repeats what the prospect wrote', () => {
   const text = draftIntroductionText(lead, request);
   assert.match(text, /Narcobollo/);
   assert.match(text, /Vender más bollos/);
-  assert.match(text, /Marketing, Producción audiovisual/);
+  // Los servicios salen con el nombre de la tarjeta que eligió el prospecto (renombradas el 14 de noviembre de 2026).
+  assert.match(text, /Marketing \/ Manejo de redes sociales, Producción \/ Fotos \/ Videos/);
   assert.match(text, /2\.500\.000 COP \(Presupuesto mensual\)/);
+  // Una solicitud anterior al recorte conserva sus respuestas de AMC, con sus nombres.
   assert.match(text, /AMC Start/);
   assert.doesNotMatch(text, /undefined/);
 });

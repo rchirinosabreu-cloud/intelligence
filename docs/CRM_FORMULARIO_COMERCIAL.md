@@ -20,6 +20,8 @@ Lógica completa: **Formulario → CRM → calificación → seguimiento → cot
 
 ## 3. Recorrido y gamificación
 
+**Formulario acortado (Rodny, 14 de noviembre de 2026: «el formulario está muy largo»).** Se retiraron los pasos de Evento y Estrategia AMC, la fecha importante, «¿otras personas deciden?» y «¿cuándo esperas la propuesta?»; la bienvenida ya no dice cuántos pasos ni minutos son (el número cambia con los servicios). «Página web o redes» pasó a «Usuarios en redes sociales», texto libre separado por comas, que va a las notas de la oportunidad (no a `linkedinUrl`); la web la pide el paso de Web. La etapa de contratación pasó al paso de presupuesto («Presupuesto y momento»), porque de ella sale la prioridad. Las tarjetas de servicios se renombraron (Branding / Creación de logos, Diseño gráfico / Imágenes, Producción / Fotos / Videos, Marketing / Manejo de redes sociales, Pauta / Trafficker / SEO, Editorial / Diseño industrial) y cada paso de servicio se llama como su tarjeta; Pauta ofrece SEO («Gestión SEO mensual») y Editorial, «Diseño de producto, empaque o envase» (línea personalizada). Con un servicio son 6 pasos. Las preguntas retiradas siguen en `RETIRED_QUESTIONS` solo para que las solicitudes anteriores se lean con sus nombres. La tabla de abajo es el recorrido original.
+
 | Pantalla | Qué ve la persona |
 |---|---|
 | Bienvenida | Texto de Brain Studio, enlace al sitio en pestaña nueva, «8 pasos · unos 5 minutos», botón Comenzar |

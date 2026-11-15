@@ -5,13 +5,13 @@ import { PRIVACY_POLICY_VERSION } from './privacyPolicy.js';
 // quotation catalog. The React component only renders what this file says; the API will validate with it too.
 
 export const SERVICE_CATEGORIES = Object.freeze([
-  { value: 'BRANDING', label: 'Branding', description: 'Creación y evolución de marcas: identidad visual, logotipos, naming, manuales de marca, rebranding y sistemas visuales.' },
-  { value: 'DISENO', label: 'Diseño', description: 'Piezas gráficas, presentaciones, brochures, flyers, campañas, plegables, pendones y materiales digitales o impresos.' },
+  { value: 'BRANDING', label: 'Branding / Creación de logos', description: 'Creación y evolución de marcas: identidad visual, logotipos, naming, manuales de marca, rebranding y sistemas visuales.' },
+  { value: 'DISENO', label: 'Diseño gráfico / Imágenes', description: 'Piezas gráficas, presentaciones, brochures, flyers, campañas, plegables, pendones y materiales digitales o impresos.' },
   { value: 'COMUNICACION_CORPORATIVA', label: 'Comunicación corporativa', description: 'Estrategias de comunicación, posicionamiento, campañas, relacionamiento con medios, comunicados, vocería y acompañamiento institucional.' },
-  { value: 'PRODUCCION_AUDIOVISUAL', label: 'Producción audiovisual', description: 'Fotografía, video, reels, edición, grabaciones, drone, guiones, cobertura, producción y postproducción.' },
-  { value: 'MARKETING', label: 'Marketing', description: 'Estrategia digital, gestión de redes sociales, planeación de contenidos, copywriting, community management y campañas.' },
-  { value: 'ADS', label: 'Ads', description: 'Meta Ads, Google Ads, TikTok Ads, SEM, performance y administración de publicidad digital.' },
-  { value: 'EDITORIAL', label: 'Editorial', description: 'Informes, revistas, libros, catálogos, memorias, documentos institucionales y publicaciones.' },
+  { value: 'PRODUCCION_AUDIOVISUAL', label: 'Producción / Fotos / Videos', description: 'Fotografía, video, reels, edición, grabaciones, drone, guiones, cobertura, producción y postproducción.' },
+  { value: 'MARKETING', label: 'Marketing / Manejo de redes sociales', description: 'Estrategia digital, gestión de redes sociales, planeación de contenidos, copywriting, community management y campañas.' },
+  { value: 'ADS', label: 'Pauta / Trafficker / SEO', description: 'Meta Ads, Google Ads, TikTok Ads, SEM, SEO, performance y administración de publicidad digital.' },
+  { value: 'EDITORIAL', label: 'Editorial / Diseño industrial', description: 'Informes, revistas, libros, catálogos, memorias, documentos institucionales y publicaciones; diseño de productos, empaques y envases.' },
   { value: 'WEB', label: 'Web', description: 'Sitios web, landing pages, e-commerce, rediseño, UX/UI, mantenimiento y actualización.' },
   { value: 'DESARROLLO', label: 'Desarrollo', description: 'Software, plataformas, automatizaciones, soluciones con inteligencia artificial, dashboards, Power BI e integraciones.' },
   { value: 'MERCHANDISING_IMPRESION', label: 'Merchandising e impresión', description: 'Material POP, señalética, merchandising, impresión y materiales para eventos.' },
@@ -43,7 +43,8 @@ const CONTACT = {
     q('email', 'Correo electrónico', 'email', { required: true, autoComplete: 'email', placeholder: 'nombre@empresa.com' }),
     q('phone', 'WhatsApp / teléfono', 'phone', { required: true, autoComplete: 'tel', placeholder: '+57 300 000 0000' }),
     text('location', 'Ciudad y país', { required: true, placeholder: 'Ej. Bogotá, Colombia' }),
-    q('website', 'Página web o redes sociales', 'url', { placeholder: 'https://', help: 'Opcional.' }),
+    // Rodny, 14 de noviembre de 2026: usuarios de redes, varios separados por comas. La página web la pide el paso de Web.
+    text('socialHandles', 'Usuarios en redes sociales', { placeholder: 'Ej. @tumarca, @tumarca.co', help: 'Puedes escribir varios, separados por comas.' }),
     // Ley 1581 de 2012: autorización previa, expresa e informada (27 de septiembre de 2026).
     q('dataAuthorization', 'Autorizo a BRAIN STUDIO AGENCIA CREATIVA S.A.S. a tratar mis datos personales para atender esta solicitud, preparar una propuesta y contactarme por correo, teléfono o WhatsApp, conforme a su Política de tratamiento de datos personales.', 'consent', {
       required: true, policyHref: '/privacidad', policyLabel: 'Leer la política'
@@ -58,9 +59,6 @@ const NEED = {
   id: 'necesidad', title: 'Cuéntanos qué necesitas', eyebrow: 'Paso 2', intro: 'Con el mayor detalle posible. Si ya conoces cantidades, entregables, plataformas o referencias, inclúyelas aquí.',
   questions: [
     area('need', '¿Qué proyecto, necesidad o idea quieres desarrollar con Brain Studio?', { required: true, rows: 6, placeholder: 'Qué estás buscando, qué necesitas resolver o qué quieres desarrollar…' }),
-    single('hasKeyDate', '¿Hay alguna fecha importante que debamos tener en cuenta?', [opt('SI', 'Sí'), opt('NO', 'No'), opt('NO_DEFINIDA', 'Aún no está definida')], { required: true }),
-    q('keyDate', '¿Cuál es la fecha?', 'date', { showIf: is('hasKeyDate', 'SI'), required: true }),
-    text('keyDateNote', '¿Qué sucede ese día?', { showIf: is('hasKeyDate', 'SI'), placeholder: 'Ej. Lanzamiento del producto, evento, cierre de convocatoria' }),
     single('startWhen', '¿Cuándo te gustaría iniciar?', [
       opt('ASAP', 'Lo antes posible'), opt('DOS_SEMANAS', 'En las próximas 2 semanas'), opt('PROXIMO_MES', 'Durante el próximo mes'),
       opt('UNO_A_TRES_MESES', 'En 1 a 3 meses'), opt('MAS_ADELANTE', 'Más adelante'), opt('NO_DEFINIDO', 'Aún no lo tengo definido')
@@ -77,7 +75,7 @@ const SERVICES = {
 // (a catalog name, or a custom line when the catalog has no equivalent yet).
 export const SERVICE_BLOCKS = Object.freeze({
   BRANDING: {
-    title: 'Branding', questions: [
+    title: 'Branding / Creación de logos', questions: [
       multi('branding.needs', '¿Qué necesitas principalmente?', [
         opt('MARCA_NUEVA', 'Crear una marca desde cero'), opt('LOGOTIPO', 'Diseño de logotipo'), opt('NAMING', 'Naming / creación de nombre'),
         opt('IDENTIDAD', 'Identidad visual'), opt('MANUAL', 'Manual de marca'), opt('REBRANDING', 'Rebranding'), opt('ACTUALIZACION', 'Actualización de una marca existente'), OTHER
@@ -88,7 +86,7 @@ export const SERVICE_BLOCKS = Object.freeze({
     catalog: { 'branding.needs': { MARCA_NUEVA: 'Marca Plan Estándar', LOGOTIPO: 'Marca Plan Básico', NAMING: 'Naming', IDENTIDAD: 'Rediseño de identidad visual', MANUAL: 'Manual corporativo', REBRANDING: 'Rebranding de marca corporativa', ACTUALIZACION: 'Aplicación adicional de marca', OTRO: null } }
   },
   DISENO: {
-    title: 'Diseño', questions: [
+    title: 'Diseño gráfico / Imágenes', questions: [
       multi('design.pieces', '¿Qué tipo de piezas necesitas?', [
         opt('FLYERS', 'Flyers'), opt('BROCHURE', 'Brochure'), opt('PRESENTACION', 'Presentación'), opt('CAMPANA', 'Piezas para campaña'), opt('REDES', 'Piezas para redes'),
         opt('PENDONES', 'Pendones'), opt('PLEGABLES', 'Trípticos / plegables'), opt('IMPRESO', 'Material impreso'), OTHER
@@ -110,7 +108,7 @@ export const SERVICE_BLOCKS = Object.freeze({
     catalog: { 'comms.needs': { MENSUAL: 'Apoyo mensual en comunicación interna y diseño corporativo', INTERNA: 'Apoyo mensual en comunicación interna y diseño corporativo', EQUIPO_EXTERNO: 'Apoyo mensual en comunicación interna y diseño corporativo' } }
   },
   PRODUCCION_AUDIOVISUAL: {
-    title: 'Producción audiovisual', questions: [
+    title: 'Producción / Fotos / Videos', questions: [
       multi('av.needs', '¿Qué necesitas?', [
         opt('VIDEO', 'Video'), opt('VIDEO_CORPORATIVO', 'Video corporativo'), opt('REELS', 'Reels / contenido vertical'), opt('FOTOGRAFIA', 'Fotografía'), opt('EDICION', 'Edición'),
         opt('DRONE', 'Drone'), opt('GUION', 'Guion'), opt('COBERTURA', 'Cobertura de evento'), opt('INTEGRAL', 'Producción audiovisual integral'), OTHER
@@ -128,7 +126,7 @@ export const SERVICE_BLOCKS = Object.freeze({
     }
   },
   MARKETING: {
-    title: 'Marketing', questions: [
+    title: 'Marketing / Manejo de redes sociales', questions: [
       multi('mkt.needs', '¿Qué necesitas principalmente?', [
         opt('REDES', 'Manejo de redes sociales'), opt('ESTRATEGIA', 'Estrategia de marketing'), opt('PLANEACION', 'Planeación de contenidos'), opt('PARRILLA', 'Parrilla de contenidos'),
         opt('DISENO_PUBLICACIONES', 'Diseño de publicaciones'), opt('COPY', 'Copywriting'), opt('COMMUNITY', 'Community management'), opt('COMUNIDAD', 'Gestión de comunidad'),
@@ -142,24 +140,25 @@ export const SERVICE_BLOCKS = Object.freeze({
     catalog: { 'mkt.needs': { REDES: 'Marketing Básico – 8 contenidos', ESTRATEGIA: 'Estrategia de contenidos', PLANEACION: 'Calendario de contenidos', PARRILLA: 'Calendario de contenidos', DISENO_PUBLICACIONES: 'Pieza gráfica individual', COPY: 'Copy para publicación', COMMUNITY: 'Community management', COMUNIDAD: 'Community management', CAMPANA: 'Desarrollo de campaña digital', INTEGRAL: 'Estrategia 360', OTRO: null } }
   },
   ADS: {
-    title: 'Ads', questions: [
-      multi('ads.platforms', '¿En qué plataformas quieres pautar?', [
-        opt('META', 'Meta / Facebook / Instagram'), opt('GOOGLE', 'Google'), opt('TIKTOK', 'TikTok'), opt('LINKEDIN', 'LinkedIn'), opt('YOUTUBE', 'YouTube'), opt('RECOMENDACION', 'Necesito recomendación'), opt('OTRA', 'Otra')
+    title: 'Pauta / Trafficker / SEO', questions: [
+      multi('ads.platforms', '¿En qué plataformas quieres pautar o posicionarte?', [
+        opt('META', 'Meta / Facebook / Instagram'), opt('GOOGLE', 'Google'), opt('TIKTOK', 'TikTok'), opt('LINKEDIN', 'LinkedIn'), opt('YOUTUBE', 'YouTube'), opt('SEO', 'SEO / posicionamiento en buscadores'), opt('RECOMENDACION', 'Necesito recomendación'), opt('OTRA', 'Otra')
       ], { required: true }),
       single('ads.accounts', '¿Ya tienes cuentas publicitarias activas?', [opt('SI', 'Sí'), opt('NO', 'No'), opt('NO_SEGURO', 'No estoy seguro')], { required: true }),
       q('ads.budget', '¿Tienes un presupuesto aproximado destinado exclusivamente a inversión en pauta?', 'money', { help: 'Este valor corresponde a inversión en medios y no necesariamente a los honorarios de gestión de Brain Studio.', allowUndefined: 'Aún no está definido' })
     ],
-    catalog: { 'ads.platforms': { META: 'Administración de Meta Ads', GOOGLE: 'Administración de Google Ads', TIKTOK: null, LINKEDIN: null, YOUTUBE: 'Administración de Google Ads', RECOMENDACION: 'Configuración inicial de campaña', OTRA: null } }
+    catalog: { 'ads.platforms': { META: 'Administración de Meta Ads', GOOGLE: 'Administración de Google Ads', TIKTOK: null, LINKEDIN: null, YOUTUBE: 'Administración de Google Ads', SEO: 'Gestión SEO mensual', RECOMENDACION: 'Configuración inicial de campaña', OTRA: null } }
   },
   EDITORIAL: {
-    title: 'Editorial', questions: [
+    title: 'Editorial / Diseño industrial', questions: [
       multi('editorial.needs', '¿Qué necesitas desarrollar?', [
-        opt('INFORME', 'Informe'), opt('REVISTA', 'Revista'), opt('LIBRO', 'Libro'), opt('CATALOGO', 'Catálogo'), opt('PRESENTACION', 'Presentación'), opt('INSTITUCIONAL', 'Documento institucional'), opt('MEMORIA', 'Memoria'), OTHER
+        opt('INFORME', 'Informe'), opt('REVISTA', 'Revista'), opt('LIBRO', 'Libro'), opt('CATALOGO', 'Catálogo'), opt('PRESENTACION', 'Presentación'), opt('INSTITUCIONAL', 'Documento institucional'), opt('MEMORIA', 'Memoria'),
+        opt('PRODUCTO', 'Diseño de producto, empaque o envase'), OTHER
       ], { required: true }),
-      text('editorial.pages', '¿Cuántas páginas aproximadamente tendrá?', { placeholder: 'Ej. 40' }),
+      text('editorial.pages', 'Si es una publicación, ¿cuántas páginas aproximadamente tendrá?', { placeholder: 'Ej. 40' }),
       single('editorial.content', '¿El contenido ya está listo?', [opt('SI', 'Sí'), opt('PARCIAL', 'Parcialmente'), opt('APOYO', 'Necesitamos apoyo para organizarlo o redactarlo'), opt('NO', 'Aún no tenemos el contenido')], { required: true })
     ],
-    catalog: { 'editorial.needs': { INFORME: 'Informe corporativo hasta 60 páginas', REVISTA: 'Diseño editorial por página', LIBRO: 'Diseño editorial por página', CATALOGO: 'Catálogo digital de productos o servicios', PRESENTACION: 'Presentación corporativa', INSTITUCIONAL: 'Manual corporativo', MEMORIA: 'Informe corporativo hasta 60 páginas', OTRO: null } }
+    catalog: { 'editorial.needs': { INFORME: 'Informe corporativo hasta 60 páginas', REVISTA: 'Diseño editorial por página', LIBRO: 'Diseño editorial por página', CATALOGO: 'Catálogo digital de productos o servicios', PRESENTACION: 'Presentación corporativa', INSTITUCIONAL: 'Manual corporativo', MEMORIA: 'Informe corporativo hasta 60 páginas', PRODUCTO: null, OTRO: null } }
   },
   WEB: {
     title: 'Web', questions: [
@@ -209,52 +208,36 @@ export const SERVICE_BLOCKS = Object.freeze({
   }
 });
 
-const EVENT = {
-  id: 'evento', title: '¿Tu proyecto está relacionado con un evento o activación?', eyebrow: 'Evento', intro: 'Un evento puede combinar diseño, audiovisual, comunicación, contenido y merchandising.',
-  questions: [
-    single('event.related', '¿Está relacionado con un evento o activación?', YES_NO, { required: true }),
-    multi('event.needs', '¿Qué necesitas para el evento?', [
-      opt('CONCEPTO', 'Concepto creativo'), opt('LINEA_GRAFICA', 'Línea gráfica'), opt('PIEZAS', 'Piezas gráficas'), opt('SENALETICA', 'Señalética'), opt('FOTOGRAFIA', 'Fotografía'), opt('VIDEO', 'Video'),
-      opt('COBERTURA', 'Cobertura'), opt('REDES', 'Redes sociales'), opt('ACTIVACION', 'Activación'), opt('MERCHANDISING', 'Merchandising'), opt('POP', 'Material POP'), opt('CAMPANA', 'Campaña de comunicación'), OTHER
-    ], { showIf: is('event.related', 'SI'), required: true })
-  ]
-};
-
-// Names and one-line descriptions as published on amc.brainstudioagencia.com (September 2026). Prices stay out on purpose.
-export const AMC_PLANS = Object.freeze([
-  { value: 'START', label: 'AMC Start', description: 'Para emprendimientos que necesitan construir una presencia profesional desde el comienzo: marca emprendedor, marketing básico, landing page y Meta Ads.' },
-  { value: 'BOOST', label: 'AMC Boost', description: 'Para negocios que no necesitan tanto desarrollo de marca pero sí contenidos más sólidos: marca emprendedor, marketing estándar, landing page y Meta Ads.' },
-  { value: 'GROWTH', label: 'AMC Growth', description: 'Para negocios que quieren una identidad más completa, contenido constante y web corporativa: marca estándar, marketing estándar, web corporativa y Meta Ads.' },
-  { value: 'IMPACT', label: 'AMC Impact', description: 'Para empresas que necesitan presencia robusta, más contenidos, comercio electrónico y pauta en varias plataformas: marca pro, marketing pro, e-commerce, Meta + Google Ads.' },
-  { value: 'RECOMENDACION', label: 'No estoy seguro / quiero recomendación', description: 'Cuéntanos lo que buscas y te proponemos la alternativa que mejor encaje.' }
-]);
-
-export const AMC_SUMMARY = Object.freeze({
-  what: 'La tríada AMC conecta estrategia, marca, contenido, desarrollo web y pauta digital en un ecosistema coherente y preparado para crecer. Durante 3 meses avanzamos contigo por tres momentos:',
-  moments: [
-    { name: 'Arranque', text: 'Construimos o fortalecemos las bases de tu marca.' },
-    { name: 'Conversión', text: 'Activamos tu presencia digital y desarrollamos tu ecosistema.' },
-    { name: 'Maduración', text: 'Activamos la pauta digital para atraer público, generar resultados y crecer.' }
-  ],
-  closing: 'No importa si empiezas desde cero o si ya tienes marca: partimos de lo que tienes y potenciamos lo que necesitas.'
-});
-
-const AMC = {
-  id: 'amc', title: '¿Buscas una solución más integral?', eyebrow: 'Estrategia AMC',
-  intro: 'Además de nuestros servicios específicos, en Brain Studio contamos con la estrategia AMC, diseñada para marcas que quieren integrar comunicación, marketing, contenido y crecimiento en una misma estrategia.',
-  summary: AMC_SUMMARY,
-  link: { label: 'Ver la estrategia AMC completa', href: 'https://amc.brainstudioagencia.com/' },
-  questions: [
-    single('amc.interest', '¿Te interesa que tu propuesta considere nuestra estrategia AMC?', [
-      opt('SI', 'Sí, quiero que mi propuesta considere AMC'), opt('CONOCER', 'Quiero conocer primero las opciones'), opt('NO', 'No por ahora'), opt('RECOMENDACION', 'No estoy seguro, quiero una recomendación')
-    ], { required: true }),
-    single('amc.plan', '¿Qué alternativa AMC te interesa?', AMC_PLANS, { showIf: is('amc.interest', 'SI', 'CONOCER'), required: true }),
-    text('amc.why', '¿Qué fue lo que más te interesó de la estrategia AMC?', { showIf: is('amc.interest', 'SI', 'CONOCER') })
-  ]
-};
+// Rodny, 14 de noviembre de 2026: el formulario estaba muy largo. Se retiraron los pasos de evento y de la
+// estrategia AMC y las preguntas de fecha importante, otras personas que deciden y cuándo espera la propuesta;
+// la etapa de contratación pasó al paso de presupuesto. Las solicitudes que ya llegaron conservan esas respuestas:
+// estas preguntas ya no se muestran, pero siguen aquí para que el CRM las lea con sus nombres y no con códigos.
+const RETIRED_QUESTIONS = [
+  q('website', 'Página web o redes sociales', 'url'),
+  single('hasKeyDate', '¿Hay alguna fecha importante que debamos tener en cuenta?', [opt('SI', 'Sí'), opt('NO', 'No'), opt('NO_DEFINIDA', 'Aún no está definida')]),
+  q('keyDate', '¿Cuál es la fecha?', 'date'),
+  text('keyDateNote', '¿Qué sucede ese día?'),
+  single('event.related', '¿Está relacionado con un evento o activación?', YES_NO),
+  multi('event.needs', '¿Qué necesitas para el evento?', [
+    opt('CONCEPTO', 'Concepto creativo'), opt('LINEA_GRAFICA', 'Línea gráfica'), opt('PIEZAS', 'Piezas gráficas'), opt('SENALETICA', 'Señalética'), opt('FOTOGRAFIA', 'Fotografía'), opt('VIDEO', 'Video'),
+    opt('COBERTURA', 'Cobertura'), opt('REDES', 'Redes sociales'), opt('ACTIVACION', 'Activación'), opt('MERCHANDISING', 'Merchandising'), opt('POP', 'Material POP'), opt('CAMPANA', 'Campaña de comunicación'), OTHER
+  ]),
+  single('amc.interest', '¿Te interesa que tu propuesta considere nuestra estrategia AMC?', [
+    opt('SI', 'Sí, quiero que mi propuesta considere AMC'), opt('CONOCER', 'Quiero conocer primero las opciones'), opt('NO', 'No por ahora'), opt('RECOMENDACION', 'No estoy seguro, quiero una recomendación')
+  ]),
+  single('amc.plan', '¿Qué alternativa AMC te interesa?', [
+    opt('START', 'AMC Start'), opt('BOOST', 'AMC Boost'), opt('GROWTH', 'AMC Growth'), opt('IMPACT', 'AMC Impact'), opt('RECOMENDACION', 'No estoy seguro / quiero recomendación')
+  ]),
+  text('amc.why', '¿Qué fue lo que más te interesó de la estrategia AMC?'),
+  single('decision.others', '¿Hay otras personas que participen en la decisión de contratación?', YES_NO),
+  text('decision.who', '¿Quiénes participan?'),
+  single('proposal.when', '¿Cuándo te gustaría recibir nuestra propuesta?', [
+    opt('ASAP', 'Lo antes posible'), opt('TRES_DIAS', 'En los próximos 3 días hábiles'), opt('ESTA_SEMANA', 'Durante esta semana'), opt('DOS_SEMANAS', 'En las próximas 2 semanas'), opt('SIN_FECHA', 'No tengo una fecha específica')
+  ])
+];
 
 const BUDGET = {
-  id: 'presupuesto', title: 'Presupuesto', eyebrow: 'Presupuesto', intro: 'Nos ayuda a proponerte algo realista. Un presupuesto mensual y uno por proyecto son cosas muy distintas.',
+  id: 'presupuesto', title: 'Presupuesto y momento', eyebrow: 'Presupuesto', intro: 'Nos ayuda a proponerte algo realista. Un presupuesto mensual y uno por proyecto son cosas muy distintas.',
   questions: [
     single('budget.has', '¿Tienes un presupuesto aproximado para este proyecto?', [opt('SI', 'Sí'), opt('NO', 'No'), opt('NO_DEFINIDO', 'Aún no está definido'), opt('RECOMENDACION', 'Quiero recibir una recomendación')], { required: true }),
     q('budget.amount', '¿Cuál es el presupuesto aproximado?', 'money', { showIf: is('budget.has', 'SI'), required: true }),
@@ -265,21 +248,11 @@ const BUDGET = {
     single('budget.adsIncluded', 'Si tu proyecto incluye pauta digital, ¿la inversión en medios está incluida dentro del presupuesto anterior?', [
       opt('SI', 'Sí'), opt('NO', 'No'), opt('NO_APLICA', 'No aplica'), opt('NO_DEFINIDO', 'Aún no está definido')
     ], { showIf: is('budget.has', 'SI') }),
-    q('budget.adsExtra', '¿Cuál sería aproximadamente el presupuesto adicional destinado a pauta?', 'money', { showIf: answers => answers['budget.has'] === 'SI' && answers['budget.adsIncluded'] === 'NO' })
-  ]
-};
-
-const TIMING = {
-  id: 'momento', title: 'Momento de contratación', eyebrow: 'Momento', intro: 'Para acompañarte al ritmo que necesitas.',
-  questions: [
+    q('budget.adsExtra', '¿Cuál sería aproximadamente el presupuesto adicional destinado a pauta?', 'money', { showIf: answers => answers['budget.has'] === 'SI' && answers['budget.adsIncluded'] === 'NO' }),
+    // De esta respuesta sale la prioridad de la oportunidad en el CRM: no quitarla sin cambiar esa regla.
     single('stage', '¿En qué etapa estás actualmente?', [
       opt('EXPLORANDO', 'Estoy explorando posibilidades'), opt('BUSCANDO', 'Estoy buscando proveedores'), opt('COMPARANDO', 'Estoy comparando propuestas'),
       opt('APROBADO', 'El proyecto ya está aprobado internamente'), opt('PRONTO', 'Necesito contratar pronto'), opt('PRECIOS', 'Solo quiero conocer precios por ahora')
-    ], { required: true }),
-    single('decision.others', '¿Hay otras personas que participen en la decisión de contratación?', YES_NO, { required: true }),
-    text('decision.who', '¿Quiénes participan?', { showIf: is('decision.others', 'SI'), placeholder: 'Ej. gerencia general, área financiera' }),
-    single('proposal.when', '¿Cuándo te gustaría recibir nuestra propuesta?', [
-      opt('ASAP', 'Lo antes posible'), opt('TRES_DIAS', 'En los próximos 3 días hábiles'), opt('ESTA_SEMANA', 'Durante esta semana'), opt('DOS_SEMANAS', 'En las próximas 2 semanas'), opt('SIN_FECHA', 'No tengo una fecha específica')
     ], { required: true })
   ]
 };
@@ -303,8 +276,7 @@ export const WELCOME = Object.freeze({
     'Trabajamos desde necesidades específicas hasta proyectos integrales de comunicación, marketing, branding, producción audiovisual, desarrollo digital y experiencias.'
   ],
   link: { label: 'Conoce más sobre Brain Studio', href: 'https://brainstudioagencia.com' },
-  closing: 'Completa esta información para que podamos conocer mejor tu proyecto y preparar una propuesta acorde con lo que necesitas.',
-  estimatedMinutes: 5
+  closing: 'Completa esta información para que podamos conocer mejor tu proyecto y preparar una propuesta acorde con lo que necesitas.'
 });
 
 export const THANKS = Object.freeze({
@@ -315,7 +287,7 @@ export const THANKS = Object.freeze({
 });
 
 const FIXED_BEFORE = [CONTACT, NEED, SERVICES];
-const FIXED_AFTER = [EVENT, AMC, BUDGET, TIMING, SOURCE];
+const FIXED_AFTER = [BUDGET, SOURCE];
 
 // ---- runtime -------------------------------------------------------------------------------------------
 
@@ -328,7 +300,7 @@ export const visibleSteps = (answers = {}) => {
   const dynamic = (unsureOnly ? ['NO_ESTOY_SEGURO'] : services).map(value => ({
     id: `servicio:${value}`, service: value, title: SERVICE_BLOCKS[value].title, eyebrow: 'Sobre este servicio', questions: SERVICE_BLOCKS[value].questions
   }));
-  // "No estoy seguro" skips the service detail of everything else but still asks event, AMC, budget, timing and source.
+  // "No estoy seguro" skips the service detail of everything else but still asks budget, stage and source.
   return [...FIXED_BEFORE, ...dynamic, ...FIXED_AFTER];
 };
 
@@ -383,7 +355,10 @@ export const encouragement = ratio => {
 // ---- mapping to the CRM and to the quotation catalog ---------------------------------------------------------
 
 const labelOf = (options, value) => options.find(option => option.value === value)?.label ?? value;
-const questionById = new Map([...FIXED_BEFORE, ...FIXED_AFTER, ...Object.values(SERVICE_BLOCKS)].flatMap(step => step.questions).map(question => [question.id, question]));
+const questionById = new Map([
+  ...RETIRED_QUESTIONS,
+  ...[...FIXED_BEFORE, ...FIXED_AFTER, ...Object.values(SERVICE_BLOCKS)].flatMap(step => step.questions)
+].map(question => [question.id, question]));
 
 export const answerLabel = (id, value) => {
   const question = questionById.get(id);
@@ -435,7 +410,6 @@ export const suggestQuotationItems = (answers = {}) => {
       }
     }
   }
-  if (answers['event.related'] === 'SI') push('MARKETING', 'Cobertura digital de evento', answerLabel('event.needs', answers['event.needs'] || []));
   return lines;
 };
 
@@ -455,11 +429,9 @@ export const buildLeadDraft = (answers = {}, { receivedAt = new Date() } = {}) =
     `Necesidad: ${answers.need || '—'}`,
     `Servicios: ${serviceLabels.join(', ') || '—'}`,
     answers.startWhen ? `Inicio deseado: ${answerLabel('startWhen', answers.startWhen)}` : null,
-    answers['hasKeyDate'] === 'SI' ? `Fecha clave: ${answers.keyDate || '—'} · ${answers.keyDateNote || ''}`.trim() : null,
+    answers.socialHandles ? `Redes: ${answers.socialHandles}` : null,
     answers.stage ? `Etapa de contratación: ${answerLabel('stage', answers.stage)}` : null,
-    answers['proposal.when'] ? `Propuesta esperada: ${answerLabel('proposal.when', answers['proposal.when'])}` : null,
     answers['budget.has'] === 'SI' && budget ? `Presupuesto: ${budget.toLocaleString('es-CO')} ${answers['budget.currency'] || 'COP'} (${answerLabel('budget.scope', answers['budget.scope'])})` : answers['budget.has'] ? `Presupuesto: ${answerLabel('budget.has', answers['budget.has'])}` : null,
-    answers['amc.interest'] ? `AMC: ${answerLabel('amc.interest', answers['amc.interest'])}${answers['amc.plan'] ? ` · ${answerLabel('amc.plan', answers['amc.plan'])}` : ''}` : null,
     answers.extra ? `Nota del cliente: ${answers.extra}` : null
   ].filter(Boolean).join('\n');
 
@@ -472,13 +444,14 @@ export const buildLeadDraft = (answers = {}, { receivedAt = new Date() } = {}) =
       jobTitle: answers.jobTitle?.trim() || null,
       email: answers.email?.trim().toLowerCase() || null,
       phone: answers.phone?.trim() || null,
-      linkedinUrl: answers.website?.trim() || null,
+      // Los usuarios de redes no son un enlace: van en las notas y en la solicitud, tal como se escribieron.
+      linkedinUrl: null,
       serviceInterest: serviceLabels.join(' + ') || null,
       language: 'Español',
       allowedContact: 'Correo y WhatsApp indicados en el formulario',
       priority,
       publishedAt: null,
-      callDeadlineAt: answers['hasKeyDate'] === 'SI' && answers.keyDate ? answers.keyDate : null,
+      callDeadlineAt: null,
       quotedValue: budget && (answers['budget.currency'] === 'COP' || answers['budget.currency'] === 'USD') ? budget : null,
       currency: ['COP', 'USD'].includes(answers['budget.currency']) ? answers['budget.currency'] : 'COP',
       nextAction: 'Revisar la solicitud y hacer el primer contacto (llamada o WhatsApp).',
