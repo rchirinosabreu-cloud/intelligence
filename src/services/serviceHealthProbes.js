@@ -29,6 +29,9 @@ const SLOW = { database: 2000, http: 5000 };
 const CALENDAR_STALE_MS = 30 * 60 * 1000;
 const MAIL_STALE_MS = 45 * 60 * 1000;
 const TRM_STALE_DAYS = 5;
+// El vigilante externo corre cada 10 minutos, pero GitHub puede retrasar una corrida programada.
+const UPTIME_WORKFLOW_FILE = 'uptime.yml';
+const UPTIME_STALE_MINUTES = 45;
 
 // Los buzones de Bria viven en la base lateral; aquí solo se leen sus columnas públicas, nunca la contraseña.
 const defaultReadMailAccounts = async () => {
@@ -411,6 +414,29 @@ export const createServiceHealthProbes = ({
         return result('WARN', `La última TRM publicada es vieja (${String(rate.validFrom).slice(0, 10)}).`, { latencyMs });
       }
       return slowOrOk(latencyMs, SLOW.http, `TRM vigente: ${Math.round(rate.rate).toLocaleString('es-CO')}.`);
+    },
+
+    // El vigilante externo corre en GitHub (`.github/workflows/uptime.yml`), fuera de Railway. Aquí solo se
+    // lee su última corrida: si dejó de correr, nadie avisaría de una caída completa.
+    async watcher() {
+      const repo = String(env.UPTIME_WATCHER_REPO || '').trim();
+      if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return notConfigured('Falta decir en qué repositorio corre el vigilante externo.');
+      const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'platform-service-health', 'X-GitHub-Api-Version': '2022-11-28' };
+      if (env.UPTIME_WATCHER_TOKEN) headers.Authorization = `Bearer ${env.UPTIME_WATCHER_TOKEN}`;
+      const { value: response, latencyMs } = await timed(() => get(`https://api.github.com/repos/${repo}/actions/workflows/${UPTIME_WORKFLOW_FILE}/runs?per_page=1&status=completed`, headers));
+      const body = await readJson(response);
+      if (!response.ok) return fail(classifyHttpFailure(response.status));
+      const run = body?.workflow_runs?.[0];
+      if (!run) return result('WARN', 'El vigilante todavía no ha hecho ninguna revisión.', { latencyMs });
+      const minutes = Math.max(0, Math.round((now().getTime() - new Date(run.updated_at || run.created_at).getTime()) / 60_000));
+      const ago = minutes < 1 ? 'hace un momento' : `hace ${plural(minutes, 'minuto', 'minutos')}`;
+      if (!Number.isFinite(minutes) || minutes > UPTIME_STALE_MINUTES) {
+        return result('WARN', `El vigilante no revisa desde ${ago}: puede estar detenido.`, { latencyMs });
+      }
+      if (run.conclusion !== 'success') {
+        return result('WARN', `En su última revisión (${ago}) el vigilante no obtuvo respuesta desde fuera.`, { latencyMs });
+      }
+      return result('OK', `Revisó ${ago} y la plataforma respondió.`, { latencyMs });
     }
   };
 

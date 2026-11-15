@@ -39,7 +39,8 @@ const OK_MESSAGES = {
   'storage-financial': 'El bucket «financial-evidence» responde.',
   email: 'Inicia sesión con normalidad.',
   push: '14 dispositivos registrados.',
-  trm: 'TRM vigente: 3.912.'
+  trm: 'TRM vigente: 3.912.',
+  watcher: 'Revisó hace 6 minutos y la plataforma respondió.'
 };
 
 const memoryDb = () => {

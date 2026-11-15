@@ -240,6 +240,35 @@ test('push reports the registered devices and warns when most of them fail', asy
   assert.equal((await failing.probes.push()).status, 'WARN');
 });
 
+test('el vigilante externo se lee de su última corrida en GitHub: al día, detenido, sin respuesta o sin configurar', async () => {
+  const env = { ...baseEnv, UPTIME_WATCHER_REPO: 'agencia/plataforma' };
+  const runs = (run) => async () => jsonResponse(200, { workflow_runs: run ? [run] : [] });
+
+  const fresh = build({ env, fetchImpl: runs({ conclusion: 'success', updated_at: '2026-10-04T14:54:00.000Z' }) });
+  const ok = await fresh.probes.watcher();
+  assert.equal(ok.status, 'OK');
+  assert.match(ok.message, /hace 6 minutos/);
+  const request = fresh.requests.find((item) => item.url?.includes('api.github.com'));
+  assert.match(request.url, /repos\/agencia\/plataforma\/actions\/workflows\/uptime\.yml\/runs\?per_page=1&status=completed/);
+  assert.equal(request.options.headers.Authorization, undefined, 'un repositorio público se lee sin llave');
+
+  const stale = await build({ env, fetchImpl: runs({ conclusion: 'success', updated_at: '2026-10-04T13:30:00.000Z' }) }).probes.watcher();
+  assert.equal(stale.status, 'WARN');
+  assert.match(stale.message, /puede estar detenido/);
+
+  const down = await build({ env, fetchImpl: runs({ conclusion: 'failure', updated_at: '2026-10-04T14:58:00.000Z' }) }).probes.watcher();
+  assert.equal(down.status, 'WARN');
+  assert.match(down.message, /no obtuvo respuesta desde fuera/);
+
+  assert.equal((await build({ env, fetchImpl: runs(null) }).probes.watcher()).status, 'WARN');
+  assert.equal((await build({ env, fetchImpl: async () => jsonResponse(404, {}) }).probes.watcher()).status, 'FAIL');
+  assert.equal((await build().probes.watcher()).status, 'NOT_CONFIGURED');
+
+  const priv = build({ env: { ...env, UPTIME_WATCHER_TOKEN: 'llave' }, fetchImpl: runs({ conclusion: 'success', updated_at: '2026-10-04T14:59:50.000Z' }) });
+  assert.match((await priv.probes.watcher()).message, /hace un momento/);
+  assert.equal(priv.requests.find((item) => item.url?.includes('api.github.com')).options.headers.Authorization, 'Bearer llave');
+});
+
 test('the TRM warns when the last published rate is old', async () => {
   assert.equal((await build().probes.trm()).status, 'OK');
   const old = build({ trm: async () => ({ rate: 3900, validFrom: '2026-09-20T00:00:00.000' }) });
