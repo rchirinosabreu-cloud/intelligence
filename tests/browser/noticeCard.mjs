@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { createOperationalNoticePreview } from '../../scripts/preview-operational-notices.mjs';
 
-// La cúpula (Rodny, 13 de noviembre de 2026): de borde a borde, sin caja, texto blanco centrado; verde para el
-// seguimiento y coral solo para lo importante; el botón principal blanco con el texto en la variante profunda.
+// La cúpula (Rodny, 13 de noviembre de 2026): de borde a borde, sin caja, texto centrado; verde para el seguimiento y
+// coral solo para lo importante. De vidrio desde el 14 de noviembre (opción B): en claro, texto oscuro y botón principal
+// del color con texto blanco; en oscuro, texto blanco y botón principal blanco con el texto en la variante profunda.
 test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conserva la decisión Recordarme', async () => {
   const preview=await createOperationalNoticePreview({port:0});
   const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
@@ -13,6 +14,8 @@ test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conse
     await page.goto(`${preview.origin}/crm`);
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     const card=page.locator('[data-important-notice]'); await card.waitFor();
+    // Los botones llevan `transition-colors`: se miden los colores finales, no uno a medio camino tras cambiar de tema.
+    await page.addStyleTag({content:'.brain-notice-content * { transition: none !important; }'});
     const bounds=await card.boundingBox();
     assert.equal(bounds.width,1440,'sin caja: ocupa el ancho de la ventana');
     assert.equal(bounds.x,0);
@@ -21,11 +24,14 @@ test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conse
     const style=await content.evaluate(e=>({background:getComputedStyle(e).backgroundColor,width:e.getBoundingClientRect().width,align:getComputedStyle(e).textAlign}));
     assert.equal(style.background,'rgba(0, 0, 0, 0)','el bloque no tiene fondo propio');
     assert.ok(style.width<=620);assert.equal(style.align,'center');
-    assert.equal(await card.locator('.brain-notice-dot').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');
-    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
+    // Modo claro: texto oscuro, punto y botón principal del color profundo del aviso, texto del botón blanco.
+    const dot=await card.locator('.brain-notice-dot').evaluate(e=>getComputedStyle(e).backgroundColor);
+    assert.notEqual(dot,'rgb(255, 255, 255)');assert.notEqual(dot,'rgb(24, 24, 27)');
+    assert.equal(await card.locator('.brain-notice-title').evaluate(e=>getComputedStyle(e).color),'rgb(24, 24, 27)');
     const primary=await card.locator('.brain-notice-primary').evaluate(e=>({color:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor}));
-    assert.equal(primary.background,'rgb(255, 255, 255)');
-    assert.notEqual(primary.color,'rgb(255, 255, 255)');
+    assert.equal(primary.color,'rgb(255, 255, 255)');
+    assert.equal(primary.background,dot,'el botón principal lleva el mismo color profundo que el punto');
+    assert.equal(await card.locator('.brain-notice-wash').evaluate(e=>getComputedStyle(e).backdropFilter),'blur(22px) saturate(1.2)','vidrio: lo de atrás se ve desenfocado');
     // El tono lo da el nivel: coral en lo importante, verde en el seguimiento.
     assert.equal(await card.getAttribute('data-level'),'IMPORTANTE');
     assert.equal(await card.evaluate(e=>getComputedStyle(e).getPropertyValue('--notice-hue').trim()),'255 106 104');
@@ -35,7 +41,10 @@ test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conse
     await page.screenshot({path:'output/avisos-operativos-local/cupula-claro.png',animations:'disabled'});
     await page.getByRole('button',{name:'Tema oscuro',exact:true}).click();
     await page.screenshot({path:'output/avisos-operativos-local/cupula-oscuro.png',animations:'disabled'});
+    // Modo oscuro: texto blanco, botón principal blanco con el texto en la variante profunda (no rojo sobre rojo).
     assert.equal(await card.locator('.brain-notice-title a').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)');
+    const dark=await card.locator('.brain-notice-primary').evaluate(e=>({color:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor}));
+    assert.equal(dark.background,'rgb(255, 255, 255)');assert.notEqual(dark.color,'rgb(255, 255, 255)');
     await page.getByRole('button',{name:'Tema claro',exact:true}).click();
     await card.getByRole('button',{name:'Revisar cierre y avance',exact:true}).click();
     await page.waitForURL(/clientes\/operacion\/faro/);
@@ -48,6 +57,10 @@ test('la cúpula va de borde a borde, permanece tras Esc y clic exterior y conse
     await page.keyboard.press('Escape'); assert.ok(await card.isVisible());
     await card.getByRole('button',{name:'Recordarme',exact:true}).click();
     await card.getByRole('button',{name:'En 1 hora',exact:true}).click();
+    // Se va bajando con fundido: un instante marcada `data-leaving`, sin recibir clics, y después se retira.
+    const leaving=page.locator('[data-important-notice][data-leaving]');await leaving.waitFor();
+    assert.equal(await leaving.evaluate(e=>getComputedStyle(e).animationName),'brain-notice-out');
+    assert.equal(await leaving.locator('.brain-notice-content').evaluate(e=>getComputedStyle(e).pointerEvents),'none');
     await card.waitFor({state:'detached'});
     await page.reload();assert.equal(await card.count(),0,'la pausa sobrevive la recarga');
     await page.getByLabel('Caso',{exact:true}).selectOption('suspension');await card.waitFor();

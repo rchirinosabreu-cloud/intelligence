@@ -21,6 +21,8 @@ import { bogotaDateKey } from '@/lib/crmNextFollowUp';
 // Las decisiones de negocio muestran consecuencias y confirmación; el registro nativo determina su resolución.
 const NOTICE_KEY = ['important-notice'];
 const POLL_MS = 60 * 1000;
+/** Cuánto se queda la banda yéndose (fundido hacia abajo) antes de retirarse del árbol. Coincide con `brain-notice-out`. */
+export const NOTICE_EXIT_MS = 320;
 
 const fetchCurrent = async () => {
   const response = await fetch(`${getApiBaseUrl()}/api/important-notices/current`, { cache: 'no-store' });
@@ -54,7 +56,7 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
   />
 );
 
-function NoticeBody({ notice, onDecided, onRefresh, onHeightChange }) {
+function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightChange }) {
   const navigate = useNavigate();
   const navigateFrom = useNavigateFrom();
   const [mode, setMode] = useState('base'); // base | channels | close | confirm | snooze
@@ -191,7 +193,7 @@ function NoticeBody({ notice, onDecided, onRefresh, onHeightChange }) {
   };
 
   return (
-    <div className="brain-notice-band" data-important-notice={notice.id} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'}>
+    <div className="brain-notice-band" data-important-notice={notice.id} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'} data-leaving={leaving || undefined}>
       <div className="brain-notice-wash" aria-hidden="true" />
       <div ref={boxRef} className="brain-notice-content">
         <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite">
@@ -344,13 +346,26 @@ export default function ImportantNoticeBand({ enabled = true, onVisibleChange, o
     return () => clearTimeout(timer);
   }, [enabled, nextAt, queryClient]);
 
-  const visible = Boolean(notice);
+  // La banda entra subiendo con fundido y se va bajando con fundido (Rodny, 14 de noviembre de 2026: «fade up y fade
+  // low, que sea suave»). Como el aviso desaparece de la consulta de golpe, el último se conserva aquí un instante,
+  // marcado `data-leaving`, hasta que termina su animación de salida; si en ese instante llega otro, lo reemplaza y entra.
+  const [shown, setShown] = useState(() => (notice ? { notice, leaving: false } : null));
+  useEffect(() => {
+    if (notice) { setShown({ notice, leaving: false }); return undefined; }
+    setShown((current) => (current && !current.leaving ? { ...current, leaving: true } : current));
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const timer = setTimeout(() => setShown(null), reduce ? 0 : NOTICE_EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const visible = Boolean(shown);
   useEffect(() => { onVisibleChange?.(visible); }, [visible, onVisibleChange]);
 
   return (
-    <><AnnouncementPreview />{notice && <NoticeBody
-      key={notice.id}
-      notice={notice}
+    <><AnnouncementPreview />{shown && <NoticeBody
+      key={shown.notice.id}
+      notice={shown.notice}
+      leaving={shown.leaving}
       onHeightChange={onHeightChange}
       onRefresh={() => queryClient.invalidateQueries({ queryKey: NOTICE_KEY })}
       onDecided={() => {
