@@ -45,11 +45,15 @@ const muted = 'text-zinc-500 dark:text-zinc-400';
  * las personas del puesto **de a dos por fila** (Rodny, el mismo día, al ver cuatro primeros apilados en una columna:
  * «horrible, puede verse partido, dos por fila»); nunca se recorta a nadie.
  */
-function Podium({ groups, title, tone = 'month', ...attrs }) {
+const PODIUM_TONES = {
+  week: { Icon: Flame, icon: 'text-brand-green-deep dark:text-brand-green', surface: 'bg-white/70 dark:bg-zinc-900/60' },
+  month: { Icon: Trophy, icon: 'text-brand-yellow-deep dark:text-brand-yellow', surface: 'bg-brand-yellow/10 dark:bg-brand-yellow/5' },
+  constancy: { Icon: Check, icon: 'text-brand-green-deep dark:text-brand-green', surface: 'bg-brand-green/10 dark:bg-brand-green/10' }
+};
+function Podium({ groups, title, tone = 'month', unit = 'pts', ...attrs }) {
   if (!groups.length) return null;
-  const Icon = tone === 'week' ? Flame : Trophy;
-  const iconClass = tone === 'week' ? 'text-brand-green-deep dark:text-brand-green' : 'text-brand-yellow-deep dark:text-brand-yellow';
-  return <section {...attrs} className={cn('space-y-3 rounded-3xl p-3', tone === 'week' ? 'bg-white/70 dark:bg-zinc-900/60' : 'bg-brand-yellow/10 dark:bg-brand-yellow/5')}>
+  const { Icon, icon: iconClass, surface: toneSurface } = PODIUM_TONES[tone] || PODIUM_TONES.month;
+  return <section {...attrs} className={cn('space-y-3 rounded-3xl p-3', toneSurface)}>
     <h4 className="flex items-center gap-2 text-sm font-semibold"><Icon className={cn('h-4 w-4', iconClass)} />{title}</h4>
     <div className="grid grid-cols-3 items-end gap-2">
       {[2, 1, 3].map(rank => {
@@ -60,7 +64,7 @@ function Podium({ groups, title, tone = 'month', ...attrs }) {
           <div className={cn('grid w-full items-end justify-items-center gap-x-1 gap-y-2', shared ? 'grid-cols-2' : 'grid-cols-1')}>{group.people.map(person => <div key={person.id} data-podium-member={person.id} className="flex w-full min-w-0 flex-col items-center">
             <RunnerAvatar person={person} size={rank === 1 ? (shared ? 44 : 76) : (shared ? 36 : 60)} /><p className={cn('mt-1.5 w-full text-center font-semibold', shared ? 'truncate text-xs leading-4' : 'break-words text-sm')}>{person.name}</p>
           </div>)}</div>
-          <p className={cn('mt-1 text-xs', muted)}>{group.score} pts</p>
+          <p className={cn('mt-1 text-xs', muted)}>{group.score} {unit}</p>
           {shared && <p className={cn('text-xs leading-4', muted)}>Puesto compartido</p>}
           <span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
         </div>;
@@ -73,15 +77,40 @@ function Podium({ groups, title, tone = 'month', ...attrs }) {
  * La clasificación completa en tarjetas de tres por fila (Rodny, 9 de noviembre de 2026: «varios por fila para que no se
  * vuelva tan largo»). El puesto se comparte en los empates; quien mira va resaltado.
  */
-function RankingGrid({ people, ranked, attribute, tone = 'month', label }) {
+function RankingGrid({ people, ranked, attribute, tone = 'month', label, unit = 'pts', rankOf = (person) => leagueRank(person.score, ranked), valueFor = (person) => person.score, detailOf = null }) {
   return <ol aria-label={label} className="grid grid-cols-3 gap-2">{people.map((person, index) => <li key={person.id} {...{ [attribute]: person.id }}
     className={cn('relative flex min-w-0 flex-col items-center rounded-2xl px-1.5 pb-2.5 pt-3 text-center', person.isSelf ? 'bg-brand-cyan/10 dark:bg-brand-cyan/10' : tone === 'week' ? 'bg-white/70 dark:bg-zinc-900/60' : cn(surface, 'rounded-2xl'))}>
-    <span className={cn('absolute left-2 top-1.5 text-xs font-semibold tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span>
+    <span className={cn('absolute left-2 top-1.5 text-xs font-semibold tabular-nums', muted)}>{rankOf(person) ?? '–'}</span>
     <RunnerAvatar person={person} size={40} phase={index} />
     <p className="mt-1.5 flex w-full items-center justify-center gap-1 text-xs font-semibold"><span className="truncate">{person.name}</span>{person.isSelf && <span className="shrink-0 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</p>
-    <p className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></p>
-    {person.scoreBreakdown && <p className={cn('mt-0.5 text-xs leading-[14px]', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}
+    <p className="text-sm font-bold tabular-nums">{valueFor(person) ?? '–'} <span className={cn('text-xs font-normal', muted)}>{unit}</span></p>
+    {detailOf ? <p className={cn('mt-0.5 text-xs leading-[14px]', muted)}>{detailOf(person)}</p>
+      : person.scoreBreakdown && <p className={cn('mt-0.5 text-xs leading-[14px]', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}
   </li>)}</ol>;
+}
+
+/**
+ * El premio a la constancia (Rodny, 12 de noviembre de 2026: «dale»): qué parte de los hábitos jugados se cumplió, con
+ * días confirmados. Va aparte del podio de puntos porque no depende de cuánto se registra.
+ */
+function Constancy({ constancy }) {
+  const qualified = constancy.lanes.filter((lane) => lane.qualifies);
+  const groups = leaguePodiumGroups(qualified);
+  const detail = (lane) => lane.qualifies ? `${lane.won} de ${lane.played} hábitos`
+    : lane.played ? `Lleva ${lane.daysPlayed} de ${constancy.minDays} días para entrar` : 'Sin días jugados';
+  return <section data-race-constancy aria-label="Constancia del mes" className="space-y-3">
+    <div><h4 className="flex items-center gap-2 pt-1 text-sm font-semibold"><Check className="h-4 w-4 text-brand-green-deep dark:text-brand-green" />Constancia del mes</h4>
+      <p className={cn('mt-1 text-xs leading-5', muted)}>Qué parte de los hábitos que jugaste cumpliste, sin importar cuánto registras. {constancy.closedDays
+        ? `Entra quien jugó al menos ${constancy.minDays} de los ${constancy.closedDays} días cerrados.`
+        : 'Se calcula con cada cierre diario, desde las 6:05 p. m.'}</p></div>
+    {groups.length ? <Podium groups={groups} title="Podio de la constancia" tone="constancy" unit="%" data-race-constancy-podium aria-label="Primeras posiciones de la constancia" />
+      : <p className={cn('rounded-2xl bg-brand-green/10 px-3 py-3 text-center text-xs', muted)}>Todavía nadie cumple los días para entrar.</p>}
+    <details data-race-constancy-ranking className="group">
+      <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Ver la constancia de todo el equipo<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
+      <div className="pt-2"><RankingGrid people={constancy.lanes} attribute="data-league-constancy-member" label="Constancia del mes" unit="%"
+        rankOf={(lane) => lane.rank} valueFor={(lane) => lane.percent} detailOf={detail} /></div>
+    </details>
+  </section>;
 }
 
 function Habits({ today }) {
@@ -118,6 +147,7 @@ function Rules() {
       <li>Si estás entre las dos primeras personas en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
       <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos.</li>
+      <li>Además de los puntos, hay un premio a la constancia: qué parte de los hábitos que jugaste en el mes cumpliste. Cuenta con los días cerrados y entra quien jugó al menos el 60 % de ellos.</li>
     </ul>
   </details>;
 }
@@ -138,6 +168,7 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
   const weekRanked = useMemo(() => [...(week?.lanes || [])].filter(lane => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es')), [week]);
   const weekPodium = useMemo(() => leaguePodiumGroups(weekRanked), [weekRanked]);
   const weekLeaders = week?.lastWeek?.leaders || [];
+  const myConstancy = league?.constancy?.closedDays ? league.constancy.lanes.find(lane => lane.isSelf) : null;
   const history = useQuery({ queryKey: ['league', 'recognitions', league?.month, league?.startsAt], queryFn: () => requestLeague('/recognitions'), enabled: open && Boolean(league), staleTime: 60000, retry: false });
   const currentGift = given && given.startsAt === league?.startsAt && given.week === league?.kudos?.weekKey ? given.gift : null;
 
@@ -177,6 +208,10 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                     <span className="min-w-0"><span className="font-semibold">Esta semana</span>{week.label && <span className={cn('ml-1', muted)}>{week.label}</span>}</span>
                     <span className="tabular-nums"><strong data-race-week-score className="text-sm">{week.score ?? 0}</strong> <span className={muted}>pts</span>{week.position && <span data-race-week-position className={cn('ml-2', muted)}>· puesto {week.position.rank}</span>}</span>
                   </div>}
+                  {myConstancy && <div data-race-constancy-mine className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/70 px-3 py-2 text-xs dark:bg-zinc-900/60">
+                    <span className="font-semibold">Constancia del mes</span>
+                    <span className="tabular-nums"><strong className="text-sm">{myConstancy.percent ?? '–'}</strong> <span className={muted}>%</span><span className={cn('ml-2', muted)}>{myConstancy.qualifies ? `· puesto ${myConstancy.rank}` : `· entras con ${league.constancy.minDays} días jugados`}</span></span>
+                  </div>}
                 </section>}
                 {league.nextStep && <section className={cn(surface, 'relative overflow-hidden p-4')}>
                   <span aria-hidden="true" className="brain-gradient-primary absolute inset-x-0 top-0 h-1" />
@@ -210,6 +245,7 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                   <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Ver la clasificación completa del mes<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
                   <div className="pt-2"><RankingGrid people={ranked} ranked={ranked} attribute="data-league-member" label="Clasificación del mes" /></div>
                 </details>
+                {league.constancy && <Constancy constancy={league.constancy} />}
                 {league.meetings && <MeetingAward meetings={league.meetings} lanes={lanes} />}
                 {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />5 puntos para…</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Cada semana podrás regalar cinco puntos a algún miembro del equipo para agradecerle por alguna ayuda o reconocer su trabajo</p><KudosGift lanes={lanes} selfId={self.id} given={currentGift || league.kudos?.givenThisWeek} onGiven={gift => { setGiven({ startsAt: league.startsAt, week: league.kudos.weekKey, gift }); queryClient.invalidateQueries({ queryKey: ['league'] }); }} />{league.kudos?.received?.map((gift, index) => <p key={index} className="mt-3 border-t border-brand-magenta/10 pt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><strong>{gift.from}</strong>{gift.note ? `: «${gift.note}»` : ' te regaló puntos.'}</p>)}</section>}
                 <p className={cn('text-center text-xs', muted)}>El resultado se valida al cierre del mes.</p>

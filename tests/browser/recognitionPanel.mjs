@@ -37,6 +37,7 @@ try {
   assert.match(await panel.locator('[data-race-panel-score]').innerText(), /100\s*puntos/);
   // La semana arranca en cero cada lunes y convive con el mes (Rodny, 9 de noviembre de 2026).
   assert.match(await panel.locator('[data-race-week]').innerText(), /Esta semana[\s\S]*del 2 al 8 de noviembre[\s\S]*100\s*pts[\s\S]*puesto 1/);
+  assert.match(await panel.locator('[data-race-constancy-mine]').innerText(), /Constancia del mes[\s\S]*86\s*%[\s\S]*puesto 4/, 'ranks count distinct percentages above: 95, 92 and 88');
   assert.equal(await panel.locator('[data-race-track]').count(), 0);
   const avatar = panel.locator('[data-race-hero] [data-runner-avatar="pixel"]');
   await avatar.waitFor();
@@ -99,6 +100,21 @@ try {
     const tops = await panel.locator(`[${attribute}]`).evaluateAll(nodes => nodes.slice(0, 4).map(node => node.getBoundingClientRect().top));
     assert.ok(tops.slice(0, 3).every(top => Math.abs(top - tops[0]) < 1) && tops[3] > tops[0], `${attribute} lists three people per row`);
   }
+  // El premio a la constancia (Rodny, 12 de noviembre de 2026): su propio podio en porcentaje, la lista plegada.
+  const constancy = panel.locator('[data-race-constancy]');
+  assert.ok((await constancy.boundingBox()).y > (await panel.locator('[data-race-podium]').boundingBox()).y, 'constancy comes after the month podium');
+  const constancyPodium = constancy.locator('[data-race-constancy-podium]');
+  assert.deepEqual(await constancyPodium.locator('[data-podium-rank]').evaluateAll(nodes => nodes.map(n => n.dataset.podiumRank)), ['2', '1', '3']);
+  assert.match(await constancyPodium.locator('[data-podium-rank="1"]').innerText(), /Helen[\s\S]*95 %/);
+  assert.equal(await constancyPodium.locator('[data-podium-rank="2"] [data-podium-member]').count(), 2, 'Melissa and Mariceth share second');
+  assert.equal(await constancyPodium.getByText('Elisa', { exact: true }).count(), 0, 'one perfect day does not enter');
+  assert.match(await constancy.innerText(), /Entra quien jugó al menos 5 de los 7 días cerrados/);
+  assert.equal(await constancy.locator('[data-race-constancy-ranking]').evaluate(el => el.open), false);
+  await constancy.locator('[data-race-constancy-ranking] summary').click();
+  assert.match(await constancy.locator('[data-league-constancy-member="elisa"]').innerText(), /100[\s\S]*Lleva 2 de 5 días para entrar/);
+  assert.match(await constancy.locator('[data-league-constancy-member="helen"]').innerText(), /38 de 40 hábitos/);
+  await constancyPodium.evaluate(el => el.scrollIntoView({ block: 'start' }));
+  await shot('constancia-claro');
   await panel.getByText('5 puntos para…', { exact: true }).waitFor();
   assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada semana podrás regalar cinco puntos/);
   assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
@@ -185,6 +201,7 @@ try {
     league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 5, weekKey: '2026-W45' };
     league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0, scoreBreakdown: league.scoreBreakdown }));
     league.week = { ...league.week, score: 0, position: null, podium: [], lanes: league.week.lanes.map(person => ({ ...person, score: 0 })), lastWeek: { ...league.week.lastWeek, leaders: [] } };
+    league.constancy = { closedDays: 0, minDays: 0, lanes: league.constancy.lanes.map(lane => ({ ...lane, won: 0, played: 0, daysPlayed: 0, percent: null, qualifies: false, score: 0, rank: null })) };
     league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0, isProvisional: true, isConfirmed: false };
     await route.fulfill({ response, json: league });
   });
@@ -208,6 +225,9 @@ try {
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-race-podium]').count(), 0);
   assert.equal(await panel.locator('[data-race-week-podium]').count(), 0, 'a week at zero has no podium');
+  assert.equal(await panel.locator('[data-race-constancy-podium]').count(), 0, 'without closed days there is no constancy podium');
+  assert.match(await panel.locator('[data-race-constancy]').innerText(), /Se calcula con cada cierre diario/);
+  assert.equal(await panel.locator('[data-race-constancy-mine]').count(), 0);
   await panel.locator('[data-race-month-ranking] summary').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
   assert.equal(await panel.locator('[data-league-week-member]').count(), 0, 'a week at zero lists nobody');

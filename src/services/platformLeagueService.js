@@ -10,7 +10,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace } from '../lib/leagueDay.js';
-import { KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
+import { KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, constancyOf, constancyStandings, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
 import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
@@ -284,6 +284,11 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const lastDay = lastDayOfMonth(monthKey);
       const myWeek = weekLanes.find(lane => lane.isSelf);
       const weekRank = leagueRank(myWeek?.score ?? 0, weekRanked);
+      // La constancia (Rodny, 12 de noviembre de 2026): solo días confirmados en el cierre diario, sin hoy en vivo.
+      const confirmed = new Map(members.map(member => [member.id, []]));
+      for (const row of saved) confirmed.get(row.member_id)?.push({ day: row.day_key, habits: row.habits });
+      const constancy = constancyStandings(members.map(member => ({ id: member.id, name: firstName(member.name), avatarUrl: member.avatarUrl || null,
+        pixelAvatarKey: avatarKeys[member.id] || null, isSelf: member.id === me.id, ...constancyOf(confirmed.get(member.id)) })), { closedDays: new Set(saved.map(row => row.day_key)).size });
       return {
         month: monthKey,
         week: {
@@ -311,6 +316,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         nextStepUrl: '/gestion',
         podium: leaguePodiumGroups(ranked).flatMap(group => group.people.map(lane => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score, rank: group.rank }))),
         winner: null,
+        constancy,
         race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
       };
     },
