@@ -103,7 +103,7 @@ test('un criterio que confirma una persona vale mientras no venza', () => {
 
 const facts = (overrides = {}) => ({
   oversized: {}, brand: [], timezone: [], agentsChars: 20000, ensureScripts: 0, migrationsOnStart: true,
-  healthcheck: true, browserTestsInCi: true, testsInCi: true, coverage: 85, permissionMatrix: true,
+  browserTestsInCi: true, testsInCi: true, coverage: 85, permissionMatrix: true,
   moduleList: true, demoSeed: true, platformMap: true, securityExceptions: 0, vulnerabilities: { high: 0, critical: 0 },
   routes: { total: 400, unguarded: 0 },
   present: { mfa: true, vault: true, auditImmutable: true, rateLimit: true, aiLog: true, taskPrivacy: true, serviceHealth: true, clientErrors: true, demoInstance: true, legalEntity: true, welcome: true, browserTests: true },
@@ -112,7 +112,7 @@ const facts = (overrides = {}) => ({
 });
 const allManual = (today) => Object.fromEntries([
   'revision-externa', 'restauracion-probada', 'despliegue-automatico', 'vigilante-externo', 'procesos-separados',
-  'dos-servidores', 'entorno-de-pruebas', 'plantilla-cliente-nuevo', 'segunda-instancia-sin-codigo', 'guia-de-uso',
+  'dos-servidores', 'entorno-de-pruebas', 'chequeo-de-salud', 'plantilla-cliente-nuevo', 'segunda-instancia-sin-codigo', 'guia-de-uso',
   'instalacion-en-un-dia', 'prueba-de-permiso-por-ruta'
 ].map((id) => [id, { fecha: today }]));
 
@@ -124,7 +124,7 @@ test('con todo cumplido cada área da 10; con lo de hoy, cada criterio pendiente
 
   const real = evaluateAreas(facts({
     oversized: { 'src/A.jsx': 3000 }, brand: ['src/a.js'], timezone: ['src/b.js'], agentsChars: 478000, ensureScripts: 68,
-    migrationsOnStart: false, healthcheck: false, browserTestsInCi: false, coverage: null, permissionMatrix: false,
+    migrationsOnStart: false, browserTestsInCi: false, coverage: null, permissionMatrix: false,
     securityExceptions: 1, vulnerabilities: { high: 3, critical: 0 }, routes: { total: 400, unguarded: 120 }
   }), {}, today);
   const code = real.find((area) => area.id === 'codigo');
