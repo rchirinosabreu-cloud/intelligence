@@ -777,6 +777,8 @@ model ClientContract {
   cutDay         Int      @default(1)
   deliverables   Json     @default("[]")
   scopeDetails   Json?    @db.JsonB
+  /// La pauta aprobada por el cliente: [{ platform, brand, currency, amount }], una por plataforma y marca. La lee Pautas.
+  adBudgets      Json     @default("[]")
   renewalDecision       String    @default("PENDIENTE")
   renewalDecisionAt     DateTime? @db.Timestamptz(3)
   renewalDecisionById   String?

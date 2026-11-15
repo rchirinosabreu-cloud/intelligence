@@ -60,11 +60,19 @@ test('Operación muestra la pauta del cliente y la banda abre la pauta sin decid
     assert.match(source('server.js'), /initAdBudgetAlertScheduler\(\)/);
 });
 
-test('la ficha escribe las mismas pautas del módulo, sin un segundo formulario ni otra copia del dato', () => {
+test('la ficha escribe las mismas pautas del módulo, sin un segundo formulario; lo aprobado vive en el contrato y la pauta lo lee', () => {
     const card = source('src/components/modules/AdBudgets/ClientAdBudgets.jsx');
     assert.match(card, /import \{ AdBudgetDialog, AdSpendDialog \} from '\.\/AdBudgetDialogs'/);
     assert.match(card, /useAdBudgets\(\{ clientId/);
-    assert.doesNotMatch(source('prisma/schema.prisma').match(/^model ClientContract \{[\s\S]*?^\}/m)[0], /adBudget|pauta/i, 'el contrato no guarda otra copia');
+    // Rodny, 13 de noviembre de 2026: «el presupuesto de pauta debe vivir en la ficha operativa del cliente».
+    assert.match(source('prisma/schema.prisma').match(/^model ClientContract \{[\s\S]*?^\}/m)[0], /adBudgets\s+Json\s+@default\("\[\]"\)/, 'el contrato guarda la pauta aprobada');
+    assert.match(source('scripts/ensure-client-operations-schema.js'), /"ClientContract" ADD COLUMN IF NOT EXISTS "adBudgets" JSONB NOT NULL DEFAULT '\[\]'/);
+    const service = source('src/services/adBudgetService.js');
+    assert.match(service, /approvedAdBudgetFor\(budget, today\)/, 'la pauta lee lo aprobado del contrato');
+    assert.doesNotMatch(service, /updateCycle|adCycleAmountProblem/, 'el presupuesto no se corrige por ciclo desde Pautas');
+    const dialogs = source('src/components/modules/AdBudgets/AdBudgetDialogs.jsx');
+    assert.doesNotMatch(dialogs, /aria-label="Presupuesto"|CurrencyToggle/, 'la pauta no escribe cifra ni moneda: salen del contrato');
+    assert.doesNotMatch(source('src/services/metaAdBudgetClient.js'), /setBudget|method: 'POST'|'POST'/, 'la plataforma no cambia presupuestos en Meta');
 });
 
 test('un formulario de pauta dentro de la ficha no envía la ficha', () => {

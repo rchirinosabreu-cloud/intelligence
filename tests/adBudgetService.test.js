@@ -13,9 +13,11 @@ const users = [
     { id: 'u-keila', name: 'Keila', role: 'EDITOR', isActive: true, modulePermissions: { pautas: true, pautas_editar: true } },
     { id: 'u-camila', name: 'Camila', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { manager: true } }
 ];
+// La pauta aprobada vive en el contrato del cliente (13 de noviembre de 2026): de ahí salen la cifra y la moneda.
+const approved = (brand, amount, currency = 'COP') => ({ platform: 'META', brand, currency, amount });
 const clients = [
-    { id: 'c-endova', name: 'Promo Group', slug: 'promo-group', isArchived: false, projectManagerId: 'm-camila', contracts: [{ startDate: '2026-01-15', cutDay: 15 }] },
-    { id: 'c-pueblito', name: 'New Pueblito', slug: 'new-pueblito', isArchived: false, projectManagerId: 'm-camila', contracts: [{ startDate: '2026-01-01', cutDay: 1 }] },
+    { id: 'c-endova', name: 'Promo Group', slug: 'promo-group', isArchived: false, projectManagerId: 'm-camila', contracts: [{ id: 'k-endova', startDate: '2026-01-15', cutDay: 15, adBudgets: [approved('Endova', 300000), approved(null, 300000)] }] },
+    { id: 'c-pueblito', name: 'New Pueblito', slug: 'new-pueblito', isArchived: false, projectManagerId: 'm-camila', contracts: [{ id: 'k-pueblito', startDate: '2026-01-01', cutDay: 1, adBudgets: [approved(null, 300000), approved('Endova', 300000)] }] },
     { id: 'c-archivado', name: 'Antiguo', slug: 'antiguo', isArchived: true, contracts: [] }
 ];
 const newDb = (extra = {}) => createAdBudgetsDb({ clients, team: [keila, camila], users, ...extra });
@@ -47,7 +49,7 @@ test('el corte propio de la pauta manda sobre el contrato, y quitarlo vuelve al 
 
 test('no se crea una pauta incompleta ni de un cliente archivado, y el motivo llega en palabras', async () => {
     const db = newDb();
-    await assert.rejects(service(db).create({ ...baseInput, amount: '' }, actor), (error) => error.statusCode === 422 && /presupuesto/.test(error.message));
+    await assert.rejects(service(db).create({ ...baseInput, brand: 'Otra marca' }, actor), (error) => error.statusCode === 422 && /no tiene pauta aprobada para Meta · Otra marca/.test(error.message));
     await assert.rejects(service(db).create({ ...baseInput, clientId: 'c-archivado' }, actor), /no está activo/);
     await assert.rejects(service(db).create({ ...baseInput, responsibleId: 'nadie' }, actor), /Equipo/);
     assert.equal(db.store.budgets.length, 0);
@@ -102,7 +104,7 @@ test('una lectura sin marcar reabre el ciclo, para poder corregir', async () => 
     assert.equal(db.store.cycles[0].closedAt, null);
 });
 
-test('cambiar el presupuesto aplica al ciclo abierto y respeta los meses pasados', async () => {
+test('lo aprobado en la ficha llega a la pauta y a su ciclo abierto; los meses cerrados conservan su cifra', async () => {
     const db = newDb({
         budgets: [endova],
         cycles: [
@@ -110,28 +112,46 @@ test('cambiar el presupuesto aplica al ciclo abierto y respeta los meses pasados
             { id: 'now', budgetId: 'b-endova', cycleKey: '2026-10', amount: 300000, spent: 91000, spentAsOf: '2026-11-06', closedAt: null }
         ]
     });
-    await service(db).update('b-endova', { ...baseInput, clientId: 'c-endova', amount: '400000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
+    const changed = await service(db).applyContractApprovals(db, { clientId: 'c-endova', approvals: [approved('Endova', 400000)], actor });
+    assert.deepEqual(changed, ['b-endova']);
+    assert.equal(db.store.budgets.find((row) => row.id === 'b-endova').amount, 400000, 'la pauta es el espejo del contrato');
     assert.equal(db.store.cycles.find((row) => row.id === 'now').amount, 400000);
     assert.equal(db.store.cycles.find((row) => row.id === 'old').amount, 200000);
+    const event = db.store.events.find((row) => row.action === 'APROBADO_FICHA');
+    assert.match(event.summary, /Pauta aprobada en la ficha del cliente: de \$ 300\.000 a \$ 400\.000/);
+    assert.equal(event.actorId, 'u-keila');
+    assert.deepEqual(await service(db).applyContractApprovals(db, { clientId: 'c-endova', approvals: [approved('Endova', 400000)], actor }), [], 'la misma cifra no escribe nada');
 });
 
-test('corregir un dato conserva los demás y deja qué decía antes', async () => {
+test('el presupuesto no se escribe desde la pauta: lo que llegue en amount se ignora y manda el contrato', async () => {
     const db = newDb({ budgets: [{ ...endova, objective: 'Interacción', platform: 'META', kind: 'MENSUAL', currency: 'COP', payer: 'POR_DEFINIR' }] });
-    const saved = await service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
-    assert.equal(saved.amount, 350000);
+    const saved = await service(db).update('b-endova', { amount: '999999', currency: 'USD', notes: 'Convocatorias' }, actor);
+    assert.equal(saved.amount, 300000, 'la del contrato');
+    assert.equal(saved.currency, 'COP');
+    assert.equal(saved.approved.source, 'CONTRATO');
     assert.equal(saved.objective, 'Interacción');
-    assert.match(db.store.events[0].summary, /^Cambió el presupuesto\. Aprobó: Gema por WhatsApp/);
-    assert.deepEqual(db.store.events[0].before, { amount: 300000 });
+    assert.equal(db.store.events[0].summary, 'Cambió la nota');
+    assert.deepEqual(db.store.events[0].before, { notes: null });
 });
 
-test('se corrige todo, incluso la moneda y el cliente de una pauta con gasto registrado', async () => {
-    const db = newDb({ budgets: [endova] });
+test('al cambiar de cliente, la pauta toma la cifra y la moneda que ese contrato aprobó para su marca', async () => {
+    const pueblitoUsd = { ...clients[1], contracts: [{ id: 'k-pueblito', startDate: '2026-01-01', cutDay: 1, adBudgets: [approved('Endova', 100, 'USD')] }] };
+    const db = newDb({ budgets: [endova], clients: [clients[0], pueblitoUsd, clients[2]] });
     await service(db).recordSpend('b-endova', { spent: '100', readOn: '2026-11-06' }, actor);
-    const usd = await service(db).update('b-endova', { currency: 'USD', amount: '100', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
-    assert.equal(usd.currency, 'USD');
     const moved = await service(db).update('b-endova', { clientId: 'c-pueblito' }, actor);
     assert.equal(moved.client.name, 'New Pueblito');
+    assert.equal(moved.currency, 'USD');
+    assert.equal(moved.amount, 100, 'New Pueblito aprobó USD 100 para la marca Endova');
     await assert.rejects(service(db).update('b-endova', { clientId: 'c-archivado' }, actor), /no está activo/);
+});
+
+test('una pauta sin entrada en el contrato sigue con su cifra y lo dice en amarillo', async () => {
+    const db = newDb({ budgets: [{ ...endova, brand: 'Sin contrato' }] });
+    const [budget] = (await service(db).list()).budgets;
+    assert.equal(budget.approved.source, 'PAUTA');
+    assert.equal(budget.evaluation.availableCents, 30_000_000);
+    assert.match(budget.evaluation.reasons.join(' '), /El contrato de Promo Group no tiene pauta aprobada para Meta · Sin contrato: agrégala en la ficha operativa/);
+    assert.equal(budget.evaluation.level, 'yellow');
 });
 
 test('una lectura mal escrita se corrige y el ciclo se recalcula', async () => {
@@ -175,11 +195,14 @@ test('un cierre se deshace, y el saldo que pasaba vuelve a ser provisional', asy
     assert.ok(budgets[0].pendingClose);
 });
 
-test('el presupuesto de un mes cerrado se corrige aparte, y cambia el saldo que pasó', async () => {
-    const db = newDb({ budgets: [{ ...endova, clientId: 'c-pueblito', id: 'b-p' }], cycles: [{ id: 'y', budgetId: 'b-p', cycleKey: '2026-10', amount: 300000, spent: 100000, closedAt: at('2026-11-01') }] });
-    await service(db).updateCycle('b-p', '2026-10', { amount: '400000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
-    assert.equal((await service(db).list()).budgets[0].evaluation.carryCents, 30_000_000);
-    await assert.rejects(service(db).updateCycle('b-p', '2026-10', { amount: '0' }, actor), /presupuesto/);
+test('un mes cerrado conserva la cifra con la que se cerró aunque el contrato apruebe otra: el saldo que pasó no cambia', async () => {
+    // La ficha guarda 400.000 en el contrato y manda el espejo a la pauta, como hace `saveProfile`.
+    const pueblito = { ...clients[1], contracts: [{ id: 'k-pueblito', startDate: '2026-01-01', cutDay: 1, adBudgets: [approved(null, 400000)] }] };
+    const db = newDb({ budgets: [{ ...endova, clientId: 'c-pueblito', brand: null, id: 'b-p' }], clients: [clients[0], pueblito, clients[2]], cycles: [{ id: 'y', budgetId: 'b-p', cycleKey: '2026-10', amount: 300000, spent: 100000, closedAt: at('2026-11-01') }] });
+    await service(db).applyContractApprovals(db, { clientId: 'c-pueblito', approvals: [approved(null, 400000)], actor });
+    const [budget] = (await service(db).list()).budgets;
+    assert.equal(budget.evaluation.carryCents, 20_000_000, 'octubre cerró con 300.000');
+    assert.equal(budget.evaluation.availableCents, 60_000_000, 'noviembre dispone de 400.000 más lo que sobró');
 });
 
 test('un saldo ajustado vuelve a la cuenta automática', async () => {
@@ -211,10 +234,10 @@ test('una pauta terminada se reactiva editando su estado', async () => {
 
 test('el detalle dice qué se corrigió y quién', async () => {
     const db = newDb({ budgets: [endova] });
-    await service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema por WhatsApp', reason: 'El cliente aprobó otra cifra' }, actor);
+    await service(db).update('b-endova', { payer: 'TARJETA_BRAIN' }, actor);
     const detail = await service(db).detail('b-endova');
     assert.equal(detail.changes[0].by, 'Keila');
-    assert.match(detail.changes[0].summary, /presupuesto/);
+    assert.match(detail.changes[0].summary, /quién paga/);
 });
 
 test('un ciclo mal escrito no crea filas', async () => {
@@ -364,13 +387,11 @@ test('más de tres pautas salen en un solo aviso, y lo atendido se cierra en el 
     assert.deepEqual(closed.close, [{ id: 'n', resolution: 'YA_ATENDIDO' }]);
 });
 
-test('cambiar el presupuesto aprobado pide quién lo aprobó y por qué, y lo deja en el historial', async () => {
-    const db = newDb({ budgets: [{ ...endova, id: 'b-endova' }] });
-    await assert.rejects(service(db).update('b-endova', { amount: '350000' }, actor), /quién lo aprobó/);
-    await assert.rejects(service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema' }, actor), /motivo/);
-    assert.equal((await service(db).update('b-endova', { notes: 'Solo una nota' }, actor)).notes, 'Solo una nota', 'lo demás se corrige sin pedir nada');
-    await service(db).update('b-endova', { amount: '350000', approvedBy: 'Gema por WhatsApp', reason: 'Subieron la pauta de noviembre' }, actor);
-    const event = db.store.events.find((row) => row.action === 'EDITAR' && row.after?.amount === 350000);
-    assert.match(event.summary, /Aprobó: Gema por WhatsApp\. Motivo: Subieron la pauta de noviembre/);
-    assert.equal(event.after.approvedBy, 'Gema por WhatsApp');
+test('las opciones del formulario traen, por cliente, las pautas aprobadas en su contrato y cuál ya tiene pauta', async () => {
+    const db = newDb({ budgets: [endova] });
+    const { clients: options } = await service(db).options();
+    const promo = options.find((client) => client.id === 'c-endova');
+    assert.equal(promo.slug, 'promo-group');
+    assert.deepEqual(promo.approved.map((entry) => [entry.brand, entry.amount, entry.budgetId]), [['Endova', 300000, 'b-endova'], [null, 300000, null]]);
+    assert.equal(options.some((client) => client.id === 'c-archivado'), false);
 });

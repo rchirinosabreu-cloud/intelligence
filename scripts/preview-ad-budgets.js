@@ -4,7 +4,7 @@ import express from 'express';
 import { createServer } from 'vite';
 import { dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
 import { createAdBudgetsDb } from '../tests/fixtures/adBudgetsMemoryDb.js';
-import { budgets, campaigns, clients, cycles, previewMeta, previewMetaBudgets, readings, team, users } from '../tests/fixtures/adBudgetsPreviewData.js';
+import { budgets, campaigns, clients, cycles, previewMeta, previewMetaBudgets, readings, setPreviewMetaBudget, team, users } from '../tests/fixtures/adBudgetsPreviewData.js';
 import { createAdBudgetRouter } from '../src/routes/api/adBudgets.js';
 import { adBudgetService } from '../src/services/adBudgetService.js';
 import { adBudgetMetaService } from '../src/services/adBudgetMetaService.js';
@@ -30,7 +30,8 @@ export async function createAdBudgetsPreview({ port = 3848, today = null } = {})
   const api = express();
   api.use(express.json());
   api.use((req, _res, next) => { req.user = { userId: VIEWER, name: 'Keila', role: 'EDITOR', modulePermissions: permissions() }; next(); });
-  api.use(createAdBudgetRouter({ service: adBudgetService(db, { clock }), metaService: adBudgetMetaService(db, { meta: previewMeta, budgetClient: previewMetaBudgets, token: () => 'muestra', clock, log: () => {} }) }));
+  const metaService = adBudgetMetaService(db, { meta: previewMeta, budgetClient: previewMetaBudgets, token: () => 'muestra', clock, log: () => {} });
+  api.use(createAdBudgetRouter({ service: adBudgetService(db, { clock }), metaService }));
 
   const server = await createServer({
     configFile: false,
@@ -51,6 +52,16 @@ export async function createAdBudgetsPreview({ port = 3848, today = null } = {})
         if (pathname.startsWith('/api/')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Cache-Control', 'no-store');
+          // Un cambio hecho «en el Administrador de anuncios» de la muestra: `POST /api/__preview/meta-presupuesto?campana=ID&diario=4500`.
+          if (pathname === '/api/__preview/meta-presupuesto' && req.method === 'POST') {
+            const params = new URL(req.url, 'http://localhost').searchParams;
+            const row = setPreviewMetaBudget(params.get('campana'), { daily_budget: String(Number(params.get('diario')) || 0) });
+            // Con el reloj fijo de la muestra, «Actualizar ahora» se da por recién hecho; aquí corre la siguiente lectura.
+            if (row) await metaService.syncBudgets();
+            res.statusCode = row ? 200 : 404;
+            res.end(JSON.stringify(row || { error: 'No existe esa campaña en la muestra.' }));
+            return;
+          }
           if (pathname === '/api/__preview/permisos' && req.method === 'POST') {
             access.edit = new URL(req.url, 'http://localhost').searchParams.get('editar') !== '0';
             res.end(JSON.stringify({ edit: access.edit }));

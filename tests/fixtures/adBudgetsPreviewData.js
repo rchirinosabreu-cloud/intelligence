@@ -10,18 +10,21 @@ export const users = [
     { id: 'u-camila', name: 'Camila', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { manager: true } }
 ];
 
-const client = (id, name, cutDay) => ({ id, name, slug: id, isArchived: false, projectManagerId: 'm-camila', contracts: [{ startDate: '2026-01-01', cutDay }] });
+// La pauta aprobada vive en el contrato del cliente (13 de noviembre de 2026): de ahí la lee cada pauta.
+const approved = (amount, brand = null, currency = 'COP') => ({ platform: 'META', brand, currency, amount });
+const client = (id, name, cutDay, adBudgets = []) => ({ id, name, slug: id, isArchived: false, projectManagerId: 'm-camila', contracts: [{ id: `k-${id}`, startDate: '2026-01-01', cutDay, adBudgets }] });
 
 export const clients = [
-    client('foobspain', 'Foobespain', 1),
-    client('muestra', 'Cliente de muestra (cierra pronto)', 11),
-    client('bonsai', 'Bonsai', 19),
-    client('promo-group', 'Promo Group', 15),
-    client('new-pueblito', 'New Pueblito', 1),
-    client('pablo-hoff', 'Pablo Hoff', 1),
-    client('multik', 'Multi-K', 19),
-    client('titanes', 'Titanes', 19),
-    { id: 'martinez', name: 'Martínez y Nájera', slug: 'martinez', isArchived: false, contracts: [] }
+    client('foobspain', 'Foobespain', 1, [approved(100, 'Wine & Wonder', 'USD'), approved(100, 'Wine Summit', 'USD'), approved(100, 'FoobeSpain', 'USD')]),
+    client('muestra', 'Cliente de muestra (cierra pronto)', 11, [approved(1000000)]),
+    client('bonsai', 'Bonsai', 19, [approved(1000000)]),
+    client('promo-group', 'Promo Group', 15, [approved(300000, 'Endova')]),
+    client('new-pueblito', 'New Pueblito', 1, [approved(300000)]),
+    client('pablo-hoff', 'Pablo Hoff', 1, [approved(200000)]),
+    client('multik', 'Multi-K', 19, [approved(350000)]),
+    client('titanes', 'Titanes', 19, [approved(400000)]),
+    // Martínez y Nájera: el contrato aprueba dos pautas y todavía no tiene ninguna en Pautas.
+    client('martinez', 'Martínez y Nájera', 1, [approved(200000), approved(250000, 'Sede norte')])
 ];
 
 const old = new Date('2026-08-01T12:00:00Z');
@@ -124,13 +127,14 @@ export const previewMetaBudgets = {
         if (Number(campaign.daily_budget) || Number(campaign.lifetime_budget)) return [{ campaignId: id, level: 'CAMPAIGN', raw: { ...campaign } }];
         return [...budgetState.values()].filter((row) => row.campaign_id === id).map((raw) => ({ campaignId: id, level: 'ADSET', raw: { ...raw } }));
     }),
-    setBudget: async ({ objectId, field, minor }) => {
-        const row = budgetState.get(objectId);
-        if (!row) throw Object.assign(new Error('Object does not exist'), { name: 'MetaGraphError', code: 100 });
-        if (field === 'lifetime_budget') row.budget_remaining = String(Number(row.budget_remaining || 0) + minor - Number(row.lifetime_budget));
-        row[field] = String(minor);
-        return { success: true };
-    }
+};
+
+/** La muestra simula un cambio hecho en el Administrador de anuncios: solo cambia esta copia en memoria. */
+export const setPreviewMetaBudget = (id, patch) => {
+    const row = budgetState.get(String(id));
+    if (!row) return null;
+    Object.assign(row, patch);
+    return { ...row };
 };
 
 export const campaigns = [

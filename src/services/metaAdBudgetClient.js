@@ -1,11 +1,11 @@
 /**
- * Leer y cambiar el presupuesto de campañas en Meta (Pautas, 12 de noviembre de 2026). Es lo único de la plataforma que
- * cambia algo en una cuenta publicitaria, y solo el presupuesto: no crea, pausa ni borra campañas.
+ * Leer el presupuesto de campañas en Meta (Pautas, 12 de noviembre de 2026). Solo lee: el presupuesto se cambia en el
+ * Administrador de anuncios de Meta, nunca desde la plataforma (Rodny, 13 de noviembre de 2026: «el tope está
+ * establecido en Meta, no se puede manipular desde la plataforma»). Se probó cambiarlo desde aquí con tope y se retiró.
  *
  * Leído en la referencia de Meta (Marketing API): `GET /{campaign_id}` con `daily_budget`, `lifetime_budget`,
  * `budget_remaining`, `effective_status` y `stop_time`; si la campaña no tiene presupuesto lo llevan sus conjuntos,
- * `GET /{campaign_id}/adsets` con los mismos campos y `end_time`. Cambiar es `POST /{id}` con el campo y su valor en la
- * unidad mínima de la moneda. La llave va en la cabecera, nunca en la dirección.
+ * `GET /{campaign_id}/adsets` con los mismos campos y `end_time`. La llave va en la cabecera, nunca en la dirección.
  */
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION, MetaGraphError } from './metaGraphService.js';
 
@@ -71,17 +71,7 @@ export const createMetaAdBudgetClient = ({ fetchImpl = globalThis.fetch, version
         return results;
     };
 
-    /**
-     * Cambia el presupuesto diario o total de una campaña o un conjunto. Meta responde `{ success: true }`. Con
-     * `validateOnly` Meta revisa el cambio (permisos y valor) sin aplicarlo (`execution_options=["validate_only"]`).
-     */
-    const setBudget = async ({ objectId, field, minor, token, validateOnly = false }) => {
-        if (!['daily_budget', 'lifetime_budget'].includes(field)) throw new Error('Solo se cambia el presupuesto.');
-        const params = { [field]: Math.round(minor), ...(validateOnly ? { execution_options: JSON.stringify(['validate_only']) } : {}) };
-        return call('POST', encodeURIComponent(String(objectId)), params, token);
-    };
-
-    return { readCampaignBudgets, setBudget };
+    return { readCampaignBudgets };
 };
 
 export const metaAdBudgetClient = createMetaAdBudgetClient();

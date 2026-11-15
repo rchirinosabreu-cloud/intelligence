@@ -141,7 +141,7 @@ try {
             contactName: c.contactName, email: c.email, phone: c.phone, city: c.city, country: c.country, status: 'ACTIVO',
             monthlyFee: c.monthlyFee, description: c.description, instagramUrl: c.instagramUrl || null, complexity: c.complexity,
             projectManagerId: members[c.pm].id, responsibleId: c.cm ? members[c.cm].id : null,
-            contracts: { create: { serviceType: c.contract.serviceType, status: c.contract.status, startDate: c.contract.startDate, standBySince: c.contract.standBySince, cutDay: c.contract.cutDay, deliverables: c.contract.deliverables, storiesPerWeek: c.contract.storiesPerWeek, productionDays: c.contract.productionDays, monthlyReport: c.contract.monthlyReport, createdById: admin.id } },
+            contracts: { create: { serviceType: c.contract.serviceType, status: c.contract.status, startDate: c.contract.startDate, standBySince: c.contract.standBySince, cutDay: c.contract.cutDay, deliverables: c.contract.deliverables, storiesPerWeek: c.contract.storiesPerWeek, productionDays: c.contract.productionDays, monthlyReport: c.contract.monthlyReport, adBudgets: dataset.adBudgets.filter((b) => b.client === c.key).map((b) => ({ platform: b.platform, brand: b.brand || null, currency: b.currency, amount: b.amount })), createdById: admin.id } },
             observations: { create: c.observations.map((text) => ({ text, source: 'MANUAL', authorId: admin.id })) }
         } });
     }

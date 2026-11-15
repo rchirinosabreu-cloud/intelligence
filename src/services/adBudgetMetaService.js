@@ -13,7 +13,7 @@ import {
     META_DISCOVERY_DAYS, META_SYNC_EVERY_HOURS, metaCampaignIdsProblem, metaCyclesToSync, metaReadingAction, metaSpendWindow, suggestMetaCampaigns, unassignedMetaCampaigns
 } from '../lib/adBudgetMeta.js';
 import { humanizeMetaReadError } from '../lib/metaReportSources.js';
-import { humanizeMetaBudgetError, metaBudgetChange, metaBudgetObject, metaForecastRecord, projectMetaSpend, projectionStart } from '../lib/adBudgetMetaBudgets.js';
+import { metaBudgetObject, metaForecastRecord, projectMetaSpend, projectionStart } from '../lib/adBudgetMetaBudgets.js';
 import { metaAdBudgetClient } from './metaAdBudgetClient.js';
 import { metaInsightsService } from './metaInsightsService.js';
 import { AD_BUDGET_INCLUDE, bogotaToday, describeBudget, ensureAdCycle, syncAdCycle } from './adBudgetService.js';
@@ -297,7 +297,7 @@ export const adBudgetMetaService = (db = prisma, {
 
         /**
          * Los presupuestos que Meta tiene en las campañas de una pauta, con lo que gastaría cada una hasta el límite de gasto
-         * y cuánto queda del ciclo. La pantalla comprueba el tope con la misma regla antes de enviar.
+         * y cuánto queda del ciclo. Solo se ven: el presupuesto se cambia en el Administrador de anuncios de Meta.
          */
         async metaBudgets(budgetId) {
             if (!configured()) throw httpError(503, 'La conexión con Meta no está configurada en el servidor.');
@@ -310,59 +310,6 @@ export const adBudgetMetaService = (db = prisma, {
                 objects: objects.map((object) => ({ ...object, projectedCents: byId.get(object.id) || 0 })),
                 projectedCents: totalCents
             };
-        },
-
-        /**
-         * Cambia el presupuesto diario o total de una campaña ligada (o de uno de sus conjuntos). Se vuelve a leer todo de
-         * Meta justo antes, para comprobar que nadie lo cambió y que no se pasa de lo aprobado; después se lee otra vez para
-         * confirmar, y queda en el historial de la pauta con quién lo hizo.
-         */
-        async adjustBudget(budgetId, input = {}, actor) {
-            if (!configured()) throw httpError(503, 'La conexión con Meta no está configurada en el servidor.');
-            const newCents = Math.round(Number(input.amount) * 100);
-            if (!Number.isFinite(newCents) || newCents <= 0) throw httpError(422, 'Escribe el nuevo presupuesto.');
-            const { row, view, described } = await evaluated(budgetId);
-            const { objects, problems } = await readObjects(row);
-            if (!objects.some((object) => object.id === String(input.objectId)) && problems.length) throw httpError(502, problems[0]);
-            const decision = metaBudgetChange({ budget: view, objects, objectId: input.objectId, kind: input.kind, newCents, expectedCents: input.expectedCents });
-            if (decision.problem) throw Object.assign(httpError(decision.status, decision.problem), { maxCents: decision.maxCents ?? null });
-            const { object } = decision;
-            try {
-                await budgetClient.setBudget({ objectId: object.id, field: decision.field, minor: decision.minor, token: token() });
-            } catch (error) {
-                log('[Pautas Meta] Meta no aceptó el cambio de presupuesto:', error?.message || error);
-                throw httpError(502, humanizeMetaBudgetError(error));
-            }
-            let confirmed = null;
-            try {
-                const again = await readObjects(row);
-                const after = again.objects.find((item) => item.id === object.id);
-                confirmed = after ? after.budgetCents === newCents : null;
-                // El aviso de «se pasaría» se cae en cuanto se baja: el pronóstico del ciclo se rehace con lo que Meta tiene ahora.
-                const now = clock();
-                const cycleRow = await ensureAdCycle(db, row, described.cycle);
-                await db.adBudgetCycle.update({ where: { id: cycleRow.id }, data: { metaForecast: metaForecastRecord({ objects: again.objects, problems: again.problems, asOf: view.asOf || view.today, today: view.today, deadline: view.deadline, at: now.toISOString() }) } });
-            } catch (error) {
-                log('[Pautas Meta] No se pudo confirmar el cambio de presupuesto:', error?.message || error);
-            }
-            const money = (value) => formatAdMoney(value, row.currency);
-            const label = object.kind === 'DAILY' ? 'diario' : 'total';
-            const where = object.level === 'ADSET' ? `del conjunto «${object.name}» (${object.campaignName || 'campaña'})` : `de «${object.name}»`;
-            const summary = `Presupuesto ${label} en Meta ${where}: de ${money(object.budgetCents)} a ${money(newCents)}`;
-            try {
-                await db.adBudgetEvent.create({
-                    data: {
-                        id: randomUUID(), budgetId, clientId: row.clientId, action: 'META_PRESUPUESTO', summary: summary.slice(0, 500),
-                        before: { objectId: object.id, level: object.level, field: decision.field, cents: object.budgetCents },
-                        after: { objectId: object.id, level: object.level, field: decision.field, cents: newCents, confirmed },
-                        actorId: actorId(actor)
-                    }
-                });
-            } catch (error) {
-                // Meta ya cambió: no se dice que falló por no poder anotarlo.
-                log('[Pautas Meta] Cambio hecho en Meta sin anotar en el historial:', error?.message || error);
-            }
-            return { ok: true, confirmed, summary, objectId: object.id, budgetCents: newCents, afterCents: decision.afterCents };
         },
 
         /** «Actualizar ahora»: corre la lectura salvo que acabe de correr. */

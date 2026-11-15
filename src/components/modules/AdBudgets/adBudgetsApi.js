@@ -61,8 +61,6 @@ export const useUpdateAdReading = () => useBoardMutation(({ id, readingId, input
 
 export const useDeleteAdReading = () => useBoardMutation(({ id, readingId }) => request(`/${id}/readings/${readingId}`, { method: 'DELETE' }));
 
-export const useUpdateAdCycle = () => useBoardMutation(({ id, cycleKey, input }) => request(`/${id}/cycles/${cycleKey}`, { method: 'PATCH', body: JSON.stringify(input) }));
-
 export const useReopenAdCycle = () => useBoardMutation(({ id, cycleKey }) => request(`/${id}/cycles/${cycleKey}/reopen`, { method: 'POST' }));
 
 export const useDeleteAdCampaign = () => useBoardMutation(({ budgetId, campaignId }) => request(`/${budgetId}/campaigns/${campaignId}`, { method: 'DELETE' }));
@@ -80,8 +78,6 @@ export function useAdMetaSuggestions(id, { enabled = true } = {}) {
 export function useAdMetaBudgets(id, { enabled = true } = {}) {
   return useQuery({ queryKey: [...BOARD_KEY, 'meta-budgets', id], queryFn: () => request(`/${encodeURIComponent(id)}/meta-budgets`), enabled: enabled && Boolean(id), staleTime: 0, retry: false });
 }
-
-export const useAdjustAdMetaBudget = () => useBoardMutation(({ id, input }) => request(`/${id}/meta-budget`, { method: 'POST', body: JSON.stringify(input) }));
 
 export const useSyncAdMeta = () =>useBoardMutation(() => request('/meta/sync', { method: 'POST' }));
 

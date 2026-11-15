@@ -32,19 +32,19 @@ Rodny: «quiero ver la forma en que pueda conectar esto con las pautas reales en
 - **Solo lee el gasto.** La lectura no pausa campañas ni cambia nada en Meta. Un fallo de Meta no borra lo que había: queda dicho en la cuenta o en la pauta.
 - **Lo que no resuelve:** la hora de corte de cada cuenta es la de su zona horaria en Meta, y una cuenta en otra zona puede diferir un día en los bordes del ciclo.
 
-## Ajustar el presupuesto en Meta (12 de noviembre de 2026)
+## El presupuesto aprobado vive en la ficha del cliente, y en Meta se configura (13 de noviembre de 2026)
 
-Rodny: «no tiene sentido ajustar gasto en la plataforma si en Meta va a tener otro». En «Gasto en Meta» → «Ver y ajustar el presupuesto en Meta» se ve lo que Meta tiene configurado ahora en cada campaña ligada y, con «Editar pautas», se cambia.
+Rodny: «el presupuesto de pauta debe vivir en la ficha operativa del cliente y eso debe estar en Meta y reflejarse en pauta, si hay una inconsistencia entonces que Bria haga el aviso» y «solamente se puede aprobar desde el Meta Business y la plataforma reflejarlo». Tres cifras, cada una en su sitio:
 
-- **El presupuesto vive en la campaña o en sus conjuntos de anuncios, nunca en los dos** (referencia de Meta). Si la campaña no tiene, se ven y se ajustan sus conjuntos. Diario o total: Meta no deja cambiar el tipo, solo el valor.
-- **Lo que gastaría**: diario por los días que faltan hasta el límite de gasto del ciclo (contando hoy si el gasto se leyó hoy, o desde el día siguiente a la última lectura), total por lo que le queda; si un total sigue después del límite, solo la parte de estos días. Pausada no gasta. Es una estimación con lo configurado en Meta.
-- **El tope** (Rodny: «no lo deja»): un cambio que sube lo que la pauta gastaría por encima de lo que queda del ciclo (más la tolerancia) no se hace, y la ventana dice el máximo para esa campaña. Si el cliente aprobó más, se sube primero el presupuesto de la pauta. Bajar siempre se deja, aunque la pauta ya vaya pasada.
-- **Antes de cambiar se vuelve a leer Meta**: si alguien cambió el presupuesto allá mientras tanto, no se pisa y se pide revisar. Después se lee otra vez para confirmar.
-- **Queda en «Correcciones»** con el antes, el después y quién (`AdBudgetEvent`, acción `META_PRESUPUESTO`). Si Meta no acepta, se dice con sus palabras y no se anota nada.
-- **Lo cambiado en el Administrador de anuncios** no lo puede impedir la plataforma, pero lo ve: cada lectura (cada dos horas o con «Actualizar ahora») guarda lo que la pauta gastaría con lo configurado (`AdBudgetCycle.metaForecast`). Si se pasaría, la fila lo dice en rojo y a quien la lleva le llega a la banda (`PAUTA_META`). Bajarlo desde la plataforma rehace ese cálculo y el aviso se cae en el acto; bajarlo en Meta, en la siguiente lectura.
-- **Solo cambia el valor del presupuesto** (`daily_budget` o `lifetime_budget`, en pesos enteros o centavos de dólar): no pausa, no crea, no borra campañas y no cambia fechas.
-- **Comprobado contra Meta real el 12 de noviembre de 2026**, con autorización de Rodny: (1) la plataforma leyó los presupuestos de las campañas de las 18 cuentas activas, diarios y totales, de campaña y de conjunto; la llave tiene permiso de anunciar en todas y de administrar en casi todas. (2) En las 9 cuentas con una campaña con presupuesto, Meta revisó un cambio sin aplicarlo (`validate_only`, con el mismo valor) y dijo que lo aceptaría, también en dólares. (3) Un cambio real: el presupuesto total del conjunto «MENSAJES NOVIEMBRE 2026» de «BRAIN CON CONVERSACIONES NOV 2026» subió de 240.000 a 240.100 y volvió a 240.000.
-- **Meta acepta un cambio de presupuesto cada 30 segundos en el mismo conjunto o campaña** (código 613). Devolver el cambio del ensayo falló hasta esperar medio minuto; la ventana lo dice en palabras si pasa.
+- **Lo aprobado** está en el contrato del cliente, en la ficha operativa: `ClientContract.adBudgets`, una entrada por plataforma y marca con su moneda y su cifra por ciclo («Pauta aprobada por el cliente»). La pauta de Pautas **no tiene presupuesto propio**: lo lee de ahí (`approvedAdBudgetFor`), «Nueva pauta» elige una de las aprobadas en el contrato y `AdBudget.amount` es solo su espejo (`applyContractApprovals` lo actualiza al guardar la ficha, con una línea en «Correcciones», `APROBADO_FICHA`). Una pauta cuya marca no está en el contrato sigue con la cifra que traía, en amarillo, y dice que falta agregarla a la ficha. Un ciclo ya cerrado conserva la cifra con la que se cerró. Se retiraron «Corregir presupuesto» por ciclo y los campos de «quién lo aprobó» del día anterior.
+- **Lo configurado** está en Meta: el presupuesto de cada campaña o conjunto. **La plataforma no lo cambia** («el tope está establecido en Meta, no se puede manipular desde la plataforma»): «Ver el presupuesto en Meta» solo lo muestra, con lo que gastaría cada campaña hasta el límite de gasto. El ajuste desde la plataforma con tope se construyó, se probó contra Meta real y se retiró el mismo día; `metaAdBudgetClient` solo lee.
+- **Lo gastado** lo lee Meta cada dos horas (sección anterior).
+
+Cuando no cuadran, la plataforma avisa (ver «Avisos»): si con lo configurado en Meta la pauta gastaría más de lo aprobado, la fila lo dice en rojo y a quien la lleva le llega a la banda; se corrige en el Administrador de anuncios de Meta o, si el cliente aprobó más, en la ficha. Lo que sobra de un mes pasa al siguiente (la dirección, 13 de noviembre de 2026: «por eso este mes se está pasando el gasto, porque no se gastó el mes pasado»), así que lo aprobado del ciclo incluye ese saldo y Meta debería reflejarlo.
+
+- **Carga de las 8 pautas**: `scripts/load-ad-budget-approvals.js` copia la cifra y la moneda de cada pauta vigente al contrato de su cliente si no la tiene (simula por defecto; `--confirmar CARGAR` escribe; no toca las pautas). Un cliente sin contrato vigente se señala y se completa a mano en la ficha.
+- **Google y TikTok** quedan en stand by: la ficha acepta la plataforma, pero hoy solo hay pautas de Meta.
+- **Comprobado contra Meta real el 12 de noviembre de 2026** (lectura y, antes de retirarlo, el ajuste): la llave lee los presupuestos de las 18 cuentas activas. Meta acepta un cambio de presupuesto cada 30 segundos por objeto (código 613).
 
 ## Corregir y deshacer
 
@@ -62,10 +62,10 @@ Todo se escribe a mano y todo se corrige. Cada corrección queda en `AdBudgetEve
 | Una campaña | Lápiz: se edita, se apaga o se elimina |
 | Una pauta creada por error | «Eliminar pauta» en «Editar pauta» |
 | Las campañas de Meta de una pauta | «Cambiar campañas»; soltarlas no borra las lecturas ya escritas |
-| El presupuesto aprobado (de la pauta o de un ciclo) | Se cambia en «Editar pauta» o «Corregir presupuesto», diciendo **quién lo aprobó y el motivo**: es el tope de lo que se gasta y queda en «Correcciones» |
+| El presupuesto aprobado | En la ficha operativa del cliente («Pauta aprobada por el cliente»): la pauta lo toma de ahí y queda en «Correcciones» |
 | El saldo que pasa de un ciclo a otro | Lo calcula la plataforma (aprobado menos gastado) y la ventana lo muestra; «Acuerdo de saldo distinto» registra otra cifra solo si se acordó con el cliente, con motivo |
 | Una campaña marcada «No es de una pauta» | Ligarla a una pauta la vuelve a contar |
-| Un presupuesto cambiado en Meta | Se vuelve a cambiar desde la misma ventana; queda en «Correcciones» |
+| El presupuesto de una campaña en Meta | En el Administrador de anuncios de Meta; la plataforma lo refleja en la siguiente lectura |
 
 Lo eliminado no tiene botón de deshacer: se pide confirmación antes y sus datos quedan en el registro para reconstruirlo. Para conservar una pauta se marca como terminada.
 
@@ -78,23 +78,21 @@ No hay importación de los Excel. `scripts/load-ad-budgets.js` crea las pautas d
 | Quién | Por dónde | Cuándo |
 |---|---|---|
 | Quien lleva la pauta | Banda | Gasto sin actualizar por 3 días, o 1 día en los últimos 5 del ciclo. Falta el gasto final. Campaña activa pasada su fecha o que termina después del cierre. |
-| Quien lleva la pauta | Banda (salmón) | Lo configurado en Meta haría pasarse lo aprobado: lo gastado más lo que gastarían las campañas ligadas hasta el límite de gasto supera el presupuesto (más la tolerancia). Sale de la lectura de Meta de cada dos horas, así que también avisa de lo que alguien cambió en el Administrador de anuncios. «Revisar presupuesto en Meta» abre la ventana para bajarlo. |
+| Quien lleva la pauta | Banda (salmón) | Lo configurado en Meta haría pasarse lo aprobado: lo gastado más lo que gastarían las campañas ligadas hasta el límite de gasto supera el presupuesto (más la tolerancia). Sale de la lectura de Meta de cada dos horas, así que también avisa de lo que alguien cambió en el Administrador de anuncios. «Revisar presupuesto en Meta» abre la ventana que lo muestra; se baja en Meta o se sube lo aprobado en la ficha. |
 | Project manager de la cuenta | Campana, sin cifras | Una vez por ciclo a 5 días del cierre y una vez si la pauta se pasa. |
 
 El aviso de la banda se cae solo al actualizar el gasto o cambiar la campaña. Más de tres avisos salen en un resumen. Sin responsable, el aviso va al área Pauta de Equipo y, si no hay nadie, al project manager. La banda pide actualizar el gasto o cerrar el ciclo, así que solo le llega a quien tiene «Editar pautas»; la campana del project manager pide solo ver Pautas.
 
 ## Permisos
 
-Dos niveles (Rodny, 12 de noviembre de 2026: «ver y editar, siendo editar el ajuste en Meta»):
+Dos niveles (Rodny, 12 de noviembre de 2026: «ver y editar»):
 
 - **Ver**: casilla `pautas` en Equipo. Quien tiene Manager entra sin tocar la base (`inheritsFrom`). Ve el tablero, el historial y el presupuesto en Meta, y puede pedir «Actualizar ahora».
-- **Editar**: casilla «Editar pautas y ajustar presupuestos en Meta» (`pautas_editar`). Crear, corregir y eliminar pautas, actualizar el gasto, cerrar ciclos, ligar campañas y ajustar el presupuesto en Meta. **Nadie la trae por su cargo, tampoco un administrador** (`EXPLICIT_KEYS`): se marca persona por persona, como la liga. El servidor lo comprueba en cada ruta que escribe (`requireAdBudgetEdit`); la pantalla solo esconde los botones.
+- **Editar**: casilla «Editar pautas» (`pautas_editar`). Crear, corregir y eliminar pautas, actualizar el gasto cuando Meta no lo trae, cerrar ciclos y ligar campañas. El presupuesto aprobado se cambia en la ficha del cliente (Operación) y el de cada campaña en Meta, no aquí. **Nadie la trae por su cargo, tampoco un administrador** (`EXPLICIT_KEYS`): se marca persona por persona, como la liga. El servidor lo comprueba en cada ruta que escribe (`requireAdBudgetEdit`); la pantalla solo esconde los botones.
 
-Al desplegarlo nadie tiene «Editar pautas» hasta que un administrador se la marque en Equipo: a quien lleva la pauta (Keila) y a quien deba ajustar presupuestos.
+Al desplegarlo nadie tiene «Editar pautas» hasta que un administrador se la marque en Equipo: a quien lleva la pauta (Keila).
 
 ## Lo que falta
-
-- **Que el presupuesto aprobado salga del contrato del cliente** (ficha operativa) y no se escriba en la pauta. Pendiente de decidir con la dirección (12 de noviembre de 2026).
 
 - Llevar a Cartera lo gastado con la tarjeta de Brain Studio, para cobrarlo.
 - Comparar el gasto del informe con el registrado aquí.

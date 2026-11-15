@@ -9,6 +9,10 @@ import {
   CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_FORMATS as FORMATS, CONTRACT_STATUSES, SERVICE_TYPES,
   contractQuota, normalizeOperationProfile,
 } from '@/lib/clientOperations';
+import { AD_PLATFORMS } from '@/lib/adBudgets';
+import { normalizeContractAdBudgets } from '@/lib/adBudgetApproval';
+import MoneyInput from '@/components/ui/MoneyInput';
+import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import { ContractScopeFields } from './ClientContractScope';
 
 // Ficha operativa: qué se vendió, a quién y quién lo lleva. Lo editan admins y project managers. Se valida con la
@@ -24,6 +28,9 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
   const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, ...(initialRenew ? { startDate: '', endDate: '', status: 'ACTIVO' } : {}), deliverables: (base.deliverables || []).map((row) => ({ ...row })) }));
   const [scope, setScope] = useState(() => base.scopeDetails ? structuredClone(base.scopeDetails) : null);
   const [scopeChanged, setScopeChanged] = useState(false);
+  // La pauta aprobada por el cliente (13 de noviembre de 2026): de aquí la lee Pautas. Se manda siempre, también al renovar.
+  const [adBudgets, setAdBudgets] = useState(() => (base.adBudgets || []).map((row) => ({ platform: row.platform || 'META', brand: row.brand || '', currency: row.currency || 'COP', amount: String(row.amount ?? '') })));
+  const setAd = (index, patch) => setAdBudgets((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   const [profile, setProfile] = useState({ description: client.description || '', instagramUrl: client.instagramUrl || '', agency: client.agency || 'BRAIN', complexity: client.complexity || '', pmId: client.projectManager?.id || client.projectManagerId || '', cmId: client.communityManager?.id || client.responsibleId || '', externalPlanUrl: client.externalPlanUrl || '' });
   // Quien ya lleva la cuenta sigue siendo una opción aunque la lista de equipo solo traiga activos.
   const members = [...new Map([
@@ -62,8 +69,10 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
     // Una ficha antigua guardada sin detallar no se reclasifica ni envía una retirada implícita.
     delete input.contract.scopeDetails;
     if (scopeChanged || base.scopeDetails != null) input.contract.scopeDetails = scope;
+    const approvals = normalizeContractAdBudgets(adBudgets.map((row) => ({ ...row, brand: row.brand.trim() })));
+    input.contract.adBudgets = approvals.value;
     const check = normalizeOperationProfile(input);
-    if (!check.valid) { setErrors(check.errors); setError('Revisa los campos marcados.'); return; }
+    if (!check.valid || !approvals.valid) { setErrors({ ...check.errors, ...approvals.errors }); setError('Revisa los campos marcados.'); return; }
     setSaving(true);
     setErrors({});
     setError('');
@@ -216,6 +225,31 @@ export default function ClientOperationDialog({ client, team = [], onClose, onSa
                 </fieldset>
               </>
             )}
+
+            <fieldset className="space-y-2" data-contract-ad-budgets>
+              <legend className={LABEL}>Pauta aprobada por el cliente</legend>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que el cliente aprobó gastar en pauta por ciclo, por plataforma y marca. Pautas lo lee de aquí; el presupuesto de cada campaña se configura en Meta.</p>
+              <ul className="space-y-2">
+                {adBudgets.map((row, index) => (
+                  <li key={index} data-contract-ad-budget={index} className="grid gap-2 sm:grid-cols-[7rem_1fr_auto_8.5rem_2.75rem]">
+                    <Select value={row.platform} onChange={(e) => setAd(index, { platform: e.target.value })} aria-label={`Plataforma de la pauta ${index + 1}`} className={FIELD}>
+                      {AD_PLATFORMS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </Select>
+                    <input value={row.brand} maxLength={120} onChange={(e) => setAd(index, { brand: e.target.value })} placeholder="Marca o cuenta (opcional)" aria-label={`Marca de la pauta ${index + 1}`} className={FIELD} />
+                    <CurrencyToggle bordered value={row.currency} onChange={(currency) => setAd(index, { currency })} />
+                    <MoneyInput value={row.amount} onChange={(amount) => setAd(index, { amount })} aria-label={`Cifra aprobada de la pauta ${index + 1}`} className={FIELD} />
+                    <button type="button" aria-label={`Quitar la pauta ${index + 1}`} onClick={() => setAdBudgets((current) => current.filter((_, i) => i !== index))}
+                      className="brain-danger-button-icon inline-flex min-h-11 items-center justify-center rounded-xl"><Trash2 className="h-4 w-4" /></button>
+                    {errors[`contract.adBudgets.${index}.amount`] && <p className="text-xs text-destructive brain-destructive-text sm:col-span-5">{errors[`contract.adBudgets.${index}.amount`]}</p>}
+                    {errors[`contract.adBudgets.${index}.brand`] && <p className="text-xs text-destructive brain-destructive-text sm:col-span-5">{errors[`contract.adBudgets.${index}.brand`]}</p>}
+                  </li>
+                ))}
+              </ul>
+              <button type="button" data-contract-ad-budget-add onClick={() => setAdBudgets((current) => [...current, { platform: 'META', brand: '', currency: 'COP', amount: '' }])}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan">
+                <Plus className="h-4 w-4" /> Añadir pauta aprobada
+              </button>
+            </fieldset>
 
             <ContractScopeFields scope={scope} contract={contract} onLegacyChange={setC} onChange={(next) => { setScope(next); setScopeChanged(true); }} />
               <label className="flex min-h-11 items-center gap-3 rounded-xl border border-zinc-200 px-3 text-sm font-medium dark:border-white/10">

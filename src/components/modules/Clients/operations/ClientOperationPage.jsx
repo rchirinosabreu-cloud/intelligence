@@ -16,6 +16,7 @@ import ClientObservations from './ClientObservations';
 import { CloseDialog, ReportDialog, SuspensionDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
 import PiecePeekDialog from './PiecePeekDialog';
 import { ContractScopeSummary } from './ClientContractScope';
+import { AD_PLATFORMS, formatAdMoney, labelOfAd } from '@/lib/adBudgets';
 import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 import { deriveClientAlerts } from '@/lib/clientOperationAlerts';
@@ -402,6 +403,18 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {!sharedQuota && contract.deliverables.map((row) => <span key={row.format} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium dark:border-white/10">{row.quantity} {row.format}</span>)}
                 <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs font-semibold dark:bg-white/10">{quota} en total</span>
+              </div>
+            </div>
+          )}
+          {contract.adBudgets?.length > 0 && (
+            <div data-contract-ad-budgets-summary>
+              <p className={LABEL}>Pauta aprobada</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {contract.adBudgets.map((row) => (
+                  <span key={`${row.platform}:${row.brand || ''}`} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium dark:border-white/10">
+                    {[labelOfAd(AD_PLATFORMS, row.platform), row.brand].filter(Boolean).join(' · ')} · {formatAdMoney(Math.round(Number(row.amount) * 100), row.currency)}
+                  </span>
+                ))}
               </div>
             </div>
           )}

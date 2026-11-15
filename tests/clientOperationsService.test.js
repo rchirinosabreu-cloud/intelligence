@@ -48,6 +48,7 @@ function fixture() {
     { id: 'c-promo', name: 'Promo Group', slug: 'promo', logoUrl: null, isArchived: false, responsible: null, projectManager: null, contracts: [], monthlyReports: [], contentPlans: [], nativeTasks: [] },
   ];
   const writes = [];
+  const adBudgets = [{ id: 'b-nattal', clientId: 'c-nattal', platform: 'META', brand: null, currency: 'COP', amount: 300000, status: 'ACTIVA', kind: 'MENSUAL', cutDay: null }];
   const team = [member('m-kamila', 'Kamila'), member('m-jarlan', 'Jarlan'), member('m-old', 'Exempleado', false)];
   const observations = [{ id: 'ob2', clientId: 'c-nattal', authorId: 'u-kamila' }, { id: 'ob1', clientId: 'c-nattal', authorId: null }];
   const db = {
@@ -71,6 +72,13 @@ function fixture() {
       create: async (args) => { writes.push(['contract.create', args]); return args.data; },
       update: async (args) => { writes.push(['contract.update', args]); return args.data; },
     },
+    // Las pautas de Pautas, para el espejo de lo aprobado en la ficha (13 de noviembre de 2026).
+    adBudget: {
+      findMany: async ({ where }) => adBudgets.filter((row) => row.clientId === where.clientId).map((row) => ({ ...row, cycles: [] })),
+      update: async (args) => { writes.push(['adBudget.update', args]); return args.data; },
+    },
+    adBudgetCycle: { update: async (args) => { writes.push(['adBudgetCycle.update', args]); return args.data; } },
+    adBudgetEvent: { create: async (args) => { writes.push(['adBudgetEvent.create', args]); return args.data; } },
     clientMonthlyReport: {
       findFirst: async ({ where }) => clients.find((c) => c.id === where.clientId)?.monthlyReports.find((r) => r.year === where.year && r.month === where.month) || null,
       create: async (args) => {
@@ -194,6 +202,26 @@ test('guardar actualiza el contrato vigente y «renovar» crea uno nuevo', async
   assert.equal(updated.data.updatedById, 'u1');
   await service.saveProfile({ clientId: 'c-nattal', actorUserId: 'u1', input: { agency: 'BRAIN', renew: true, contract: { ...contract, startDate: '2027-01-01' } } });
   assert.ok(writes.some(([kind, args]) => kind === 'contract.create' && args.data.startDate === '2027-01-01'));
+});
+
+test('la pauta aprobada se guarda en el contrato y llega a la pauta de Pautas; omitirla conserva la guardada', async () => {
+  const { service, writes } = fixture();
+  const contract = { serviceType: 'PARRILLA', status: 'ACTIVO', startDate: '2026-01-01', endDate: null, cutDay: 1, deliverables: [{ format: 'Post', quantity: 4 }], storiesPerWeek: 3, productionDays: 0, monthlyReport: true };
+  await service.saveProfile({ clientId: 'c-nattal', actorUserId: 'u1', input: { agency: 'BRAIN', contract } });
+  assert.equal(Object.hasOwn(writes.find(([kind]) => kind === 'contract.update')[1].data, 'adBudgets'), false, 'un formulario sin el campo no toca lo aprobado');
+  assert.equal(writes.some(([kind]) => kind === 'adBudget.update'), false);
+
+  await service.saveProfile({ clientId: 'c-nattal', actorUserId: 'u1', input: { agency: 'BRAIN', contract: { ...contract, adBudgets: [{ platform: 'META', brand: '', currency: 'COP', amount: '450000' }] } } });
+  const [, updated] = writes.filter(([kind]) => kind === 'contract.update').at(-1);
+  assert.deepEqual(updated.data.adBudgets, [{ platform: 'META', brand: null, currency: 'COP', amount: 450000 }]);
+  const [, mirrored] = writes.find(([kind]) => kind === 'adBudget.update');
+  assert.equal(mirrored.where.id, 'b-nattal');
+  assert.equal(mirrored.data.amount, 450000);
+  const [, event] = writes.find(([kind]) => kind === 'adBudgetEvent.create');
+  assert.equal(event.data.action, 'APROBADO_FICHA');
+  assert.match(event.summary || event.data.summary, /de \$ 300\.000 a \$ 450\.000/);
+
+  await assert.rejects(service.saveProfile({ clientId: 'c-nattal', actorUserId: 'u1', input: { agency: 'BRAIN', contract: { ...contract, adBudgets: [{ platform: 'META', brand: '', currency: 'COP', amount: '0' }] } } }), (error) => error.errors?.['contract.adBudgets.0.amount'] === 'Escribe la cifra aprobada.');
 });
 
 test('la ficha mal llenada o con personas inactivas se rechaza con el motivo por campo', async () => {
