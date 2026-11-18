@@ -6,8 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { brandSearchKey } from '@/lib/clientBrand';
 import BrandSheet, { BrandSheetSkeleton } from './BrandSheet';
 import BrandEditorDialog from './BrandEditorDialog';
-import BrandImportDialog from './BrandImportDialog';
-import { Button } from '@/components/ui/button';
 import { useBrand, useBrands } from './brandsApi';
 
 // Marcas (Rodny, 18 de noviembre de 2026): la pestaña «Marcas» del módulo de Clientes, con la ficha de marca
@@ -19,29 +17,29 @@ function BrandCard({ item, onOpen }) {
     const colors = item.brand?.colors || [];
     const fonts = item.brand?.fonts || [];
     return (
-        <li>
+        <li className="min-w-0">
             <button
                 type="button"
                 onClick={() => onOpen(item.client.slug)}
                 data-brand-card={item.client.slug}
-                className="flex h-full w-full flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20 dark:hover:bg-white/5"
+                className="flex h-full w-full min-w-0 flex-col items-stretch gap-4 rounded-2xl border border-zinc-200 bg-white p-4 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20 dark:hover:bg-white/5"
             >
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex w-full min-w-0 items-center gap-3">
                     <ClientAvatar client={item.client} size={40} />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                         <p className="brain-type-value truncate text-zinc-900 dark:text-white">{item.client.name}</p>
                         <p className="brain-type-label truncate">{fonts.length ? [...new Set(fonts.map((font) => font.family))].join(' · ') : 'Sin tipografías'}</p>
                     </div>
                 </div>
                 {colors.length ? (
-                    <div className="flex h-10 overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10" aria-label={`Colores: ${colors.map((c) => c.hex).join(', ')}`}>
-                        {colors.slice(0, 8).map((color) => <span key={`${color.hex}-${color.role}`} className="flex-1" style={{ backgroundColor: color.hex }} />)}
+                    <div className="flex h-10 w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10" aria-label={`Colores: ${colors.map((c) => c.hex).join(', ')}`}>
+                        {colors.slice(0, 8).map((color) => <span key={`${color.hex}-${color.role}`} className="h-full min-w-0 flex-1" style={{ backgroundColor: color.hex }} />)}
                     </div>
                 ) : (
-                    <div className="flex h-10 items-center rounded-lg border border-dashed border-zinc-200 px-3 dark:border-white/10"><span className="brain-type-help">Sin colores todavía</span></div>
+                    <div className="flex h-10 w-full items-center rounded-lg border border-dashed border-zinc-200 px-3 dark:border-white/10"><span className="brain-type-help">Sin colores todavía</span></div>
                 )}
-                <div className="flex items-center gap-2">
-                    <div className="h-1.5 flex-1 rounded-full bg-zinc-100 dark:bg-white/10" aria-hidden="true">
+                <div className="flex w-full items-center gap-2">
+                    <div className="h-1.5 min-w-0 flex-1 rounded-full bg-zinc-100 dark:bg-white/10" aria-hidden="true">
                         <div className="h-1.5 rounded-full bg-brand-green" style={{ width: `${(item.completeness.done / item.completeness.total) * 100}%` }} />
                     </div>
                     <span className="brain-type-label">{item.completeness.done}/{item.completeness.total}</span>
@@ -76,7 +74,6 @@ export default function BrandsBoard() {
     const { data, isLoading, isError, error } = useBrands();
     const [params, setParams] = useSearchParams();
     const [query, setQuery] = useState('');
-    const [importing, setImporting] = useState(false);
     const openSlug = params.get('cliente');
     const showArchived = params.get('marcasArchivadas') === '1';
 
@@ -114,11 +111,6 @@ export default function BrandsBoard() {
                         className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                     />
                 </label>
-                {data?.canImport && (
-                    <Button type="button" variant="outline" className="min-h-11" onClick={() => setImporting(true)}>
-                        Cargar fichas de los manuales
-                    </Button>
-                )}
             </div>
 
             {isLoading ? (
@@ -152,7 +144,6 @@ export default function BrandsBoard() {
                 </>
             )}
 
-            {importing && <BrandImportDialog open={importing} onClose={() => setImporting(false)} />}
             {openSlug && <BrandDialog slug={openSlug} clientId={openClient?.id} onClose={close} />}
         </div>
     );

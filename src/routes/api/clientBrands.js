@@ -1,14 +1,9 @@
 import express from 'express';
-import { createRequire } from 'node:module';
 import multer from 'multer';
 import { clientBrandService } from '../../services/clientBrandService.js';
 import { BRAND_LIMITS, canEditBrand } from '../../lib/clientBrand.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import { receivesFiles } from '../../lib/uploadMarker.js';
-import prisma from '../../lib/prisma.js';
-import { runBrandImport } from '../../services/clientBrandImport.js';
-
-const require_ = createRequire(import.meta.url);
 
 // Marcas de los clientes (Rodny, 18 de noviembre de 2026): la pestaña «Marcas» del módulo de Clientes. Ver es
 // de quien tiene Clientes (la ruta se monta con `requireModulePermission('clientes')`); escribir pide además
@@ -20,16 +15,9 @@ export const requireBrandEdit = (req, res, next) => (canEditBrand(req.user)
     : res.status(403).json({ error: 'Para editar marcas necesitas el módulo de Clientes. Pídeselo a un administrador en Equipo.' }));
 requireBrandEdit.permission = { module: 'clientes' };
 
-/** Cargar las fichas de los manuales: solo administradores (es una carga en bloque sobre todos los clientes). */
-export const canImportBrands = (user) => String(user?.role || '').toUpperCase() === 'ADMIN';
-export const requireBrandImport = (req, res, next) => (canImportBrands(req.user)
-    ? next()
-    : res.status(403).json({ error: 'Cargar las fichas de los manuales es de un administrador.' }));
-requireBrandImport.permission = { module: 'clientes', role: 'ADMIN' };
-
 const upload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRAND_LIMITS.fileBytes, files: 1 } });
 
-export const createClientBrandRouter = ({ service = null, db = null, dataset = null, fetchImpl } = {}) => {
+export const createClientBrandRouter = ({ service = null } = {}) => {
     const router = express.Router();
     const brands = () => service || clientBrandService();
     const handle = (work, status = 200) => async (req, res) => {
@@ -49,17 +37,8 @@ export const createClientBrandRouter = ({ service = null, db = null, dataset = n
         return res.status(400).json({ error: message });
     });
 
-    router.get('/', handle(async (req) => ({ ...(await brands().list()), canEdit: canEditBrand(req.user), canImport: canImportBrands(req.user) })));
+    router.get('/', handle(async (req) => ({ ...(await brands().list()), canEdit: canEditBrand(req.user) })));
 
-    // Cargar las fichas sacadas de los manuales (data/client-brands.json). `apply: false` solo cuenta qué haría.
-    router.post('/import', requireBrandImport, handle((req) => runBrandImport({
-        db: db || prisma,
-        service: brands(),
-        dataset: dataset || require_('../../../data/client-brands.json'),
-        apply: req.body?.apply === true,
-        user: req.user,
-        ...(fetchImpl ? { fetchImpl } : {})
-    })));
     router.get('/:clientId', handle(async (req) => ({ ...(await brands().get(req.params.clientId)), canEdit: canEditBrand(req.user) })));
     router.put('/:clientId', requireBrandEdit, handle((req) => brands().save(req.params.clientId, req.body || {}, req.user)));
     router.post('/:clientId/files', requireBrandEdit, receivesFiles(receiveFile, { field: 'file' }), handle(
@@ -87,12 +66,23 @@ export const createClientBrandRouter = ({ service = null, db = null, dataset = n
     router.get('/:clientId/files/:fileId', async (req, res) => {
         try {
             const { file } = await brands().fileLink(req.params.clientId, req.params.fileId);
+            // Miniatura de un logo: los PNG llegan a pesar medio mega y una ficha tiene hasta treinta; la pantalla
+            // pide la versión chica y solo «Descargar» baja el original. Un archivo de marca no cambia, así que la
+            // miniatura se guarda en memoria y el navegador la conserva un día.
+            if (req.query.thumb === '1' && /^image\/(png|jpe?g|webp)$/i.test(file.mimeType || '')) {
+                const thumb = await brands().fileThumbnail(file);
+                if (thumb) {
+                    res.setHeader('Content-Type', 'image/webp');
+                    res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
+                    return res.send(thumb);
+                }
+            }
             const object = await brands().openFile(file);
             const disposition = req.query.download === '1' ? 'attachment' : 'inline';
             res.setHeader('Content-Type', file.mimeType || object.ContentType || 'application/octet-stream');
             res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name || 'archivo')}`);
             res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-            res.setHeader('Cache-Control', 'private, max-age=300');
+            res.setHeader('Cache-Control', 'private, max-age=3600');
             return object.Body.pipe(res);
         } catch (error) {
             if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });

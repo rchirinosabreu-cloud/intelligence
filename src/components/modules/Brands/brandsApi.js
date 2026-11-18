@@ -19,8 +19,8 @@ async function request(path, options = {}) {
     return body;
 }
 
-export const brandFileUrl = (clientId, fileId, { download = false } = {}) =>
-    `${getApiBaseUrl()}/api/brands/${encodeURIComponent(clientId)}/files/${encodeURIComponent(fileId)}${download ? '?download=1' : ''}`;
+export const brandFileUrl = (clientId, fileId, { download = false, thumb = false } = {}) =>
+    `${getApiBaseUrl()}/api/brands/${encodeURIComponent(clientId)}/files/${encodeURIComponent(fileId)}${download ? '?download=1' : thumb ? '?thumb=1' : ''}`;
 
 export function useBrands({ enabled = true } = {}) {
     return useQuery({ queryKey: [...KEY, 'list'], queryFn: () => request(''), enabled, staleTime: 30_000 });
@@ -53,7 +53,3 @@ export const useRemoveBrandFile = () => useBrandMutation(({ clientId, fileId }) 
 export function brandFontUrl(clientId, family) {
     return `${getApiBaseUrl()}/api/brands/${encodeURIComponent(clientId)}/fonts/download?family=${encodeURIComponent(family)}`;
 }
-
-/** Cargar las fichas de los manuales (solo administradores). `apply: false` solo cuenta qué haría. */
-export const useImportBrands = () => useBrandMutation(({ apply }) =>
-    request('/import', { method: 'POST', body: JSON.stringify({ apply: Boolean(apply) }) }));

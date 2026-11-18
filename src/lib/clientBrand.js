@@ -222,10 +222,10 @@ export function canEditBrand(user) {
 }
 
 /** Un archivo de marca tiene un tipo y una forma conocidos; el SVG se rechaza en toda la plataforma. */
-export function brandFileProblem({ kind, name, size } = {}) {
+export function brandFileProblem({ kind, name, size, maxBytes = BRAND_LIMITS.fileBytes } = {}) {
     if (!BRAND_FILE_KINDS.includes(kind)) return 'Elige qué es el archivo: logo, tipografía, manual o recurso.';
     if (!clean(name)) return 'El archivo no tiene nombre.';
-    if (Number(size) > BRAND_LIMITS.fileBytes) return `«${clean(name)}» pesa más de 50 MB.`;
+    if (Number(size) > maxBytes) return `«${clean(name)}» pesa más de ${Math.round(maxBytes / 1024 / 1024)} MB.`;
     const ext = String(name).toLowerCase().split('.').pop();
     if (ext === 'svg' || ext === 'svgz') return 'Los SVG no se aceptan en la plataforma: sube el logo en PNG o PDF.';
     if (kind === 'FUENTE' && !['ttf', 'otf', 'woff', 'woff2', 'zip'].includes(ext)) {

@@ -1,4 +1,5 @@
 import { zipSync } from 'fflate';
+import sharp from 'sharp';
 import prisma from '../lib/prisma.js';
 import { getPlatformStorage } from './platformStorageService.js';
 import {
@@ -91,6 +92,18 @@ export function parseGoogleFontCss(css = '') {
     return files;
 }
 
+// Miniaturas de logos en memoria (unas 400 de ~15 KB): los archivos de marca no se editan, se reemplazan.
+const thumbnails = new Map();
+const THUMB_CACHE_MAX = 400;
+
+async function streamToBuffer(body) {
+    if (Buffer.isBuffer(body)) return body;
+    if (typeof body?.transformToByteArray === 'function') return Buffer.from(await body.transformToByteArray());
+    const chunks = [];
+    for await (const chunk of body) chunks.push(Buffer.from(chunk));
+    return Buffer.concat(chunks);
+}
+
 export function clientBrandService({ db = prisma, storage = () => getPlatformStorage('PLATFORM'), fetchImpl = (...args) => fetch(...args) } = {}) {
     const findClient = async (clientId) => {
         const client = await db.client.findUnique({
@@ -149,16 +162,17 @@ export function clientBrandService({ db = prisma, storage = () => getPlatformSto
             return this.get(client.id);
         },
 
-        async addFile(clientId, { kind, label, file } = {}, user) {
+        /** `maxBytes` lo fija solo la carga de los manuales (hay manuales de 120 MB); la pantalla sube hasta 50 MB. */
+        async addFile(clientId, { kind, label, file, maxBytes = BRAND_LIMITS.fileBytes } = {}, user) {
             const client = await findClient(clientId);
             if (!file) throw failure('Elige un archivo para subir.');
-            const problem = brandFileProblem({ kind, name: file.originalname, size: file.size });
+            const problem = brandFileProblem({ kind, name: file.originalname, size: file.size, maxBytes });
             if (problem) throw failure(problem);
             let brand = await db.clientBrand.findUnique({ where: { clientId: client.id } });
             if (!brand) {
                 brand = await db.clientBrand.create({ data: { clientId: client.id, createdById: actorId(user), updatedById: actorId(user), source: 'Pantalla' } });
             }
-            const stored = await storage().uploadToS3(file, `brands/${client.id}`, { maxBytes: BRAND_LIMITS.fileBytes });
+            const stored = await storage().uploadToS3(file, `brands/${client.id}`, { maxBytes });
             await db.clientBrandFile.create({
                 data: {
                     brandId: brand.id,
@@ -227,6 +241,22 @@ export function clientBrandService({ db = prisma, storage = () => getPlatformSto
                 `${font.family} — tipografía de Google Fonts (licencia abierta).\nMarca: ${client.name}\nMás información: https://fonts.google.com/specimen/${font.family.trim().replace(/\s+/g, '+')}\n`
             );
             return { name: `${base}.zip`, buffer: Buffer.from(zipSync(entries, { level: 0 })) };
+        },
+
+        /** Miniatura WebP de 480 px de lado, con su transparencia; `null` si la imagen no se deja leer. */
+        async fileThumbnail(file) {
+            if (thumbnails.has(file.id)) return thumbnails.get(file.id);
+            try {
+                const object = await storage().getFromS3Stream(file.key);
+                const bytes = await streamToBuffer(object.Body);
+                const thumb = await sharp(bytes).resize(480, 480, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+                if (thumbnails.size >= THUMB_CACHE_MAX) thumbnails.delete(thumbnails.keys().next().value);
+                thumbnails.set(file.id, thumb);
+                return thumb;
+            } catch (error) {
+                console.warn('[Brands] No se pudo preparar la miniatura:', error.message);
+                return null;
+            }
         },
 
         async openFile(file) {
