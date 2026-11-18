@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   DAILY_HABITS, EXTRA_ACTIONS, BADGE_THRESHOLD, HABIT_POINTS, EXTRA_POINTS, KUDOS_VALUE, KUDOS_WEEKLY,
   summarizeDays, habitsScore, kudosScore, leagueScore, habitRates, leagueNextStep, todayPoints, trackScale, trackPosition, leagueMonthLabel, leagueWeekLabel, ordinalLabel, leagueRank
-} from '../src/lib/platformLeague.js';
+, habitPoints, effortPoints } from '../src/lib/platformLeague.js';
 
 const day = (values, extras = {}) => ({ day: '2026-11-03', habits: Object.fromEntries(DAILY_HABITS.map((h, i) => [h.key, values[i]])), extras });
 const full = (value, count) => Array.from({ length: count }, () => day(DAILY_HABITS.map(() => value)));
@@ -71,8 +71,8 @@ test('badges light from 90 % of the played days, and the next step is the habit 
 });
 
 test('today’s points, the track scale, the month label and the ordinal', () => {
-  assert.deepEqual(todayPoints(day([true, true, false, null, true], { PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null })), { earned: 3, possible: 4, extrasEarned: ['PRIMERO_EN_ABRIR'], points: 20 });
-  assert.deepEqual(todayPoints(undefined), { earned: 0, possible: 0, extrasEarned: [], points: 0 });
+  assert.deepEqual(todayPoints(day([true, true, false, null, true], { PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null })), { earned: 3, possible: 4, extrasEarned: ['PRIMERO_EN_ABRIR'], effort: 0, points: 20 });
+  assert.deepEqual(todayPoints(undefined), { earned: 0, possible: 0, extrasEarned: [], effort: 0, points: 0 });
   const merged = { ...day([true, true, true, true, true], { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null }), ...todayPoints(day([true, true, true, true, true], { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null })) };
   assert.deepEqual(merged.extras, { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null }, 'spreading today’s points over the day keeps the extras object (the lost extra stays visible as lost)');
   assert.deepEqual(trackScale([35, 78, null]), { max: 100, marks: [0, 25, 50, 75, 100] }, 'never less than 100');
@@ -95,4 +95,20 @@ test('today’s points, the track scale, the month label and the ordinal', () =>
  const scores=[{score:20},{score:10},{score:10},{score:0}];
  assert.equal(leagueRank(10,scores),2); assert.equal(leagueRank(0,scores),null);
  assert.equal(leagueRank(10,[{score:20},{score:20},{score:10}]),2,'a tie above does not skip the next position');
+});
+
+// Rodny, 18 de noviembre de 2026: con los mismos hábitos, quien cerró cinco tareas sumaba lo mismo que quien cerró una,
+// y 3 de 4 a tiempo valía lo mismo que 0 de 4.
+test('a lost habit pays its done part, rounded, and effort pays one point per task up to twenty a day', () => {
+  const entry = { habits: { RELOJ: true, AL_DIA: true, A_TIEMPO: false, DOCUMENTADO: null, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true },
+    extras: { ESFUERZO: 4, PROPORCION: { A_TIEMPO: 0.75 }, PRIMERO_EN_ABRIR: false } };
+  assert.equal(habitPoints(entry, 'A_TIEMPO'), 4);
+  assert.equal(habitPoints(entry, 'RELOJ'), 5);
+  assert.equal(habitPoints(entry, 'DOCUMENTADO'), 0);
+  assert.equal(effortPoints(entry), 4);
+  assert.equal(effortPoints({ extras: { ESFUERZO: 37 } }), 20);
+  assert.equal(todayPoints(entry).points, 5 + 5 + 4 + 5 + 5 + 4);
+  assert.equal(summarizeDays([entry, entry]).points, 2 * 28);
+  assert.equal(summarizeDays([entry]).earned, 4, 'a partial habit is not an earned habit for badges and full days');
+  assert.equal(leagueScore({ days: [{ habits: {}, extras: { ESFUERZO: 2 } }] }), 2, 'effort alone is a score');
 });

@@ -2,7 +2,7 @@
 // plataforma ya registra. Regla pura: el servicio junta las fuentes (cierres con sus relojes, sesiones, la foto de
 // las 6:00 y las devoluciones) y esto decide. Un hábito que no se pudo jugar queda `null` y nunca resta. La
 // evidencia es una frase en español por hábito, hechos y números, nunca un juicio sobre la persona.
-import { DAILY_HABITS, EXTRA_ACTIONS } from './platformLeague.js';
+import { DAILY_HABITS, EXTRA_ACTIONS, EFFORT_KEY, PROPORTION_KEY } from './platformLeague.js';
 import { describePlatformMutation } from './operationalMutationLabels.js';
 import { mergeAreaChecks } from './leagueAreaChecks.js';
 
@@ -28,6 +28,20 @@ const dueDayOf = (task) => {
 };
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+const dueLabel = (value) => {
+  const day = value ? new Date(value).toISOString().slice(0, 10) : null;
+  return day ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`)) : null;
+};
+/** Qué quedó vencido, con su nombre: sin eso «Al día» se perdía sin que nadie supiera por qué (Rodny, 18 de noviembre de 2026). */
+export function pendingEvidence(tasks = [], count = tasks.length) {
+  const named = (tasks || []).filter((task) => task?.title).slice(0, 2).map((task) => {
+    const due = dueLabel(task.dueDate);
+    return `«${task.title}»${due ? ` (vencía el ${due})` : ''}`;
+  });
+  if (!named.length) return `Al cierre quedaba ${plural(count, 'tarea vencida', 'tareas vencidas')}.`;
+  const rest = count - named.length;
+  return `Al cierre quedaba ${named.join(' y ')}${rest > 0 ? ` y ${plural(rest, 'más', 'más')}` : ''}.`;
+}
 /** «HH:mm» de Bogotá de un instante. */
 export const bogotaTimeOf = (value) => {
   const time = value instanceof Date ? value.getTime() : Date.parse(value);
@@ -75,8 +89,10 @@ export function workRecordFromTrace(event = {}) {
  * registrara trabajo; `productionDays`: las jornadas de producción (eventos de Actividad) en que participó.
  * `areaChecks`: los chequeos de su área por hábito (`leagueAreaChecks.js`), que se suman a lo que dieron las tareas.
  */
-export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [], areaChecks = null } = {}) {
+export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [], areaChecks = null, closeState = null } = {}) {
   const habits = {}, evidence = {}, extras = {};
+  // La parte cumplida de cada hábito, en unidades: `{ ok, total }`. Sirve para pagar la parte de un hábito perdido.
+  const units = {};
 
   // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
   // Una jornada de producción se cierra con tiempo declarado y vale: en campo no hay cronómetro (Rodny, 9 de noviembre de 2026).
@@ -85,6 +101,13 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     const declaredProduction = closedTasks.filter((task) => task.production && task.declared).length;
     const dirty = sessions.filter((session) => session.isOverlapping || Boolean(session.correctedAt) || Number(session.durationMs || 0) > FORGOTTEN_SESSION_MS);
     habits.RELOJ = unmeasured.length === 0 && dirty.length === 0;
+    // Cada cierre es una unidad y cada sesión olvidada, encimada o corregida es una unidad perdida; sin cierres, cada sesión.
+    units.RELOJ = closedTasks.length
+      ? { ok: closedTasks.length - unmeasured.length, total: closedTasks.length + dirty.length }
+      : { ok: sessions.length - dirty.length, total: sessions.length };
+    // Esfuerzo: cada tarea cerrada con su tiempo (medido, o declarado en una jornada de producción) suma un punto.
+    extras[EFFORT_KEY] = closedTasks.length - unmeasured.length;
+    evidence[EFFORT_KEY] = extras[EFFORT_KEY] ? `${plural(extras[EFFORT_KEY], 'tarea cerrada con su tiempo', 'tareas cerradas con su tiempo')}.` : 'Ninguna tarea cerrada con su tiempo.';
     const parts = [];
     if (closedTasks.length) parts.push(`${plural(closedTasks.length - unmeasured.length, 'cierre con tiempo registrado', 'cierres con tiempo registrado')} de ${closedTasks.length}`);
     if (declaredProduction) parts.push(plural(declaredProduction, 'jornada con tiempo declarado', 'jornadas con tiempo declarado'));
@@ -96,11 +119,21 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     evidence.RELOJ = 'Sin cierres ni relojes ese día.';
   }
 
-  // Al día: la foto de las 6:00.
-  if (overdueAtDawn === null || overdueAtDawn === undefined) {
+  // Al día (Rodny, 18 de noviembre de 2026): se juzga cómo termina la jornada, no cómo amanece. Con la foto de las 6:00
+  // quien amanecía con una vencida perdía el hábito aunque la cerrara a las 9. Y solo se juega si la persona cerró algo:
+  // sin tareas no hay nada que dejar vencido, y el hábito se regalaba a quien no tenía trabajo.
+  if (!closedTasks.length) {
     habits.AL_DIA = null;
-    evidence.AL_DIA = dawnEvidenceReason || 'Sin foto de las 6:00 ese día.';
+    evidence.AL_DIA = 'Sin cierres ese día: Al día se juega cuando cierras algo.';
+  } else if (closeState && Number.isFinite(Number(closeState.pending))) {
+    const pending = Number(closeState.pending);
+    habits.AL_DIA = pending === 0;
+    evidence.AL_DIA = pending === 0 ? 'Cerró la jornada sin nada vencido.' : pendingEvidence(closeState.pendingTasks, pending);
+  } else if (overdueAtDawn === null || overdueAtDawn === undefined) {
+    habits.AL_DIA = null;
+    evidence.AL_DIA = dawnEvidenceReason || 'Sin lectura de cómo terminó la jornada.';
   } else {
+    // Respaldo: sin lectura del cierre, la foto de las 6:00 de siempre.
     habits.AL_DIA = Number(overdueAtDawn) === 0;
     evidence.AL_DIA = Number(overdueAtDawn) === 0 ? 'Amaneció sin vencidas.' : `Amaneció con ${plural(Number(overdueAtDawn), 'vencida', 'vencidas')}.`;
   }
@@ -113,6 +146,7 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   } else {
     const onTime = dated.filter((row) => { const closedDay = bogotaDayOf(row.task.completedAt); return closedDay && closedDay <= row.due; });
     habits.A_TIEMPO = onTime.length === dated.length;
+    units.A_TIEMPO = { ok: onTime.length, total: dated.length };
     evidence.A_TIEMPO = `${onTime.length} de ${dated.length} a tiempo.`;
   }
 
@@ -129,13 +163,18 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   } else {
     const documented = delegated.filter((task) => task.documented).length;
     habits.DOCUMENTADO = documented === delegated.length;
+    units.DOCUMENTADO = { ok: documented, total: delegated.length };
     evidence.DOCUMENTADO = `${documented} de ${plural(delegated.length, 'tarea delegada con contexto', 'tareas delegadas con contexto')}.`;
   }
 
-  // Sin devolución.
+  // Sin devolución: se juega si la persona entregó algo ese día o si le devolvieron algo (Rodny, 18 de noviembre de 2026).
+  // Sin entregas no hay nada que devolver, y el hábito se regalaba a quien no había trabajado.
   if (returnedToday === null || returnedToday === undefined) {
     habits.SIN_DEVOLUCION = null;
     evidence.SIN_DEVOLUCION = 'Sin lectura de devoluciones ese día.';
+  } else if (!closedTasks.length && Number(returnedToday) === 0) {
+    habits.SIN_DEVOLUCION = null;
+    evidence.SIN_DEVOLUCION = 'Sin entregas ese día.';
   } else {
     habits.SIN_DEVOLUCION = Number(returnedToday) === 0;
     evidence.SIN_DEVOLUCION = Number(returnedToday) === 0 ? 'Nada devuelto.' : `${plural(Number(returnedToday), 'tarea devuelta', 'tareas devueltas')}.`;
@@ -177,7 +216,20 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   evidence.PRIMERO_EN_REUNION = 'El administrador confirma quién llegó primero a tráfico.';
 
   // Hábitos por área (Rodny, 12 de noviembre de 2026): las fuentes de Parrillas, el CRM, Pautas y Financiero.
-  if (areaChecks) mergeAreaChecks(habits, evidence, areaChecks);
+  // «Al día» del área solo se juega si ese día quedó registro de trabajo: sin trabajo, no se regala.
+  if (areaChecks) {
+    const checks = habits.TRABAJO_REGISTRADO === true ? areaChecks : { ...areaChecks, AL_DIA: [] };
+    for (const [key, list] of Object.entries(checks)) for (const check of (list || []).filter(Boolean)) {
+      units[key] = units[key] || { ok: 0, total: 0 };
+      units[key].total += 1;
+      if (check.ok === true) units[key].ok += 1;
+    }
+    mergeAreaChecks(habits, evidence, checks);
+  }
+  // La parte cumplida de cada hábito perdido, para pagar esa parte (3 de 4 a tiempo vale 4 de 5 puntos).
+  const proportion = {};
+  for (const [key, { ok, total }] of Object.entries(units)) if (habits[key] === false && total > 0 && ok > 0) proportion[key] = Math.round((ok / total) * 100) / 100;
+  if (Object.keys(proportion).length) extras[PROPORTION_KEY] = proportion;
 
   for (const habit of DAILY_HABITS) if (!(habit.key in habits)) habits[habit.key] = null;
   for (const extra of EXTRA_ACTIONS) if (!(extra.key in extras)) extras[extra.key] = null;

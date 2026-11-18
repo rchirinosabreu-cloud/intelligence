@@ -13,7 +13,7 @@ const members = [
   { id: 'm-jesu', name: 'Jesu', avatarUrl: null, user: { id: 'u-jesu', role: 'EDITOR', isActive: true, modulePermissions: { liga: true } } }
 ];
 
-const fakeDb = () => ({
+const fakeDb = ({ closeViewsOverride = null } = {}) => ({
   recognitionAward: { groupBy: async () => [], findMany: async () => [] },
   teamMember: {
     findMany: async () => members,
@@ -21,6 +21,9 @@ const fakeDb = () => ({
   },
   task: {
     findMany: async ({ where, select }) => {
+      // La lectura del cierre de la jornada (Al día): sin ella el hábito vuelve a la foto de las 6:00, que es lo que
+      // prueban estos casos. La regla del cierre tiene su propia prueba más abajo.
+      if (where.AND) { if (closeViewsOverride) return closeViewsOverride; throw new Error('sin lectura del cierre en este doble'); }
       if (where.createdAt) return [
         { id: 'created-r', creatorId: 'u-rodny', assigneeId: 'm-helen', taskComments: [{ content: 'Contexto: el cliente pidió versión vertical' }], taskAttachments: [] },
         { id: 'created-h', creatorId: 'u-helen', assigneeId: 'm-rodny', taskComments: [], taskAttachments: [] }
@@ -67,7 +70,7 @@ test('league sends bundled avatar keys for known people without altering the poi
   const service = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.race.lanes.find(p => p.isSelf).pixelAvatarKey, 'rodny');
-  assert.equal(league.score, 30);
+  assert.equal(league.score, 31, 'six habits and one task closed with its time');
 });
 
 test('recognition collection reads only the current recipient and Bogotá month, without task details or writes', async () => {
@@ -161,13 +164,13 @@ test('live habits can change without reducing confirmed points, including gifts 
   db.recognitionAward.findMany = async () => [{ id: 'award', recipientId: 'u-rodny', occurredAt: at(`${DAY}T19:00:00Z`) }];
   const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T22:00:00Z`) });
   const before = await service.leagueFor({ userId: 'u-rodny' });
-  assert.deepEqual(before.scoreBreakdown, { confirmed: 25, provisional: 30 });
+  assert.deepEqual(before.scoreBreakdown, { confirmed: 25, provisional: 31 });
   assert.equal(before.today.isProvisional, true);
   const find = db.task.findMany;
   db.task.findMany = async args => args.select.returnedAt ? [{ assigneeId: 'm-rodny', returnedAt: at(`${DAY}T18:00:00Z`) }] : find(args);
   const after = await service.leagueFor({ userId: 'u-rodny' });
-  assert.deepEqual(after.scoreBreakdown, { confirmed: 25, provisional: 25 });
-  assert.equal(after.score, 50);
+  assert.deepEqual(after.scoreBreakdown, { confirmed: 25, provisional: 26 });
+  assert.equal(after.score, 51);
   assert.deepEqual(after.race.lanes.find(lane => lane.isSelf).scoreBreakdown, after.scoreBreakdown);
 });
 
@@ -179,8 +182,8 @@ test('a saved daily close confirms today once and survives later source changes'
   const find = db.task.findMany;
   db.task.findMany = async args => args.select.returnedAt ? [{ assigneeId: 'm-rodny', returnedAt: at(`${DAY}T18:00:00Z`) }] : find(args);
   const result = await service.leagueFor({ userId: 'u-rodny' });
-  assert.deepEqual(result.scoreBreakdown, { confirmed: 30, provisional: 0 });
-  assert.equal(result.score, 30);
+  assert.deepEqual(result.scoreBreakdown, { confirmed: 31, provisional: 0 });
+  assert.equal(result.score, 31);
   assert.equal(result.today.isProvisional, false);
   assert.equal(result.today.habits.SIN_DEVOLUCION, true);
   assert.equal(result.today.evidence.SIN_DEVOLUCION, 'Nada devuelto.');
@@ -192,7 +195,7 @@ test('a fresh league starts at zero, excludes old daily evidence and never backf
   repo.startedAt = async () => cutoff;
   const db = fakeDb();
   const windows = [];
-  db.task.findMany = async ({ where }) => { windows.push(where); return []; };
+  db.task.findMany = async ({ where }) => { if (!where.AND) windows.push(where); return []; }; // la lectura del cierre mira el estado de las tareas, no lo cerrado desde el inicio
   db.taskWorkSession.findMany = async () => [];
   const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => cutoff });
   const league = await service.leagueFor({ userId: 'u-rodny' });
@@ -279,18 +282,18 @@ test('a day is evaluated for every active person from the real sources, and save
   const by = Object.fromEntries(rows.map((row) => [row.memberId, row.habits]));
   assert.deepEqual(by['m-rodny'], { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
   assert.deepEqual(by['m-helen'], { RELOJ: false, AL_DIA: false, A_TIEMPO: false, DOCUMENTADO: false, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true }, 'declared time, two overdue at dawn, closed after the original date, no comment; the closing itself is recorded work');
-  assert.deepEqual(by['m-jesu'], { RELOJ: true, AL_DIA: true, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: false, TRABAJO_REGISTRADO: true }, 'worked without closing; one task returned');
+  assert.deepEqual(by['m-jesu'], { RELOJ: true, AL_DIA: null, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: false, TRABAJO_REGISTRADO: true }, 'worked without closing (Al día is not played without closings); one task returned');
   const evidence = Object.fromEntries(rows.map((row) => [row.memberId, row.evidence]));
   assert.match(evidence['m-rodny'].TRABAJO_REGISTRADO, /Financiero/, 'the financial record and the collection activity count as work (the league gift does not)');
   assert.doesNotMatch(evidence['m-rodny'].TRABAJO_REGISTRADO, /Liga/);
   const extras = Object.fromEntries(rows.map((row) => [row.memberId, row.extras]));
-  assert.deepEqual(extras['m-helen'], { PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the first human trace from 8:00 was hers');
-  assert.deepEqual(extras['m-rodny'], { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null });
+  assert.deepEqual(extras['m-helen'], { ESFUERZO: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the first human trace from 8:00 was hers; declared time is not effort');
+  assert.deepEqual(extras['m-rodny'], { ESFUERZO: 1, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null });
   await service.computeAndSave(DAY);
   assert.equal(repo.days.size, 3);
   assert.match(repo.days.get(`${DAY}:m-helen`).evidence.A_TIEMPO, /0 de 1 a tiempo/);
   assert.match(repo.days.get(`${DAY}:m-rodny`).evidence.PRIMERO_EN_ABRIR, /Helen abrió primero, a las 08:04/);
-  assert.deepEqual(repo.days.get(`${DAY}:m-helen`).extras, { PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the extras are saved beside the habits');
+  assert.deepEqual(repo.days.get(`${DAY}:m-helen`).extras, { ESFUERZO: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the extras are saved beside the habits');
 });
 
 test('the automatic run computes today from 18:05 on business days and backfills the missing days of the month, never a weekend', async () => {
@@ -317,16 +320,16 @@ test('the league of a person: the month so far plus today live, the lanes of the
   const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) }); // 14:00 Bogotá del 3
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.month, '2026-11');
-  assert.equal(league.score, 60, 'five habits on the 2nd and six today at 5 each, plus one gift at 5');
+  assert.equal(league.score, 61, 'five habits on the 2nd and six today at 5 each, one task closed with its time, plus one gift at 5');
   assert.deepEqual(league.today.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.deepEqual({ earned: league.today.earned, possible: league.today.possible, extrasEarned: league.today.extrasEarned, points: league.today.points }, { earned: 6, possible: 6, extrasEarned: [], points: 35 });
-  assert.deepEqual(league.today.extras, { PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null }, 'the extras object survives beside today’s points');
+  assert.deepEqual({ earned: league.today.earned, possible: league.today.possible, extrasEarned: league.today.extrasEarned, points: league.today.points }, { earned: 6, possible: 6, extrasEarned: [], points: 36 });
+  assert.deepEqual(league.today.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null }, 'the extras object survives beside today’s points');
   assert.equal(league.streak.days, 2);
   assert.equal(league.kudos.score, 5);
   assert.equal(league.kudos.received[0].from, 'Helen');
   assert.equal(league.race.lanes.length, 3);
   assert.deepEqual(league.race.lanes.map((lane) => lane.name), ['Helen', 'Jesu', 'Rodny'], 'fixed order by name, never by score');
-  assert.equal(league.race.lanes.find((lane) => lane.isSelf).score, 60);
+  assert.equal(league.race.lanes.find((lane) => lane.isSelf).score, 61);
   assert.equal(league.race.lanes.find((lane) => lane.name === 'Helen').score, 25, 'two habits on the 2nd, two today and the extra for opening first');
   assert.ok(!('level' in league.race.lanes[0]), 'no levels anywhere');
   assert.deepEqual(league.race.track, { max: 100, marks: [0, 25, 50, 75, 100] });
@@ -361,10 +364,10 @@ test('the week starts at zero every Monday beside the month total (Rodny, 9 de n
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.week.key, '2026-W45');
   assert.deepEqual([league.week.from, league.week.to, league.week.label], ['2026-11-02', '2026-11-08', 'del 2 al 8 de noviembre']);
-  assert.equal(league.week.score, 25 + 30 + 5 + 5, 'the 2nd, today live, this week’s gift and today’s award; nothing from October');
-  assert.equal(league.score, 65, 'the month does not include October either');
+  assert.equal(league.week.score, 25 + 31 + 5 + 5, 'the 2nd, today live, this week’s gift and today’s award; nothing from October');
+  assert.equal(league.score, 66, 'the month does not include October either');
   assert.deepEqual(league.week.position, { rank: 1, of: 3 });
-  assert.deepEqual(league.week.lanes.map(lane => [lane.name, lane.score]), [['Helen', 15], ['Jesu', 15], ['Rodny', 65]], 'Helen: today’s two habits and the extra; Jesu: today’s three habits (clock, dawn, recorded work)');
+  assert.deepEqual(league.week.lanes.map(lane => [lane.name, lane.score]), [['Helen', 15], ['Jesu', 10], ['Rodny', 66]], 'Helen: today’s two habits and the extra; Jesu: clock and recorded work (Al día is not played without closings)');
   assert.equal(league.week.podium[0].name, 'Rodny');
   assert.deepEqual([league.week.lastWeek.key, league.week.lastWeek.label], ['2026-W44', 'del 26 de octubre al 1 de noviembre']);
   assert.deepEqual(league.week.lastWeek.leaders.map(lane => [lane.name, lane.score]), [['Helen', 30]], 'Helen won W44: five habits and an award; Rodny had two habits and a gift (15)');
@@ -374,8 +377,8 @@ test('the week starts at zero every Monday beside the month total (Rodny, 9 de n
   db.recognitionAward.findMany = async () => [];
   const fresh = await monday.leagueFor({ userId: 'u-rodny' });
   assert.equal(fresh.week.key, '2026-W46');
-  assert.equal(fresh.week.score, 5, 'only today’s provisional «Sin devolución»: nothing carried over from last week');
-  assert.deepEqual(fresh.week.position, { rank: 1, of: 3 }, 'everyone starts the week tied');
+  assert.equal(fresh.week.score, 0, 'nothing carried over from last week, and no free «Sin devolución» before doing anything (Rodny, 18 de noviembre de 2026)');
+  assert.equal(fresh.week.position, null, 'zero points place nobody');
   assert.ok(fresh.score >= 30, 'the month keeps the 2nd and the gift');
   assert.deepEqual(fresh.week.lastWeek.leaders.map(lane => lane.name), ['Rodny'], 'last week (W45) is now the one that just closed');
 });
@@ -434,7 +437,7 @@ test('only an admin records the two traffic winners of a week (same meeting, nev
  await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-jesu',day:DAY}),e=>e.statusCode===409&&e.code==='LEAGUE_MEETING_FULL');
  assert.equal(repo.meetings.length,2);
  db.recognitionAward.findMany=async({where,select})=>{ assert.ok(where.occurredAt.gte<=at('2026-11-01T05:00:00.000Z'), 'the awards read covers the month (and the previous week)');assert.deepEqual(select,{id:true,recipientId:true,occurredAt:true});return [{id:'a',recipientId:'u-rodny',occurredAt:at(DAY+'T15:00:00Z')}];};
- for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,45);assert.equal(league.today.points,45);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);
+ for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,46);assert.equal(league.today.points,46);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);
   assert.equal(league.today.extras.PRIMERO_EN_REUNION,true);assert.match(league.today.evidence.PRIMERO_EN_REUNION,/Rodny y Helen/);assert.equal(league.meetings.entries.length,2);}
  const helen=await service.leagueFor({userId:'u-helen'});
  assert.equal(helen.today.extras.PRIMERO_EN_REUNION,true,'the second winner also sees her extra');
@@ -473,8 +476,8 @@ test('area checks join the habits: today asks for the snapshot, a past day does 
   const jesu = (await service.evaluateDay(DAY)).find((row) => row.memberId === 'm-jesu');
   assert.equal(jesu.habits.DOCUMENTADO, true, 'a source plays a habit that tasks did not');
   assert.equal(jesu.evidence.DOCUMENTADO, 'Financiero: 1 de 1 registro con soporte o nota.');
-  assert.equal(jesu.habits.AL_DIA, false, 'clean tasks do not cover an overdue follow-up');
-  assert.equal(jesu.evidence.AL_DIA, 'Tareas: Amaneció sin vencidas. · CRM: 1 seguimiento vencido.');
+  assert.equal(jesu.habits.AL_DIA, false, 'an overdue follow-up loses Al día on a day with recorded work');
+  assert.equal(jesu.evidence.AL_DIA, 'CRM: 1 seguimiento vencido.', 'without closings, tasks do not play Al día; the area does');
   const helen = (await service.evaluateDay(DAY)).find((row) => row.memberId === 'm-helen');
   assert.equal(helen.evidence.DOCUMENTADO, '0 de 1 tarea delegada con contexto.', 'people without area checks keep their evidence as it was');
   await service.evaluateDay('2026-11-02');
@@ -484,5 +487,20 @@ test('area checks join the habits: today asks for the snapshot, a past day does 
   const failing = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`),
     areaSources: { read: async () => { throw new Error('down'); } }, logger: { error: () => {} } });
   const rows = await failing.evaluateDay(DAY);
-  assert.equal(rows.find((row) => row.memberId === 'm-jesu').habits.AL_DIA, true, 'without the areas the day is the one tasks gave');
+  assert.equal(rows.find((row) => row.memberId === 'm-jesu').habits.AL_DIA, null, 'without the areas the day is the one tasks gave: no closings, Al día not played');
+});
+
+// Rodny, 18 de noviembre de 2026: Al día se juzga al cierre de la jornada, con la regla de la insignia. Quien amaneció
+// con una vencida y la cerró gana el hábito; quien deja algo vencido lo ve nombrado.
+test('Al día reads the close of the day: what was owed and still open at 18:00, with its name', async () => {
+  const closeViewsOverride = [
+    { id: 't-r', title: 'Reel', status: 'REALIZADA', assigneeId: 'm-rodny', completedAt: at(`${DAY}T20:00:00.000Z`), dueDate: at(`${DAY}T12:00:00.000Z`) },
+    { id: 't-old', title: 'Informe octubre', status: 'PENDIENTE', assigneeId: 'm-helen', completedAt: null, dueDate: at('2026-10-02T12:00:00.000Z') }
+  ];
+  const service = createPlatformLeagueService({ db: fakeDb({ closeViewsOverride }), repository: fakeRepo(), snapshots, now: () => at(`${DAY}T23:30:00.000Z`) });
+  const rows = Object.fromEntries((await service.evaluateDay(DAY)).map((row) => [row.memberId, row]));
+  assert.equal(rows['m-rodny'].habits.AL_DIA, true);
+  assert.equal(rows['m-rodny'].evidence.AL_DIA, 'Cerró la jornada sin nada vencido.');
+  assert.equal(rows['m-helen'].habits.AL_DIA, false);
+  assert.equal(rows['m-helen'].evidence.AL_DIA, 'Al cierre quedaba «Informe octubre» (vencía el 2 de octubre).');
 });

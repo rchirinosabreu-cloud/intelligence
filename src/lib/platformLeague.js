@@ -1,4 +1,4 @@
-// Liga mensual: 5 por hábito, 5 por primera actividad, 10 por tráfico registrado,
+// Liga mensual: 5 por hábito (la parte cumplida si se perdió), 1 por tarea cerrada con reloj (hasta 20 al día), 5 por primera actividad, 10 por tráfico registrado,
 // 5 por reconocimiento nativo y regalos semanales de 5. Los regalos históricos conservan su valor.
 // Los empates comparten puesto. Una lectura nunca concede premios.
 
@@ -43,6 +43,39 @@ export const MEETING_WINNERS_PER_WEEK = 2;
 export const RECOGNITION_POINTS = 5;
 export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'PLAN_APPROVED', 'WEEKLY_FIFTY'];
 
+/**
+ * Esfuerzo (Rodny, 18 de noviembre de 2026: «a puntos por esfuerzo, solo ponle un punto»): cada tarea cerrada con su
+ * tiempo registrado suma un punto, hasta veinte al día. Los hábitos miden cómo se trabaja; esto, cuánto. Sin él, quien
+ * cerraba una tarea y quien cerraba seis sumaban lo mismo (Brayan y Melissa, 13 de noviembre: 1 y 5 cierres, 20 y 20).
+ */
+export const EFFORT_POINTS_PER_TASK = 1;
+export const EFFORT_DAILY_CAP = 20;
+/** Lo que el día guarda en `extras` además de los extras de una sola persona: el esfuerzo y la parte cumplida de un hábito. */
+export const EFFORT_KEY = 'ESFUERZO';
+export const PROPORTION_KEY = 'PROPORCION';
+
+/** Los puntos de esfuerzo de un día: un punto por tarea cerrada con reloj, con techo. */
+export function effortPoints(entry) {
+  const tasks = Number(entry?.extras?.[EFFORT_KEY]);
+  return Number.isFinite(tasks) && tasks > 0 ? Math.min(tasks, EFFORT_DAILY_CAP) * EFFORT_POINTS_PER_TASK : 0;
+}
+
+/**
+ * Los puntos de un hábito en un día. Ganado entero, cinco. Perdido, la parte cumplida (Rodny, 18 de noviembre de 2026:
+ * 3 de 4 a tiempo no puede valer lo mismo que 0 de 4): `extras.PROPORCION[clave]` guarda esa parte, de 0 a 1, y se
+ * redondea al punto. Sin evaluar, cero, y nunca resta.
+ */
+export function habitPoints(entry, key) {
+  const value = entry?.habits?.[key];
+  if (value === true) return HABIT_POINTS;
+  if (value !== false) return 0;
+  const share = Number(entry?.extras?.[PROPORTION_KEY]?.[key]);
+  return Number.isFinite(share) && share > 0 ? Math.round(HABIT_POINTS * Math.min(1, share)) : 0;
+}
+
+/** La insignia «Al día» pide al menos dos cierres antes de las 18:00 (Rodny, 18 de noviembre de 2026). */
+export const CAUGHT_UP_MIN_CLOSED = 2;
+
 /** Una insignia se enciende desde el 90 % de los días en que ese hábito se jugó. */
 export const BADGE_THRESHOLD = 0.9;
 
@@ -56,7 +89,7 @@ const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 export function summarizeDays(days = []) {
   const perHabit = Object.fromEntries(DAILY_HABITS.map((habit) => [habit.key, { earned: 0, possible: 0 }]));
   const perExtra = Object.fromEntries(EXTRA_ACTIONS.map((extra) => [extra.key, 0]));
-  let earned = 0, possible = 0, fullDays = 0, extras = 0;
+  let earned = 0, possible = 0, fullDays = 0, extras = 0, habitTotal = 0, effort = 0;
   for (const entry of days) {
     let dayEarned = 0, dayPossible = 0;
     for (const habit of DAILY_HABITS) {
@@ -64,19 +97,21 @@ export function summarizeDays(days = []) {
       if (value === null || value === undefined) continue;
       perHabit[habit.key].possible += 1;
       dayPossible += 1;
+      habitTotal += habitPoints(entry, habit.key);
       if (value === true) { perHabit[habit.key].earned += 1; dayEarned += 1; }
     }
     for (const extra of EXTRA_ACTIONS) if (entry?.extras?.[extra.key] === true) { perExtra[extra.key] += 1; extras += 1; }
+    effort += effortPoints(entry);
     earned += dayEarned; possible += dayPossible;
     if (dayPossible > 0 && dayEarned === dayPossible) fullDays += 1;
   }
-  return { earned, possible, fullDays, extras, perHabit, perExtra, points: earned * HABIT_POINTS + EXTRA_ACTIONS.reduce((sum, extra) => sum + perExtra[extra.key] * extra.points, 0) };
+  return { earned, possible, fullDays, extras, effort, perHabit, perExtra, points: habitTotal + effort + EXTRA_ACTIONS.reduce((sum, extra) => sum + perExtra[extra.key] * extra.points, 0) };
 }
 
 /** Lo que pone la plataforma: hábitos y extras, en puntos. `null` si todavía no se jugó nada. */
 export function habitsScore(days = []) {
-  const { possible, extras, points } = summarizeDays(days);
-  if (!possible && !extras) return null;
+  const { possible, extras, effort, points } = summarizeDays(days);
+  if (!possible && !extras && !effort) return null;
   return points;
 }
 
@@ -147,16 +182,18 @@ export function leagueNextStep(days = []) {
 
 /** Los puntos de hoy: cuántos hábitos van ganados y cuántos se juegan, qué extras cayeron y cuántos puntos suman. */
 export function todayPoints(entry) {
-  let earned = 0, possible = 0;
+  let earned = 0, possible = 0, habitTotal = 0;
   for (const habit of DAILY_HABITS) {
     const value = entry?.habits?.[habit.key];
     if (value === null || value === undefined) continue;
     possible += 1;
+    habitTotal += habitPoints(entry, habit.key);
     if (value === true) earned += 1;
   }
   // `extrasEarned`, no `extras`: el día ya trae `extras` como objeto y esto se mezcla encima de él.
   const extrasEarned = EXTRA_ACTIONS.filter((extra) => entry?.extras?.[extra.key] === true).map((extra) => extra.key);
-  return { earned, possible, extrasEarned, points: earned * HABIT_POINTS + EXTRA_ACTIONS.filter(extra => extrasEarned.includes(extra.key)).reduce((sum, extra) => sum + extra.points, 0) };
+  const effort = effortPoints(entry);
+  return { earned, possible, extrasEarned, effort, points: habitTotal + effort + EXTRA_ACTIONS.filter(extra => extrasEarned.includes(extra.key)).reduce((sum, extra) => sum + extra.points, 0) };
 }
 
 /** La escala de la pista: de 0 al techo redondo que cubre al puntero (nunca menos de 100), con cuatro marcas. */

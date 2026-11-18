@@ -12,7 +12,7 @@ import MeetingAward from './MeetingAward';
 import RecognitionCollection, { RecognitionHistory, RecognitionStatus } from './RecognitionCollection';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, KUDOS_WEEKLY, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
+import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, KUDOS_WEEKLY, CAUGHT_UP_MIN_CLOSED, EFFORT_DAILY_CAP, EFFORT_KEY, effortPoints, habitPoints, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
 
 // El nombre de archivo conserva compatibilidad con el dock y ?carrera.
 // Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
@@ -96,12 +96,21 @@ function Habits({ today }) {
       const Icon = item.icon;
       const unavailable = item.extra && !item.source;
       const earned = item.value === true;
-      return <li key={item.key} className="py-3" {...{ [item.extra ? 'data-race-today-extra' : 'data-race-today-habit']: item.key }} data-race-today-state={earned ? 'earned' : item.value === false ? 'missed' : 'idle'}>
-        <div className="flex items-center gap-2"><Icon className={cn('h-4 w-4', earned ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">{item.label}</span><span className={cn('text-xs', earned ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{unavailable ? 'Próximamente' : earned ? `+${item.points} hoy` : item.value === false ? 'Sin sumar hoy' : 'Sin evaluar'}</span></div>
+      // Un hábito perdido paga la parte cumplida (Rodny, 18 de noviembre de 2026): 3 de 4 a tiempo son 4 puntos.
+      const partial = !item.extra && item.value === false ? habitPoints(today, item.key) : 0;
+      const counted = earned || partial > 0;
+      return <li key={item.key} className="py-3" {...{ [item.extra ? 'data-race-today-extra' : 'data-race-today-habit']: item.key }} data-race-today-state={earned ? 'earned' : partial ? 'partial' : item.value === false ? 'missed' : 'idle'}>
+        <div className="flex items-center gap-2"><Icon className={cn('h-4 w-4', counted ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">{item.label}</span><span className={cn('text-xs', counted ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{unavailable ? 'Próximamente' : earned ? `+${item.points} hoy` : partial ? `+${partial} hoy, en parte` : item.value === false ? 'Sin sumar hoy' : 'Sin evaluar'}</span></div>
         <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{item.hint}</p>
         {today.evidence?.[item.key] && <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{today.evidence[item.key]}</p>}
       </li>;
-    })}</ul>
+    })}
+      <li className="py-3" data-race-today-effort={effortPoints(today)}>
+        <div className="flex items-center gap-2"><Flame className={cn('h-4 w-4', effortPoints(today) ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">Esfuerzo</span><span className={cn('text-xs', effortPoints(today) ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{effortPoints(today) ? `+${effortPoints(today)} hoy` : 'Sin sumar hoy'}</span></div>
+        <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>Un punto por cada tarea que cierras con su tiempo registrado, hasta {EFFORT_DAILY_CAP} al día.</p>
+        {today.evidence?.[EFFORT_KEY] && <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{today.evidence[EFFORT_KEY]}</p>}
+      </li>
+    </ul>
   </details>;
 }
 
@@ -109,7 +118,10 @@ function Rules() {
   return <details className="group text-xs">
     <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Cómo se cuentan los puntos<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
     <ul className={cn(surface, 'mt-2 list-disc space-y-2 p-4 pl-8 leading-5', muted)}>
-      <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
+      <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Si lo cumples en parte, sumas esa parte: 3 de 4 tareas a tiempo son 4 puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
+      <li>Esfuerzo: cada tarea que cierras con su tiempo registrado suma 1 punto, hasta {EFFORT_DAILY_CAP} al día.</li>
+      <li>Al día mira cómo terminas la jornada a las 6:00 pm, no cómo amaneces: si cierras lo vencido durante el día, lo ganas. Si te queda algo, la plataforma te dice qué.</li>
+      <li>Al día y Sin devolución se juegan los días en que cierras algo: sin entregas no suman ni restan.</li>
       <li>Al día, A tiempo y Documentado también se leen de tu área: las parrillas de tus cuentas, tus seguimientos del CRM, tus pautas y tus registros de Financiero. Ganas el hábito si todo lo que jugaste ese día salió bien.</li>
       <li>Documentado mira lo que le pasas a otra persona: un comentario de al menos 20 letras, un archivo o un enlace. Tus recordatorios propios y las tareas que salen de una pieza no cuentan.</li>
       <li>Una jornada de producción vale para Reloj con el tiempo declarado al cerrar el pendiente.</li>
@@ -117,7 +129,7 @@ function Rules() {
       <li>La primera actividad registrada desde las 8:00 am suma {EXTRA_POINTS} puntos.</li>
       <li>Si estás entre las dos primeras personas en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
-      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos.</li>
+      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 6:00 pm sin dejar nada vencido.</li>
     </ul>
   </details>;
 }

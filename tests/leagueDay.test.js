@@ -31,17 +31,40 @@ test('Documentado only plays tasks delegated to someone else and not born from a
 test('a clean day earns the six points, each with its evidence in Spanish', () => {
   const out = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }], closedTasks: [task()], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
   assert.deepEqual(out.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.deepEqual(out.extras, { PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null }, 'the extras travel beside the habits');
+  assert.deepEqual(out.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null }, 'the extras travel beside the habits, with the effort of the day');
   assert.match(out.evidence.RELOJ, /1 cierre con tiempo registrado/);
   assert.match(out.evidence.AL_DIA, /sin vencidas/);
   assert.match(out.evidence.TRABAJO_REGISTRADO, /Gestión de tareas/);
   for (const text of Object.values(out.evidence)) assert.doesNotMatch(text, /lento|flojo|mal\b/i);
 });
 
-test('a day without closings leaves clock, on-time, documented and recorded work out of play, and the others still count', () => {
-  const out = evaluateLeagueDay({ day: DAY, closedTasks: [], sessions: [], overdueAtDawn: 2, returnedToday: 0 });
-  assert.deepEqual(out.habits, { RELOJ: null, AL_DIA: false, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: null });
-  assert.match(out.evidence.AL_DIA, /2 vencidas/);
+// Rodny, 18 de noviembre de 2026: sin trabajo no hay hábitos regalados. Antes, quien no cerraba nada sumaba Al día y Sin
+// devolución, diez puntos al día por no tener tareas.
+test('a day without closings leaves every habit out of play: nothing is earned for having no work, and a return still counts', () => {
+  const out = evaluateLeagueDay({ day: DAY, closedTasks: [], sessions: [], overdueAtDawn: 0, returnedToday: 0 });
+  assert.deepEqual(out.habits, { RELOJ: null, AL_DIA: null, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: null, TRABAJO_REGISTRADO: null });
+  assert.equal(evaluateLeagueDay({ day: DAY, returnedToday: 1 }).habits.SIN_DEVOLUCION, false, 'a returned task is lost even on a day without closings');
+});
+
+test('Al día is judged at the close of the day, names what was left and falls back to the dawn photo without that reading', () => {
+  const clean = evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session()], overdueAtDawn: 1, returnedToday: 0, closeState: { closed: 1, pending: 0, pendingTasks: [] } });
+  assert.equal(clean.habits.AL_DIA, true, 'who dawned with an overdue task and closed it wins the habit');
+  assert.equal(clean.evidence.AL_DIA, 'Cerró la jornada sin nada vencido.');
+  const left = evaluateLeagueDay({ day: DAY, closedTasks: [task()], overdueAtDawn: 0, returnedToday: 0,
+    closeState: { closed: 1, pending: 3, pendingTasks: [{ title: 'Informe octubre', dueDate: '2026-10-02T12:00:00.000Z' }, { title: 'Reel', dueDate: null }, { title: 'Post', dueDate: null }] } });
+  assert.equal(left.habits.AL_DIA, false);
+  assert.equal(left.evidence.AL_DIA, 'Al cierre quedaba «Informe octubre» (vencía el 2 de octubre) y «Reel» y 1 más.');
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()], overdueAtDawn: 2, returnedToday: 0 }).habits.AL_DIA, false, 'without the close reading, the dawn photo');
+});
+
+test('effort pays one point per task closed with its time, and a lost habit pays the part that was done', () => {
+  const late = (n) => task({ id: `l${n}`, completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-02T12:00:00.000Z' });
+  const out = evaluateLeagueDay({ day: DAY, closedTasks: [task({ id: 'a' }), task({ id: 'b' }), task({ id: 'c' }), late(1), task({ id: 'u', measuredMs: 60_000 })], sessions: [session()], returnedToday: 0,
+    closeState: { closed: 5, pending: 0, pendingTasks: [] } });
+  assert.equal(out.extras.ESFUERZO, 4, 'four closings with their time; the one measured for a minute does not count');
+  assert.equal(out.habits.A_TIEMPO, false);
+  assert.equal(out.habits.RELOJ, false);
+  assert.deepEqual(out.extras.PROPORCION, { RELOJ: 0.8, A_TIEMPO: 0.8 });
 });
 
 test('Trabajo registrado (Rodny, 9 de noviembre de 2026): Elisa’s financial records and any other module count; only presence loses it; no trace means not played', () => {
