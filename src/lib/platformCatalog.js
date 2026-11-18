@@ -48,6 +48,8 @@ export const PLATFORM_EXCLUDED = [
   { match: /^POST \/content\/items\/:id\/final-assets\/(direct-upload|confirm)$/, reason: 'la subida directa va del navegador al almacenamiento' },
   { match: /^POST \/content\/items\/:id\/delivery\/(direct-upload|confirm)$/, reason: 'confirmación de una carga directa del navegador, ligada a su sesión de entrega' },
   { match: /^\w+ \/clients\/:\w+\/(logo-image|storage\/signed-url|files)(\/|$)/, reason: 'archivos y logos' },
+  { match: /^\w+ \/brands\/:clientId\/files(\/|$)/, reason: 'subir, bajar o retirar logos, tipografías y manuales de una marca se hace en su ficha' },
+  { match: /^GET \/brands\/:clientId\/fonts\/download$/, reason: 'bajar una tipografía en .zip es un archivo para la persona, no una lectura' },
   { match: /^\w+ \/boards\/(unfurl|:boardId\/storage\/signed-url)$/, reason: 'adjuntos de inspiración' },
   { match: /^\w+ \/reports\/(generate|extract-metrics|image-proxy|:reportId\/(pdf|preview))$/, reason: 'subir capturas y archivos del informe' },
   // Adjuntar un comprobante, un soporte o un certificado sí se hace desde el chat (22 de octubre de 2026); bajarlo no.
@@ -441,6 +443,10 @@ export const PLATFORM_OPERATIONS = {
   // Salud de servicios
   'GET /service-health': { que: 'El semáforo de servicios externos (administradores).' },
   'GET /platform-health': { que: 'La salud de la plataforma por dentro: la nota de cada área (producto, pruebas, permisos, seguridad, código, operación, lista para otro cliente) y qué criterio falta en cada una (administradores).' },
+  // Marcas (18 de noviembre de 2026): la respuesta a «¿cuál es el color de este cliente?».
+  'GET /brands': { que: 'Las marcas de todos los clientes (cada uno dice client.isArchived; los archivados van aparte, como en el Directorio): colores (HEX y su papel), tipografías con su uso, tono, enlaces al manual y a Canva, y qué le falta a cada ficha (completeness.missing). Solo lectura; los archivos se bajan desde la ficha.' },
+  'GET /brands/:clientId': { que: 'La marca de un cliente: logos y archivos subidos (por nombre), colores, tipografías, tono, reglas de uso y enlaces al manual original.' },
+  'PUT /brands/:clientId': { que: 'Guarda la ficha de marca completa de un cliente. Se manda la ficha entera: lo que no se manda se borra. Un color que no sea HEX se rechaza diciendo cuál.', campos: 'colors (lista de { hex, name, role: PRINCIPAL|SECUNDARIO|ACENTO|NEUTRO|FONDO }), fonts (lista de { family, use: TITULOS|TEXTOS|LOGO|COMPLEMENTARIA, source: GOOGLE|ARCHIVO|COMERCIAL, weights }), tagline, voice, usageNotes, manualUrl, canvaUrl, logosUrl, links (lista de { label, url }), revision (la que se leyó)' },
   'GET /ad-budgets': { que: 'Las pautas de todos los clientes: presupuesto global, ciclo del cliente, gasto registrado, saldo y cómo va cada una. Las cifras terminadas en Cents van en centavos: para hablar usa formatos con su moneda, y `evaluation.reasons` ya lo dice en palabras. El gasto lo escribe quien lleva la pauta mirando Meta: la fecha de la lectura dice hasta cuándo es cierto.', campos: 'clientId (opcional), terminadas=1 (opcional)' },
   'GET /ad-budgets/options': { que: 'Los clientes y las personas del equipo que se pueden elegir al crear una pauta.' },
   'GET /ad-budgets/meta': { que: 'La conexión de Pautas con Meta: las cuentas publicitarias que ve la plataforma, cada campaña que gastó en los últimos 30 días con la pauta a la que está ligada, y las que gastan sin estar en ninguna pauta (unassigned). Solo lectura; spend30Cents va en centavos de la moneda de su cuenta.' },

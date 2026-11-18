@@ -279,7 +279,7 @@ const Clients = () => {
       || a.client.name.localeCompare(b.client.name, 'es')), [operations.data]);
 
   const refreshEverywhere = () => {
-    for (const key of ['clients-list', 'clientsDropdown', 'client-operations', 'dashboard-assignment-clients', 'financial-record-clients']) {
+    for (const key of ['clients-list', 'clientsDropdown', 'client-operations', 'dashboard-assignment-clients', 'financial-record-clients', 'brands']) {
       queryClient.invalidateQueries({ queryKey: [key] });
     }
   };

@@ -1,39 +1,68 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
-import { Palette, Image, Type, BookOpen } from '@/components/ui/icons';
+import { Edit, ExternalLink, Loader2, Palette } from '@/components/ui/icons';
+import { readableTextOn } from '@/lib/clientBrand';
+import { useBrand } from './Brands/brandsApi';
+import BrandEditorDialog from './Brands/BrandEditorDialog';
 
-const DigitalIdentityWidget = () => {
-    const items = [
-        { label: 'Logos', icon: Image },
-        { label: 'Colores', icon: Palette },
-        { label: 'Tipografías', icon: Type },
-        { label: 'Manual', icon: BookOpen },
-    ];
+// Identidad digital del espacio del cliente (18 de noviembre de 2026): antes eran cuatro botones sin
+// función. Ahora muestra lo que más se pregunta —los colores, con un toque para copiar— y las tipografías,
+// y lleva a la ficha completa en la pestaña «Marcas» de Clientes.
+
+const DigitalIdentityWidget = ({ client }) => {
+    const { data, isLoading } = useBrand(client?.id);
+    const [editing, setEditing] = useState(false);
+    const colors = data?.brand?.colors || [];
+    const fonts = data?.brand?.fonts || [];
+
+    const copy = async (hex) => {
+        try { await navigator.clipboard.writeText(hex); toast.success(`HEX copiado: ${hex}`); }
+        catch { toast.error('No se pudo copiar. Selecciónalo y cópialo a mano.'); }
+    };
 
     return (
-        <Card className="w-full flex flex-col h-full min-h-[300px] p-6">
-            <div className="flex items-center gap-2 mb-6">
-                <div className="p-1.5 bg-purple-500/10 rounded-xl">
-                    <Palette className="w-4 h-4 text-purple-500" />
-                </div>
-                <h3 className="font-semibold text-zinc-900 dark:text-white">Identidad Digital</h3>
+        <Card className="w-full p-6" data-brand-widget="">
+            <div className="mb-4 flex items-center justify-between gap-2">
+                <h3 className="brain-type-section flex items-center gap-2 text-zinc-900 dark:text-white">
+                    <Palette className="h-4 w-4 text-zinc-500 dark:text-zinc-400" aria-hidden="true" /> Identidad de marca
+                </h3>
+                {data?.canEdit && (
+                    <button type="button" onClick={() => setEditing(true)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label="Editar marca">
+                        <Edit className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 flex-1">
-                {items.map((item, idx) => (
-                    <button
-                        key={idx}
-                        className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-purple-500/50 hover:bg-purple-50 dark:hover:bg-purple-900/10 transition-all group"
-                    >
-                        <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-3 group-hover:scale-110 transition-transform text-zinc-500 dark:text-zinc-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                            <item.icon className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 group-hover:text-purple-700 dark:group-hover:text-purple-300">
-                            {item.label}
-                        </span>
-                    </button>
-                ))}
-            </div>
+            {isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Cargando…</div>
+            ) : (
+                <div className="space-y-4">
+                    {colors.length ? (
+                        <ul className="grid grid-cols-4 gap-2">
+                            {colors.slice(0, 8).map((color) => (
+                                <li key={`${color.hex}-${color.role}`}>
+                                    <button type="button" onClick={() => copy(color.hex)} className="flex h-14 w-full items-end rounded-lg border border-zinc-200 p-1.5 text-xs font-medium dark:border-white/10" style={{ backgroundColor: color.hex, color: readableTextOn(color.hex) }} aria-label={`Copiar ${color.hex}`}>
+                                        {color.hex}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="brain-type-help">Esta marca todavía no tiene colores cargados.</p>
+                    )}
+                    {fonts.length > 0 && (
+                        <p className="brain-type-body text-zinc-700 dark:text-zinc-200">{[...new Set(fonts.map((font) => font.family))].join(' · ')}</p>
+                    )}
+                    {client?.slug && (
+                        <Link to={`/clientes?tab=marcas&cliente=${encodeURIComponent(client.slug)}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+                            <ExternalLink className="h-4 w-4" aria-hidden="true" /> Ver logos, tipografías y manual
+                        </Link>
+                    )}
+                </div>
+            )}
+            {data && <BrandEditorDialog open={editing} onClose={() => setEditing(false)} data={data} />}
         </Card>
     );
 };

@@ -74,7 +74,7 @@ const ClientDetail = ({ client, onBack }) => {
                 onExternalOpenChange={setIsChatOpen}
             />
             <SocialAccountsWidget clientId={client.id} canManage={canManageSocial} />
-            <DigitalIdentityWidget />
+            <DigitalIdentityWidget client={client} />
             <KeyLinksWidget clientId={client.id} />
         </div>
 
