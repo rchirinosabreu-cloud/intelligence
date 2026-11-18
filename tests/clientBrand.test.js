@@ -63,7 +63,7 @@ test('escribir una marca: dirección, project managers y editores con Clientes; 
     assert.match(routes, /router\.use\('\/brands', requireModulePermission\('clientes'\), createClientBrandRouter\(\)\);/, 'es parte del módulo de Clientes');
     assert.ok(routes.indexOf("router.use('/brands'") > routes.indexOf('router.use(authenticateToken)'), 'y detrás de la sesión');
     const router = source('src/routes/api/clientBrands.js');
-    for (const line of router.split('\n').filter((l) => /router\.(put|post|delete)\(/.test(l))) assert.match(line, /requireBrandEdit|requireBrandImport/, line);
+    for (const line of router.split('\n').filter((l) => /router\.(put|post|delete)\(/.test(l))) assert.match(line, /requireBrandEdit/, line);
 });
 
 test('los archivos de marca: nada de SVG y cada tipo con sus formatos', () => {
@@ -239,7 +239,7 @@ test('cargar los manuales: crea lo que falta, sube solo PNG de Drive, no pisa fi
     assert.ok(isPng(png) && !isPng(Buffer.from('<html>')));
 });
 
-test('los logos del dataset vienen de Drive con etiqueta y la carga es solo de administradores', () => {
+test('los logos del dataset vienen de Drive con etiqueta y no hay botón de carga en bloque', () => {
     const data = JSON.parse(readFileSync(new URL('../data/client-brands.json', import.meta.url), 'utf8'));
     const logos = data.brands.flatMap((b) => (b.logos || []).map((l) => ({ ...l, brand: b.aliases[0] })));
     assert.ok(logos.length >= 100);
@@ -248,9 +248,8 @@ test('los logos del dataset vienen de Drive con etiqueta y la carga es solo de a
         assert.equal(new Set(labels).size, labels.length, `etiquetas repetidas en ${brand.aliases[0]}`);
     }
     assert.ok(logos.every((l) => /^[A-Za-z0-9_-]{20,}$/.test(l.driveId) && l.label.trim()));
-    const router = readFileSync(new URL('../src/routes/api/clientBrands.js', import.meta.url), 'utf8');
-    assert.match(router, /router\.post\('\/import', requireBrandImport/);
-    assert.match(router, /role \|\| ''\)\.toUpperCase\(\) === 'ADMIN'/);
+    const board = readFileSync(new URL('../src/components/modules/Brands/Brands.jsx', import.meta.url), 'utf8');
+    assert.doesNotMatch(board, /Cargar fichas de los manuales/, 'Rodny pidió quitar ese botón: se carga desde la ficha');
 });
 
 test('al arrancar completa lo que falte sin repetir, y un fallo no tumba el servidor', async () => {
@@ -274,4 +273,27 @@ test('sin nombre exacto, la palabra de la marca encuentra a un solo cliente; si 
     assert.equal(matchBrandToClient({ aliases: ['SunPartners'], matchWords: ['sun partners'] }, clients).client?.id, 'c');
     assert.equal(matchBrandToClient({ aliases: ['Nuva'], matchWords: ['nuva'] }, [...clients, { id: 'n1', name: 'Nuva Hogar', slug: 'n1' }, { id: 'n2', name: 'Nuva Oficina', slug: 'n2' }]).client, null);
     assert.equal(matchBrandToClient({ aliases: ['Brain'] }, [{ id: 'x', name: 'Brainy', slug: 'x' }]).client, null, 'sin palabra clave, solo nombre exacto');
+});
+
+test('la carga sube el manual en PDF a la plataforma, una sola vez, y prefiere la copia comprimida', async () => {
+    const { runBrandImport } = await import('../src/services/clientBrandImport.js');
+    const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
+    const db = createBrandsDb([{ id: 'c1', name: 'Verona', slug: 'verona', isArchived: false }]);
+    const uploads = [];
+    const service = clientBrandService({ db, storage: () => ({ uploadToS3: async (file, folder, opts) => { uploads.push({ name: file.originalname, max: opts.maxBytes }); return { key: `${folder}/${file.originalname}`, name: file.originalname, size: file.size, mimeType: file.mimetype }; } }) });
+    const pdf = Buffer.from('%PDF-1.7 comprimido');
+    let driveCalls = 0;
+    const fetchImpl = async () => { driveCalls += 1; return { ok: true, arrayBuffer: async () => Buffer.from('%PDF-1.7 original') }; };
+    const dataset = { brands: [{ aliases: ['Verona'], colors: [{ hex: '#CC467B' }], manualUrl: `https://drive.google.com/file/d/${'v'.repeat(33)}/view` }] };
+    const done = await runBrandImport({ db, service, dataset, apply: true, fetchImpl, localManual: async () => pdf });
+    assert.equal(done.totals.manuals, 1);
+    assert.equal(driveCalls, 0, 'con copia comprimida no baja el original');
+    assert.equal(uploads[0].name, 'Verona - Manual de marca.pdf');
+    const files = (await service.get('c1')).brand.files;
+    assert.equal(files.find((f) => f.kind === 'MANUAL').label, 'Manual de marca');
+    const again = await runBrandImport({ db, service, dataset, apply: true, fetchImpl, localManual: async () => pdf });
+    assert.equal(again.totals.manuals, 0, 'no se repite');
+    const sheet = readFileSync(new URL('../src/components/modules/Brands/BrandSheet.jsx', import.meta.url), 'utf8');
+    assert.match(sheet, /PdfDocumentPreview/, 'se lee con el visor de PDF de la plataforma');
+    assert.doesNotMatch(sheet, /drivePreviewUrl|<iframe/, 'sin el visor de Drive');
 });

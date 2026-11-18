@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookOpen, Check, Copy, Download, Edit, ExternalLink, FileText, Image, Loader2, Palette, Sparkles, Trash2, Type } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
     readableTextOn,
     rgbText
 } from '@/lib/clientBrand';
-import { drivePreviewUrl, parseDriveFileId } from '@/lib/driveLinks';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { brandFileUrl, brandFontUrl, useRemoveBrandFile } from './brandsApi';
 import BrandFileUpload from './BrandFileUpload';
 
@@ -144,7 +144,7 @@ function FileTile({ file, clientId, canEdit, onRemove, removing }) {
         <li className="group overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
             <div className="flex h-28 items-center justify-center bg-zinc-50 p-3 dark:bg-zinc-800/60" style={isImage(file) ? TRANSPARENCY_GRID : undefined}>
                 {isImage(file)
-                    ? <img src={brandFileUrl(clientId, file.id)} alt={file.label || file.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                    ? <img src={brandFileUrl(clientId, file.id, { thumb: true })} alt={file.label || file.name} className="max-h-full max-w-full object-contain" loading="lazy" decoding="async" />
                     : <FileText className="h-10 w-10 text-zinc-400" aria-hidden="true" />}
             </div>
             <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -182,11 +182,13 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
     const files = brand?.files || [];
     const logos = files.filter((file) => file.kind === 'LOGO');
     const otherFiles = files.filter((file) => file.kind !== 'LOGO' && file.kind !== 'FUENTE');
+    const manuals = otherFiles.filter((file) => file.kind === 'MANUAL' && /pdf$/i.test(file.mimeType || file.name || ''));
+    const [reading, setReading] = useState(null);
     const fontFiles = files.filter((file) => file.kind === 'FUENTE');
     const colors = brand?.colors || [];
     const fonts = brand?.fonts || [];
     const links = [
-        brand?.manualUrl && { label: 'Manual de marca', url: brand.manualUrl },
+        brand?.manualUrl && { label: 'Manual en Drive', url: brand.manualUrl },
         brand?.logosUrl && { label: 'Carpeta de logos', url: brand.logosUrl },
         brand?.canvaUrl && { label: 'Canva', url: brand.canvaUrl },
         ...(brand?.links || [])
@@ -256,33 +258,53 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
 
             <Section icon={BookOpen} title="Manual y archivos" action={canEdit && <BrandFileUpload clientId={client.id} kind="MANUAL" label="Subir manual" />}>
                 {links.length > 0 && <div className="flex flex-wrap gap-2">{links.map((link) => <LinkPill key={link.url} href={link.url}>{link.label}</LinkPill>)}</div>}
-                {brand?.manualUrl && <ManualPreview url={brand.manualUrl} />}
+                {manuals.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {manuals.map((file) => (
+                            <Button key={file.id} type="button" className="min-h-11 gap-2" onClick={() => setReading(file)}>
+                                <BookOpen className="h-4 w-4" aria-hidden="true" /> Ver {manuals.length > 1 ? `«${file.label || file.name}»` : 'el manual'}
+                            </Button>
+                        ))}
+                    </div>
+                )}
+                {reading && <ManualViewer file={reading} clientId={client.id} onClose={() => setReading(null)} />}
                 {otherFiles.length > 0 && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{otherFiles.map((file) => <FileTile key={file.id} file={file} clientId={client.id} canEdit={canEdit} onRemove={removeFile} removing={remove.isPending} />)}</ul>}
-                {!links.length && !otherFiles.length && <Empty>Sin manual enlazado todavía.</Empty>}
+                {!links.length && !otherFiles.length && <Empty>Todavía no hay manual. Súbelo en PDF con «Subir manual».</Empty>}
             </Section>
         </div>
     );
 }
 
-// El manual queda enlazado a Drive (Rodny: no llenar el almacenamiento con manuales), pero se puede leer aquí
-// mismo con el visor de Drive, el único marco ajeno que permite la plataforma. Se carga al pedirlo: un manual
-// pesa y la mayoría de las consultas son solo un color.
-function ManualPreview({ url }) {
-    const [open, setOpen] = useState(false);
-    const src = drivePreviewUrl(parseDriveFileId(url));
-    if (!src) return null;
+// El manual vive en la plataforma y se lee con el mismo visor de PDF de Drive y del chat (Rodny: «prefiero que
+// los manuales de marca estén arriba directamente … con el visor que ya la plataforma tiene»). Se baja al
+// pedirlo: un manual pesa y la mayoría de las consultas son solo un color.
+const PdfDocumentPreview = lazy(() => import('@/components/modules/Drive/PdfDocumentPreview'));
+
+function ManualViewer({ file, clientId, onClose }) {
+    const [state, setState] = useState({ data: null, error: null });
+    useEffect(() => {
+        let active = true;
+        fetch(brandFileUrl(clientId, file.id))
+            .then(async (response) => {
+                if (!response.ok) throw new Error('No se pudo abrir el manual. Inténtalo de nuevo.');
+                return response.arrayBuffer();
+            })
+            .then((data) => active && setState({ data, error: null }))
+            .catch((error) => active && setState({ data: null, error: error.message }));
+        return () => { active = false; };
+    }, [clientId, file.id]);
     return (
-        <div className="space-y-3">
-            <Button type="button" variant="outline" size="sm" className="min-h-11 gap-2" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-                <BookOpen className="h-4 w-4" aria-hidden="true" /> {open ? 'Ocultar el manual' : 'Ver el manual aquí'}
-            </Button>
-            {open && (
-                <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-900">
-                    <iframe title="Manual de marca" src={src} className="block h-[70vh] min-h-[420px] w-full" allow="autoplay" loading="lazy" />
-                </div>
-            )}
-            {open && <p className="brain-type-help">Si no carga, el manual no está compartido por enlace en Drive: ábrelo con «Manual de marca».</p>}
-        </div>
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-h-[92vh] overflow-y-auto bg-white dark:bg-zinc-950 sm:max-w-5xl">
+                <DialogTitle>{file.label || 'Manual de marca'}</DialogTitle>
+                <DialogDescription>{file.name}</DialogDescription>
+                {state.error
+                    ? <p className="text-sm text-destructive">{state.error}</p>
+                    : !state.data
+                        ? <p className="flex items-center gap-2 py-10 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Abriendo el manual…</p>
+                        : <Suspense fallback={<BrandSheetSkeleton />}><PdfDocumentPreview data={state.data} name={file.name} /></Suspense>}
+            </DialogContent>
+        </Dialog>
     );
 }
 

@@ -31,11 +31,16 @@ export async function createBrandsPreview({ port = 3870, empty = process.argv.in
     uploadToS3: async (file, folder) => { const key = `${folder}/${Date.now()}_${file.originalname}`; objects.set(key, file.buffer); return { key, name: file.originalname, size: file.size, mimeType: file.mimetype }; },
     getFromS3Stream: async (key) => ({ Body: Readable.from(objects.get(key) || Buffer.alloc(0)) })
   });
+  if (empty) {
+    const { runBrandImport } = await import('../src/services/clientBrandImport.js');
+    const result = await runBrandImport({ db, service: clientBrandService({ db, storage }), dataset, apply: true });
+    console.log(`Carga de los manuales: ${result.totals.created} fichas, ${result.totals.logos} logos, ${result.totals.manuals} manuales.`);
+  }
   const access = { edit: true };
   const api = express();
   api.use(express.json());
   api.use((req, _res, next) => { req.user = empty ? { userId: 'u-rodny', name: 'Rodny', role: 'ADMIN' } : { userId: 'u-keila', name: 'Keila', role: 'EDITOR', modulePermissions: { clientes: access.edit } }; next(); });
-  api.use(createClientBrandRouter({ service: clientBrandService({ db, storage }), db, dataset }));
+  api.use(createClientBrandRouter({ service: clientBrandService({ db, storage }) }));
 
   const server = await createServer({
     configFile: false,
