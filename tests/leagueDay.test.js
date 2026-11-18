@@ -53,7 +53,7 @@ test('Al día is judged at the close of the day, names what was left and falls b
   const left = evaluateLeagueDay({ day: DAY, closedTasks: [task()], overdueAtDawn: 0, returnedToday: 0,
     closeState: { closed: 1, pending: 3, pendingTasks: [{ title: 'Informe octubre', dueDate: '2026-10-02T12:00:00.000Z' }, { title: 'Reel', dueDate: null }, { title: 'Post', dueDate: null }] } });
   assert.equal(left.habits.AL_DIA, false);
-  assert.equal(left.evidence.AL_DIA, 'Al cierre quedaba «Informe octubre» (vencía el 2 de octubre) y «Reel» y 1 más.');
+  assert.equal(left.evidence.AL_DIA, 'Al cierre quedaba «Informe octubre» (vencía el 2 de octubre), «Reel» y 1 más.');
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()], overdueAtDawn: 2, returnedToday: 0 }).habits.AL_DIA, false, 'without the close reading, the dawn photo');
 });
 
@@ -181,4 +181,12 @@ test('the week of a day runs Monday to Sunday and the previous one is seven days
   assert.deepEqual(isoWeekRange('2026-11-04'), { weekKey: '2026-W45', from: '2026-11-02', to: '2026-11-08' });
   assert.deepEqual(previousWeekRange('2026-11-04'), { weekKey: '2026-W44', from: '2026-10-26', to: '2026-11-01' }, 'the previous week crosses October and November');
   assert.deepEqual(previousWeekRange('2026-11-09'), { weekKey: '2026-W45', from: '2026-11-02', to: '2026-11-08' });
+});
+
+test('antes de las 18:00 Al día dice lo que falta por cerrar, no «al cierre quedaba»', () => {
+  const open = evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session()], returnedToday: 0,
+    closeState: { closed: 1, pending: 3, open: true, pendingTasks: [{ title: 'Carrusel Villa', dueDate: `${DAY}T12:00:00.000Z` }, { title: 'Informe', dueDate: '2026-11-02T12:00:00.000Z' }, { title: 'Post', dueDate: null }] } });
+  assert.equal(open.evidence.AL_DIA, 'Antes de las 18:00 te falta cerrar «Carrusel Villa» (vence hoy), «Informe» (venció el 2 de noviembre) y 1 más.');
+  const clear = evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session()], returnedToday: 0, closeState: { closed: 1, pending: 0, open: true, pendingTasks: [] } });
+  assert.equal(clear.evidence.AL_DIA, 'Por ahora nada pendiente: se confirma a las 18:00.');
 });

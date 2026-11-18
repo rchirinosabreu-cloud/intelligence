@@ -32,15 +32,23 @@ const dueLabel = (value) => {
   const day = value ? new Date(value).toISOString().slice(0, 10) : null;
   return day ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`)) : null;
 };
-/** Qué quedó vencido, con su nombre: sin eso «Al día» se perdía sin que nadie supiera por qué (Rodny, 18 de noviembre de 2026). */
-export function pendingEvidence(tasks = [], count = tasks.length) {
+/** Qué quedó vencido, con su nombre: sin eso «Al día» se perdía sin que nadie supiera por qué (Rodny, 18 de noviembre de 2026).
+ * Antes de las 18:00 de hoy la jornada sigue abierta: no se dice «al cierre quedaba», sino lo que falta por cerrar. */
+export function pendingEvidence(tasks = [], count = tasks.length, { open = false, day = null } = {}) {
   const named = (tasks || []).filter((task) => task?.title).slice(0, 2).map((task) => {
+    const dueDay = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null;
     const due = dueLabel(task.dueDate);
-    return `«${task.title}»${due ? ` (vencía el ${due})` : ''}`;
+    if (!due) return `«${task.title}»`;
+    if (open) return `«${task.title}» (${dueDay === day ? 'vence hoy' : `venció el ${due}`})`;
+    return `«${task.title}» (vencía el ${due})`;
   });
-  if (!named.length) return `Al cierre quedaba ${plural(count, 'tarea vencida', 'tareas vencidas')}.`;
+  const lead = open ? 'Antes de las 18:00 te falta cerrar' : 'Al cierre quedaba';
+  if (!named.length) return open
+    ? `${lead} ${plural(count, 'tarea que vence hoy o antes', 'tareas que vencen hoy o antes')}.`
+    : `${lead} ${plural(count, 'tarea vencida', 'tareas vencidas')}.`;
   const rest = count - named.length;
-  return `Al cierre quedaba ${named.join(' y ')}${rest > 0 ? ` y ${plural(rest, 'más', 'más')}` : ''}.`;
+  const list = rest > 0 ? `${named.join(', ')} y ${plural(rest, 'más', 'más')}` : named.join(' y ');
+  return `${lead} ${list}.`;
 }
 /** «HH:mm» de Bogotá de un instante. */
 export const bogotaTimeOf = (value) => {
@@ -128,7 +136,9 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   } else if (closeState && Number.isFinite(Number(closeState.pending))) {
     const pending = Number(closeState.pending);
     habits.AL_DIA = pending === 0;
-    evidence.AL_DIA = pending === 0 ? 'Cerró la jornada sin nada vencido.' : pendingEvidence(closeState.pendingTasks, pending);
+    evidence.AL_DIA = pending === 0
+      ? (closeState.open ? 'Por ahora nada pendiente: se confirma a las 18:00.' : 'Cerró la jornada sin nada vencido.')
+      : pendingEvidence(closeState.pendingTasks, pending, { open: Boolean(closeState.open), day });
   } else if (overdueAtDawn === null || overdueAtDawn === undefined) {
     habits.AL_DIA = null;
     evidence.AL_DIA = dawnEvidenceReason || 'Sin lectura de cómo terminó la jornada.';

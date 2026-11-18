@@ -19,7 +19,7 @@ import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 import { createLeagueAreaSources } from './leagueAreaSources.js';
 import { closeViewsFor } from './caughtUpAtCloseService.js';
-import { caughtUpAtClose } from './recognitionRules.js';
+import { caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
 import { hasRealContext } from '../lib/leagueAreaChecks.js';
 import { AD_BUDGET_INCLUDE, describeBudget } from './adBudgetService.js';
 import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
@@ -175,9 +175,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       // Sin lectura, el hábito vuelve a la foto de las 6:00.
       const views = await closeViewsFor(db, { day: dayKey, memberIds: members.map((member) => member.id) })
         .catch((error) => { logger.error('[Liga] Sin lectura del cierre de la jornada:', error?.message || error); return null; });
+      const dayOpen = now() < dayCloseCutoff(dayKey);
       if (views) for (const [memberId, bucket] of byMember) {
         const { closed, pending, pendingTasks } = caughtUpAtClose({ day: dayKey, views: views.get(memberId) || [] });
-        bucket.closeState = { closed, pending, pendingTasks };
+        bucket.closeState = { closed, pending, pendingTasks, open: dayOpen };
       }
       return { dayKey, members, byMember };
     },
