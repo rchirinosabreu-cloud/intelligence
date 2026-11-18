@@ -190,3 +190,8 @@ test('antes de las 18:00 Al día dice lo que falta por cerrar, no «al cierre qu
   const clear = evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session()], returnedToday: 0, closeState: { closed: 1, pending: 0, open: true, pendingTasks: [] } });
   assert.equal(clear.evidence.AL_DIA, 'Por ahora nada pendiente: se confirma a las 18:00.');
 });
+
+test('Reloj nombra el cierre que no contó y por qué', () => {
+  const day = evaluateLeagueDay({ day: DAY, closedTasks: [task(), task({ title: 'Carrusel Villa', measuredMs: 3 * 60000 }), task({ title: 'Reel', measuredMs: 0 })], sessions: [session()], returnedToday: 0 });
+  assert.match(day.evidence.RELOJ, /Sin tiempo válido: «Carrusel Villa» \(3 min medidos, el mínimo es 10\) y «Reel» \(se cerró sin reloj\)\.$/);
+});

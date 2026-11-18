@@ -50,6 +50,12 @@ export function pendingEvidence(tasks = [], count = tasks.length, { open = false
   const list = rest > 0 ? `${named.join(', ')} y ${plural(rest, 'más', 'más')}` : named.join(' y ');
   return `${lead} ${list}.`;
 }
+/** Por qué un cierre no cuenta para Reloj. */
+function unmeasuredReason(task) {
+  if (!task.production && task.declared) return 'tiempo declarado a mano, no medido';
+  const minutes = Math.floor(Number(task.measuredMs || 0) / 60000);
+  return minutes > 0 ? `${minutes} min medidos, el mínimo es 10` : 'se cerró sin reloj';
+}
 /** «HH:mm» de Bogotá de un instante. */
 export const bogotaTimeOf = (value) => {
   const time = value instanceof Date ? value.getTime() : Date.parse(value);
@@ -122,6 +128,12 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     if (dirty.length) parts.push(plural(dirty.length, 'sesión olvidada, encimada o corregida', 'sesiones olvidadas, encimadas o corregidas'));
     else parts.push(`${plural(sessions.length, 'sesión limpia', 'sesiones limpias')}`);
     evidence.RELOJ = parts.join(' · ');
+    // Qué cierre no contó, con su nombre y el motivo (Melissa, 18 de noviembre de 2026: «¿cuál no tenía tiempo?»).
+    const named = unmeasured.filter((task) => task.title).slice(0, 2).map((task) => `«${task.title}» (${unmeasuredReason(task)})`);
+    if (named.length) {
+      const rest = unmeasured.length - named.length;
+      evidence.RELOJ += `. Sin tiempo válido: ${rest > 0 ? `${named.join(', ')} y ${plural(rest, 'más', 'más')}` : named.join(' y ')}.`;
+    }
   } else {
     habits.RELOJ = null;
     evidence.RELOJ = 'Sin cierres ni relojes ese día.';
