@@ -59,12 +59,18 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
     });
     const plan = planBrandImport(dataset, clients);
     const report = [];
+    const claimed = new Set();
 
     for (const item of plan) {
         if (item.action === 'OMITIR') { report.push({ name: item.name, action: 'OMITIR', reason: item.reason }); continue; }
+        // Dos fichas del manual para un mismo cliente (una unidad dentro de otra): la primera crea, la segunda
+        // solo le suma sus logos.
+        if (item.action === 'CREAR' && claimed.has(item.client.id)) item.action = 'COMPLETAR';
+        claimed.add(item.client.id);
         const existingLabels = new Set();
-        if (item.client.brand) {
-            const files = await db.clientBrandFile.findMany({ where: { brandId: item.client.brand.id, kind: 'LOGO' }, select: { label: true } });
+        const brandId = item.client.brand?.id || (apply ? (await db.clientBrand.findUnique({ where: { clientId: item.client.id } }))?.id : null);
+        if (brandId) {
+            const files = await db.clientBrandFile.findMany({ where: { brandId, kind: 'LOGO' }, select: { label: true } });
             for (const file of files) if (file.label) existingLabels.add(file.label.trim().toLowerCase());
         }
         const pending = item.logos.filter((logo) => !existingLabels.has(logo.label.trim().toLowerCase()));
@@ -127,16 +133,17 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
 }
 
 /**
- * La primera vez que la plataforma arranca sin ninguna ficha de marca, carga las de los manuales (Rodny, 18 de
- * noviembre de 2026: «puedes cargar todo lo que necesites en la base de datos»). Una sola vez: con una ficha
- * en la tabla ya no corre, y lo que se quiera completar después se hace con el botón de la pestaña Marcas.
- * Nunca lanza: un fallo se anota y el servidor sigue.
+ * En cada arranque completa lo que falte de los manuales (Rodny, 18 de noviembre de 2026: «puedes cargar todo lo
+ * que necesites en la base de datos»). Es idempotente: una ficha existente no se pisa y un logo ya cargado —o
+ * retirado por el equipo— no se vuelve a subir, así que con todo cargado no baja nada. Sirve para los clientes
+ * que se crean después con el nombre del manual. Nunca lanza: un fallo se anota y el servidor sigue.
  */
-export async function seedBrandsOnFirstBoot({ db, service, dataset, fetchImpl, log = console } = {}) {
+export async function seedBrandsOnBoot({ db, service, dataset, fetchImpl, log = console } = {}) {
     try {
-        if (await db.clientBrand.count() > 0) return { skipped: true };
         const result = await runBrandImport({ db, service, dataset, apply: true, ...(fetchImpl ? { fetchImpl } : {}) });
-        log.log?.(`[Brands] Fichas de los manuales cargadas: ${result.totals.created} nuevas, ${result.totals.logos} logos.`);
+        if (result.totals.created || result.totals.logos) {
+            log.log?.(`[Brands] Fichas de los manuales: ${result.totals.created} nuevas, ${result.totals.logos} logos.`);
+        }
         for (const line of result.report) {
             if (line.action === 'OMITIR') log.log?.(`[Brands] Sin cargar ${line.name}: ${line.reason}`);
             for (const problem of line.logoProblems || []) log.warn?.(`[Brands] ${line.name}: ${problem}`);

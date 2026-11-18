@@ -254,5 +254,17 @@ export function matchBrandToClient(entry, clients = []) {
     const found = clients.filter((client) => keys.has(brandSearchKey(client.name)) || keys.has(brandSearchKey(client.slug)));
     if (found.length === 1) return { client: found[0], problem: null };
     if (found.length > 1) return { client: null, problem: `coincide con varios clientes: ${found.map((c) => c.name).join(', ')}` };
+    // Sin nombre exacto, una palabra propia de la marca («haad», «endova») que aparezca entera en el nombre de un
+    // solo cliente. Nunca un parecido: si la tienen dos, no se elige ninguno.
+    const words = (entry?.matchWords || []).map(brandSearchKey).filter((word) => word.length >= 4);
+    if (words.length) {
+        const byWord = clients.filter((client) => {
+            const name = ` ${brandSearchKey(client.name)} `;
+            const compact = brandSearchKey(client.name).replace(/ /g, '');
+            return words.some((word) => name.includes(` ${word} `) || (!word.includes(' ') && compact === word));
+        });
+        if (byWord.length === 1) return { client: byWord[0], problem: null };
+        if (byWord.length > 1) return { client: null, problem: `la palabra de la marca coincide con varios clientes: ${byWord.map((c) => c.name).join(', ')}` };
+    }
     return { client: null, problem: 'no hay un cliente con ese nombre en la plataforma' };
 }
