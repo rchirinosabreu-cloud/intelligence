@@ -93,6 +93,16 @@ export default {
           coral: { DEFAULT: 'rgb(var(--brand-coral) / <alpha-value>)', deep: '#D9433F', soft: '#FFEDEC' },
           yellow: { DEFAULT: 'rgb(var(--brand-yellow) / <alpha-value>)', deep: '#8A6D00', soft: '#FFF8D6' }
         },
+        // Bria, la IA de la plataforma, con su guía de marca (Rodny, 18 de noviembre de 2026). Menta, turquesa y cian
+        // forman el degradado; la chispa es solo para la estrella y los puntos; el azul noche es el texto sobre el
+        // degradado (el blanco no se lee sobre la menta) y el fondo de Bria en modo oscuro. `cyan-deep` y `teal` son los
+        // tonos AA para texto sobre blanco; `mist` es la burbuja de quien escribe.
+        bria: {
+          mint: '#72DD9B', turquoise: '#2BC1AF', cyan: '#14AEBC', gold: '#FBC219',
+          night: '#092038', 'night-deep': '#061629', 'night-raised': '#0E2C4A',
+          ink: '#23384D', muted: '#3A5266', 'cyan-deep': '#0B6E78', teal: '#0B5E66', mist: '#DFF5F0',
+          'gold-soft': '#FFF4CC', 'gold-ink': '#5C4300', line: '#D6E8E9'
+        },
         // Semantic status tones for traffic lights and health signals. Red stays on `destructive`.
         status: {
           positive: { DEFAULT: 'rgb(var(--status-positive) / <alpha-value>)', fg: 'rgb(var(--status-positive-fg) / <alpha-value>)' },
@@ -103,7 +113,9 @@ export default {
         'brand-primary': 'linear-gradient(135deg, rgb(var(--brand-cyan)), rgb(var(--brand-green)))',
         'brand-energy': 'linear-gradient(135deg, rgb(var(--brand-magenta)), rgb(var(--brand-coral)))',
         'brand-sunrise': 'linear-gradient(135deg, rgb(var(--brand-coral)), rgb(var(--brand-yellow)))',
-        'brand-spectrum': 'linear-gradient(120deg, rgb(var(--brand-cyan)) 0%, rgb(var(--brand-green)) 45%, rgb(var(--brand-yellow)) 100%)'
+        'brand-spectrum': 'linear-gradient(120deg, rgb(var(--brand-cyan)) 0%, rgb(var(--brand-green)) 45%, rgb(var(--brand-yellow)) 100%)',
+        // El degradado de Bria, de la menta al cian, como el isotipo.
+        'bria': 'linear-gradient(120deg, #72DD9B 0%, #2BC1AF 55%, #14AEBC 100%)'
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -129,6 +141,9 @@ export default {
         // es Roboto, que es lo más parecido y ya viene en casi todos los equipos: si Google Fonts no
         // carga, la plataforma se estrecha un poco pero no cambia de carácter.
         sans: ['Roboto Condensed', 'Roboto', 'system-ui', 'sans-serif'],
+        // Montserrat, la tipografía de la guía de Bria, solo para sus títulos (18 de noviembre de 2026). Roc Grotesk vive
+        // dentro del logo, como imagen: es de pago y no se carga en la web.
+        bria: ['Montserrat', 'Roboto Condensed', 'system-ui', 'sans-serif'],
       },
     },
   },

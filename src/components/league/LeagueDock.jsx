@@ -5,6 +5,7 @@ import { requestLeague } from '@/lib/leagueRequest';
 import RaceOfTheMonth from './RaceOfTheMonth';
 import { LeaguePoseContext } from './LeaguePoseContext';
 import { nextLeaguePose } from '@/lib/leaguePose';
+import { OPEN_LEAGUE_EVENT } from '@/components/recognitions/RecognitionNotice';
 
 // La copa de la liga (Rodny, 3 de noviembre de 2026: «no quiero nada en el dashboard, solo quiero un icono de la copa
 // por ahí medio asomándose a la mitad de la pantalla derecha, y ahí se abre el panel»): una pestaña pequeña pegada al
@@ -34,6 +35,12 @@ export default function LeagueDock({ enabled = true, userId, welcome }) {
     enabled,
     staleTime: STALE_MS,
     retry: (count, failure) => failure?.status !== 404 && count < 2
+  });
+  // «Ver la liga» desde el aviso de un logro (18 de noviembre de 2026) abre la carrera sin cambiar de pantalla.
+  useEffect(() => {
+    const openFromNotice = () => changeOpen(true);
+    window.addEventListener(OPEN_LEAGUE_EVENT, openFromNotice);
+    return () => window.removeEventListener(OPEN_LEAGUE_EVENT, openFromNotice);
   });
   // Al abrir se vuelve a pedir: «hoy» cambia con cada cierre y cada reloj.
   useEffect(() => { if (open && enabled) queryClient.invalidateQueries({ queryKey: LEAGUE_QUERY_KEY }); }, [open, enabled, queryClient]);

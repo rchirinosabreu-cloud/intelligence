@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import RecognitionNotice from './RecognitionNotice';
 
-export default function RecognitionRuntime({ userId, disabled = false }) {
+export default function RecognitionRuntime({ userId, disabled = false, leagueEnabled = false }) {
   const [notice, setNotice] = useState(null);
   const noticeRef = useRef(null);
   const [blocked, setBlocked] = useState(true);
@@ -50,5 +50,5 @@ export default function RecognitionRuntime({ userId, disabled = false }) {
     return () => { stopped = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, [userId, disabled, queryClient]);
   if (disabled) return null;
-  return <RecognitionNotice event={blocked ? null : notice} onDismiss={() => { noticeRef.current = null; setNotice(null); }} />;
+  return <RecognitionNotice event={blocked ? null : notice} leagueEnabled={leagueEnabled} onDismiss={() => { noticeRef.current = null; setNotice(null); }} />;
 }
