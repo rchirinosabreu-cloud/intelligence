@@ -193,5 +193,11 @@ test('antes de las 18:00 Al día dice lo que falta por cerrar, no «al cierre qu
 
 test('Reloj nombra el cierre que no contó y por qué', () => {
   const day = evaluateLeagueDay({ day: DAY, closedTasks: [task(), task({ title: 'Carrusel Villa', measuredMs: 3 * 60000 }), task({ title: 'Reel', measuredMs: 0 })], sessions: [session()], returnedToday: 0 });
-  assert.match(day.evidence.RELOJ, /Sin tiempo válido: «Carrusel Villa» \(3 min medidos, el mínimo es 10\) y «Reel» \(se cerró sin reloj\)\.$/);
+  assert.match(day.evidence.RELOJ, /Sin tiempo válido: «Carrusel Villa» \(3 min medidos, el mínimo es 5\) y «Reel» \(se cerró sin reloj\)\.$/);
+});
+
+test('Reloj: cinco minutos medidos bastan; lo declarado al cerrar no suma', () => {
+  const day = evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 6 * 60000 }), task({ title: 'Story', measuredMs: 6 * 60000, declared: true }), task({ title: 'Post', measuredMs: 0, declared: true })], sessions: [session()], returnedToday: 0 });
+  assert.equal(day.extras.ESFUERZO, 2);
+  assert.match(day.evidence.RELOJ, /«Post» \(pasó directo a realizado; el tiempo se declaró a mano\)/);
 });

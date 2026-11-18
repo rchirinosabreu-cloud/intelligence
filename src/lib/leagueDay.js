@@ -7,7 +7,7 @@ import { describePlatformMutation } from './operationalMutationLabels.js';
 import { mergeAreaChecks } from './leagueAreaChecks.js';
 
 /** Menos de diez minutos medidos no es una tarea con cronómetro (el mismo umbral que pide el tiempo declarado). */
-export const MIN_MEASURED_MS = 10 * 60 * 1000;
+export const MIN_MEASURED_MS = 5 * 60 * 1000;
 /** Una sesión de más de 8 horas es un reloj olvidado (la regla de Ritmo). */
 export const FORGOTTEN_SESSION_MS = 8 * 60 * 60 * 1000;
 
@@ -52,9 +52,10 @@ export function pendingEvidence(tasks = [], count = tasks.length, { open = false
 }
 /** Por qué un cierre no cuenta para Reloj. */
 function unmeasuredReason(task) {
-  if (!task.production && task.declared) return 'tiempo declarado a mano, no medido';
+  const minutes0 = Math.floor(Number(task.measuredMs || 0) / 60000);
+  if (!task.production && task.declared) return minutes0 > 0 ? `${minutes0} min con reloj y el resto declarado a mano` : 'pasó directo a realizado; el tiempo se declaró a mano';
   const minutes = Math.floor(Number(task.measuredMs || 0) / 60000);
-  return minutes > 0 ? `${minutes} min medidos, el mínimo es 10` : 'se cerró sin reloj';
+  return minutes > 0 ? `${minutes} min medidos, el mínimo es ${MIN_MEASURED_MS / 60000}` : 'se cerró sin reloj';
 }
 /** «HH:mm» de Bogotá de un instante. */
 export const bogotaTimeOf = (value) => {
@@ -111,7 +112,9 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
   // Una jornada de producción se cierra con tiempo declarado y vale: en campo no hay cronómetro (Rodny, 9 de noviembre de 2026).
   if (closedTasks.length || sessions.length) {
-    const unmeasured = closedTasks.filter((task) => task.production ? !task.declared && Number(task.measuredMs || 0) < MIN_MEASURED_MS : (task.declared || Number(task.measuredMs || 0) < MIN_MEASURED_MS));
+    // Cuenta lo medido con el reloj: cinco minutos bastan (Rodny, 18 de noviembre de 2026: las tareas cortas no llegaban a diez).
+    // Lo declarado al cerrar no es uso del reloj y no suma, aunque se declare encima de unos minutos medidos.
+    const unmeasured = closedTasks.filter((task) => task.production ? !task.declared && Number(task.measuredMs || 0) < MIN_MEASURED_MS : Number(task.measuredMs || 0) < MIN_MEASURED_MS);
     const declaredProduction = closedTasks.filter((task) => task.production && task.declared).length;
     const dirty = sessions.filter((session) => session.isOverlapping || Boolean(session.correctedAt) || Number(session.durationMs || 0) > FORGOTTEN_SESSION_MS);
     habits.RELOJ = unmeasured.length === 0 && dirty.length === 0;
