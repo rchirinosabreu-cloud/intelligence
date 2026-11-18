@@ -288,19 +288,19 @@ async function bootstrap() {
         console.log(`🚀 [Service: API] Servidor escuchando en puerto ${PORT} (Bound to 0.0.0.0)`);
     });
 
-    // 6. Marcas (18 de noviembre de 2026): con la tabla vacía, carga una sola vez las fichas de los manuales del
-    // Drive con sus logos. Después del arranque y sin esperarla: bajar los logos no puede retrasar el servidor.
+    // 6. Marcas (18 de noviembre de 2026): completa lo que falte de las fichas de los manuales del Drive con sus
+    // logos (idempotente). Después del arranque y sin esperarla: bajar los logos no puede retrasar el servidor.
     if (process.env.DEMO_MODE !== 'true') {
         setTimeout(async () => {
             try {
-                const [{ seedBrandsOnFirstBoot }, { clientBrandService }, { default: prismaClient }, { readFile }] = await Promise.all([
+                const [{ seedBrandsOnBoot }, { clientBrandService }, { default: prismaClient }, { readFile }] = await Promise.all([
                     import('./src/services/clientBrandImport.js'),
                     import('./src/services/clientBrandService.js'),
                     import('./src/lib/prisma.js'),
                     import('node:fs/promises')
                 ]);
                 const dataset = JSON.parse(await readFile(new URL('./data/client-brands.json', import.meta.url), 'utf8'));
-                await seedBrandsOnFirstBoot({ db: prismaClient, service: clientBrandService(), dataset });
+                await seedBrandsOnBoot({ db: prismaClient, service: clientBrandService(), dataset });
             } catch (brandError) {
                 console.error('[Brands] No se pudo preparar la carga de los manuales:', brandError.message);
             }

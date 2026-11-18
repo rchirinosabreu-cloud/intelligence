@@ -227,6 +227,9 @@
           "driveId": "1wM55BLbpvQTCu1pMJ4ROsNRdtpzEsGQ7",
           "label": "Respaldo PromoGroup IPS blanco"
         }
+      ],
+      "matchWords": [
+        "endova"
       ]
     },
     {
@@ -292,6 +295,10 @@
           "driveId": "1a6fT5UduLyAPr-pzHx0suMRuSU3Zjin2",
           "label": "PromoGroup IPS horizontal"
         }
+      ],
+      "matchWords": [
+        "promogroup",
+        "promo group"
       ]
     },
     {
@@ -370,6 +377,9 @@
           "driveId": "1Ih4Z5BCtNYgewU31Aa3je-an9k7HQ4_y",
           "label": "HAAD Aesthetic Center arena"
         }
+      ],
+      "matchWords": [
+        "haad"
       ]
     },
     {
@@ -756,6 +766,9 @@
           "source": "GOOGLE",
           "weights": "Regular y Bold"
         }
+      ],
+      "matchWords": [
+        "nuva"
       ]
     },
     {
@@ -1173,6 +1186,10 @@
           "driveId": "1l4PqCi_wsLnFUHW_0_f0k8n1gkIBnBJT",
           "label": "Vertical blanco con lema"
         }
+      ],
+      "matchWords": [
+        "brain studio",
+        "brainstudio"
       ]
     },
     {
@@ -1190,6 +1207,10 @@
           "driveId": "1_7EmWyU-5UnF-xWaqVr5HDBrZkDcpcJn",
           "label": "Principal"
         }
+      ],
+      "matchWords": [
+        "sunpartners",
+        "sun partners"
       ]
     }
   ]

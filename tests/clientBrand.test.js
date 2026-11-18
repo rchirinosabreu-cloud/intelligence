@@ -253,17 +253,25 @@ test('los logos del dataset vienen de Drive con etiqueta y la carga es solo de a
     assert.match(router, /role \|\| ''\)\.toUpperCase\(\) === 'ADMIN'/);
 });
 
-test('al arrancar sin fichas carga los manuales una sola vez, y un fallo no tumba el servidor', async () => {
-    const { seedBrandsOnFirstBoot } = await import('../src/services/clientBrandImport.js');
+test('al arrancar completa lo que falte sin repetir, y un fallo no tumba el servidor', async () => {
+    const { seedBrandsOnBoot } = await import('../src/services/clientBrandImport.js');
     const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
     const db = createBrandsDb([{ id: 'c1', name: 'Aristea', slug: 'aristea', isArchived: false }]);
     const service = clientBrandService({ db, storage: () => ({}) });
     const quiet = { log() {}, warn() {}, error() {} };
     const dataset = { brands: [{ aliases: ['Aristea'], colors: [{ hex: '#3B2A74' }] }] };
-    const first = await seedBrandsOnFirstBoot({ db, service, dataset, log: quiet });
-    assert.equal(first.totals.created, 1);
-    assert.deepEqual(await seedBrandsOnFirstBoot({ db, service, dataset, log: quiet }), { skipped: true });
-    const broken = await seedBrandsOnFirstBoot({ db: { clientBrand: { count: async () => { throw new Error('sin base'); } } }, service, dataset, log: quiet });
+    assert.equal((await seedBrandsOnBoot({ db, service, dataset, log: quiet })).totals.created, 1);
+    assert.equal((await seedBrandsOnBoot({ db, service, dataset, log: quiet })).totals.created, 0, 'la segunda vez no crea nada');
+    const broken = await seedBrandsOnBoot({ db: { client: { findMany: async () => { throw new Error('sin base'); } } }, service, dataset, log: quiet });
     assert.equal(broken.error, 'sin base');
-    assert.match(readFileSync(new URL('../server.js', import.meta.url), 'utf8'), /seedBrandsOnFirstBoot/);
+    assert.match(readFileSync(new URL('../server.js', import.meta.url), 'utf8'), /seedBrandsOnBoot/);
+});
+
+test('sin nombre exacto, la palabra de la marca encuentra a un solo cliente; si son dos, ninguno', () => {
+    const clients = [{ id: 'a', name: 'Haad Stetica y SPA', slug: 'haad-stetica' }, { id: 'b', name: 'PromoGroup / Endova', slug: 'pg' }, { id: 'c', name: 'Sun Partners Mobiliario', slug: 'sp' }];
+    assert.equal(matchBrandToClient({ aliases: ['HAAD Aesthetic Center'], matchWords: ['haad'] }, clients).client?.id, 'a');
+    assert.equal(matchBrandToClient({ aliases: ['Endova'], matchWords: ['endova'] }, clients).client?.id, 'b');
+    assert.equal(matchBrandToClient({ aliases: ['SunPartners'], matchWords: ['sun partners'] }, clients).client?.id, 'c');
+    assert.equal(matchBrandToClient({ aliases: ['Nuva'], matchWords: ['nuva'] }, [...clients, { id: 'n1', name: 'Nuva Hogar', slug: 'n1' }, { id: 'n2', name: 'Nuva Oficina', slug: 'n2' }]).client, null);
+    assert.equal(matchBrandToClient({ aliases: ['Brain'] }, [{ id: 'x', name: 'Brainy', slug: 'x' }]).client, null, 'sin palabra clave, solo nombre exacto');
 });
