@@ -14,6 +14,7 @@ import {
     readableTextOn,
     rgbText
 } from '@/lib/clientBrand';
+import { drivePreviewUrl, parseDriveFileId } from '@/lib/driveLinks';
 import { brandFileUrl, brandFontUrl, useRemoveBrandFile } from './brandsApi';
 import BrandFileUpload from './BrandFileUpload';
 
@@ -135,10 +136,13 @@ function FontCard({ font, files, clientId }) {
     );
 }
 
+// Cuadritos detrás de un logo, como en un editor de imagen: así se ve igual la versión blanca que la negra.
+const TRANSPARENCY_GRID = { backgroundColor: '#b4b4bb', backgroundImage: 'repeating-conic-gradient(#9c9ca5 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' };
+
 function FileTile({ file, clientId, canEdit, onRemove, removing }) {
     return (
         <li className="group overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
-            <div className="flex h-28 items-center justify-center bg-zinc-50 p-3 dark:bg-zinc-800/60">
+            <div className="flex h-28 items-center justify-center bg-zinc-50 p-3 dark:bg-zinc-800/60" style={isImage(file) ? TRANSPARENCY_GRID : undefined}>
                 {isImage(file)
                     ? <img src={brandFileUrl(clientId, file.id)} alt={file.label || file.name} className="max-h-full max-w-full object-contain" loading="lazy" />
                     : <FileText className="h-10 w-10 text-zinc-400" aria-hidden="true" />}
@@ -252,9 +256,32 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
 
             <Section icon={BookOpen} title="Manual y archivos" action={canEdit && <BrandFileUpload clientId={client.id} kind="MANUAL" label="Subir manual" />}>
                 {links.length > 0 && <div className="flex flex-wrap gap-2">{links.map((link) => <LinkPill key={link.url} href={link.url}>{link.label}</LinkPill>)}</div>}
+                {brand?.manualUrl && <ManualPreview url={brand.manualUrl} />}
                 {otherFiles.length > 0 && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{otherFiles.map((file) => <FileTile key={file.id} file={file} clientId={client.id} canEdit={canEdit} onRemove={removeFile} removing={remove.isPending} />)}</ul>}
                 {!links.length && !otherFiles.length && <Empty>Sin manual enlazado todavía.</Empty>}
             </Section>
+        </div>
+    );
+}
+
+// El manual queda enlazado a Drive (Rodny: no llenar el almacenamiento con manuales), pero se puede leer aquí
+// mismo con el visor de Drive, el único marco ajeno que permite la plataforma. Se carga al pedirlo: un manual
+// pesa y la mayoría de las consultas son solo un color.
+function ManualPreview({ url }) {
+    const [open, setOpen] = useState(false);
+    const src = drivePreviewUrl(parseDriveFileId(url));
+    if (!src) return null;
+    return (
+        <div className="space-y-3">
+            <Button type="button" variant="outline" size="sm" className="min-h-11 gap-2" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+                <BookOpen className="h-4 w-4" aria-hidden="true" /> {open ? 'Ocultar el manual' : 'Ver el manual aquí'}
+            </Button>
+            {open && (
+                <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-900">
+                    <iframe title="Manual de marca" src={src} className="block h-[70vh] min-h-[420px] w-full" allow="autoplay" loading="lazy" />
+                </div>
+            )}
+            {open && <p className="brain-type-help">Si no carga, el manual no está compartido por enlace en Drive: ábrelo con «Manual de marca».</p>}
         </div>
     );
 }

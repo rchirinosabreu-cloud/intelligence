@@ -8,10 +8,11 @@ export function createBrandsDb(clients) {
         brands, files,
         client: {
             findUnique: async ({ where }) => clients.find((c) => c.id === where.id) || null,
-            findMany: async () => [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+            findMany: async ({ where } = {}) => clients.filter((c) => where?.isArchived === undefined || c.isArchived === where.isArchived).sort((a, b) => a.name.localeCompare(b.name, 'es'))
                 .map((c) => ({ ...c, brand: withFiles(brands.find((b) => b.clientId === c.id)) }))
         },
         clientBrand: {
+            count: async () => brands.length,
             findUnique: async ({ where }) => withFiles(brands.find((b) => b.clientId === where.clientId)),
             create: async ({ data }) => { const row = { id: `b${brands.length + 1}`, revision: 1, colors: [], fonts: [], links: [], updatedAt: new Date(), ...data }; brands.push(row); return row; },
             updateMany: async ({ where, data }) => {
@@ -22,6 +23,7 @@ export function createBrandsDb(clients) {
             }
         },
         clientBrandFile: {
+            findMany: async ({ where }) => files.filter((f) => f.brandId === where.brandId && (!where.kind || f.kind === where.kind)),
             create: async ({ data }) => { const row = { id: `f${files.length + 1}`, createdAt: new Date(), deletedAt: null, ...data }; files.push(row); return row; },
             findFirst: async ({ where }) => {
                 const brand = brands.find((b) => b.clientId === where.brand.clientId);

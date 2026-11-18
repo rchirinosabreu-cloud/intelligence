@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { brandSearchKey } from '@/lib/clientBrand';
 import BrandSheet, { BrandSheetSkeleton } from './BrandSheet';
 import BrandEditorDialog from './BrandEditorDialog';
+import BrandImportDialog from './BrandImportDialog';
+import { Button } from '@/components/ui/button';
 import { useBrand, useBrands } from './brandsApi';
 
 // Marcas (Rodny, 18 de noviembre de 2026): la pestaña «Marcas» del módulo de Clientes, con la ficha de marca
@@ -74,6 +76,7 @@ export default function BrandsBoard() {
     const { data, isLoading, isError, error } = useBrands();
     const [params, setParams] = useSearchParams();
     const [query, setQuery] = useState('');
+    const [importing, setImporting] = useState(false);
     const openSlug = params.get('cliente');
     const showArchived = params.get('marcasArchivadas') === '1';
 
@@ -111,6 +114,11 @@ export default function BrandsBoard() {
                         className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                     />
                 </label>
+                {data?.canImport && (
+                    <Button type="button" variant="outline" className="min-h-11" onClick={() => setImporting(true)}>
+                        Cargar fichas de los manuales
+                    </Button>
+                )}
             </div>
 
             {isLoading ? (
@@ -144,6 +152,7 @@ export default function BrandsBoard() {
                 </>
             )}
 
+            {importing && <BrandImportDialog open={importing} onClose={() => setImporting(false)} />}
             {openSlug && <BrandDialog slug={openSlug} clientId={openClient?.id} onClose={close} />}
         </div>
     );

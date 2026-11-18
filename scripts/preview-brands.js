@@ -14,14 +14,14 @@ import { matchBrandToClient, normalizeBrandInput } from '../src/lib/clientBrand.
 // fichas extraídas de los manuales (data/client-brands.json). Sin .env, sin base de datos, sin producción. Los archivos
 // que se suben viven en memoria y se pierden al apagar. `?ver=1` en `/api/__preview/permisos` deja a la persona solo viendo.
 
-export async function createBrandsPreview({ port = 3870 } = {}) {
+export async function createBrandsPreview({ port = 3870, empty = process.argv.includes('--vacio') } = {}) {
   process.chdir(path.resolve(import.meta.dirname, '..'));
   const dataset = JSON.parse(readFileSync('data/client-brands.json', 'utf8'));
   const clients = dataset.brands.map((entry, index) => ({ id: `c${index + 1}`, name: entry.aliases[0], slug: entry.aliases[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-'), logoUrl: null, status: 'ACTIVO', isArchived: false }));
   clients.push({ id: 'c-wine', name: 'Wine Summit', slug: 'wine-summit', logoUrl: null, status: 'ACTIVO', isArchived: false });
   clients.push({ id: 'c-bonsai', name: 'Bonsai', slug: 'bonsai', logoUrl: null, status: 'CERRADO', isArchived: true });
   const db = createBrandsDb(clients);
-  for (const entry of dataset.brands) {
+  for (const entry of empty ? [] : dataset.brands) {
     const { client } = matchBrandToClient(entry, clients);
     const { brand } = normalizeBrandInput(entry);
     if (client) await db.clientBrand.create({ data: { ...brand, clientId: client.id, source: entry.source } });
@@ -34,8 +34,8 @@ export async function createBrandsPreview({ port = 3870 } = {}) {
   const access = { edit: true };
   const api = express();
   api.use(express.json());
-  api.use((req, _res, next) => { req.user = { userId: 'u-keila', name: 'Keila', role: 'EDITOR', modulePermissions: { clientes: access.edit } }; next(); });
-  api.use(createClientBrandRouter({ service: clientBrandService({ db, storage }) }));
+  api.use((req, _res, next) => { req.user = empty ? { userId: 'u-rodny', name: 'Rodny', role: 'ADMIN' } : { userId: 'u-keila', name: 'Keila', role: 'EDITOR', modulePermissions: { clientes: access.edit } }; next(); });
+  api.use(createClientBrandRouter({ service: clientBrandService({ db, storage }), db, dataset }));
 
   const server = await createServer({
     configFile: false,

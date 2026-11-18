@@ -63,7 +63,7 @@ test('escribir una marca: dirección, project managers y editores con Clientes; 
     assert.match(routes, /router\.use\('\/brands', requireModulePermission\('clientes'\), createClientBrandRouter\(\)\);/, 'es parte del módulo de Clientes');
     assert.ok(routes.indexOf("router.use('/brands'") > routes.indexOf('router.use(authenticateToken)'), 'y detrás de la sesión');
     const router = source('src/routes/api/clientBrands.js');
-    for (const line of router.split('\n').filter((l) => /router\.(put|post|delete)\(/.test(l))) assert.match(line, /requireBrandEdit/, line);
+    for (const line of router.split('\n').filter((l) => /router\.(put|post|delete)\(/.test(l))) assert.match(line, /requireBrandEdit|requireBrandImport/, line);
 });
 
 test('los archivos de marca: nada de SVG y cada tipo con sus formatos', () => {
@@ -203,4 +203,67 @@ test('una tipografía de Google de la ficha se baja en .zip; una que no está en
     await assert.rejects(service.googleFontZip('c1', 'Massilia'), (error) => error.statusCode === 404);
     await assert.rejects(service.googleFontZip('c1', 'Comic Sans'), (error) => error.statusCode === 404);
     assert.equal(parseGoogleFontCss('').length, 0);
+});
+
+test('cargar los manuales: crea lo que falta, sube solo PNG de Drive, no pisa fichas ni repite logos', async () => {
+    const { runBrandImport, isPng } = await import('../src/services/clientBrandImport.js');
+    const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
+    const db = createBrandsDb([
+        { id: 'c1', name: 'Aristea', slug: 'aristea', isArchived: false },
+        { id: 'c2', name: 'Verona', slug: 'verona', isArchived: false },
+        { id: 'c3', name: 'Bonsai', slug: 'bonsai', isArchived: true }
+    ]);
+    const uploads = [];
+    const service = clientBrandService({ db, storage: () => ({ uploadToS3: async (file, folder) => { uploads.push(`${folder}/${file.originalname}`); return { key: `${folder}/${file.originalname}`, name: file.originalname, size: file.size, mimeType: file.mimetype }; } }) });
+    await service.save('c2', { colors: [{ hex: '#CC467B', name: 'La del equipo' }] }, { userId: 'u1' });
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(20)]);
+    let driveFixed = false;
+    const fetchImpl = async (url) => ({ ok: true, arrayBuffer: async () => (url.includes('NOPNG') && !driveFixed ? Buffer.from('<html>') : png) });
+    const dataset = { brands: [
+        { aliases: ['Aristea'], colors: [{ hex: '#3B2A74' }], logos: [{ driveId: 'a'.repeat(33), label: 'Principal' }, { driveId: 'NOPNG' + 'b'.repeat(28), label: 'Roto' }] },
+        { aliases: ['Verona'], colors: [{ hex: '#000000' }], logos: [{ driveId: 'c'.repeat(33), label: 'Blanco' }] },
+        { aliases: ['Bonsai'], colors: [{ hex: '#111111' }] }
+    ] };
+    const preview = await runBrandImport({ db, service, dataset, apply: false, fetchImpl });
+    assert.equal(uploads.length, 0, 'simular no sube nada');
+    assert.deepEqual(preview.report.map((l) => l.action), ['CREAR', 'COMPLETAR', 'OMITIR'], 'un archivado no se carga');
+    const done = await runBrandImport({ db, service, dataset, apply: true, fetchImpl });
+    assert.equal(done.totals.logos, 2);
+    assert.match(done.report[0].logoProblems[0], /no es un PNG/);
+    assert.equal((await service.get('c2')).brand.colors[0].name, 'La del equipo', 'la ficha del equipo no se pisa');
+    assert.equal((await service.get('c1')).brand.colors[0].hex, '#3B2A74');
+    driveFixed = true;
+    const again = await runBrandImport({ db, service, dataset, apply: true, fetchImpl });
+    assert.equal(again.totals.logos, 1, 'solo reintenta el que falló');
+    assert.equal(again.report[1].logosNew, 0, 'un logo ya cargado no se repite');
+    assert.ok(isPng(png) && !isPng(Buffer.from('<html>')));
+});
+
+test('los logos del dataset vienen de Drive con etiqueta y la carga es solo de administradores', () => {
+    const data = JSON.parse(readFileSync(new URL('../data/client-brands.json', import.meta.url), 'utf8'));
+    const logos = data.brands.flatMap((b) => (b.logos || []).map((l) => ({ ...l, brand: b.aliases[0] })));
+    assert.ok(logos.length >= 100);
+    for (const brand of data.brands) {
+        const labels = (brand.logos || []).map((l) => l.label);
+        assert.equal(new Set(labels).size, labels.length, `etiquetas repetidas en ${brand.aliases[0]}`);
+    }
+    assert.ok(logos.every((l) => /^[A-Za-z0-9_-]{20,}$/.test(l.driveId) && l.label.trim()));
+    const router = readFileSync(new URL('../src/routes/api/clientBrands.js', import.meta.url), 'utf8');
+    assert.match(router, /router\.post\('\/import', requireBrandImport/);
+    assert.match(router, /role \|\| ''\)\.toUpperCase\(\) === 'ADMIN'/);
+});
+
+test('al arrancar sin fichas carga los manuales una sola vez, y un fallo no tumba el servidor', async () => {
+    const { seedBrandsOnFirstBoot } = await import('../src/services/clientBrandImport.js');
+    const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
+    const db = createBrandsDb([{ id: 'c1', name: 'Aristea', slug: 'aristea', isArchived: false }]);
+    const service = clientBrandService({ db, storage: () => ({}) });
+    const quiet = { log() {}, warn() {}, error() {} };
+    const dataset = { brands: [{ aliases: ['Aristea'], colors: [{ hex: '#3B2A74' }] }] };
+    const first = await seedBrandsOnFirstBoot({ db, service, dataset, log: quiet });
+    assert.equal(first.totals.created, 1);
+    assert.deepEqual(await seedBrandsOnFirstBoot({ db, service, dataset, log: quiet }), { skipped: true });
+    const broken = await seedBrandsOnFirstBoot({ db: { clientBrand: { count: async () => { throw new Error('sin base'); } } }, service, dataset, log: quiet });
+    assert.equal(broken.error, 'sin base');
+    assert.match(readFileSync(new URL('../server.js', import.meta.url), 'utf8'), /seedBrandsOnFirstBoot/);
 });

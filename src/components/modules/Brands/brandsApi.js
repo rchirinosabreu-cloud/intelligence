@@ -53,3 +53,7 @@ export const useRemoveBrandFile = () => useBrandMutation(({ clientId, fileId }) 
 export function brandFontUrl(clientId, family) {
     return `${getApiBaseUrl()}/api/brands/${encodeURIComponent(clientId)}/fonts/download?family=${encodeURIComponent(family)}`;
 }
+
+/** Cargar las fichas de los manuales (solo administradores). `apply: false` solo cuenta qué haría. */
+export const useImportBrands = () => useBrandMutation(({ apply }) =>
+    request('/import', { method: 'POST', body: JSON.stringify({ apply: Boolean(apply) }) }));
