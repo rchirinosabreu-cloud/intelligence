@@ -39,6 +39,8 @@ export async function createBrandsPreview({ port = 3870, empty = process.argv.in
   const access = { edit: true };
   const api = express();
   api.use(express.json());
+  // Como producción: sin sesión no hay nada (en producción una <img> directa respondía «No token provided»).
+  api.use((req, res, next) => (req.headers.authorization ? next() : res.status(401).json({ error: 'No token provided' })));
   api.use((req, _res, next) => { req.user = empty ? { userId: 'u-rodny', name: 'Rodny', role: 'ADMIN' } : { userId: 'u-keila', name: 'Keila', role: 'EDITOR', modulePermissions: { clientes: access.edit } }; next(); });
   api.use(createClientBrandRouter({ service: clientBrandService({ db, storage }) }));
 

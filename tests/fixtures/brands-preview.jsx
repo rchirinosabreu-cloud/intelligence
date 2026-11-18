@@ -35,6 +35,19 @@ function SignedIn({ children }) {
   return children;
 }
 
+// Como en main.jsx: el fetch de la plataforma lleva la sesión; una <img> o un <a> no. La muestra exige el
+// token igual que producción, así que un archivo pedido sin él falla aquí también.
+const originalFetch = window.fetch;
+window.fetch = (resource, config = {}) => {
+    const url = typeof resource === 'string' ? resource : resource.url;
+    if (url.includes('/api/')) {
+        const headers = new Headers(config.headers || {});
+        headers.set('Authorization', 'Bearer muestra');
+        return originalFetch(resource, { ...config, headers });
+    }
+    return originalFetch(resource, config);
+};
+
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 
 createRoot(document.getElementById('root')).render(
