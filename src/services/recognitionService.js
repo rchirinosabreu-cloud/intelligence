@@ -111,9 +111,12 @@ async function activeRecipient(tx, userId) {
   if (!user?.isActive) throw failure('Usuario no disponible.', 401);
   return user;
 }
-async function validRecipientResource(tx, award, userId) {
-  return award.taskId ? tx.task.findFirst({ where: { id: award.taskId, status: 'REALIZADA', assignee: { userId, isActive: true } } })
-    : tx.contentPlan.findFirst({ where: { id: award.planId, deletedAt: null, owner: { userId, isActive: true } } });
+// «Al día» (y cualquier insignia del día o de la semana) no cuelga de una tarea ni de una parrilla: es de la persona.
+// Antes caía en la rama de parrillas con `id: null`, Prisma lanzaba y la celebración nunca salía (18 de noviembre de 2026).
+export async function validRecipientResource(tx, award, userId) {
+  if (award.taskId) return tx.task.findFirst({ where: { id: award.taskId, status: 'REALIZADA', assignee: { userId, isActive: true } } });
+  if (award.planId) return tx.contentPlan.findFirst({ where: { id: award.planId, deletedAt: null, owner: { userId, isActive: true } } });
+  return award.recipientId === userId;
 }
 export async function claimRecognition(db, userId, at = new Date()) {
   return recognitionTransaction(db, async tx => {
