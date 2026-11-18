@@ -297,3 +297,15 @@ test('la carga sube el manual en PDF a la plataforma, una sola vez, y prefiere l
     assert.match(sheet, /PdfDocumentPreview/, 'se lee con el visor de PDF de la plataforma');
     assert.doesNotMatch(sheet, /drivePreviewUrl|<iframe/, 'sin el visor de Drive');
 });
+
+test('los archivos de marca se piden con la sesión: nada de <img src> ni <a href> directos a la API', () => {
+    // En producción cada logo respondía «No token provided»: una etiqueta <img> o un enlace no llevan la sesión.
+    for (const file of ['BrandSheet.jsx', 'Brands.jsx']) {
+        const source = readFileSync(new URL(`../src/components/modules/Brands/${file}`, import.meta.url), 'utf8');
+        assert.doesNotMatch(source, /src=\{brandFileUrl|href=\{brandFileUrl|href=\{brandFontUrl/, file);
+    }
+    const api = readFileSync(new URL('../src/components/modules/Brands/brandsApi.js', import.meta.url), 'utf8');
+    assert.match(api, /export function useBrandImage/);
+    assert.match(api, /export async function downloadBrandFile/);
+    assert.match(readFileSync(new URL('../scripts/preview-brands.js', import.meta.url), 'utf8'), /No token provided/, 'la muestra exige la sesión como producción');
+});

@@ -15,7 +15,7 @@ import {
     rgbText
 } from '@/lib/clientBrand';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { brandFileUrl, brandFontUrl, useRemoveBrandFile } from './brandsApi';
+import { brandFileUrl, brandFontUrl, downloadBrandFile, loadBrandObjectUrl, useBrandImage, useRemoveBrandFile } from './brandsApi';
 import BrandFileUpload from './BrandFileUpload';
 
 // La ficha de marca de un cliente, tal como la consulta el equipo: lo que más se pregunta (colores) arriba,
@@ -114,13 +114,13 @@ function FontCard({ font, files, clientId }) {
                         <Copy className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     {fontFile ? (
-                        <a href={brandFileUrl(clientId, fontFile.id, { download: true })} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10">
+                        <button type="button" onClick={() => downloadBrandFile(brandFileUrl(clientId, fontFile.id, { download: true }), fontFile.name).catch((e) => toast.error(e.message))} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10">
                             <Download className="h-4 w-4" aria-hidden="true" /> Descargar
-                        </a>
+                        </button>
                     ) : isGoogle ? (
-                        <a href={brandFontUrl(clientId, font.family)} download className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10" aria-label={`Descargar la tipografía ${font.family}`}>
+                        <button type="button" onClick={() => downloadFont(clientId, font.family)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10" aria-label={`Descargar la tipografía ${font.family}`}>
                             <Download className="h-4 w-4" aria-hidden="true" /> Descargar
-                        </a>
+                        </button>
                     ) : font.url ? (
                         <a href={font.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10">
                             <ExternalLink className="h-4 w-4" aria-hidden="true" /> Abrir
@@ -139,12 +139,29 @@ function FontCard({ font, files, clientId }) {
 // Cuadritos detrás de un logo, como en un editor de imagen: así se ve igual la versión blanca que la negra.
 const TRANSPARENCY_GRID = { backgroundColor: '#b4b4bb', backgroundImage: 'repeating-conic-gradient(#9c9ca5 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' };
 
+async function downloadFont(clientId, family) {
+    const pending = toast.loading(`Preparando ${family}…`);
+    try {
+        await downloadBrandFile(brandFontUrl(clientId, family), `${family}.zip`);
+        toast.success(`${family} descargada`, { id: pending });
+    } catch (error) {
+        toast.error(error.message, { id: pending });
+    }
+}
+
+function LogoThumb({ clientId, file }) {
+    const src = useBrandImage(brandFileUrl(clientId, file.id, { thumb: true }));
+    return src
+        ? <img src={src} alt={file.label || file.name} className="max-h-full max-w-full object-contain" decoding="async" />
+        : <span className="h-12 w-20 animate-pulse rounded bg-zinc-300/60 dark:bg-white/10" aria-hidden="true" />;
+}
+
 function FileTile({ file, clientId, canEdit, onRemove, removing }) {
     return (
         <li className="group overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
             <div className="flex h-28 items-center justify-center bg-zinc-50 p-3 dark:bg-zinc-800/60" style={isImage(file) ? TRANSPARENCY_GRID : undefined}>
                 {isImage(file)
-                    ? <img src={brandFileUrl(clientId, file.id, { thumb: true })} alt={file.label || file.name} className="max-h-full max-w-full object-contain" loading="lazy" decoding="async" />
+                    ? <LogoThumb clientId={clientId} file={file} />
                     : <FileText className="h-10 w-10 text-zinc-400" aria-hidden="true" />}
             </div>
             <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -153,9 +170,9 @@ function FileTile({ file, clientId, canEdit, onRemove, removing }) {
                     <p className="brain-type-label">{BRAND_FILE_KIND_LABELS[file.kind]}</p>
                 </div>
                 <div className="flex shrink-0">
-                    <a href={brandFileUrl(clientId, file.id, { download: true })} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label={`Descargar ${file.name}`}>
+                    <button type="button" onClick={() => downloadBrandFile(brandFileUrl(clientId, file.id, { download: true }), file.name).catch((e) => toast.error(e.message))} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label={`Descargar ${file.name}`}>
                         <Download className="h-4 w-4" aria-hidden="true" />
-                    </a>
+                    </button>
                     {canEdit && (
                         <button type="button" disabled={removing} onClick={() => onRemove(file)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={`Quitar ${file.name}`}>
                             <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -284,13 +301,11 @@ function ManualViewer({ file, clientId, onClose }) {
     const [state, setState] = useState({ data: null, error: null });
     useEffect(() => {
         let active = true;
-        fetch(brandFileUrl(clientId, file.id))
-            .then(async (response) => {
-                if (!response.ok) throw new Error('No se pudo abrir el manual. Inténtalo de nuevo.');
-                return response.arrayBuffer();
-            })
+        loadBrandObjectUrl(brandFileUrl(clientId, file.id))
+            .then((objectUrl) => fetch(objectUrl))
+            .then((response) => response.arrayBuffer())
             .then((data) => active && setState({ data, error: null }))
-            .catch((error) => active && setState({ data: null, error: error.message }));
+            .catch(() => active && setState({ data: null, error: 'No se pudo abrir el manual. Inténtalo de nuevo.' }));
         return () => { active = false; };
     }, [clientId, file.id]);
     return (

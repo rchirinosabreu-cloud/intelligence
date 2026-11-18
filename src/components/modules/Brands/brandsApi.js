@@ -1,3 +1,4 @@
+import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
@@ -52,4 +53,55 @@ export const useRemoveBrandFile = () => useBrandMutation(({ clientId, fileId }) 
 /** Una tipografía de Google de la ficha, en .zip con sus archivos .ttf. */
 export function brandFontUrl(clientId, family) {
     return `${getApiBaseUrl()}/api/brands/${encodeURIComponent(clientId)}/fonts/download?family=${encodeURIComponent(family)}`;
+}
+
+// Los archivos de marca piden sesión, y una etiqueta <img> o un enlace <a> no la llevan (en producción cada
+// logo respondía «No token provided»). Se piden con el `fetch` de la plataforma, que sí la lleva, y se guardan
+// como URL local mientras la pestaña esté abierta: volver a abrir una ficha no vuelve a bajar nada.
+const objectUrls = new Map();
+
+export function loadBrandObjectUrl(url) {
+    if (!objectUrls.has(url)) {
+        const pending = fetch(url)
+            .then((response) => {
+                if (!response.ok) throw new Error('No se pudo cargar el archivo.');
+                return response.blob();
+            })
+            .then((blob) => URL.createObjectURL(blob))
+            .catch((error) => { objectUrls.delete(url); throw error; });
+        objectUrls.set(url, pending);
+    }
+    return objectUrls.get(url);
+}
+
+/** Una imagen privada de la marca, lista para un <img>. `null` mientras carga o si falla. */
+export function useBrandImage(url) {
+    const [src, setSrc] = React.useState(null);
+    React.useEffect(() => {
+        let active = true;
+        if (!url) return undefined;
+        loadBrandObjectUrl(url).then((value) => active && setSrc(value)).catch(() => active && setSrc(null));
+        return () => { active = false; };
+    }, [url]);
+    return src;
+}
+
+/** Descarga con sesión y con el nombre que manda el servidor (o el que se pase). */
+export async function downloadBrandFile(url, fallbackName = 'archivo') {
+    const response = await fetch(url);
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'No se pudo descargar el archivo.');
+    }
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const name = encoded ? decodeURIComponent(encoded) : fallbackName;
+    const href = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 60_000);
 }
