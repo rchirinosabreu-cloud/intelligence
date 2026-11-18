@@ -1,9 +1,14 @@
 import express from 'express';
+import { createRequire } from 'node:module';
 import multer from 'multer';
 import { clientBrandService } from '../../services/clientBrandService.js';
 import { BRAND_LIMITS, canEditBrand } from '../../lib/clientBrand.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import { receivesFiles } from '../../lib/uploadMarker.js';
+import prisma from '../../lib/prisma.js';
+import { runBrandImport } from '../../services/clientBrandImport.js';
+
+const require_ = createRequire(import.meta.url);
 
 // Marcas de los clientes (Rodny, 18 de noviembre de 2026): la pestaña «Marcas» del módulo de Clientes. Ver es
 // de quien tiene Clientes (la ruta se monta con `requireModulePermission('clientes')`); escribir pide además
@@ -15,9 +20,16 @@ export const requireBrandEdit = (req, res, next) => (canEditBrand(req.user)
     : res.status(403).json({ error: 'Para editar marcas necesitas el módulo de Clientes. Pídeselo a un administrador en Equipo.' }));
 requireBrandEdit.permission = { module: 'clientes' };
 
+/** Cargar las fichas de los manuales: solo administradores (es una carga en bloque sobre todos los clientes). */
+export const canImportBrands = (user) => String(user?.role || '').toUpperCase() === 'ADMIN';
+export const requireBrandImport = (req, res, next) => (canImportBrands(req.user)
+    ? next()
+    : res.status(403).json({ error: 'Cargar las fichas de los manuales es de un administrador.' }));
+requireBrandImport.permission = { module: 'clientes', role: 'ADMIN' };
+
 const upload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRAND_LIMITS.fileBytes, files: 1 } });
 
-export const createClientBrandRouter = ({ service = null } = {}) => {
+export const createClientBrandRouter = ({ service = null, db = null, dataset = null, fetchImpl } = {}) => {
     const router = express.Router();
     const brands = () => service || clientBrandService();
     const handle = (work, status = 200) => async (req, res) => {
@@ -37,7 +49,17 @@ export const createClientBrandRouter = ({ service = null } = {}) => {
         return res.status(400).json({ error: message });
     });
 
-    router.get('/', handle(async (req) => ({ ...(await brands().list()), canEdit: canEditBrand(req.user) })));
+    router.get('/', handle(async (req) => ({ ...(await brands().list()), canEdit: canEditBrand(req.user), canImport: canImportBrands(req.user) })));
+
+    // Cargar las fichas sacadas de los manuales (data/client-brands.json). `apply: false` solo cuenta qué haría.
+    router.post('/import', requireBrandImport, handle((req) => runBrandImport({
+        db: db || prisma,
+        service: brands(),
+        dataset: dataset || require_('../../../data/client-brands.json'),
+        apply: req.body?.apply === true,
+        user: req.user,
+        ...(fetchImpl ? { fetchImpl } : {})
+    })));
     router.get('/:clientId', handle(async (req) => ({ ...(await brands().get(req.params.clientId)), canEdit: canEditBrand(req.user) })));
     router.put('/:clientId', requireBrandEdit, handle((req) => brands().save(req.params.clientId, req.body || {}, req.user)));
     router.post('/:clientId/files', requireBrandEdit, receivesFiles(receiveFile, { field: 'file' }), handle(

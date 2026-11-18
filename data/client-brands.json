@@ -3,258 +3,1194 @@
   "readOn": "2026-11-18",
   "brands": [
     {
-      "aliases": ["Aristea", "Aristea Consultoría", "Aristea Consultoria"],
+      "aliases": [
+        "Aristea",
+        "Aristea Consultoría",
+        "Aristea Consultoria"
+      ],
       "source": "Manual de marca -Aristea.pdf (Drive), leído el 18 nov 2026",
       "tagline": "Creamos valor sostenible",
       "manualUrl": "https://drive.google.com/file/d/1NqgPaCJsb6cZAMbhsonmrFciG7Xd5-9x/view",
       "logosUrl": "https://drive.google.com/drive/folders/1VnyC6J5-y8NWawX_G8bHoWHCCYKXNqSA",
       "colors": [
-        { "hex": "#3B2A74", "role": "PRINCIPAL", "cmyk": "95, 98, 16, 5" },
-        { "hex": "#6C64AA", "role": "PRINCIPAL", "cmyk": "67, 64, 0, 0" },
-        { "hex": "#9CC53F", "role": "PRINCIPAL", "cmyk": "47, 0, 89, 0" },
-        { "hex": "#D36C13", "role": "PRINCIPAL", "cmyk": "13, 65, 100, 3" },
-        { "hex": "#F4B115", "role": "PRINCIPAL", "cmyk": "3, 34, 93, 0" },
-        { "hex": "#013036", "role": "SECUNDARIO" },
-        { "hex": "#0C545F", "role": "SECUNDARIO" },
-        { "hex": "#13708D", "role": "SECUNDARIO" },
-        { "hex": "#7A1959", "role": "SECUNDARIO" },
-        { "hex": "#18A14B", "role": "SECUNDARIO" },
-        { "hex": "#C7D98A", "role": "SECUNDARIO" },
-        { "hex": "#B95728", "role": "SECUNDARIO" }
+        {
+          "hex": "#3B2A74",
+          "role": "PRINCIPAL",
+          "cmyk": "95, 98, 16, 5"
+        },
+        {
+          "hex": "#6C64AA",
+          "role": "PRINCIPAL",
+          "cmyk": "67, 64, 0, 0"
+        },
+        {
+          "hex": "#9CC53F",
+          "role": "PRINCIPAL",
+          "cmyk": "47, 0, 89, 0"
+        },
+        {
+          "hex": "#D36C13",
+          "role": "PRINCIPAL",
+          "cmyk": "13, 65, 100, 3"
+        },
+        {
+          "hex": "#F4B115",
+          "role": "PRINCIPAL",
+          "cmyk": "3, 34, 93, 0"
+        },
+        {
+          "hex": "#013036",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#0C545F",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#13708D",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#7A1959",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#18A14B",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#C7D98A",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#B95728",
+          "role": "SECUNDARIO"
+        }
       ],
       "fonts": [
-        { "family": "Massilia", "use": "TITULOS", "source": "COMERCIAL", "weights": "Light, Regular y Bold" }
+        {
+          "family": "Massilia",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Light, Regular y Bold"
+        }
       ],
-      "usageNotes": "Imagotipo: el símbolo y la tipografía pueden ir juntos o separados. Usar la versión principal; si no se puede, la versión en negativo o en blanco y negro, la que dé mejor contraste con el fondo. Los colores secundarios complementan en posts, carteles y tarjetas."
+      "usageNotes": "Imagotipo: el símbolo y la tipografía pueden ir juntos o separados. Usar la versión principal; si no se puede, la versión en negativo o en blanco y negro, la que dé mejor contraste con el fondo. Los colores secundarios complementan en posts, carteles y tarjetas.",
+      "logos": [
+        {
+          "driveId": "1av5Zxm9u6IUIulz3fmNvjltzDVao_ZPS",
+          "label": "Isotipo morado"
+        },
+        {
+          "driveId": "1DK_IiUVpBNE4xxfVQhWyv00hfUQSnGKp",
+          "label": "Principal morado"
+        },
+        {
+          "driveId": "1f-8vpDK0hr_KQhzVVoNmOrQN7nFIWklT",
+          "label": "Principal morado oscuro"
+        },
+        {
+          "driveId": "1kxcApRWgYh9A1lwg0hucdaak7VGgGETv",
+          "label": "Lavanda"
+        },
+        {
+          "driveId": "1OBG6oIr3fmMPpSKdR4Vdhd2XxqkpiMGN",
+          "label": "Verde"
+        },
+        {
+          "driveId": "1fluSI20wN0OVS6jo9ZAwZhXLy6KYeteJ",
+          "label": "Magenta"
+        },
+        {
+          "driveId": "1Ls8kBdQuvYPyNxhjLlNaUfobmza2Sq6o",
+          "label": "Petróleo"
+        },
+        {
+          "driveId": "1IgfTwfSit7Q4Hni6fA91ueIwqFITArKj",
+          "label": "Verde lima"
+        },
+        {
+          "driveId": "1XfflLLSE7qysldMrSWM_uligbMipS1Ms",
+          "label": "Terracota"
+        },
+        {
+          "driveId": "1eOtVHHt6YwTxc8NPz3egGTFg7BXiWVnr",
+          "label": "Naranja"
+        },
+        {
+          "driveId": "1y_NkyG8edF4E3KS45dRv23CSKYWeGyBv",
+          "label": "Blanco"
+        },
+        {
+          "driveId": "13_KpWySXfFsH3unBYU3fXgJFhY7bjiI7",
+          "label": "Negro"
+        },
+        {
+          "driveId": "1hhrqgyb14YArBgnOmEL1uEgJRlXQIXy4",
+          "label": "Negro sin lema"
+        },
+        {
+          "driveId": "1Mt-EaNZZanOv5z9iRzy0afWAClFuwN0e",
+          "label": "Solo nombre negro"
+        },
+        {
+          "driveId": "1JHHTE5-QvhLMksNLjn5DH4Dat_Od9X_o",
+          "label": "Aristea Builds negro"
+        },
+        {
+          "driveId": "1PiSK4DtPA3CKRAUD4jg11epjJbA000jp",
+          "label": "Aristea Builds blanco"
+        },
+        {
+          "driveId": "1nqAtSyOzIa9nEjdSIi0vxdMmqP15JGCR",
+          "label": "Aristea Baseline negro"
+        },
+        {
+          "driveId": "1fQXybl97SzXxP6g7jc3ZHo4f9TSTGxeQ",
+          "label": "Aristea Baseline blanco"
+        },
+        {
+          "driveId": "1PDWAB1hweI_aYo82n4uK1gICArjd9sTJ",
+          "label": "Aristea Tells blanco"
+        }
+      ]
     },
     {
-      "aliases": ["Endova", "ENDOVA"],
+      "aliases": [
+        "Endova",
+        "ENDOVA"
+      ],
       "source": "Manual de marca - ENDOVA.pdf (Drive), leído el 18 nov 2026",
       "tagline": "Centro Especializado en Endoscopia y Diagnóstico Cardiovascular",
       "manualUrl": "https://drive.google.com/file/d/1LqRpIhwrozpcuqRY8tC92imzMmdvJLP0/view",
       "logosUrl": "https://drive.google.com/drive/folders/1Qde148xn0uz9WRq9_JuzywI-tBr2b3FA",
       "colors": [
-        { "hex": "#181933", "role": "PRINCIPAL" },
-        { "hex": "#313674", "role": "PRINCIPAL" },
-        { "hex": "#495097", "role": "PRINCIPAL" },
-        { "hex": "#335C24", "role": "SECUNDARIO", "cmyk": "80, 39, 100, 36" },
-        { "hex": "#589F3E", "role": "SECUNDARIO" },
-        { "hex": "#8DD672", "role": "ACENTO" }
+        {
+          "hex": "#181933",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#313674",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#495097",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#335C24",
+          "role": "SECUNDARIO",
+          "cmyk": "80, 39, 100, 36"
+        },
+        {
+          "hex": "#589F3E",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#8DD672",
+          "role": "ACENTO"
+        }
       ],
       "fonts": [
-        { "family": "Halcom", "use": "LOGO", "source": "COMERCIAL", "weights": "Variable" },
-        { "family": "Montserrat", "use": "TEXTOS", "source": "GOOGLE", "weights": "Light" }
+        {
+          "family": "Halcom",
+          "use": "LOGO",
+          "source": "COMERCIAL",
+          "weights": "Variable"
+        },
+        {
+          "family": "Montserrat",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Light"
+        }
       ],
-      "usageNotes": "Endova es una unidad de PromoGroup («Una unidad de PromoGroup» acompaña el logo). Logotipo tipográfico: usar la versión principal; si no se puede, la negativa o la de blanco y negro."
+      "usageNotes": "Endova es una unidad de PromoGroup («Una unidad de PromoGroup» acompaña el logo). Logotipo tipográfico: usar la versión principal; si no se puede, la negativa o la de blanco y negro.",
+      "logos": [
+        {
+          "driveId": "1PrLRgTYeqUMsm6fzyBz35Q7Q0rPT7Vmx",
+          "label": "Principal"
+        },
+        {
+          "driveId": "13lcFP8gwZixsNRx4CCJE4wSijdPrrKCL",
+          "label": "Isotipo verde"
+        },
+        {
+          "driveId": "1SfddrpQrJ0fVQjQM3emf9VAH3BNMqrtQ",
+          "label": "Isotipo azul"
+        },
+        {
+          "driveId": "1ZZmkAUmPqSzyLPn5ux1krtxm_DEjxBj3",
+          "label": "Respaldo PromoGroup IPS"
+        },
+        {
+          "driveId": "1wM55BLbpvQTCu1pMJ4ROsNRdtpzEsGQ7",
+          "label": "Respaldo PromoGroup IPS blanco"
+        }
+      ]
     },
     {
-      "aliases": ["PromoGroup", "Promogroup", "Promo Group", "PromoGroup IPS", "Promogroup IPS"],
+      "aliases": [
+        "PromoGroup",
+        "Promogroup",
+        "Promo Group",
+        "PromoGroup IPS",
+        "Promogroup IPS"
+      ],
       "source": "Propuesta identidad digital-Promogroup.pdf y Manual de marca PromoGroup.ai (Drive), leídos el 18 nov 2026",
       "manualUrl": "https://drive.google.com/file/d/1DhueWAhr7zAzEmgjPo-IAeuqgT9kg9_F/view",
       "links": [
-        { "label": "Guía de identidad digital", "url": "https://drive.google.com/file/d/1l6qGT-9nmLQYPemzwGXeJhH6zMlWlKiq/view" }
+        {
+          "label": "Guía de identidad digital",
+          "url": "https://drive.google.com/file/d/1l6qGT-9nmLQYPemzwGXeJhH6zMlWlKiq/view"
+        }
       ],
       "colors": [
-        { "hex": "#161834", "role": "PRINCIPAL" },
-        { "hex": "#313674", "role": "PRINCIPAL" },
-        { "hex": "#495097", "role": "SECUNDARIO" },
-        { "hex": "#589F3E", "role": "ACENTO" }
+        {
+          "hex": "#161834",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#313674",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#495097",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#589F3E",
+          "role": "ACENTO"
+        }
       ],
       "fonts": [
-        { "family": "Obviously", "use": "TITULOS", "source": "COMERCIAL", "weights": "Medium para títulos y énfasis" },
-        { "family": "Obviously", "use": "TEXTOS", "source": "COMERCIAL", "weights": "Regular para párrafos, Light para datos y etiquetas" }
+        {
+          "family": "Obviously",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Medium para títulos y énfasis"
+        },
+        {
+          "family": "Obviously",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "Regular para párrafos, Light para datos y etiquetas"
+        }
       ],
       "usageNotes": "El logo aprobado es el que incluye «IPS». Endova es una unidad dentro de PromoGroup.",
-      "voice": "Integra experiencia médica, gestión y operación para servicios de salud confiables y humanos."
+      "voice": "Integra experiencia médica, gestión y operación para servicios de salud confiables y humanos.",
+      "logos": [
+        {
+          "driveId": "1ZZmkAUmPqSzyLPn5ux1krtxm_DEjxBj3",
+          "label": "PromoGroup IPS color"
+        },
+        {
+          "driveId": "1wM55BLbpvQTCu1pMJ4ROsNRdtpzEsGQ7",
+          "label": "PromoGroup IPS blanco"
+        },
+        {
+          "driveId": "1a6fT5UduLyAPr-pzHx0suMRuSU3Zjin2",
+          "label": "PromoGroup IPS horizontal"
+        }
+      ]
     },
     {
-      "aliases": ["HAAD", "Haad", "HAAD Aesthetic Center", "Haad Estética y Spa", "HAAD Esthetic Center"],
+      "aliases": [
+        "HAAD",
+        "Haad",
+        "HAAD Aesthetic Center",
+        "Haad Estética y Spa",
+        "HAAD Esthetic Center"
+      ],
       "source": "Manual de marca -HAAD.pdf (Drive), leído el 18 nov 2026",
       "manualUrl": "https://drive.google.com/file/d/1R-WRYGXm0XtXAq97yjkjLHv6u2R7qfUf/view",
       "colors": [
-        { "hex": "#B89C7A", "role": "PRINCIPAL" },
-        { "hex": "#8A7F75", "role": "SECUNDARIO" },
-        { "hex": "#603914", "role": "SECUNDARIO" },
-        { "hex": "#CFCAC3", "role": "NEUTRO" },
-        { "hex": "#F4F1EC", "role": "FONDO" }
+        {
+          "hex": "#B89C7A",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#8A7F75",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#603914",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#CFCAC3",
+          "role": "NEUTRO"
+        },
+        {
+          "hex": "#F4F1EC",
+          "role": "FONDO"
+        }
       ],
       "fonts": [
-        { "family": "Gotham", "use": "TEXTOS", "source": "COMERCIAL" },
-        { "family": "Loretta Display", "use": "TITULOS", "source": "COMERCIAL" },
-        { "family": "Beauty Handwriting", "use": "COMPLEMENTARIA", "source": "COMERCIAL", "weights": "Regular" }
+        {
+          "family": "Gotham",
+          "use": "TEXTOS",
+          "source": "COMERCIAL"
+        },
+        {
+          "family": "Loretta Display",
+          "use": "TITULOS",
+          "source": "COMERCIAL"
+        },
+        {
+          "family": "Beauty Handwriting",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL",
+          "weights": "Regular"
+        }
       ],
-      "usageNotes": "Logotipo tipográfico (HAAD Aesthetic Center). Usar la versión con mejor contraste con el fondo."
+      "usageNotes": "Logotipo tipográfico (HAAD Aesthetic Center). Usar la versión con mejor contraste con el fondo.",
+      "logos": [
+        {
+          "driveId": "1aWD1vysy_Kiu0vtGWupi9UuwyPdI-kqv",
+          "label": "HAAD beige"
+        },
+        {
+          "driveId": "1ZbjPHkKOofTumBLlup5dRZvn4hT6DAQv",
+          "label": "HAAD blanco"
+        },
+        {
+          "driveId": "1-blgXDuVt5vpIC7Rtbzp9sqqpmbUuEjx",
+          "label": "HAAD arena"
+        },
+        {
+          "driveId": "1ALzCESBIm5_CV5omdi4NZfT9J-GCOlqv",
+          "label": "HAAD Aesthetic Center beige"
+        },
+        {
+          "driveId": "1G-gHjnr8cfBxeyrWxfjfslRS3u8sjofd",
+          "label": "HAAD Aesthetic Center blanco"
+        },
+        {
+          "driveId": "1Ih4Z5BCtNYgewU31Aa3je-an9k7HQ4_y",
+          "label": "HAAD Aesthetic Center arena"
+        }
+      ]
     },
     {
-      "aliases": ["Finas", "Finas Asesores", "Felix Finas", "Félix Finas", "FINAS by Félix Rodríguez Peña"],
+      "aliases": [
+        "Finas",
+        "Finas Asesores",
+        "Felix Finas",
+        "Félix Finas",
+        "FINAS by Félix Rodríguez Peña"
+      ],
       "source": "Manual de marca FINAS by félix rodríguez peña.pdf (Drive), leído el 18 nov 2026. Los colores del manual son imagen: faltan por cargar.",
       "manualUrl": "https://drive.google.com/file/d/14Tkm4U1qsvXL7N3s4M0Iw3Vb30ETBcay/view",
       "colors": [],
       "fonts": [
-        { "family": "Josefin Sans", "use": "TITULOS", "source": "GOOGLE", "weights": "Regular, Semi Bold y Bold. Solo logo, títulos, encabezados y textos especiales" },
-        { "family": "Source Sans 3", "use": "TEXTOS", "source": "GOOGLE", "weights": "Para los textos" }
+        {
+          "family": "Josefin Sans",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Regular, Semi Bold y Bold. Solo logo, títulos, encabezados y textos especiales"
+        },
+        {
+          "family": "Source Sans 3",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Para los textos"
+        }
       ],
-      "usageNotes": "En videos, la foto de Félix va solo al inicio; no repetir fotos."
+      "usageNotes": "En videos, la foto de Félix va solo al inicio; no repetir fotos.",
+      "logos": [
+        {
+          "driveId": "13GgO5vYiT6A50W7Gv8WDThS4yYboT7aT",
+          "label": "Con nombre, color"
+        },
+        {
+          "driveId": "151Dwb_wR2rqCsc_-s77wCb5bl0MbX2U0",
+          "label": "Con nombre, blanco"
+        },
+        {
+          "driveId": "1u9gUPfZ2c2i1H5Ste_xgzix9_TnXSNlS",
+          "label": "Con nombre, negro"
+        },
+        {
+          "driveId": "1xWamalbZ6gPfuAnEA60mhLDnUKwP5huC",
+          "label": "FINAS color"
+        },
+        {
+          "driveId": "172dgSPgMCkKdMms-3zPC9ikvtm4mNwIY",
+          "label": "FINAS blanco"
+        },
+        {
+          "driveId": "16l0TrHYSWrHCsk2lY_7C3gcAw7FAToBN",
+          "label": "FINAS negro"
+        },
+        {
+          "driveId": "1xC1OUPeZ1wQLa3DCJoszzSly0Cm7ME3O",
+          "label": "Isotipo color"
+        },
+        {
+          "driveId": "1qJDHy27qWkgpZYtbNtUPnuwoPQ-hYYHU",
+          "label": "Isotipo blanco"
+        },
+        {
+          "driveId": "13YpMHGwYsKMriyxmWXPv3XSk_kGoQS6X",
+          "label": "Isotipo negro"
+        }
+      ]
     },
     {
-      "aliases": ["MIO AGENCIA", "MIO", "Mio Agencia", "MIO Digital Agency", "Mio Agency"],
+      "aliases": [
+        "MIO AGENCIA",
+        "MIO",
+        "Mio Agencia",
+        "MIO Digital Agency",
+        "Mio Agency"
+      ],
       "source": "Brand Kit Web-Mio Agencia.pdf (agosto 2026) y BRANDGUIDE-MIO DIGITAL AGENCY.pdf (Drive), leídos el 18 nov 2026",
       "tagline": "Salvar la galaxia, un cliente a la vez",
       "manualUrl": "https://drive.google.com/file/d/1AN5hHxjaeeKOkzYZADhKsfW65GZet7M4/view",
       "links": [
-        { "label": "Brandguide anterior", "url": "https://drive.google.com/file/d/18ziU9BBWkyC3WkbbWJyy_mqpi92nFy34/view" }
+        {
+          "label": "Brandguide anterior",
+          "url": "https://drive.google.com/file/d/18ziU9BBWkyC3WkbbWJyy_mqpi92nFy34/view"
+        }
       ],
       "colors": [
-        { "hex": "#FD6A20", "name": "Naranja principal (Orange Soda)", "role": "PRINCIPAL" },
-        { "hex": "#111111", "name": "Carbón", "role": "NEUTRO" },
-        { "hex": "#F7F4EF", "name": "Marfil", "role": "FONDO" },
-        { "hex": "#6B6B6B", "name": "Gris medio", "role": "NEUTRO" },
-        { "hex": "#E5E5E5", "name": "Gris claro", "role": "NEUTRO" },
-        { "hex": "#E85D1C", "name": "Naranja medio", "role": "SECUNDARIO" },
-        { "hex": "#DB4B18", "name": "Naranja terracota", "role": "SECUNDARIO" },
-        { "hex": "#F29A6B", "name": "Naranja suave", "role": "SECUNDARIO" },
-        { "hex": "#FCE2D6", "name": "Naranja pálido", "role": "FONDO" },
-        { "hex": "#29305A", "name": "Arsenic (guía anterior)", "role": "ACENTO" }
+        {
+          "hex": "#FD6A20",
+          "name": "Naranja principal (Orange Soda)",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#111111",
+          "name": "Carbón",
+          "role": "NEUTRO"
+        },
+        {
+          "hex": "#F7F4EF",
+          "name": "Marfil",
+          "role": "FONDO"
+        },
+        {
+          "hex": "#6B6B6B",
+          "name": "Gris medio",
+          "role": "NEUTRO"
+        },
+        {
+          "hex": "#E5E5E5",
+          "name": "Gris claro",
+          "role": "NEUTRO"
+        },
+        {
+          "hex": "#E85D1C",
+          "name": "Naranja medio",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#DB4B18",
+          "name": "Naranja terracota",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#F29A6B",
+          "name": "Naranja suave",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#FCE2D6",
+          "name": "Naranja pálido",
+          "role": "FONDO"
+        },
+        {
+          "hex": "#29305A",
+          "name": "Arsenic (guía anterior)",
+          "role": "ACENTO"
+        }
       ],
       "fonts": [
-        { "family": "Noto Serif", "use": "TITULOS", "source": "GOOGLE", "weights": "Regular e Italic: títulos, conceptos y énfasis" },
-        { "family": "Neue Haas Grotesk", "use": "TEXTOS", "source": "COMERCIAL", "weights": "45 Light a 95 Black: textos, navegación y métricas" },
-        { "family": "JetBrains Mono", "use": "COMPLEMENTARIA", "source": "GOOGLE", "weights": "Solo etiquetas y datos técnicos, en mayúsculas" }
+        {
+          "family": "Noto Serif",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Regular e Italic: títulos, conceptos y énfasis"
+        },
+        {
+          "family": "Neue Haas Grotesk",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "45 Light a 95 Black: textos, navegación y métricas"
+        },
+        {
+          "family": "JetBrains Mono",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Solo etiquetas y datos técnicos, en mayúsculas"
+        }
       ],
       "usageNotes": "Sistema de 2026: degradado opcional #FD6A20 → #DB4B18 para fondos destacados; textura de grano fino al 3–8 %. No rotar, distorsionar ni poner sombras o cajas detrás del logo. La guía anterior usaba Montserrat y el azul Arsenic #29305A.",
-      "voice": "Ambiciosos y colaborativos, directos y amables, éticos y leales, con diversión. Fotografía documental, nada de stock ni poses publicitarias."
+      "voice": "Ambiciosos y colaborativos, directos y amables, éticos y leales, con diversión. Fotografía documental, nada de stock ni poses publicitarias.",
+      "logos": [
+        {
+          "driveId": "1xlnNbrkh9vJZrP5yBTJ50nUfwu4tutqg",
+          "label": "Horizontal blanco"
+        },
+        {
+          "driveId": "1csnSCU8F8GrwU0Inef8D-rG-qWVMWehf",
+          "label": "Horizontal blanco (2)"
+        },
+        {
+          "driveId": "17KL6ABWCCATxnFJA1YLJcj2T_BTyGV8Z",
+          "label": "Horizontal negro"
+        },
+        {
+          "driveId": "1shmeqAg9Ur96vVTA9WFFeYMQ7U34MaN6",
+          "label": "Vertical blanco"
+        },
+        {
+          "driveId": "1NUGlZuxg-5eiwW6W3aEWNv2y0Ks7uoCz",
+          "label": "Vertical negro"
+        },
+        {
+          "driveId": "162bjj9VxFsWSGaXeB914Bgc3x16n9k8x",
+          "label": "Isotipo blanco"
+        },
+        {
+          "driveId": "1JuK_XzCxLz6ZmQRWQm6y_jwwClIMkJUw",
+          "label": "Isotipo negro"
+        }
+      ]
     },
     {
-      "aliases": ["Temel Studio", "Temel"],
+      "aliases": [
+        "Temel Studio",
+        "Temel"
+      ],
       "source": "Marca Temel Studio.pdf (Drive), leído el 18 nov 2026",
       "manualUrl": "https://drive.google.com/file/d/1C6kSz_CIpHjAujdDV-SraUY90cNw8-4Q/view",
       "logosUrl": "https://drive.google.com/drive/folders/1zqRBZF3wO5E43R3WRkWBLW2AL_qKqNFy",
       "colors": [
-        { "hex": "#0F2D52", "role": "PRINCIPAL" },
-        { "hex": "#C9A24D", "role": "ACENTO" },
-        { "hex": "#F3EDE4", "role": "FONDO" },
-        { "hex": "#2B2F33", "role": "NEUTRO" },
-        { "hex": "#8A8F98", "role": "NEUTRO" },
-        { "hex": "#E6E2DB", "role": "FONDO" }
+        {
+          "hex": "#0F2D52",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#C9A24D",
+          "role": "ACENTO"
+        },
+        {
+          "hex": "#F3EDE4",
+          "role": "FONDO"
+        },
+        {
+          "hex": "#2B2F33",
+          "role": "NEUTRO"
+        },
+        {
+          "hex": "#8A8F98",
+          "role": "NEUTRO"
+        },
+        {
+          "hex": "#E6E2DB",
+          "role": "FONDO"
+        }
       ],
       "fonts": [
-        { "family": "Montserrat", "use": "TITULOS", "source": "GOOGLE" },
-        { "family": "Urbanist", "use": "TEXTOS", "source": "GOOGLE" }
+        {
+          "family": "Montserrat",
+          "use": "TITULOS",
+          "source": "GOOGLE"
+        },
+        {
+          "family": "Urbanist",
+          "use": "TEXTOS",
+          "source": "GOOGLE"
+        }
+      ],
+      "logos": [
+        {
+          "driveId": "16Q2nFBnX3vfup-GQKdjEkc3agcKeeBGO",
+          "label": "Gris"
+        },
+        {
+          "driveId": "1JJArqJbYBYpKKi5gi3RWRKQw4UeAFb3_",
+          "label": "Negro"
+        },
+        {
+          "driveId": "1Twd6XvS41uzs7-0QCoxCagazMgOk4emB",
+          "label": "Grafito"
+        },
+        {
+          "driveId": "1ZzE5ZFV2BsU5X0oWuoUi_JApERgp4G_Y",
+          "label": "Blanco"
+        },
+        {
+          "driveId": "16jPkyY1n_ECq7v0SCwS0Llbz4i12oAAW",
+          "label": "Azul y crema"
+        },
+        {
+          "driveId": "1yLwf8L6Js0bIg1zRLSg_H8IOJ6oPGGY9",
+          "label": "Crema"
+        },
+        {
+          "driveId": "1fmTV1lV1BasrnxKKd87Zi33lHR3IJeRE",
+          "label": "Isotipo negro"
+        },
+        {
+          "driveId": "1Ir0gkO5pqj5fd-WgIHL5sWNCIge8OFsh",
+          "label": "Isotipo arena"
+        },
+        {
+          "driveId": "1yVF6HCmbnO_PRFf-WUD1_kVvUo_uMDnR",
+          "label": "Isotipo crema"
+        },
+        {
+          "driveId": "1bLPE0fVl_n3GdPJlEwxuvtLTqhB7WeKi",
+          "label": "Isotipo azul y blanco"
+        },
+        {
+          "driveId": "1P786JlTft1LOuOzIaC8g5B21MHXqqPOV",
+          "label": "Isotipo dorado"
+        },
+        {
+          "driveId": "1aPARCL2eNPhaSUJcsvVqWQSur96ldaSd",
+          "label": "Isotipo grafito"
+        },
+        {
+          "driveId": "1Lu5EnnSzATeekbDgd1NC-zJCBEVBvlux",
+          "label": "Isotipo gris"
+        },
+        {
+          "driveId": "1mTOuIU0QzsoaS2b2VQ0OOoKT7Dt_GkO2",
+          "label": "Isotipo azul"
+        },
+        {
+          "driveId": "1DgwkNSGCu_yUjiLx-9kJvqJQaG8yLy-k",
+          "label": "Isotipo crema y dorado"
+        },
+        {
+          "driveId": "1FLAAdNHLIXueSsAH25ydI8ffo-oYq6aw",
+          "label": "Crema y dorado"
+        },
+        {
+          "driveId": "1ZM3P8RGKt3drmC8Yuc6DKuon0dd_PSJ1",
+          "label": "Dorado"
+        },
+        {
+          "driveId": "1WSVUpn4RCTlO-NMLHgFygjCx9hsgxFkI",
+          "label": "Azul"
+        },
+        {
+          "driveId": "1xSKxp9UQJfbd21iIy59Qxeycg2yAuBhx",
+          "label": "Nombre negro"
+        },
+        {
+          "driveId": "1uVBoguc49sTfwNwe2FCZ35EKH_K8oHzC",
+          "label": "Nombre gris"
+        },
+        {
+          "driveId": "1bSCC5j_KkiRGLrI6KtsKURoGyb6Gu_8-",
+          "label": "Nombre negro (2)"
+        },
+        {
+          "driveId": "1_68RTvx2JGGE7oA7kNYZVuHFhu2oIEvn",
+          "label": "Nombre dorado"
+        },
+        {
+          "driveId": "1-n-b-D4MHQyuwz10GDKgzaPZKVoiFUEO",
+          "label": "Nombre arena"
+        },
+        {
+          "driveId": "1NwcwNlAOJ_zptysf86WRu4en28hTZJG5",
+          "label": "Nombre blanco"
+        },
+        {
+          "driveId": "1OLYloVwQyqtBsQJx8EzBoD0Im95c3NYJ",
+          "label": "Nombre crema y dorado"
+        },
+        {
+          "driveId": "1zslFnkRbwbVZlQdQqa0H_SH-EHuW12ip",
+          "label": "Nombre azul"
+        },
+        {
+          "driveId": "1DPRsgOdGGH8-bDeBKdFDn4VUFAE7TgMH",
+          "label": "Isotipo azul y dorado"
+        },
+        {
+          "driveId": "1HSyS9GZg_30Fsjtu4eXEmPxivxZ5vWFX",
+          "label": "Azul y dorado"
+        }
       ]
     },
     {
-      "aliases": ["Muebles Nuva", "NUVA", "Nuva"],
+      "aliases": [
+        "Muebles Nuva",
+        "NUVA",
+        "Nuva"
+      ],
       "source": "Branding_NUVA.pdf (Drive), leído el 18 nov 2026",
       "manualUrl": "https://drive.google.com/file/d/1V0igix6wlywmX9i4vAPFL0Q6K8zuvwDx/view",
       "colors": [
-        { "hex": "#181818", "role": "PRINCIPAL", "cmyk": "76, 60, 67, 84" },
-        { "hex": "#E2711D", "role": "PRINCIPAL", "cmyk": "27, 67, 75, 21" },
-        { "hex": "#EC8E4D", "role": "SECUNDARIO", "cmyk": "3, 52, 74, 0" },
-        { "hex": "#FFFFFF", "role": "FONDO" }
+        {
+          "hex": "#181818",
+          "role": "PRINCIPAL",
+          "cmyk": "76, 60, 67, 84"
+        },
+        {
+          "hex": "#E2711D",
+          "role": "PRINCIPAL",
+          "cmyk": "27, 67, 75, 21"
+        },
+        {
+          "hex": "#EC8E4D",
+          "role": "SECUNDARIO",
+          "cmyk": "3, 52, 74, 0"
+        },
+        {
+          "hex": "#FFFFFF",
+          "role": "FONDO"
+        }
       ],
       "fonts": [
-        { "family": "Hanuman", "use": "TITULOS", "source": "GOOGLE", "weights": "Regular y Bold" }
+        {
+          "family": "Hanuman",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Regular y Bold"
+        }
       ]
     },
     {
-      "aliases": ["ELAR", "Fundación GRIT", "Fundacion GRIT", "GRIT", "Fundación GRIT - ELAR"],
+      "aliases": [
+        "ELAR",
+        "Fundación GRIT",
+        "Fundacion GRIT",
+        "GRIT",
+        "Fundación GRIT - ELAR"
+      ],
       "source": "manual grit_compressed.pdf (Drive), leído el 18 nov 2026",
       "manualUrl": "https://drive.google.com/file/d/1L7LZZyiBKATlepfYMf4FbSwtj1BRbfBe/view",
       "colors": [
-        { "hex": "#81137B", "name": "Púrpura", "role": "PRINCIPAL", "cmyk": "50, 100, 2, 1", "pantone": "248C" }
+        {
+          "hex": "#81137B",
+          "name": "Púrpura",
+          "role": "PRINCIPAL",
+          "cmyk": "50, 100, 2, 1",
+          "pantone": "248C"
+        }
       ],
       "fonts": [
-        { "family": "Guayaba Sans", "use": "LOGO", "source": "COMERCIAL", "weights": "La «g» del logo está modificada" }
+        {
+          "family": "Guayaba Sans",
+          "use": "LOGO",
+          "source": "COMERCIAL",
+          "weights": "La «g» del logo está modificada"
+        }
       ],
       "usageNotes": "El halo de luz simboliza la sabiduría y un nuevo amanecer; el logo se construye con proporción áurea. Se usa como marca sombrilla.",
-      "voice": "Femenina, estilizada, firme y de confianza."
-    },
-    {
-      "aliases": ["Secretaría Desarrollo Económico", "Secretaría de Desarrollo Económico", "Sec Desarrollo Economico", "Desarrollo Económico", "Gobernación de Bolívar"],
-      "source": "Manual de Identidad Gráfica 2024 Gobernación de Bolívar.pdf (Drive), leído el 18 nov 2026",
-      "manualUrl": "https://drive.google.com/file/d/11vRNqDJB1XTHsxXi5emrq0CpF1qUKibw/view",
-      "colors": [
-        { "hex": "#FFCC29", "role": "PRINCIPAL", "cmyk": "0, 20, 100, 0" },
-        { "hex": "#C9262B", "role": "PRINCIPAL", "cmyk": "9, 100, 100, 4" },
-        { "hex": "#348C41", "role": "PRINCIPAL", "cmyk": "75, 0, 100, 25" },
-        { "hex": "#0075B8", "role": "PRINCIPAL", "cmyk": "100, 50, 0, 0" },
-        { "hex": "#F5874F", "role": "SECUNDARIO" },
-        { "hex": "#FFD823", "role": "SECUNDARIO" },
-        { "hex": "#FFF212", "role": "SECUNDARIO" },
-        { "hex": "#FFF688", "role": "SECUNDARIO" },
-        { "hex": "#96724A", "role": "SECUNDARIO" },
-        { "hex": "#D4A374", "role": "SECUNDARIO" },
-        { "hex": "#91D8F7", "role": "SECUNDARIO" },
-        { "hex": "#00AFEF", "role": "SECUNDARIO" },
-        { "hex": "#211F20", "role": "NEUTRO", "cmyk": "0, 0, 0, 100" },
-        { "hex": "#3566B5", "role": "ACENTO" },
-        { "hex": "#182961", "role": "ACENTO" },
-        { "hex": "#6EA6FF", "role": "ACENTO" }
-      ],
-      "fonts": [
-        { "family": "Futura", "use": "TEXTOS", "source": "COMERCIAL", "weights": "Futura Bk BT y Md BT: títulos, párrafos, presentaciones" },
-        { "family": "Times New Roman", "use": "TITULOS", "source": "COMERCIAL", "weights": "Título principal" },
-        { "family": "Fortune", "use": "COMPLEMENTARIA", "source": "COMERCIAL", "weights": "Palabras clave" }
-      ],
-      "usageNotes": "Manual de la Gobernación de Bolívar (2024): las secretarías van en cobranding con el escudo. Respetar el área de seguridad del logo."
-    },
-    {
-      "aliases": ["Verona", "Verona PR", "veronapr"],
-      "source": "Dato confirmado por Rodny en chat; la propuesta de identidad está en .ai (Drive)",
-      "manualUrl": "https://drive.google.com/file/d/1uF8WnsaxFYpBaNtf-8kLEKOwPxIAIK5o/view",
-      "colors": [
-        { "hex": "#CC467B", "name": "Rosado", "role": "PRINCIPAL" }
-      ],
-      "fonts": [],
-      "usageNotes": "Usar el rosado #CC467B en botones y llamados a la acción, no rojo."
-    },
-    {
-      "aliases": ["Mari Colón", "Mari Colon", "Kodesh Realty", "Mari Colón Kodesh Realty"],
-      "source": "Canva del cliente, según Rodny",
-      "colors": [],
-      "fonts": [
-        { "family": "Poppins", "use": "TEXTOS", "source": "GOOGLE" },
-        { "family": "TT Drugs", "use": "TITULOS", "source": "COMERCIAL" }
+      "voice": "Femenina, estilizada, firme y de confianza.",
+      "logos": [
+        {
+          "driveId": "1GXxENUWv4DA36H_P-CdbFZLLxQTt4WGx",
+          "label": "Fundación Grit color"
+        },
+        {
+          "driveId": "1p00DAO2eY8nbfDksfLmvbOIEu9Ao2gAa",
+          "label": "Fundación Grit blanco"
+        }
       ]
     },
     {
-      "aliases": ["Lettufresh", "Lettu Fresh"],
+      "aliases": [
+        "Secretaría Desarrollo Económico",
+        "Secretaría de Desarrollo Económico",
+        "Sec Desarrollo Economico",
+        "Desarrollo Económico",
+        "Gobernación de Bolívar"
+      ],
+      "source": "Manual de Identidad Gráfica 2024 Gobernación de Bolívar.pdf (Drive), leído el 18 nov 2026",
+      "manualUrl": "https://drive.google.com/file/d/11vRNqDJB1XTHsxXi5emrq0CpF1qUKibw/view",
+      "colors": [
+        {
+          "hex": "#FFCC29",
+          "role": "PRINCIPAL",
+          "cmyk": "0, 20, 100, 0"
+        },
+        {
+          "hex": "#C9262B",
+          "role": "PRINCIPAL",
+          "cmyk": "9, 100, 100, 4"
+        },
+        {
+          "hex": "#348C41",
+          "role": "PRINCIPAL",
+          "cmyk": "75, 0, 100, 25"
+        },
+        {
+          "hex": "#0075B8",
+          "role": "PRINCIPAL",
+          "cmyk": "100, 50, 0, 0"
+        },
+        {
+          "hex": "#F5874F",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#FFD823",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#FFF212",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#FFF688",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#96724A",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#D4A374",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#91D8F7",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#00AFEF",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#211F20",
+          "role": "NEUTRO",
+          "cmyk": "0, 0, 0, 100"
+        },
+        {
+          "hex": "#3566B5",
+          "role": "ACENTO"
+        },
+        {
+          "hex": "#182961",
+          "role": "ACENTO"
+        },
+        {
+          "hex": "#6EA6FF",
+          "role": "ACENTO"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Futura",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "Futura Bk BT y Md BT: títulos, párrafos, presentaciones"
+        },
+        {
+          "family": "Times New Roman",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Título principal"
+        },
+        {
+          "family": "Fortune",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL",
+          "weights": "Palabras clave"
+        }
+      ],
+      "usageNotes": "Manual de la Gobernación de Bolívar (2024): las secretarías van en cobranding con el escudo. Respetar el área de seguridad del logo.",
+      "logos": [
+        {
+          "driveId": "16TlyVH_1U0HXcWJrnJJx0kxemlK0TJqD",
+          "label": "Gobernación horizontal color"
+        },
+        {
+          "driveId": "1HU_N8jHNOXftJ5b5HHvWBK5ywlkYRX_o",
+          "label": "Gobernación vertical color"
+        },
+        {
+          "driveId": "1ai9AUlTe9IWHzdvFyV-qQY88baXotnjh",
+          "label": "Gobernación horizontal blanco"
+        },
+        {
+          "driveId": "1jeN34NqbLPe9vsK7LI5sLYbq90d38nG_",
+          "label": "Gobernación vertical blanco"
+        },
+        {
+          "driveId": "13hZkLNUqLHVpnoIzSraWvyMih9M48HD6",
+          "label": "Gobernación blanco"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Verona",
+        "Verona PR",
+        "veronapr"
+      ],
+      "source": "Dato confirmado por Rodny en chat; la propuesta de identidad está en .ai (Drive)",
+      "manualUrl": "https://drive.google.com/file/d/1uF8WnsaxFYpBaNtf-8kLEKOwPxIAIK5o/view",
+      "colors": [
+        {
+          "hex": "#CC467B",
+          "name": "Rosado",
+          "role": "PRINCIPAL"
+        }
+      ],
+      "fonts": [],
+      "usageNotes": "Usar el rosado #CC467B en botones y llamados a la acción, no rojo.",
+      "logos": [
+        {
+          "driveId": "1qjHkyxDl5D2F99PwlHbCMWfmSsXTonNa",
+          "label": "Verona blanco"
+        },
+        {
+          "driveId": "1y9MIrBEkx10mZLp_pyq5SCuesqqgf7ta",
+          "label": "Verona con sapito"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Mari Colón",
+        "Mari Colon",
+        "Kodesh Realty",
+        "Mari Colón Kodesh Realty"
+      ],
+      "source": "Canva del cliente, según Rodny",
+      "colors": [],
+      "fonts": [
+        {
+          "family": "Poppins",
+          "use": "TEXTOS",
+          "source": "GOOGLE"
+        },
+        {
+          "family": "TT Drugs",
+          "use": "TITULOS",
+          "source": "COMERCIAL"
+        }
+      ],
+      "logos": [
+        {
+          "driveId": "1IxL-R74po-s0BabmZDaaPZnPlv7vez7G",
+          "label": "Principal"
+        },
+        {
+          "driveId": "1jNARGRNG9bljNzLQpwm7uMRs6JPGmkT0",
+          "label": "Con lema"
+        },
+        {
+          "driveId": "1j_Cb-IQgB3V3eapbVOvwhm-AeSQEWFNf",
+          "label": "Con teléfono y licencia"
+        },
+        {
+          "driveId": "1k3137OgjnY-z9k3XZ6K8brTiYBNXskQ3",
+          "label": "Vino"
+        },
+        {
+          "driveId": "1es7wu0HygawzCvg2RXeg6BvMeUvgnLKL",
+          "label": "Bloque vino"
+        },
+        {
+          "driveId": "13I_Qh0DaZtWuM6BslE0bEjNmtB3jtObK",
+          "label": "Blanco"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Lettufresh",
+        "Lettu Fresh"
+      ],
       "source": "Lettufresh-Propuesta identidad digital v4.pdf (Drive), leído el 18 nov 2026. Los colores son imagen: faltan por cargar.",
       "manualUrl": "https://drive.google.com/file/d/1y8dmYoho78COuCKW7Gte_waS6PimcgE7/view",
       "colors": [],
       "fonts": [
-        { "family": "Fields", "use": "TITULOS", "source": "COMERCIAL" },
-        { "family": "Gotham", "use": "TEXTOS", "source": "COMERCIAL" },
-        { "family": "Yellow Skies", "use": "COMPLEMENTARIA", "source": "COMERCIAL" }
+        {
+          "family": "Fields",
+          "use": "TITULOS",
+          "source": "COMERCIAL"
+        },
+        {
+          "family": "Gotham",
+          "use": "TEXTOS",
+          "source": "COMERCIAL"
+        },
+        {
+          "family": "Yellow Skies",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL"
+        }
       ],
       "usageNotes": "El logo de Lettufresh siempre va junto a Salanova (lockup «Salanova @Lettufresh»).",
       "voice": "«Lo que comes sí importa». Frescura y calidad, 100 % boricua."
     },
     {
-      "aliases": ["Brain Studio", "BRAIN STUDIO", "Brain Studio Agencia"],
+      "aliases": [
+        "Brain Studio",
+        "BRAIN STUDIO",
+        "Brain Studio Agencia"
+      ],
       "source": "Manual de marca - Brain Studio.pdf (Drive), leído el 18 nov 2026",
       "tagline": "¡Comunicación que trasciende!",
       "manualUrl": "https://drive.google.com/file/d/1MVlA4X5gzSixsZ7aVAmUvmtzRkW6HBCX/view",
       "colors": [
-        { "hex": "#009BBF", "name": "Cian", "role": "PRINCIPAL" },
-        { "hex": "#31AA8A", "name": "Verde", "role": "PRINCIPAL" },
-        { "hex": "#A8118C", "name": "Magenta", "role": "SECUNDARIO" },
-        { "hex": "#FF6A68", "name": "Coral", "role": "SECUNDARIO" },
-        { "hex": "#FCD200", "name": "Amarillo", "role": "SECUNDARIO" }
+        {
+          "hex": "#009BBF",
+          "name": "Cian",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#31AA8A",
+          "name": "Verde",
+          "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#A8118C",
+          "name": "Magenta",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#FF6A68",
+          "name": "Coral",
+          "role": "SECUNDARIO"
+        },
+        {
+          "hex": "#FCD200",
+          "name": "Amarillo",
+          "role": "SECUNDARIO"
+        }
       ],
       "fonts": [
-        { "family": "Roboto", "use": "LOGO", "source": "GOOGLE", "weights": "Light en el logo; Bold y Black en títulos" },
-        { "family": "Roboto Condensed", "use": "TEXTOS", "source": "GOOGLE", "weights": "Light, Regular y Bold" },
-        { "family": "Dancing Script", "use": "COMPLEMENTARIA", "source": "GOOGLE", "weights": "Medium y Semibold, para textos con contraste" }
+        {
+          "family": "Roboto",
+          "use": "LOGO",
+          "source": "GOOGLE",
+          "weights": "Light en el logo; Bold y Black en títulos"
+        },
+        {
+          "family": "Roboto Condensed",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Light, Regular y Bold"
+        },
+        {
+          "family": "Dancing Script",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Medium y Semibold, para textos con contraste"
+        }
       ],
-      "usageNotes": "Degradado principal cian → verde. Los secundarios se usan sólidos o en degradado en posts, carteles y tarjetas. Moodboard: texturas granuladas, collage, fotos en blanco y negro o coloridas."
+      "usageNotes": "Degradado principal cian → verde. Los secundarios se usan sólidos o en degradado en posts, carteles y tarjetas. Moodboard: texturas granuladas, collage, fotos en blanco y negro o coloridas.",
+      "logos": [
+        {
+          "driveId": "1aeLKkL3okm2TeFPzbbbxNgzXUPqnLNhQ",
+          "label": "Horizontal verde"
+        },
+        {
+          "driveId": "1nfwgPjdjIS3mTKEVs3zIZZuvvkmuHg19",
+          "label": "Horizontal coral"
+        },
+        {
+          "driveId": "1rhmqimfSBR6Y5SSM4ud3YEhcCGKFO50W",
+          "label": "Horizontal azul"
+        },
+        {
+          "driveId": "1247731qxL84o27ilMLK24nh26q7CuT8q",
+          "label": "Horizontal amarillo"
+        },
+        {
+          "driveId": "1fCNHsjCTZPKSkPSKVeCmerY2CsAMWIiX",
+          "label": "Isotipo verde"
+        },
+        {
+          "driveId": "1kC7V32rexkftuYBcywMIpC1idh7M8ayn",
+          "label": "Isotipo coral"
+        },
+        {
+          "driveId": "1_588X7SJGj3-TImymMHyC-PIrHxvRDs5",
+          "label": "Isotipo azul"
+        },
+        {
+          "driveId": "1kIROCIQ8iymAhyKkWe40WfKeXRzv0Asw",
+          "label": "Isotipo amarillo"
+        },
+        {
+          "driveId": "1CRfYn_plOIWdYL0NCDnxV4bspKOTCMnV",
+          "label": "Isotipo de línea verde"
+        },
+        {
+          "driveId": "1cLcBgmiDc4CYYhLygvfvqVN1G8TH2wwB",
+          "label": "Isotipo de línea coral"
+        },
+        {
+          "driveId": "1O0Vqm85rGrY-YoIUcw1P7FSa8lL3NBAC",
+          "label": "Isotipo de línea azul"
+        },
+        {
+          "driveId": "16t-42KY34HQ7hiBI0lANUPGsQNPB07OE",
+          "label": "Isotipo de línea amarillo"
+        },
+        {
+          "driveId": "1acbXQAVPELUsNo-lkb7HRRaMGEGI-MF6",
+          "label": "Vertical verde"
+        },
+        {
+          "driveId": "1jnQXTCsmb87W4d0IyxxwBhxpREUzMU_0",
+          "label": "Vertical coral"
+        },
+        {
+          "driveId": "15z8tZcHoOgDi06KNV7qETW9qdXR4eA8_",
+          "label": "Vertical azul"
+        },
+        {
+          "driveId": "1uS4S4Aw69S766lZHmS5LZAvn3v2S5rEw",
+          "label": "Vertical amarillo"
+        },
+        {
+          "driveId": "1c-QgsM_qZcDpRCv-rlCZrs_X_q7f2fAp",
+          "label": "Horizontal blanco con lema"
+        },
+        {
+          "driveId": "1BxYWtJZikOomqu07TardFQrX_ztl2yPA",
+          "label": "Isotipo blanco"
+        },
+        {
+          "driveId": "1QEkLmIwSQoGIJBoF7EUoBfDSb9Mg_uHW",
+          "label": "Horizontal blanco"
+        },
+        {
+          "driveId": "14lMFx90mxQv0ULrde229E6-xX5qMeN4c",
+          "label": "Vertical blanco"
+        },
+        {
+          "driveId": "1nNk2jX5M_DI2Ub-5te9o7E5NQCC9pTXR",
+          "label": "Isotipo de línea blanco"
+        },
+        {
+          "driveId": "1l4PqCi_wsLnFUHW_0_f0k8n1gkIBnBJT",
+          "label": "Vertical blanco con lema"
+        }
+      ]
     },
     {
-      "aliases": ["SunPartners", "Sun Partners", "Sunpartners"],
+      "aliases": [
+        "SunPartners",
+        "Sun Partners",
+        "Sunpartners"
+      ],
       "source": "Manual Basico Sun Partners.pdf (Drive). El manual es imagen: colores y tipografías faltan por cargar.",
       "manualUrl": "https://drive.google.com/file/d/1mVR96pauw4EDKh4HfWbedG90CDZICqUe/view",
       "colors": [],
-      "fonts": []
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "1_7EmWyU-5UnF-xWaqVr5HDBrZkDcpcJn",
+          "label": "Principal"
+        }
+      ]
     }
   ]
 }

@@ -49,6 +49,8 @@ export const PLATFORM_EXCLUDED = [
   { match: /^POST \/content\/items\/:id\/delivery\/(direct-upload|confirm)$/, reason: 'confirmación de una carga directa del navegador, ligada a su sesión de entrega' },
   { match: /^\w+ \/clients\/:\w+\/(logo-image|storage\/signed-url|files)(\/|$)/, reason: 'archivos y logos' },
   { match: /^\w+ \/brands\/:clientId\/files(\/|$)/, reason: 'subir, bajar o retirar logos, tipografías y manuales de una marca se hace en su ficha' },
+  { match: /^POST \/brands\/import$/, reason: 'cargar las fichas de los manuales en bloque lo hace un administrador desde la pestaña Marcas' },
+  { match: /^POST \/brands\/import$/, reason: 'cargar las fichas de los manuales en bloque lo hace un administrador desde la pestaña Marcas' },
   { match: /^GET \/brands\/:clientId\/fonts\/download$/, reason: 'bajar una tipografía en .zip es un archivo para la persona, no una lectura' },
   { match: /^\w+ \/boards\/(unfurl|:boardId\/storage\/signed-url)$/, reason: 'adjuntos de inspiración' },
   { match: /^\w+ \/reports\/(generate|extract-metrics|image-proxy|:reportId\/(pdf|preview))$/, reason: 'subir capturas y archivos del informe' },
