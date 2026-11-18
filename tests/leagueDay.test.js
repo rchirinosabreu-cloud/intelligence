@@ -31,8 +31,8 @@ test('Documentado only plays tasks delegated to someone else and not born from a
 test('a clean day earns the six points, each with its evidence in Spanish', () => {
   const out = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }], closedTasks: [task()], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
   assert.deepEqual(out.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.deepEqual(out.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null }, 'the extras travel beside the habits, with the effort of the day');
-  assert.match(out.evidence.RELOJ, /1 cierre con tiempo registrado/);
+  assert.deepEqual(out.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 45 }] }, 'the extras travel beside the habits, with the effort of the day and the tasks behind Reloj');
+  assert.match(out.evidence.RELOJ, /1 tarea con reloj completo de 1/);
   assert.match(out.evidence.AL_DIA, /sin vencidas/);
   assert.match(out.evidence.TRABAJO_REGISTRADO, /Gestión de tareas/);
   for (const text of Object.values(out.evidence)) assert.doesNotMatch(text, /lento|flojo|mal\b/i);
@@ -57,11 +57,11 @@ test('Al día is judged at the close of the day, names what was left and falls b
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()], overdueAtDawn: 2, returnedToday: 0 }).habits.AL_DIA, false, 'without the close reading, the dawn photo');
 });
 
-test('effort pays one point per task closed with its time, and a lost habit pays the part that was done', () => {
+test('effort pays one point per task closed, and a lost habit pays the part that was done', () => {
   const late = (n) => task({ id: `l${n}`, completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-02T12:00:00.000Z' });
   const out = evaluateLeagueDay({ day: DAY, closedTasks: [task({ id: 'a' }), task({ id: 'b' }), task({ id: 'c' }), late(1), task({ id: 'u', measuredMs: 60_000 })], sessions: [session()], returnedToday: 0,
     closeState: { closed: 5, pending: 0, pendingTasks: [] } });
-  assert.equal(out.extras.ESFUERZO, 4, 'four closings with their time; the one measured for a minute does not count');
+  assert.equal(out.extras.ESFUERZO, 5, 'every closing counts, with or without its clock (Rodny, 18 de noviembre de 2026)');
   assert.equal(out.habits.A_TIEMPO, false);
   assert.equal(out.habits.RELOJ, false);
   assert.deepEqual(out.extras.PROPORCION, { RELOJ: 0.8, A_TIEMPO: 0.8 });
@@ -106,8 +106,8 @@ test('Brayan’s production day: an Actividad production event or a production t
   assert.equal(declared.habits.RELOJ, true, 'in the field there is no stopwatch: declared time on a production task is a recorded time');
   assert.match(declared.evidence.RELOJ, /1 jornada con tiempo declarado/);
   const unmeasured = evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0, declared: false, production: true })], sessions: [], overdueAtDawn: 0, returnedToday: 0 });
-  assert.equal(unmeasured.habits.RELOJ, false, 'a production task closed without any time, declared or measured, still loses the clock');
-  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0, declared: true })], sessions: [], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, false, 'declared time on ordinary work keeps losing the clock');
+  assert.equal(unmeasured.habits.RELOJ, null, 'a production task closed without any time passed straight to done: Reloj does not apply');
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0, declared: true })], sessions: [], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, null, 'ordinary work passed straight to done with declared time: Reloj does not apply');
   assert.equal(isProductionWork({ type: 'PRODUCTION' }), true);
   assert.equal(isProductionWork({ aiCategory: 'Producción Audiovisual' }), true);
   assert.equal(isProductionWork({ title: 'Jornada de fotos en Verona' }), true);
@@ -121,8 +121,8 @@ test('without a dawn snapshot or a returns reading nothing is assumed', () => {
   assert.equal(out.habits.SIN_DEVOLUCION, null);
 });
 
-test('the clock point: declared time, a forgotten clock, an overlapping session or a correction lose it', () => {
-  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0, declared: true })], sessions: [session({ closeReason: 'DECLARED' })], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, false);
+test('the clock point: a short clock, a forgotten clock, an overlapping session or a correction lose it; declared time does not play', () => {
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0, declared: true })], sessions: [session({ closeReason: 'DECLARED' })], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, null);
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: MIN_MEASURED_MS - 1 })], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, false, 'under ten minutes is not measured');
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session({ durationMs: FORGOTTEN_SESSION_MS + 1 })], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, false, 'a clock left running');
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session({ isOverlapping: true })], overdueAtDawn: 0, returnedToday: 0 }).habits.RELOJ, false, 'two clocks at once');
@@ -191,13 +191,18 @@ test('antes de las 18:00 Al día dice lo que falta por cerrar, no «al cierre qu
   assert.equal(clear.evidence.AL_DIA, 'Por ahora nada pendiente: se confirma a las 18:00.');
 });
 
-test('Reloj nombra el cierre que no contó y por qué', () => {
-  const day = evaluateLeagueDay({ day: DAY, closedTasks: [task(), task({ title: 'Carrusel Villa', measuredMs: 3 * 60000 }), task({ title: 'Reel', measuredMs: 0 })], sessions: [session()], returnedToday: 0 });
-  assert.match(day.evidence.RELOJ, /Sin tiempo válido: «Carrusel Villa» \(3 min medidos, el mínimo es 5\) y «Reel» \(se cerró sin reloj\)\.$/);
+test('Reloj nombra la tarea a la que le faltó reloj', () => {
+  const day = evaluateLeagueDay({ day: DAY, closedTasks: [task(), task({ title: 'Carrusel Villa', measuredMs: 3 * 60000 })], sessions: [session()], returnedToday: 0 });
+  assert.match(day.evidence.RELOJ, /Faltó tiempo: «Carrusel Villa» \(3 min de reloj, el mínimo es 10\)\.$/);
 });
 
-test('Reloj: cinco minutos medidos bastan; lo declarado al cerrar no suma', () => {
-  const day = evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 6 * 60000 }), task({ title: 'Story', measuredMs: 6 * 60000, declared: true }), task({ title: 'Post', measuredMs: 0, declared: true })], sessions: [session()], returnedToday: 0 });
+test('Reloj: lo que pasa directo a realizado no aplica, pero suma Esfuerzo; Publicar no cuenta en ninguno', () => {
+  const day = evaluateLeagueDay({ day: DAY, closedTasks: [task(), task({ title: 'Story', measuredMs: 0, declared: true }), task({ title: '[Publicar] Reel', measuredMs: 0 })], sessions: [session()], returnedToday: 0 });
+  assert.equal(day.habits.RELOJ, true);
   assert.equal(day.extras.ESFUERZO, 2);
-  assert.match(day.evidence.RELOJ, /«Post» \(pasó directo a realizado; el tiempo se declaró a mano\)/);
+  assert.match(day.evidence.RELOJ, /1 pasó directo a realizado y no aplica/);
+  assert.deepEqual(day.extras.RELOJ_TAREAS.map((row) => row.kind), ['ok', 'directo', 'publicar']);
+  const none = evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0 })], returnedToday: 0 });
+  assert.equal(none.habits.RELOJ, null);
+  assert.equal(none.extras.ESFUERZO, 1);
 });

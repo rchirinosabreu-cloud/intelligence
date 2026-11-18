@@ -29,7 +29,7 @@ const WEEK_SCORES = { jesu: 20, keila: 35, sara: 30, kamila: 40, brayan: 30, rod
 
 export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 'rodny' } = {}) {
   const days = myDays({ perfect });
-  const today = { day: '2026-11-04', habits: habitsOf(perfect ? [true, true, true, true, true, true] : [true, true, false, null, true, true]), extras: { PRIMERO_EN_ABRIR: perfect ? true : false, PRIMERO_EN_REUNION: null } };
+  const today = { day: '2026-11-04', habits: habitsOf(perfect ? [true, true, true, true, true, true] : [true, true, false, null, true, true]), extras: { PRIMERO_EN_ABRIR: perfect ? true : false, PRIMERO_EN_REUNION: null, ESFUERZO: 4, RELOJ_TAREAS: [{ title: 'Carrusel Villa de la Fuente', kind: 'ok', minutes: 42 }, { title: 'Carrusel La Ciudadela', kind: 'ok', minutes: 35 }, { title: 'Ajuste de copy para Verona', kind: 'directo', minutes: 0 }, { title: 'Story de lanzamiento', kind: 'corto', minutes: 6 }, { title: '[Publicar] Reel de noviembre', kind: 'publicar', minutes: 0 }] } };
   const kudos = {
     received: perfect
       ? [{ from: 'Helen', note: 'Siempre responde primero.', week: '2026-W45' }, { from: 'Melissa', note: 'Me salvó con el reel.', week: '2026-W45' }]

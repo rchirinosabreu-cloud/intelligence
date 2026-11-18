@@ -84,6 +84,24 @@ function RankingGrid({ people, ranked, attribute, tone = 'month', label }) {
   </li>)}</ol>;
 }
 
+// Qué tareas mira Reloj y cómo quedó cada una (Rodny, 18 de noviembre de 2026: «un desplegable que le explique de qué tareas habla»).
+const CLOCK_KIND = {
+  ok: () => 'Con reloj · cuenta',
+  corto: (row) => `${row.minutes} min de reloj · no llegó a 10`,
+  directo: () => 'Pasó directo a realizado · no aplica',
+  publicar: () => 'Publicar · no aplica',
+};
+function ClockTasks({ rows }) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return <details className="mt-1 pl-6" data-race-clock-tasks>
+    <summary className={cn('cursor-pointer text-xs underline-offset-2 hover:underline', muted)}>Ver las tareas de hoy</summary>
+    <ul className="mt-1 space-y-1">{rows.map((row, index) => <li key={index} className="flex gap-2 text-xs leading-5" data-race-clock-kind={row.kind}>
+      <span className="min-w-0 flex-1 truncate" title={row.title}>{row.title}</span>
+      <span className={cn('shrink-0', row.kind === 'ok' ? 'text-brand-green-deep dark:text-brand-green' : row.kind === 'corto' ? 'text-brand-coral-deep dark:text-brand-coral' : muted)}>{(CLOCK_KIND[row.kind] || CLOCK_KIND.directo)(row)}</span>
+    </li>)}</ul>
+  </details>;
+}
+
 function Habits({ today }) {
   const items = [...DAILY_HABITS.map(item => ({ ...item, icon: HABIT_ICON[item.key], value: today.habits?.[item.key], points: HABIT_POINTS })),
     ...EXTRA_ACTIONS.map(item => ({ ...item, extra: true, icon: EXTRA_ICON[item.key], value: today.extras?.[item.key] }))];
@@ -103,11 +121,12 @@ function Habits({ today }) {
         <div className="flex items-center gap-2"><Icon className={cn('h-4 w-4', counted ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">{item.label}</span><span className={cn('text-xs', counted ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{unavailable ? 'Próximamente' : earned ? `+${item.points} hoy` : partial ? `+${partial} hoy, en parte` : item.value === false ? 'Sin sumar hoy' : 'Sin evaluar'}</span></div>
         <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{item.hint}</p>
         {today.evidence?.[item.key] && <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{today.evidence[item.key]}</p>}
+        {item.key === 'RELOJ' && <ClockTasks rows={today.extras?.RELOJ_TAREAS} />}
       </li>;
     })}
       <li className="py-3" data-race-today-effort={effortPoints(today)}>
         <div className="flex items-center gap-2"><Flame className={cn('h-4 w-4', effortPoints(today) ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">Esfuerzo</span><span className={cn('text-xs', effortPoints(today) ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{effortPoints(today) ? `+${effortPoints(today)} hoy` : 'Sin sumar hoy'}</span></div>
-        <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>Un punto por cada tarea que cierras con su tiempo registrado, hasta {EFFORT_DAILY_CAP} al día.</p>
+        <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>Un punto por cada tarea que cierras, hasta {EFFORT_DAILY_CAP} al día. Las de publicar no suman.</p>
         {today.evidence?.[EFFORT_KEY] && <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{today.evidence[EFFORT_KEY]}</p>}
       </li>
     </ul>
@@ -119,7 +138,8 @@ function Rules() {
     <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Cómo se cuentan los puntos<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
     <ul className={cn(surface, 'mt-2 list-disc space-y-2 p-4 pl-8 leading-5', muted)}>
       <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Si lo cumples en parte, sumas esa parte: 3 de 4 tareas a tiempo son 4 puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
-      <li>Esfuerzo: cada tarea que cierras con su tiempo registrado suma 1 punto, hasta {EFFORT_DAILY_CAP} al día.</li>
+      <li>Esfuerzo: cada tarea que cierras suma 1 punto, hasta {EFFORT_DAILY_CAP} al día. Las de publicar no suman.</li>
+      <li>Reloj mira solo las tareas en que usaste el reloj: cuenta si llegó a 10 minutos. Lo que pasa directo a realizado y las de publicar no aplican.</li>
       <li>Al día mira cómo terminas la jornada a las 6:00 pm, no cómo amaneces: si cierras lo vencido durante el día, lo ganas. Si te queda algo, la plataforma te dice qué.</li>
       <li>Al día y Sin devolución se juegan los días en que cierras algo: sin entregas no suman ni restan.</li>
       <li>Al día, A tiempo y Documentado también se leen de tu área: las parrillas de tus cuentas, tus seguimientos del CRM, tus pautas y tus registros de Financiero. Ganas el hábito si todo lo que jugaste ese día salió bien.</li>

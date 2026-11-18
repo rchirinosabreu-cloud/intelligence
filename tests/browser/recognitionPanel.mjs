@@ -195,7 +195,7 @@ try {
   await shot('inicio-cero');
   await panel.getByText('Tus hábitos de hoy', { exact: true }).click();
   for (const description of [
-    'Registraste tu tiempo correctamente, sin sesiones olvidadas.',
+    'En las tareas que trabajaste con reloj llegaste a 10 minutos, sin relojes olvidados. Lo que pasa directo a realizado no aplica.',
     'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.',
     'Entregaste a tiempo: tus pendientes antes de su fecha y las piezas de hoy publicadas o programadas.',
     'Lo que delegas lleva contexto real: un comentario de al menos 20 letras, un archivo o un enlace. También cuentan tus gestiones del CRM con nota y tus movimientos con soporte.',

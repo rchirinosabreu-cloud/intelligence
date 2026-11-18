@@ -5,9 +5,13 @@
 import { DAILY_HABITS, EXTRA_ACTIONS, EFFORT_KEY, PROPORTION_KEY } from './platformLeague.js';
 import { describePlatformMutation } from './operationalMutationLabels.js';
 import { mergeAreaChecks } from './leagueAreaChecks.js';
+import { isPublicationTask } from './contentTaskReciprocity.js';
+/** Las tareas de la lista desplegable de Reloj, como máximo. */
+export const RELOJ_LIST_MAX = 12;
+export const RELOJ_LIST_KEY = 'RELOJ_TAREAS';
 
 /** Menos de diez minutos medidos no es una tarea con cronómetro (el mismo umbral que pide el tiempo declarado). */
-export const MIN_MEASURED_MS = 5 * 60 * 1000;
+export const MIN_MEASURED_MS = 10 * 60 * 1000;
 /** Una sesión de más de 8 horas es un reloj olvidado (la regla de Ritmo). */
 export const FORGOTTEN_SESSION_MS = 8 * 60 * 60 * 1000;
 
@@ -49,13 +53,6 @@ export function pendingEvidence(tasks = [], count = tasks.length, { open = false
   const rest = count - named.length;
   const list = rest > 0 ? `${named.join(', ')} y ${plural(rest, 'más', 'más')}` : named.join(' y ');
   return `${lead} ${list}.`;
-}
-/** Por qué un cierre no cuenta para Reloj. */
-function unmeasuredReason(task) {
-  const minutes0 = Math.floor(Number(task.measuredMs || 0) / 60000);
-  if (!task.production && task.declared) return minutes0 > 0 ? `${minutes0} min con reloj y el resto declarado a mano` : 'pasó directo a realizado; el tiempo se declaró a mano';
-  const minutes = Math.floor(Number(task.measuredMs || 0) / 60000);
-  return minutes > 0 ? `${minutes} min medidos, el mínimo es ${MIN_MEASURED_MS / 60000}` : 'se cerró sin reloj';
 }
 /** «HH:mm» de Bogotá de un instante. */
 export const bogotaTimeOf = (value) => {
@@ -109,37 +106,56 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   // La parte cumplida de cada hábito, en unidades: `{ ok, total }`. Sirve para pagar la parte de un hábito perdido.
   const units = {};
 
-  // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
-  // Una jornada de producción se cierra con tiempo declarado y vale: en campo no hay cronómetro (Rodny, 9 de noviembre de 2026).
-  if (closedTasks.length || sessions.length) {
-    // Cuenta lo medido con el reloj: cinco minutos bastan (Rodny, 18 de noviembre de 2026: las tareas cortas no llegaban a diez).
-    // Lo declarado al cerrar no es uso del reloj y no suma, aunque se declare encima de unos minutos medidos.
-    const unmeasured = closedTasks.filter((task) => task.production ? !task.declared && Number(task.measuredMs || 0) < MIN_MEASURED_MS : Number(task.measuredMs || 0) < MIN_MEASURED_MS);
-    const declaredProduction = closedTasks.filter((task) => task.production && task.declared).length;
-    const dirty = sessions.filter((session) => session.isOverlapping || Boolean(session.correctedAt) || Number(session.durationMs || 0) > FORGOTTEN_SESSION_MS);
-    habits.RELOJ = unmeasured.length === 0 && dirty.length === 0;
-    // Cada cierre es una unidad y cada sesión olvidada, encimada o corregida es una unidad perdida; sin cierres, cada sesión.
-    units.RELOJ = closedTasks.length
-      ? { ok: closedTasks.length - unmeasured.length, total: closedTasks.length + dirty.length }
-      : { ok: sessions.length - dirty.length, total: sessions.length };
-    // Esfuerzo: cada tarea cerrada con su tiempo (medido, o declarado en una jornada de producción) suma un punto.
-    extras[EFFORT_KEY] = closedTasks.length - unmeasured.length;
-    evidence[EFFORT_KEY] = extras[EFFORT_KEY] ? `${plural(extras[EFFORT_KEY], 'tarea cerrada con su tiempo', 'tareas cerradas con su tiempo')}.` : 'Ninguna tarea cerrada con su tiempo.';
+  // Reglas de Rodny (18 de noviembre de 2026):
+  // · Las tareas de «Publicar» no cuentan ni para Reloj ni para Esfuerzo: las cierra la cola de Meta, casi sola.
+  // · Esfuerzo: cada otra tarea cerrada suma un punto, tenga o no reloj.
+  // · Reloj mira solo las tareas en que se usó el reloj: una que pasó directo a realizado no aplica. Con reloj,
+  //   cuenta si llegó a diez minutos medidos. Una jornada de producción vale con su tiempo declarado: en campo no hay cronómetro.
+  const counted = closedTasks.filter((task) => !isPublicationTask(task.title || ''));
+  const published = closedTasks.length - counted.length;
+  extras[EFFORT_KEY] = counted.length;
+  evidence[EFFORT_KEY] = counted.length
+    ? `${plural(counted.length, 'tarea cerrada', 'tareas cerradas')}${published ? ` (sin contar ${plural(published, 'de publicar', 'de publicar')})` : ''}.`
+    : published ? 'Solo cerraste tareas de publicar, que no suman.' : 'Ninguna tarea cerrada.';
+  const measuredOf = (task) => Number(task.measuredMs || 0);
+  const kindOf = (task) => {
+    if (task.production) return task.declared || measuredOf(task) >= MIN_MEASURED_MS ? 'ok' : 'directo';
+    if (measuredOf(task) <= 0) return 'directo';
+    return measuredOf(task) >= MIN_MEASURED_MS ? 'ok' : 'corto';
+  };
+  const judged = counted.filter((task) => kindOf(task) !== 'directo');
+  const direct = counted.filter((task) => kindOf(task) === 'directo');
+  extras[RELOJ_LIST_KEY] = [...closedTasks].slice(0, RELOJ_LIST_MAX).map((task) => ({
+    title: task.title || 'Tarea sin título',
+    kind: isPublicationTask(task.title || '') ? 'publicar' : kindOf(task),
+    minutes: Math.floor(measuredOf(task) / 60000),
+  }));
+  // Una sesión declarada al cerrar no es un reloj: no hace jugar Reloj.
+  const clocks = sessions.filter((session) => session.closeReason !== 'DECLARED');
+  if (judged.length || clocks.length) {
+    const short = judged.filter((task) => kindOf(task) === 'corto');
+    const declaredProduction = judged.filter((task) => task.production && task.declared).length;
+    const dirty = clocks.filter((session) => session.isOverlapping || Boolean(session.correctedAt) || Number(session.durationMs || 0) > FORGOTTEN_SESSION_MS);
+    habits.RELOJ = short.length === 0 && dirty.length === 0;
+    // Cada cierre con reloj es una unidad y cada sesión olvidada, encimada o corregida es una unidad perdida; sin cierres, cada sesión.
+    units.RELOJ = judged.length
+      ? { ok: judged.length - short.length, total: judged.length + dirty.length }
+      : { ok: clocks.length - dirty.length, total: clocks.length };
     const parts = [];
-    if (closedTasks.length) parts.push(`${plural(closedTasks.length - unmeasured.length, 'cierre con tiempo registrado', 'cierres con tiempo registrado')} de ${closedTasks.length}`);
+    if (judged.length) parts.push(`${plural(judged.length - short.length, 'tarea con reloj completo', 'tareas con reloj completo')} de ${judged.length}`);
     if (declaredProduction) parts.push(plural(declaredProduction, 'jornada con tiempo declarado', 'jornadas con tiempo declarado'));
     if (dirty.length) parts.push(plural(dirty.length, 'sesión olvidada, encimada o corregida', 'sesiones olvidadas, encimadas o corregidas'));
-    else parts.push(`${plural(sessions.length, 'sesión limpia', 'sesiones limpias')}`);
+    else parts.push(`${plural(clocks.length, 'sesión limpia', 'sesiones limpias')}`);
+    if (direct.length) parts.push(`${plural(direct.length, 'pasó directo a realizado y no aplica', 'pasaron directo a realizado y no aplican')}`);
     evidence.RELOJ = parts.join(' · ');
-    // Qué cierre no contó, con su nombre y el motivo (Melissa, 18 de noviembre de 2026: «¿cuál no tenía tiempo?»).
-    const named = unmeasured.filter((task) => task.title).slice(0, 2).map((task) => `«${task.title}» (${unmeasuredReason(task)})`);
+    const named = short.filter((task) => task.title).slice(0, 2).map((task) => `«${task.title}» (${Math.floor(measuredOf(task) / 60000)} min de reloj, el mínimo es ${MIN_MEASURED_MS / 60000})`);
     if (named.length) {
-      const rest = unmeasured.length - named.length;
-      evidence.RELOJ += `. Sin tiempo válido: ${rest > 0 ? `${named.join(', ')} y ${plural(rest, 'más', 'más')}` : named.join(' y ')}.`;
+      const rest = short.length - named.length;
+      evidence.RELOJ += `. Faltó tiempo: ${rest > 0 ? `${named.join(', ')} y ${plural(rest, 'más', 'más')}` : named.join(' y ')}.`;
     }
   } else {
     habits.RELOJ = null;
-    evidence.RELOJ = 'Sin cierres ni relojes ese día.';
+    evidence.RELOJ = direct.length ? 'Ninguna tarea con reloj hoy: lo que pasa directo a realizado no aplica a Reloj.' : 'Sin cierres ni relojes ese día.';
   }
 
   // Al día (Rodny, 18 de noviembre de 2026): se juzga cómo termina la jornada, no cómo amanece. Con la foto de las 6:00

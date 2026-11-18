@@ -4,7 +4,7 @@
 
 /** Los seis hábitos de cada día hábil. Son hábitos de uso, dichos como hábitos y nunca como juicio. */
 export const DAILY_HABITS = [
-  { key: 'RELOJ', label: 'Reloj', hint: 'Registraste tu tiempo correctamente, sin sesiones olvidadas.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
+  { key: 'RELOJ', label: 'Reloj', hint: 'En las tareas que trabajaste con reloj llegaste a 10 minutos, sin relojes olvidados. Lo que pasa directo a realizado no aplica.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
   // Al día, A tiempo y Documentado también se leen de la fuente de cada área (Rodny, 12 de noviembre de 2026: «Sí,
   // hábitos por área»): Parrillas, el CRM, Pautas y Financiero, además de las tareas. Ver `leagueAreaChecks.js`.
   { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },

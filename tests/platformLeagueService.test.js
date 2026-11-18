@@ -281,19 +281,19 @@ test('a day is evaluated for every active person from the real sources, and save
   const rows = await service.evaluateDay(DAY);
   const by = Object.fromEntries(rows.map((row) => [row.memberId, row.habits]));
   assert.deepEqual(by['m-rodny'], { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.deepEqual(by['m-helen'], { RELOJ: false, AL_DIA: false, A_TIEMPO: false, DOCUMENTADO: false, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true }, 'declared time, two overdue at dawn, closed after the original date, no comment; the closing itself is recorded work');
+  assert.deepEqual(by['m-helen'], { RELOJ: null, AL_DIA: false, A_TIEMPO: false, DOCUMENTADO: false, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true }, 'declared time passed straight to done, so Reloj does not apply; two overdue at dawn, closed after the original date, no comment; the closing itself is recorded work');
   assert.deepEqual(by['m-jesu'], { RELOJ: true, AL_DIA: null, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: false, TRABAJO_REGISTRADO: true }, 'worked without closing (Al día is not played without closings); one task returned');
   const evidence = Object.fromEntries(rows.map((row) => [row.memberId, row.evidence]));
   assert.match(evidence['m-rodny'].TRABAJO_REGISTRADO, /Financiero/, 'the financial record and the collection activity count as work (the league gift does not)');
   assert.doesNotMatch(evidence['m-rodny'].TRABAJO_REGISTRADO, /Liga/);
   const extras = Object.fromEntries(rows.map((row) => [row.memberId, row.extras]));
-  assert.deepEqual(extras['m-helen'], { ESFUERZO: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the first human trace from 8:00 was hers; declared time is not effort');
-  assert.deepEqual(extras['m-rodny'], { ESFUERZO: 1, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null });
+  assert.deepEqual(extras['m-helen'], { ESFUERZO: 1, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Caption', kind: 'directo', minutes: 0 }] }, 'the first human trace from 8:00 was hers; a closing passed straight to done is still effort');
+  assert.deepEqual(extras['m-rodny'], { ESFUERZO: 1, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 50 }] });
   await service.computeAndSave(DAY);
   assert.equal(repo.days.size, 3);
   assert.match(repo.days.get(`${DAY}:m-helen`).evidence.A_TIEMPO, /0 de 1 a tiempo/);
   assert.match(repo.days.get(`${DAY}:m-rodny`).evidence.PRIMERO_EN_ABRIR, /Helen abrió primero, a las 08:04/);
-  assert.deepEqual(repo.days.get(`${DAY}:m-helen`).extras, { ESFUERZO: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null }, 'the extras are saved beside the habits');
+  assert.deepEqual(repo.days.get(`${DAY}:m-helen`).extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Caption', kind: 'directo', minutes: 0 }] }, 'the extras are saved beside the habits');
 });
 
 test('the automatic run computes today from 18:05 on business days and backfills the missing days of the month, never a weekend', async () => {
@@ -323,14 +323,14 @@ test('the league of a person: the month so far plus today live, the lanes of the
   assert.equal(league.score, 61, 'five habits on the 2nd and six today at 5 each, one task closed with its time, plus one gift at 5');
   assert.deepEqual(league.today.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
   assert.deepEqual({ earned: league.today.earned, possible: league.today.possible, extrasEarned: league.today.extrasEarned, points: league.today.points }, { earned: 6, possible: 6, extrasEarned: [], points: 36 });
-  assert.deepEqual(league.today.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null }, 'the extras object survives beside today’s points');
+  assert.deepEqual(league.today.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 50 }] }, 'the extras object survives beside today’s points');
   assert.equal(league.streak.days, 2);
   assert.equal(league.kudos.score, 5);
   assert.equal(league.kudos.received[0].from, 'Helen');
   assert.equal(league.race.lanes.length, 3);
   assert.deepEqual(league.race.lanes.map((lane) => lane.name), ['Helen', 'Jesu', 'Rodny'], 'fixed order by name, never by score');
   assert.equal(league.race.lanes.find((lane) => lane.isSelf).score, 61);
-  assert.equal(league.race.lanes.find((lane) => lane.name === 'Helen').score, 25, 'two habits on the 2nd, two today and the extra for opening first');
+  assert.equal(league.race.lanes.find((lane) => lane.name === 'Helen').score, 26, 'two habits on the 2nd, two today, the extra for opening first and one closing as effort');
   assert.ok(!('level' in league.race.lanes[0]), 'no levels anywhere');
   assert.deepEqual(league.race.track, { max: 100, marks: [0, 25, 50, 75, 100] });
   assert.equal(league.position.rank, 1);
@@ -343,7 +343,7 @@ test('the league of a person: the month so far plus today live, the lanes of the
   assert.equal(helen.kudos.givenThisWeek.name, 'Rodny');
   assert.equal(helen.nextStep.key, 'RELOJ');
   assert.deepEqual(helen.today.extrasEarned, ['PRIMERO_EN_ABRIR']);
-  assert.equal(helen.today.points, 15);
+  assert.equal(helen.today.points, 16);
 });
 
 test('the week starts at zero every Monday beside the month total (Rodny, 9 de noviembre de 2026), and names who won the previous week', async () => {
@@ -367,7 +367,7 @@ test('the week starts at zero every Monday beside the month total (Rodny, 9 de n
   assert.equal(league.week.score, 25 + 31 + 5 + 5, 'the 2nd, today live, this week’s gift and today’s award; nothing from October');
   assert.equal(league.score, 66, 'the month does not include October either');
   assert.deepEqual(league.week.position, { rank: 1, of: 3 });
-  assert.deepEqual(league.week.lanes.map(lane => [lane.name, lane.score]), [['Helen', 15], ['Jesu', 10], ['Rodny', 66]], 'Helen: today’s two habits and the extra; Jesu: clock and recorded work (Al día is not played without closings)');
+  assert.deepEqual(league.week.lanes.map(lane => [lane.name, lane.score]), [['Helen', 16], ['Jesu', 10], ['Rodny', 66]], 'Helen: today’s two habits, the extra and her closing as effort; Jesu: clock and recorded work (Al día is not played without closings)');
   assert.equal(league.week.podium[0].name, 'Rodny');
   assert.deepEqual([league.week.lastWeek.key, league.week.lastWeek.label], ['2026-W44', 'del 26 de octubre al 1 de noviembre']);
   assert.deepEqual(league.week.lastWeek.leaders.map(lane => [lane.name, lane.score]), [['Helen', 30]], 'Helen won W44: five habits and an award; Rodny had two habits and a gift (15)');
