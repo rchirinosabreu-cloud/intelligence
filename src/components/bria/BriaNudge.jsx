@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, ArrowUpRight, CheckCircle } from '@/components/ui/icons';
-import BriaPortrait from './BriaPortrait';
+import { BriaIsotipo } from './BriaBrand';
 import { askBria, openBriaConversation } from '@/lib/briaAsk';
 import { requestBriaNudges } from '@/lib/briaNudgeRequest';
 import { requestVault } from '@/lib/vaultRequest';
@@ -26,13 +26,13 @@ const decideAccess = ({ scope, requestId, decision }) => (scope === 'permission'
 function NudgeProgress({ progress }) {
   const delta = typeof progress.delta === 'number' ? progress.delta : null;
   return (
-    <div data-bria-nudge-progress className="mt-2 flex items-center gap-3 rounded-xl border border-zinc-200/80 bg-white/60 px-3 py-2 dark:border-white/10 dark:bg-zinc-950/30">
-      <div className="flex h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-brand-yellow/20 px-2 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" aria-hidden="true">
+    <div data-bria-nudge-progress className="mt-3 flex items-center gap-3 rounded-2xl border border-bria-line bg-bria-mist/40 px-3 py-2.5 dark:border-white/10 dark:bg-white/5">
+      <div className="flex h-12 min-w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-bria-gold-soft px-2 text-bria-gold-ink dark:bg-bria-gold/15 dark:text-bria-gold" aria-hidden="true">
         <span className="text-base font-semibold leading-none tabular-nums">{progress.score ?? '–'}</span>
         <span className="mt-0.5 text-xs font-medium">pts</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
+        <p className="flex items-center gap-2 text-sm font-semibold leading-5 text-bria-night dark:text-white">
           {progress.position || 'Liga del mes'}
           {delta !== null && (
             <span data-bria-nudge-delta className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums', delta >= 0 ? 'bg-brand-green/15 text-brand-green-deep dark:text-brand-green' : 'bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral')}>
@@ -40,8 +40,8 @@ function NudgeProgress({ progress }) {
             </span>
           )}
         </p>
-        {progress.next && <p className="text-xs leading-4 text-zinc-600 dark:text-zinc-300">{progress.next}</p>}
-        {progress.detail && <p className="text-xs leading-4 text-zinc-500 dark:text-zinc-400">{progress.detail}</p>}
+        {progress.next && <p className="text-sm leading-5 text-bria-muted dark:text-zinc-300">{progress.next}</p>}
+        {progress.detail && <p className="text-xs leading-4 text-bria-muted dark:text-zinc-400">{progress.detail}</p>}
       </div>
     </div>
   );
@@ -82,43 +82,46 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
       toast.error(failure.message);
     } finally { if (mounted.current) setBusy(false); }
   };
-  const action = 'inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep hover:bg-brand-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-cyan';
-  const quiet = 'inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-zinc-300 dark:hover:bg-white/10';
+  // La marca de Bria (Rodny, 18 de noviembre de 2026): el isotipo firma el aviso, sin franja de color arriba; en
+  // oscuro, el azul noche de la guía. La primera acción es el botón principal; las demás, secundarias.
+  const primary = 'inline-flex min-h-11 items-center gap-1 rounded-xl bg-bria-night px-3.5 text-sm font-semibold text-white hover:bg-bria-night/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:bg-white dark:text-bria-night dark:hover:bg-white/90';
+  const secondary = 'inline-flex min-h-11 items-center gap-1 rounded-xl border border-bria-line bg-white px-3 text-sm font-medium text-bria-night hover:bg-bria-mist/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:border-white/20 dark:bg-transparent dark:text-white dark:hover:bg-white/10';
+  const kind = (index) => (index === 0 ? primary : secondary);
   return (
-    <section role="status" aria-label="Aviso de Bria" data-bria-nudge={nudge.kind} className={cn('brain-popover-surface fixed right-4 z-[49] w-[min(340px,calc(100vw-2rem))] rounded-2xl p-3 bottom-[calc(1rem+env(safe-area-inset-bottom)+5.75rem)] sm:bottom-[calc(1rem+env(safe-area-inset-bottom)+6.75rem)]', className)}>
-      <div className="flex items-start gap-3 px-1 pt-1">
-        <BriaPortrait className="h-9 w-9 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            Bria se adelanta
-            {nudges.length > 1 && <span className="normal-case tracking-normal text-zinc-400 dark:text-zinc-500" data-bria-nudge-count>1 de {nudges.length}</span>}
-          </p>
-          <h3 className="mt-1 text-sm font-semibold leading-5 text-zinc-950 dark:text-white">{nudge.title}</h3>
-          {nudge.body && <p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{nudge.body}</p>}
-          {/* El seguimiento (14 de octubre de 2026): el desenlace del aviso en verde, o «sigue igual» en gris, escritos por el pulso. */}
-          {nudge.resolution && <p data-bria-nudge-resolution className="mt-1.5 flex items-start gap-1.5 text-sm leading-5 text-status-positive-fg"><CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />{nudge.resolution}</p>}
-          {!nudge.resolution && nudge.followUp && <p data-bria-nudge-follow-up className="mt-1.5 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{nudge.followUp}</p>}
-          {/* La liga del buen uso (27 de octubre de 2026): a las 3, el puntaje del mes en un anillo pequeño, el nivel y lo que se movió hoy. */}
-          {nudge.progress && <NudgeProgress progress={nudge.progress} />}
-          {/* Los botones los decide la plataforma según el hecho: a dónde ir y qué pedirle a Bria (queda escrito, la persona lo envía). */}
-          <div className="mt-2 -ml-2 flex flex-wrap items-center gap-x-1" data-bria-nudge-actions>
-            {(nudge.actions || []).map((item) => item.decide
-              ? <button key={item.label} type="button" disabled={busy} data-bria-nudge-decision={item.decide.decision} className={cn(item.decide.decision === 'APPROVE' ? action : quiet, 'disabled:opacity-50')} onClick={() => answer(item.decide)}>{item.label}</button>
-              : item.href
-              // Abrir un módulo recién concedido recarga la página: el menú y las rutas leen el permiso nuevo.
-              ? <a key={item.label} href={item.href} className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
-              : item.conversationId
-              ? <button key={item.label} type="button" className={action} onClick={() => openBriaConversation(item.conversationId)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
-              : item.ask
-                ? <button key={item.label} type="button" className={action} onClick={() => askBria(item.ask)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
-                : item.to && (item.external || /^https?:\/\//.test(item.to))
-                  ? <a key={item.label} href={item.to} target="_blank" rel="noopener noreferrer" className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
-                  : item.to ? <Link key={item.label} to={item.to} onClick={(event) => { event.preventDefault(); navigateFrom(item.to); }} className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></Link> : null)}
-          </div>
-        </div>
-        <button type="button" onClick={dismiss} disabled={busy} aria-label="Ocultar por hoy" title="Ocultar por hoy" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-200/60 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200">
+    <section role="status" aria-label="Aviso de Bria" data-bria-nudge={nudge.kind} className={cn('fixed right-4 z-[49] w-[min(340px,calc(100vw-2rem))] rounded-[20px] border border-bria-night/5 bg-white pb-4 text-bria-night shadow-[0_18px_36px_-20px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:text-white dark:shadow-[0_18px_36px_-18px_rgba(0,0,0,0.7)] bottom-[calc(1rem+env(safe-area-inset-bottom)+5.75rem)] sm:bottom-[calc(1rem+env(safe-area-inset-bottom)+6.75rem)]', className)}>
+      <div className="flex items-center gap-2.5 pl-4 pr-1.5 pt-2">
+        <BriaIsotipo className="h-[30px] shrink-0" />
+        <p className="flex min-w-0 flex-1 items-center gap-2 text-sm text-bria-muted dark:text-zinc-300">
+          <span><span className="font-bria font-bold text-bria-night dark:text-white">Bria</span> se adelanta</span>
+          {nudges.length > 1 && <span className="text-xs text-bria-muted dark:text-zinc-400" data-bria-nudge-count>1 de {nudges.length}</span>}
+        </p>
+        <button type="button" onClick={dismiss} disabled={busy} aria-label="Ocultar por hoy" title="Ocultar por hoy" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-bria-muted transition-colors hover:bg-bria-night/5 hover:text-bria-night disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white">
           <X className="h-4 w-4" />
         </button>
+      </div>
+      <div className="px-4">
+        <h3 className="text-base font-semibold leading-6 text-bria-night dark:text-white">{nudge.title}</h3>
+        {nudge.body && <p className="mt-1 text-sm leading-6 text-bria-ink dark:text-zinc-200">{nudge.body}</p>}
+        {/* El seguimiento (14 de octubre de 2026): el desenlace del aviso en verde, o «sigue igual» en gris, escritos por el pulso. */}
+        {nudge.resolution && <p data-bria-nudge-resolution className="mt-1.5 flex items-start gap-1.5 text-sm leading-5 text-status-positive-fg"><CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />{nudge.resolution}</p>}
+        {!nudge.resolution && nudge.followUp && <p data-bria-nudge-follow-up className="mt-1.5 text-sm leading-5 text-bria-muted dark:text-zinc-400">{nudge.followUp}</p>}
+        {/* La liga del buen uso (27 de octubre de 2026): el puntaje del mes, lo que se movió hoy y la posición. */}
+        {nudge.progress && <NudgeProgress progress={nudge.progress} />}
+        {/* Los botones los decide la plataforma según el hecho: a dónde ir y qué pedirle a Bria (queda escrito, la persona lo envía). */}
+        <div className="mt-3 flex flex-wrap items-center gap-2" data-bria-nudge-actions>
+          {(nudge.actions || []).map((item, index) => item.decide
+            ? <button key={item.label} type="button" disabled={busy} data-bria-nudge-decision={item.decide.decision} className={cn(item.decide.decision === 'APPROVE' ? primary : secondary, 'disabled:opacity-50')} onClick={() => answer(item.decide)}>{item.label}</button>
+            : item.href
+            // Abrir un módulo recién concedido recarga la página: el menú y las rutas leen el permiso nuevo.
+            ? <a key={item.label} href={item.href} className={kind(index)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
+            : item.conversationId
+            ? <button key={item.label} type="button" className={kind(index)} onClick={() => openBriaConversation(item.conversationId)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
+            : item.ask
+              ? <button key={item.label} type="button" className={kind(index)} onClick={() => askBria(item.ask)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
+              : item.to && (item.external || /^https?:\/\//.test(item.to))
+                ? <a key={item.label} href={item.to} target="_blank" rel="noopener noreferrer" className={kind(index)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
+                : item.to ? <Link key={item.label} to={item.to} onClick={(event) => { event.preventDefault(); navigateFrom(item.to); }} className={kind(index)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></Link> : null)}
+        </div>
       </div>
     </section>
   );

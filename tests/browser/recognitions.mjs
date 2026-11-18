@@ -67,7 +67,11 @@ test('real dashboard, matching panel heights, personal notice never blocks searc
   await page.getByRole('button', { name: 'Probar buen comienzo' }).click();
   const notice = page.getByRole('status', { name: 'Reconocimiento personal' });
   await notice.waitFor();
+  // Llega como píldora (18 de noviembre de 2026): el nombre y la primera línea; tocarla abre el logro entero.
+  assert.equal(await notice.getAttribute('data-recognition-state'), 'pill');
   assert.equal(await notice.getByText('Buen comienzo', { exact: true }).count(), 1);
+  await notice.getByRole('button', { name: 'Abrir el logro Buen comienzo' }).click();
+  assert.equal(await notice.getAttribute('data-recognition-state'), 'open');
   assert.match(await notice.innerText(), /Eres el primero del equipo en completar una tarea\.\s+Cada avance cuenta\./);
   const lines = await notice.locator('p').filter({ hasText: 'Cada avance cuenta.' }).evaluate(element => {
     const text = element.firstChild;

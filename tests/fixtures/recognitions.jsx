@@ -45,7 +45,7 @@ function Laboratory() {
       <label className="flex min-h-11 items-center gap-2 px-1 text-xs text-zinc-600 dark:text-zinc-300"><input type="checkbox" checked={keepVisible} onChange={event => setKeepVisible(event.target.checked)} className="h-4 w-4 accent-teal-700" />Mantener aviso visible</label>
     </div>
   </section>;
-  return <RecognitionContext.Provider value={{ events, demo: true, controls }}><App /><RecognitionNotice event={notice} style={style} onDismiss={() => setNotice(null)} durationMs={keepVisible ? 0 : 9000} /></RecognitionContext.Provider>;
+  return <RecognitionContext.Provider value={{ events, demo: true, controls }}><App /><RecognitionNotice event={notice} style={style} leagueEnabled onDismiss={() => setNotice(null)} durationMs={keepVisible ? 0 : 9000} /></RecognitionContext.Provider>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><MotionConfig reducedMotion="user"><ConfirmDialogProvider><Laboratory /></ConfirmDialogProvider></MotionConfig></React.StrictMode>);

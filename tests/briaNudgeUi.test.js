@@ -14,11 +14,12 @@ const layout = readFileSync('src/components/layout/AppLayout.jsx', 'utf8');
 const routes = readFileSync('src/routes/index.js', 'utf8');
 const server = readFileSync('server.js', 'utf8');
 
-test('the nudge sits above the mascot, on the shared popover surface, with the mascot portrait, only when the panel is closed and only when there is something to say', () => {
+test('the nudge sits above the mascot, signed with the Bria isotype, only when the panel is closed and only when there is something to say', () => {
   assert.match(assistant, /<BriaNudge userId=\{currentUser\.id\} hidden=\{open \|\| Boolean\(quickAsk\)\} \/>/);
-  assert.match(nudge, /brain-popover-surface fixed right-4 z-\[49\]/);
+  assert.match(nudge, /'fixed right-4 z-\[49\]/);
   assert.match(nudge, /bottom-\[calc\(1rem\+env\(safe-area-inset-bottom\)\+5\.75rem\)\]/);
-  assert.match(nudge, /<BriaPortrait className="h-9 w-9 shrink-0" \/>/);
+  assert.match(nudge, /<BriaIsotipo className="h-\[30px\] shrink-0" \/>/, 'la guía de marca de Bria (18 de noviembre de 2026): el isotipo firma el aviso');
+  assert.doesNotMatch(nudge, /bg-gradient|bg-bria(?![-\w])/, 'sin franja de color arriba de la tarjeta');
   assert.match(nudge, /if \(hidden \|\| !nudge\) return null;/, 'no permanent card (Rodny, 11 October 2026: «estorba»)');
   assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\.kind\}/);
   assert.match(nudge, /Bria se adelanta/);
