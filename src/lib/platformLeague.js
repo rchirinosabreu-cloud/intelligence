@@ -4,7 +4,7 @@
 
 /** Los seis hábitos de cada día hábil. Son hábitos de uso, dichos como hábitos y nunca como juicio. */
 export const DAILY_HABITS = [
-  { key: 'RELOJ', label: 'Reloj', hint: 'Registraste tu tiempo correctamente, sin sesiones olvidadas.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
+  { key: 'RELOJ', label: 'Reloj', hint: 'En las tareas que trabajaste con reloj llegaste a 10 minutos, sin relojes olvidados. Lo que pasa directo a realizado no aplica.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
   // Al día, A tiempo y Documentado también se leen de la fuente de cada área (Rodny, 12 de noviembre de 2026: «Sí,
   // hábitos por área»): Parrillas, el CRM, Pautas y Financiero, además de las tareas. Ver `leagueAreaChecks.js`.
   { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },
@@ -45,11 +45,11 @@ export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_
 
 /**
  * Esfuerzo (Rodny, 18 de noviembre de 2026: «a puntos por esfuerzo, solo ponle un punto»): cada tarea cerrada con su
- * tiempo registrado suma un punto, hasta veinte al día. Los hábitos miden cómo se trabaja; esto, cuánto. Sin él, quien
+ * tiempo registrado suma un punto, hasta diez al día (Rodny bajó el tope de 20 a 10 ese mismo día: el volumen de tareas desbalanceaba). Los hábitos miden cómo se trabaja; esto, cuánto. Sin él, quien
  * cerraba una tarea y quien cerraba seis sumaban lo mismo (Brayan y Melissa, 13 de noviembre: 1 y 5 cierres, 20 y 20).
  */
 export const EFFORT_POINTS_PER_TASK = 1;
-export const EFFORT_DAILY_CAP = 20;
+export const EFFORT_DAILY_CAP = 10;
 /** Lo que el día guarda en `extras` además de los extras de una sola persona: el esfuerzo y la parte cumplida de un hábito. */
 export const EFFORT_KEY = 'ESFUERZO';
 export const PROPORTION_KEY = 'PROPORCION';
