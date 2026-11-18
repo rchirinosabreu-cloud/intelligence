@@ -106,7 +106,7 @@ test('a lost habit pays its done part, rounded, and effort pays one point per ta
   assert.equal(habitPoints(entry, 'RELOJ'), 5);
   assert.equal(habitPoints(entry, 'DOCUMENTADO'), 0);
   assert.equal(effortPoints(entry), 4);
-  assert.equal(effortPoints({ extras: { ESFUERZO: 37 } }), 20);
+  assert.equal(effortPoints({ extras: { ESFUERZO: 37 } }), 10);
   assert.equal(todayPoints(entry).points, 5 + 5 + 4 + 5 + 5 + 4);
   assert.equal(summarizeDays([entry, entry]).points, 2 * 28);
   assert.equal(summarizeDays([entry]).earned, 4, 'a partial habit is not an earned habit for badges and full days');

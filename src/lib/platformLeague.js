@@ -45,11 +45,11 @@ export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_
 
 /**
  * Esfuerzo (Rodny, 18 de noviembre de 2026: «a puntos por esfuerzo, solo ponle un punto»): cada tarea cerrada con su
- * tiempo registrado suma un punto, hasta veinte al día. Los hábitos miden cómo se trabaja; esto, cuánto. Sin él, quien
+ * tiempo registrado suma un punto, hasta diez al día (Rodny bajó el tope de 20 a 10 ese mismo día: el volumen de tareas desbalanceaba). Los hábitos miden cómo se trabaja; esto, cuánto. Sin él, quien
  * cerraba una tarea y quien cerraba seis sumaban lo mismo (Brayan y Melissa, 13 de noviembre: 1 y 5 cierres, 20 y 20).
  */
 export const EFFORT_POINTS_PER_TASK = 1;
-export const EFFORT_DAILY_CAP = 20;
+export const EFFORT_DAILY_CAP = 10;
 /** Lo que el día guarda en `extras` además de los extras de una sola persona: el esfuerzo y la parte cumplida de un hábito. */
 export const EFFORT_KEY = 'ESFUERZO';
 export const PROPORTION_KEY = 'PROPORCION';
