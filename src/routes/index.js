@@ -80,6 +80,7 @@ import { listApiRoutes } from '../lib/platformRoutes.js';
 import { describeGuards } from '../lib/platformCatalog.js';
 import { createClientProfitabilityRouter } from './api/clientProfitability.js';
 import { createAdBudgetRouter } from './api/adBudgets.js';
+import { createClientBrandRouter } from './api/clientBrands.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 import { handleFirefliesWebhook } from '../services/firefliesWebhookService.js';
@@ -398,6 +399,8 @@ router.use('/db', dbRouter);
 router.use('/clients/:clientId', requireModulePermission('clientes'), clientFileRouter);
 router.use('/client-operations', requireModulePermission('clientes'), clientOperationsRouter);
 router.use('/ad-budgets', requireModulePermission('pautas'), createAdBudgetRouter());
+// Marcas de los clientes (18 de noviembre de 2026): una pestaña de Clientes; escribir lo cuida el router.
+router.use('/brands', requireModulePermission('clientes'), createClientBrandRouter());
 router.use('/talent-radar', talentRadarRouter);
 router.use('/activity', requireModulePermission('actividad'), activityRouter);
 router.use('/production-days/by-task', requireModulePermission('gestion'), productionTaskRouter);

@@ -717,6 +717,8 @@ model Client {
   facebookPageId      String?
   instagramBusinessId String?
   brandAssets         BrandAsset[]
+  // La ficha de marca (18 de noviembre de 2026): `src/lib/clientBrand.js`.
+  brand               ClientBrand?
   integrationsV2      AgencyIntegration[]
   announcements       ClientAnnouncement[]
   clientFiles         ClientFile[]
@@ -2065,6 +2067,52 @@ model TaskCommentReaction {
 
   @@unique([commentId, userId, emoji])
   @@index([commentId])
+}
+
+// Ficha de marca del cliente (Rodny, 18 de noviembre de 2026): colores, tipografías, tono y enlaces al
+// manual, con una sola forma para todos (`src/lib/clientBrand.js`). La ve cualquiera con sesión; aditiva con
+// `scripts/ensure-client-brand-schema.js`. `revision` evita pisar lo que otra persona guardó a la vez.
+model ClientBrand {
+  id          String            @id @default(uuid())
+  clientId    String            @unique
+  tagline     String?
+  voice       String?
+  usageNotes  String?
+  manualUrl   String?
+  canvaUrl    String?
+  logosUrl    String?
+  colors      Json              @default("[]")
+  fonts       Json              @default("[]")
+  links       Json              @default("[]")
+  source      String?
+  revision    Int               @default(1)
+  createdById String?
+  updatedById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  files       ClientBrandFile[]
+}
+
+// Logos, tipografías y manuales subidos a la ficha. Viven en el almacenamiento de la plataforma
+// (`PLATFORM_STORAGE_*`); retirar uno lo marca `deletedAt` y no borra la fila.
+model ClientBrandFile {
+  id          String      @id @default(uuid())
+  brandId     String
+  kind        String
+  label       String?
+  key         String
+  name        String
+  mimeType    String?
+  size        Int?
+  storageArea String      @default("PLATFORM")
+  createdById String?
+  createdAt   DateTime    @default(now())
+  deletedAt   DateTime?
+  deletedById String?
+  brand       ClientBrand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, deletedAt])
 }
 
 model BrandAsset {

@@ -3,16 +3,20 @@ import { useLocation, useSearchParams } from 'react-router-dom';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Activity, Plus, Users, Building2, Loader2, CalendarDays } from '@/components/ui/icons';
+import { Activity, Plus, Users, Building2, Loader2, CalendarDays, Palette } from '@/components/ui/icons';
 import ClientOperationsBoard from './ClientOperationsBoard';
 import ProductionDaysBoard from './ProductionDaysBoard';
 import TeamLoadView from './TeamLoadView';
+import BrandsBoard from '../../Brands/Brands';
 
-// Clientes con pestañas (Rodny, 2 de octubre de 2026: «puede crearse más bien un tab»). «Operación» y
-// «Equipo» solo los ven administradores y project managers; el resto ve el directorio, sin pestañas.
+// Clientes con pestañas (Rodny, 2 de octubre de 2026: «puede crearse más bien un tab»). «Operación»,
+// «Jornadas» y «Equipo» solo los ven administradores y project managers; el resto ve Directorio y Marcas.
 
 // «Jornadas» (12 de noviembre de 2026) reemplaza el Excel «Seguimiento jornadas de producción».
-const MANAGER_TABS = ['operacion', 'jornadas', 'equipo', 'directorio'];
+// «Marcas» (18 de noviembre de 2026) la ve todo el que entra a Clientes, no solo dirección: por eso quien no
+// es manager tiene también pestañas, Directorio y Marcas.
+const MANAGER_TABS = ['operacion', 'jornadas', 'equipo', 'directorio', 'marcas'];
+const MEMBER_TABS = ['directorio', 'marcas'];
 const TRIGGER = 'flex flex-1 items-center gap-2 rounded-xl py-2';
 const Loading = () => <div className="flex min-h-[30vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-cyan" /></div>;
 const LoadError = ({ text }) => <p role="alert" className="brain-alert-surface rounded-xl p-4 text-sm">{text}</p>;
@@ -20,10 +24,13 @@ const LoadError = ({ text }) => <p role="alert" className="brain-alert-surface r
 export default function ClientsSection({ canManage, canEdit = false, evaluated, team, directory, loading = false, error = '', onOpenClient, onNewClient, onSaveHighlight }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = MANAGER_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'operacion';
+  const tabs = canManage ? MANAGER_TABS : MEMBER_TABS;
+  const fallback = tabs[0];
+  const tab = tabs.includes(searchParams.get('tab')) ? searchParams.get('tab') : fallback;
   const selectTab = (value) => {
     const next = new URLSearchParams(searchParams);
-    if (value === 'operacion') next.delete('tab'); else next.set('tab', value);
+    if (value === fallback) next.delete('tab'); else next.set('tab', value);
+    if (value !== 'marcas') { next.delete('cliente'); next.delete('marcasArchivadas'); }
     setSearchParams(next, { replace: true, state: location.state });
   };
   // Un error de lectura nunca se presenta como «todo al día»: se dice y no se pinta el tablero.
@@ -44,13 +51,24 @@ export default function ClientsSection({ canManage, canEdit = false, evaluated, 
             <TabsTrigger value="jornadas" className={TRIGGER}><CalendarDays className="h-4 w-4" />Jornadas</TabsTrigger>
             <TabsTrigger value="equipo" className={TRIGGER}><Users className="h-4 w-4" />Equipo</TabsTrigger>
             <TabsTrigger value="directorio" className={TRIGGER}><Building2 className="h-4 w-4" />Directorio</TabsTrigger>
+            <TabsTrigger value="marcas" className={TRIGGER}><Palette className="h-4 w-4" />Marcas</TabsTrigger>
           </TabsList>
           <TabsContent value="operacion" className="outline-none">{body(<ClientOperationsBoard evaluated={evaluated} team={team} onOpenClient={onOpenClient} />)}</TabsContent>
           <TabsContent value="jornadas" className="outline-none">{tab === 'jornadas' && <ProductionDaysBoard />}</TabsContent>
           <TabsContent value="equipo" className="outline-none">{body(<TeamLoadView evaluated={evaluated} onOpenClient={onOpenClient} onSaveHighlight={onSaveHighlight} />)}</TabsContent>
           <TabsContent value="directorio" className="outline-none">{directory}</TabsContent>
+          <TabsContent value="marcas" className="outline-none">{tab === 'marcas' && <BrandsBoard />}</TabsContent>
         </Tabs>
-      ) : directory}
+      ) : (
+        <Tabs value={tab} onValueChange={selectTab} className="w-full">
+          <TabsList className="mb-6 flex h-auto w-full max-w-md flex-wrap justify-start gap-1 rounded-2xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-800/50">
+            <TabsTrigger value="directorio" className={TRIGGER}><Building2 className="h-4 w-4" />Directorio</TabsTrigger>
+            <TabsTrigger value="marcas" className={TRIGGER}><Palette className="h-4 w-4" />Marcas</TabsTrigger>
+          </TabsList>
+          <TabsContent value="directorio" className="outline-none">{directory}</TabsContent>
+          <TabsContent value="marcas" className="outline-none">{tab === 'marcas' && <BrandsBoard />}</TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
