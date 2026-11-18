@@ -1,3 +1,4 @@
+import { CAUGHT_UP_MIN_CLOSED } from '../lib/platformLeague.js';
 const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
 export function recognitionCalendar(at) {
   const day = dayFormatter.format(new Date(at));
@@ -27,7 +28,14 @@ export function taskAwardKinds({ teamDayCount, userDayCount, userWeekCount, earl
  * que venciera ese día o antes, ni un compromiso con hora anterior a las 18:00. Una devuelta espera a quien la creó y
  * no cuenta. Sin cerrar nada ese día no hay insignia: no se gana por no tener trabajo.
  */
-export const CAUGHT_UP_POLICY = 'cierre-del-dia-v2';
+export const CAUGHT_UP_POLICY = 'cierre-del-dia-v3';
+/**
+ * Al menos dos cierres (Rodny, 18 de noviembre de 2026): la insignia valía lo mismo con una tarea que con siete, y
+ * Brayan la ganó dos días seguidos cerrando una. La pasada solo entrega en la media hora que sigue al corte: después,
+ * reprogramar una fecha vencida la hacía desaparecer del cálculo y la insignia llegaba tarde (Sara, 12 de noviembre, 18:49).
+ */
+export { CAUGHT_UP_MIN_CLOSED };
+export const CAUGHT_UP_AWARD_WINDOW_MS = 30 * 60 * 1000;
 export const dayCloseCutoff = (day) => new Date(`${day}T23:00:00.000Z`);
 const OPEN_STATUSES = new Set(['PENDIENTE', 'EN_CURSO']);
 export function caughtUpAtClose({ day, views = [] }) {
@@ -39,8 +47,11 @@ export function caughtUpAtClose({ day, views = [] }) {
     return Boolean((due && due <= day) || (view.focusDeadlineAt && new Date(view.focusDeadlineAt) < cutoff));
   };
   const closed = views.filter((view) => done(view) && new Date(view.completedAt) >= dayStart).length;
-  const pending = views.filter((view) => openAtCutoff(view) && owed(view)).length;
-  return { eligible: closed > 0 && pending === 0, closed, pending };
+  const pendingViews = views.filter((view) => openAtCutoff(view) && owed(view));
+  const pending = pendingViews.length;
+  const pendingTasks = pendingViews.map((view) => ({ title: view.title || null, dueDate: view.dueDate || null }))
+    .sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || '')));
+  return { eligible: closed >= CAUGHT_UP_MIN_CLOSED && pending === 0, closed, pending, pendingTasks };
 }
 export function planIsApproved(items, approvedIds = []) {
   const active = items.filter(item => !item.deletedAt);

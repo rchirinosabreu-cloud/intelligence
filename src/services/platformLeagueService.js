@@ -18,6 +18,8 @@ import { hasModulePermission } from '../config/security.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 import { createLeagueAreaSources } from './leagueAreaSources.js';
+import { closeViewsFor } from './caughtUpAtCloseService.js';
+import { caughtUpAtClose } from './recognitionRules.js';
 import { hasRealContext } from '../lib/leagueAreaChecks.js';
 import { AD_BUDGET_INCLUDE, describeBudget } from './adBudgetService.js';
 import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
@@ -168,6 +170,15 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const areaChecks = await area.read({ dayKey, isToday: dayKey === bogotaDate(now()), start, end, members })
         .catch((error) => { logger.error('[Liga] Sin lectura de las áreas:', error?.message || error); return new Map(); });
       for (const [memberId, bucket] of byMember) bucket.areaChecks = areaChecks.get(memberId) || null;
+      // Al día se juzga al cierre de la jornada (Rodny, 18 de noviembre de 2026), con la misma regla de la insignia: lo que
+      // vencía ese día o antes y seguía abierto a las 18:00. Hoy, antes de las 18:00, es lo que queda por cerrar.
+      // Sin lectura, el hábito vuelve a la foto de las 6:00.
+      const views = await closeViewsFor(db, { day: dayKey, memberIds: members.map((member) => member.id) })
+        .catch((error) => { logger.error('[Liga] Sin lectura del cierre de la jornada:', error?.message || error); return null; });
+      if (views) for (const [memberId, bucket] of byMember) {
+        const { closed, pending, pendingTasks } = caughtUpAtClose({ day: dayKey, views: views.get(memberId) || [] });
+        bucket.closeState = { closed, pending, pendingTasks };
+      }
       return { dayKey, members, byMember };
     },
 

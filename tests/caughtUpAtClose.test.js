@@ -11,7 +11,7 @@ const at = (iso) => new Date(iso);
 
 test('the day closes at 18:00 of Bogotá', () => {
   assert.equal(dayCloseCutoff(DAY).toISOString(), '2026-11-11T23:00:00.000Z');
-  assert.equal(CAUGHT_UP_POLICY, 'cierre-del-dia-v2');
+  assert.equal(CAUGHT_UP_POLICY, 'cierre-del-dia-v3');
 });
 
 test('Rodny on the 11th: closed what was due that day before 18:00 and left nothing overdue', () => {
@@ -20,7 +20,7 @@ test('Rodny on the 11th: closed what was due that day before 18:00 and left noth
     { status: 'REALIZADA', completedAt: at(`${DAY}T21:30:00Z`), dueDate: at(`${DAY}T12:00:00Z`) },
     { status: 'PENDIENTE', completedAt: null, dueDate: at('2026-11-14T12:00:00Z') }
   ] });
-  assert.deepEqual(result, { eligible: true, closed: 2, pending: 0 });
+  assert.deepEqual(result, { eligible: true, closed: 2, pending: 0, pendingTasks: [] });
 });
 
 test('something due that day or before still open at 18:00 loses it, even if it was closed later that night', () => {
@@ -30,8 +30,8 @@ test('something due that day or before still open at 18:00 loses it, even if it 
   ] }).eligible, false, 'an older overdue task');
   assert.deepEqual(caughtUpAtClose({ day: DAY, views: [
     { status: 'REALIZADA', completedAt: at(`${DAY}T15:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`) },
-    { status: 'REALIZADA', completedAt: at(`${DAY}T23:40:00Z`), dueDate: at(`${DAY}T12:00:00Z`) }
-  ] }), { eligible: false, closed: 1, pending: 1 }, 'closing at 18:40 is after the close of the day');
+    { status: 'REALIZADA', title: 'Reel', completedAt: at(`${DAY}T23:40:00Z`), dueDate: at(`${DAY}T12:00:00Z`) }
+  ] }), { eligible: false, closed: 1, pending: 1, pendingTasks: [{ title: 'Reel', dueDate: at(`${DAY}T12:00:00Z`) }] }, 'closing at 18:40 is after the close of the day');
   assert.equal(caughtUpAtClose({ day: DAY, views: [
     { status: 'REALIZADA', completedAt: at(`${DAY}T15:00:00Z`), dueDate: null },
     { status: 'EN_CURSO', completedAt: null, dueDate: null, focusDeadlineAt: at(`${DAY}T20:00:00Z`) }
@@ -41,10 +41,29 @@ test('something due that day or before still open at 18:00 loses it, even if it 
 test('a returned task waits for its creator and nobody earns it for doing nothing', () => {
   assert.equal(caughtUpAtClose({ day: DAY, views: [
     { status: 'REALIZADA', completedAt: at(`${DAY}T15:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`) },
+    { status: 'REALIZADA', completedAt: at(`${DAY}T16:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`) },
     { status: 'DEVUELTA', completedAt: null, dueDate: at('2026-11-05T12:00:00Z') }
   ] }).eligible, true);
   assert.deepEqual(caughtUpAtClose({ day: DAY, views: [{ status: 'PENDIENTE', completedAt: null, dueDate: at('2026-11-20T12:00:00Z') }] }),
-    { eligible: false, closed: 0, pending: 0 }, 'without closing anything that day there is no badge');
+    { eligible: false, closed: 0, pending: 0, pendingTasks: [] }, 'without closing anything that day there is no badge');
+});
+
+// Rodny, 18 de noviembre de 2026: Brayan la ganó el 12 y el 13 cerrando una sola tarea, con los mismos cinco puntos que
+// Jesús con seis. Desde ahora pide al menos dos cierres.
+test('one closing is not enough: the badge asks for at least two', () => {
+  const one = caughtUpAtClose({ day: DAY, views: [{ status: 'REALIZADA', completedAt: at(`${DAY}T15:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`) }] });
+  assert.equal(one.eligible, false);
+  assert.equal(one.closed, 1);
+  assert.equal(one.pending, 0, 'nothing overdue: the habit Al día is still clean, only the badge waits for a second closing');
+});
+
+test('what was left overdue is named, the oldest first, so nobody loses it without knowing why', () => {
+  const result = caughtUpAtClose({ day: DAY, views: [
+    { status: 'REALIZADA', completedAt: at(`${DAY}T15:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`) },
+    { status: 'PENDIENTE', title: 'Video Pablo Hoff', dueDate: at('2026-11-10T12:00:00Z') },
+    { status: 'EN_CURSO', title: 'Informe octubre', dueDate: at('2026-10-02T12:00:00Z') }
+  ] });
+  assert.deepEqual(result.pendingTasks.map((task) => task.title), ['Informe octubre', 'Video Pablo Hoff']);
 });
 
 test('closing a task no longer grants Al día on the spot: catching up stopped being the rule', () => {
@@ -64,6 +83,7 @@ const fakeDb = () => {
     teamMember: { findMany: async () => people },
     task: { findMany: async (args) => { queries.push(args); return [
       { id: 't1', status: 'REALIZADA', assigneeId: 'm-rodny', completedAt: at(`${DAY}T15:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`), focusDeadlineAt: null },
+      { id: 't1b', status: 'REALIZADA', assigneeId: 'm-rodny', completedAt: at(`${DAY}T17:00:00Z`), dueDate: at('2026-11-13T12:00:00Z'), focusDeadlineAt: null },
       { id: 't2', status: 'REALIZADA', assigneeId: 'm-brayan', completedAt: at(`${DAY}T16:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`), focusDeadlineAt: null },
       { id: 't3', status: 'PENDIENTE', assigneeId: 'm-brayan', completedAt: null, dueDate: at('2026-11-10T12:00:00Z'), focusDeadlineAt: null },
       { id: 't4', status: 'REALIZADA', assigneeId: 'm-elisa', completedAt: at(`${DAY}T16:00:00Z`), dueDate: at(`${DAY}T12:00:00Z`), focusDeadlineAt: null }
@@ -88,15 +108,23 @@ test('at the close of a business day only who ended clean receives it, once, and
   assert.equal(award.kind, 'CAUGHT_UP');
   assert.equal(award.recipientId, 'u-rodny');
   assert.equal(award.dayKey, DAY);
-  assert.equal(award.ruleVersion, 2);
+  assert.equal(award.ruleVersion, 3);
   assert.equal(award.dedupeKey, `v1:CAUGHT_UP:u-rodny:${DAY}`, 'one Al día per person and day, old or new');
-  assert.deepEqual(award.evidence, { policy: CAUGHT_UP_POLICY, closedToday: 1, cutoff: '2026-11-11T23:00:00.000Z' });
+  assert.deepEqual(award.evidence, { policy: CAUGHT_UP_POLICY, closedToday: 2, cutoff: '2026-11-11T23:00:00.000Z' });
   assert.equal(db.traces[0].eventType, 'RECOGNITION_GRANTED');
   // La consulta se limita a las tareas vigentes (sin clientes archivados ni piezas retiradas).
   assert.ok(JSON.stringify(db.queries[0].where).includes('isArchived'));
   // Volver a pasar no repite.
-  await awardCaughtUpAtClose(db, { now: at(`${DAY}T23:50:00Z`) });
+  await awardCaughtUpAtClose(db, { now: at(`${DAY}T23:20:00Z`) });
   assert.equal(db.awards.length, 1);
+});
+
+// Sara, 12 de noviembre de 2026: la recibió a las 18:49. Más tarde que el corte, reprogramar una vencida la saca del
+// cálculo; por eso la pasada solo entrega en la media hora que sigue a las 18:00.
+test('after the half hour that follows the close, the day is settled and nothing new is granted', async () => {
+  const db = fakeDb();
+  assert.deepEqual(await awardCaughtUpAtClose(db, { now: at(`${DAY}T23:30:00Z`) }), { day: DAY, skipped: 'CIERRE_PASADO' });
+  assert.equal(db.awards.length, 0);
 });
 
 test('before 18:00, on a weekend or after the day ended, nothing is granted', async () => {

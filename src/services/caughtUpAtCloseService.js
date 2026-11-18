@@ -9,7 +9,7 @@ import { hasModulePermission } from '../config/security.js';
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
 import { completedTaskParticipationWhere, taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
-import { CAUGHT_UP_POLICY, caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
+import { CAUGHT_UP_AWARD_WINDOW_MS, CAUGHT_UP_POLICY, caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
 import { insertRecognitionAward, recognitionTransaction } from './recognitionService.js';
 
 export const CAUGHT_UP_CHECK_MS = 10 * 60 * 1000;
@@ -46,6 +46,7 @@ export async function awardCaughtUpAtClose(db = prisma, { now = new Date() } = {
   if (!isBusinessDay(day)) return { day, skipped: 'DIA_NO_HABIL' };
   const cutoff = dayCloseCutoff(day);
   if (now < cutoff) return { day, skipped: 'ANTES_DEL_CIERRE' };
+  if (now.getTime() >= cutoff.getTime() + CAUGHT_UP_AWARD_WINDOW_MS) return { day, skipped: 'CIERRE_PASADO' };
 
   return recognitionTransaction(db, async (tx) => {
     const members = (await tx.teamMember.findMany({
@@ -57,7 +58,7 @@ export async function awardCaughtUpAtClose(db = prisma, { now = new Date() } = {
     for (const member of members) {
       const result = caughtUpAtClose({ day, views: viewsOf.get(member.id) });
       if (!result.eligible) continue;
-      const id = await insertRecognitionAward(tx, { kind: 'CAUGHT_UP', recipientId: member.user.id, at: now, ruleVersion: 2,
+      const id = await insertRecognitionAward(tx, { kind: 'CAUGHT_UP', recipientId: member.user.id, at: now, ruleVersion: 3,
         evidence: { policy: CAUGHT_UP_POLICY, closedToday: result.closed, cutoff: cutoff.toISOString() } });
       if (id) granted += 1;
     }
