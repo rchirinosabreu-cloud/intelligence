@@ -65,6 +65,11 @@ export function loadBrandObjectUrl(url) {
     return acquirePrivateMedia(url).then(({ url: objectUrl, release }) => { release(); return objectUrl; });
 }
 
+/** Los bytes de un archivo de marca (el manual en PDF), desde la misma caché y sin volver a pedir la `blob:`. */
+export function loadBrandBytes(url) {
+    return acquirePrivateMedia(url).then(({ blob, release }) => { release(); return blob.arrayBuffer(); });
+}
+
 /** Una imagen privada de la marca, lista para un <img>. `null` mientras carga o si falla. */
 export function useBrandImage(url) {
     const [src, setSrc] = React.useState(null);

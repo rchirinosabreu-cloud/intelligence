@@ -40,3 +40,23 @@ test('el visor de piezas y las marcas usan la caché compartida', () => {
     const brands = readFileSync(new URL('../src/components/modules/Brands/brandsApi.js', import.meta.url), 'utf8');
     assert.match(brands, /acquirePrivateMedia/);
 });
+
+// 18 de noviembre de 2026: el manual de marca no abría en producción porque el visor volvía a pedir la dirección
+// `blob:` con `fetch` y la política de seguridad (`connect-src 'self' https: wss:`) lo bloquea. Los bytes salen
+// de la caché; nadie pide una `blob:` por la red.
+test('la caché entrega los bytes y nadie vuelve a pedir una dirección blob: con fetch', async () => {
+    const calls = [];
+    const media = await acquirePrivateMedia('/api/manual?v=1', { fetchImpl: okFetch(calls) });
+    assert.ok(media.blob, 'devuelve los bytes además de la dirección');
+    assert.equal((await media.blob.arrayBuffer()).byteLength > 0, true);
+    media.release();
+    const again = await acquirePrivateMedia('/api/manual?v=1', { fetchImpl: okFetch(calls) });
+    assert.ok(again.blob, 'también desde la caché');
+    assert.equal(calls.length, 1);
+    again.release();
+    const sheet = readFileSync(new URL('../src/components/modules/Brands/BrandSheet.jsx', import.meta.url), 'utf8');
+    assert.match(sheet, /loadBrandBytes\(brandFileUrl/);
+    assert.doesNotMatch(sheet, /fetch\(objectUrl\)/);
+    const csp = readFileSync(new URL('../src/config/security.js', import.meta.url), 'utf8');
+    assert.doesNotMatch(csp.match(/connect-src[^"]*/)?.[0] || '', /blob:/, 'si algún día se permite blob:, esta regla ya no hace falta');
+});

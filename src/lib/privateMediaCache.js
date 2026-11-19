@@ -41,12 +41,13 @@ export async function acquirePrivateMedia(source, { fetchImpl = (...args) => fet
             .then(async (response) => {
                 if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
                 const blob = await response.blob();
-                if (entries.get(source) !== entry) return URL.createObjectURL(blob);
+                if (entries.get(source) !== entry) return { url: URL.createObjectURL(blob), blob };
                 entry.url = URL.createObjectURL(blob);
+                entry.blob = blob;
                 entry.size = blob.size || 0;
                 totalBytes += entry.size;
                 evict();
-                return entry.url;
+                return { url: entry.url, blob };
             })
             .catch((error) => { if (entries.get(source) === entry) entries.delete(source); throw error; });
         entries.set(source, entry);
@@ -63,8 +64,12 @@ export async function acquirePrivateMedia(source, { fetchImpl = (...args) => fet
         if (entries.get(source) !== entry) { if (entry.refs === 0 && entry.url) URL.revokeObjectURL(entry.url); return; }
         evict();
     };
+    // `blob` son los mismos bytes, para quien los necesita leer (el visor de PDF): volver a pedir la dirección
+    // `blob:` con `fetch` lo bloquea en producción la política de seguridad (`connect-src` no admite `blob:`), y
+    // así se rompió el visor de manuales de marca el 18 de noviembre de 2026.
     try {
-        return { url: await entry.promise, release };
+        const { url, blob } = await entry.promise;
+        return { url, blob, release };
     } catch (error) {
         release();
         throw error;

@@ -14,7 +14,7 @@ import {
     rgbText
 } from '@/lib/clientBrand';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { brandFileUrl, brandFontUrl, downloadBrandFile, loadBrandObjectUrl, useBrandImage } from './brandsApi';
+import { brandFileUrl, brandFontUrl, downloadBrandFile, loadBrandBytes, useBrandImage } from './brandsApi';
 
 // La ficha de marca de un cliente, tal como la consulta el equipo: lo que más se pregunta (colores) arriba,
 // con un toque para copiar el HEX. Sirve en la página de Marcas y dentro del espacio del cliente.
@@ -282,9 +282,7 @@ function ManualViewer({ file, clientId, onClose }) {
     const [state, setState] = useState({ data: null, error: null });
     useEffect(() => {
         let active = true;
-        loadBrandObjectUrl(brandFileUrl(clientId, file.id))
-            .then((objectUrl) => fetch(objectUrl))
-            .then((response) => response.arrayBuffer())
+        loadBrandBytes(brandFileUrl(clientId, file.id))
             .then((data) => active && setState({ data, error: null }))
             .catch(() => active && setState({ data: null, error: 'No se pudo abrir el manual. Inténtalo de nuevo.' }));
         return () => { active = false; };
