@@ -68,7 +68,7 @@ function fixture() {
       delete: async (args) => { writes.push(['observation.delete', args]); return {}; },
     },
     user: { findUnique: async () => null, findMany: async ({ where }) => [{ id: 'u-kamila', name: 'Kamila' }].filter((u) => where.id.in.includes(u.id)) },
-    contentPlan: { updateMany: async (args) => { writes.push(['plan.updateMany', args]); return { count: 0 }; } },
+    contentPlan: { findMany: async (args) => { writes.push(['plan.findMany', args]); return []; } },
     clientContract: {
       create: async (args) => { writes.push(['contract.create', args]); return args.data; },
       update: async (args) => { writes.push(['contract.update', args]); return args.data; },
@@ -189,9 +189,9 @@ test('guardar la ficha valida, crea el contrato si no hay y nunca toca otros cam
   assert.deepEqual(Object.keys(clientUpdate.data).sort(), ['agency', 'complexity', 'description', 'instagramUrl', 'projectManagerId', 'responsibleId']);
   assert.equal(clientUpdate.data.responsibleId, 'm-jarlan');
   // El community nuevo pasa a ser el responsable de las parrillas abiertas del cliente.
-  const [, owners] = writes.find(([kind]) => kind === 'plan.updateMany');
+  const [, owners] = writes.find(([kind]) => kind === 'plan.findMany');
   assert.equal(owners.where.clientId, 'c-promo');
-  assert.equal(owners.data.ownerId, 'm-jarlan');
+  assert.deepEqual(owners.where.OR, [{ ownerId: null }, { ownerId: { not: 'm-jarlan' } }]);
   const [, created] = writes.find(([kind]) => kind === 'contract.create');
   assert.equal(created.data.clientId, 'c-promo');
   assert.equal(created.data.createdById, 'u1');

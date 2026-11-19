@@ -8,7 +8,9 @@
 //      Pendiente y En proceso;
 //   5. la privacidad solo la cambia quien la creó, y solo si dirige;
 //   6. un pendiente «Publicar» cuya pieza está programada en Meta no se cierra a mano: se cierra solo
-//      cuando Meta publica (15 de octubre de 2026).
+//      cuando Meta publica (15 de octubre de 2026);
+//   7. el responsable de un «Publicar» automático es el de la parrilla y solo un administrador lo cambia
+//      (19 de noviembre de 2026).
 // La reserva de un pendiente privado (poder abrirlo) se comprueba antes, con requireTaskAccess o canOpenTask.
 
 import prisma from '../lib/prisma.js';
@@ -17,7 +19,7 @@ import { canUpdateTask, isManagerRole } from '../config/security.js';
 import { canChangeTaskPrivacy } from '../lib/taskPrivacy.js';
 import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
 import { isTaskReopenRequest } from '../lib/taskTiming.js';
-import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
+import { isPublicationTask, publicationAssigneeProblem } from '../lib/contentTaskReciprocity.js';
 import { publicationTaskCloseProblem } from '../lib/socialPublishing.js';
 import { assertTaskNotLocked } from './taskFocusService.js';
 import { assertTaskClientChange } from './taskClientChange.js';
@@ -42,7 +44,7 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
   const task = await db.task.findUnique({
     where: { id: taskId },
     select: {
-      creatorId: true, status: true, title: true, clientId: true, contentItemId: true,
+      creatorId: true, status: true, title: true, clientId: true, contentItemId: true, assigneeId: true,
       assignee: { select: { userId: true } },
       collaborators: { select: { member: { select: { userId: true } } } },
       contentItem: {
@@ -86,6 +88,8 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
   if (('isPrivate' in payload || 'viewerIds' in payload) && !canChangeTaskPrivacy(task, user)) {
     throw gateError(403, 'Solo quien creó este pendiente puede cambiar con quién se comparte.');
   }
+  const assigneeProblem = publicationAssigneeProblem({ task, payload, role: user?.role });
+  if (assigneeProblem) throw gateError(409, assigneeProblem);
   await assertTaskClientChange(db, task, payload);
   return task;
 };

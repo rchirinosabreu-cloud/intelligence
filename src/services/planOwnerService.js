@@ -12,17 +12,35 @@ const RESPONSIBLE_SELECT = { responsibleId: true, responsible: { select: { isAct
 export const communityOf = (client) => (client?.responsibleId && client.responsible?.isActive === true ? client.responsibleId : null);
 
 /** Pone al community del cliente como responsable de sus parrillas abiertas. Devuelve cuántas cambió. */
+// Los «Publicar» automáticos abiertos de una parrilla siguen a su responsable: pasan del anterior (o de nadie) al
+// nuevo. Uno que un administrador le dio a otra persona se respeta.
+export async function movePublicationTasks(db, { planId, from, to }) {
+  if (!planId || !to || from === to) return 0;
+  const { count } = await db.task.updateMany({
+    where: {
+      contentItem: { planId }, title: { startsWith: '[Publicar]' }, status: { not: 'REALIZADA' },
+      OR: [{ assigneeId: null }, ...(from ? [{ assigneeId: from }] : [])]
+    },
+    data: { assigneeId: to }
+  });
+  return count;
+}
+
 // `community` lo pasa quien ya comprobó que esa persona está activa (la ficha del cliente) y se ahorra la lectura.
 export async function syncClientPlanOwners(db, clientId, { community: known = null } = {}) {
   if (!clientId) return 0;
   const community = known || communityOf(await db.client.findUnique({ where: { id: clientId }, select: RESPONSIBLE_SELECT }));
   if (!community) return 0;
   // `not` solo no alcanza a las que no tienen responsable: en SQL, NULL <> x no es verdadero.
-  const { count } = await db.contentPlan.updateMany({
+  const plans = await db.contentPlan.findMany({
     where: { clientId, ...OPEN_PLANS, OR: [{ ownerId: null }, { ownerId: { not: community } }] },
-    data: { ownerId: community }
+    select: { id: true, ownerId: true }
   });
-  return count;
+  for (const plan of plans) {
+    await db.contentPlan.update({ where: { id: plan.id }, data: { ownerId: community } });
+    await movePublicationTasks(db, { planId: plan.id, from: plan.ownerId, to: community });
+  }
+  return plans.length;
 }
 
 /** Lo mismo para todos los clientes con community. Es idempotente: corre en cada arranque. */
