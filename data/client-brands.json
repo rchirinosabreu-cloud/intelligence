@@ -2256,7 +2256,6 @@
         "sazón de iris"
       ],
       "source": "Manual de marca de La Sazón de Iris (Drive, carpeta Marca La Sazón de Iris).",
-      "manualDriveId": "12DEuFiCneY1JN1hJBdADU4H5C7QMGKEb",
       "colors": [
         {
           "hex": "#F7931E",
@@ -2337,7 +2336,8 @@
           "file": "sazon-de-iris/solo-texto.png",
           "label": "Solo el nombre"
         }
-      ]
+      ],
+      "manualUrl": "https://drive.google.com/file/d/12DEuFiCneY1JN1hJBdADU4H5C7QMGKEb/view"
     },
     {
       "aliases": [
