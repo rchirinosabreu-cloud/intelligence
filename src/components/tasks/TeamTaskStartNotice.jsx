@@ -67,7 +67,7 @@ export default function TeamTaskStartNotice({ task, open, onClose, onOpenTask, o
             type="button"
             onClick={start}
             disabled={starting}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-cyan px-4 text-sm font-semibold text-white hover:bg-brand-cyan-deep disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
             Empezar mi reloj

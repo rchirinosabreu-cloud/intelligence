@@ -9,7 +9,7 @@ function Composer() {
   const [value, setValue] = useState(''), [sent, setSent] = useState('');
   return <>
     <RichTextEditor value={value} onChange={setValue} onSend={() => setSent(value)} teamMembers={members} placeholder="Escribe @sar para mencionar a Sara…"
-      sendAction={<button type="button" onClick={() => setSent(value)} className="min-h-11 rounded-lg bg-primary px-3 text-sm text-white">Simular envío</button>} />
+      sendAction={<button type="button" onClick={() => setSent(value)} className="min-h-11 rounded-lg bg-primary px-3 text-sm text-primary-foreground">Simular envío</button>} />
     <output data-saved-comment className="block mt-4 break-words text-xs text-zinc-500 dark:text-zinc-400">{sent}</output>
   </>;
 }

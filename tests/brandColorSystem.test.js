@@ -17,7 +17,7 @@ test('the global interface remaps legacy purple palettes to Brainstudio colors',
   assert.match(tailwind, /purple:\s*brainGreen/);
   assert.match(tailwind, /600:\s*'#009EB9'/);
   assert.match(tailwind, /600:\s*'#00AC8A'/);
-  assert.match(button, /bg-\[#009EB9\]/);
+  assert.match(button, /default: 'bg-primary text-primary-foreground/, 'the primary button reads the token: deep cyan with white in light, light cyan with night in dark');
   assert.match(index, /theme-color" content="#009EB9"/);
   assert.equal(JSON.parse(manifest).theme_color, '#009EB9');
 });

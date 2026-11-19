@@ -132,7 +132,7 @@ export default function BriaObserverInbox() {
               </p>
             )}
           </div>
-          <button type="button" onClick={scanNow} disabled={isScanning} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60 sm:w-auto">
+          <button type="button" onClick={scanNow} disabled={isScanning} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground transition-transform active:scale-95 disabled:opacity-60 sm:w-auto">
             <RefreshCw className={cn('h-4 w-4', isScanning && 'animate-spin')} />
             {isScanning ? 'Observando…' : 'Escanear ahora'}
           </button>

@@ -968,7 +968,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
         <button
           onClick={handleApprove}
           disabled={isSubmitting}
-          className="px-8 py-3 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 self-end shrink-0"
+          className="px-8 py-3 bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 self-end shrink-0"
         >
           {isSubmitting ? (
             <>
@@ -1542,7 +1542,7 @@ const Reports = () => {
                <button
                 onClick={generateReport}
                 disabled={isGenerating || !sourcePlan.ready}
-                className="min-h-11 px-4 py-2.5 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-2"
+                className="min-h-11 px-4 py-2.5 bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground text-sm font-medium rounded-xl transition-colors flex items-center gap-2"
                >
                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 {isGenerating ? sourcePlan.busyLabel : sourcePlan.label}

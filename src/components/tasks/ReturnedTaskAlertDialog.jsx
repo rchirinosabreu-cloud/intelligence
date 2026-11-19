@@ -162,7 +162,7 @@ export default function ReturnedTaskAlertDialog({
                 <Button
                   type="button"
                   onClick={() => openTask(task.id)}
-                  className="min-h-11 gap-1.5 rounded-lg bg-[#009EB9] px-3 text-xs text-white hover:bg-[#008CA4] sm:min-h-8"
+                  className="min-h-11 gap-1.5 rounded-lg bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90 sm:min-h-8"
                 >
                   Revisar tarea <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Button>

@@ -352,7 +352,7 @@ const MoodboardCanvas = () => {
         <div className="relative pointer-events-auto">
           <DropdownMenu open={isAdding} onOpenChange={setIsAdding}>
           <DropdownMenuTrigger asChild><button
-            className="flex items-center gap-2 bg-[#009EB9] hover:bg-[#008CA4] text-white px-6 py-3 rounded-2xl text-sm font-semibold transition-all shadow-2xl shadow-[#009EB9]/25 active:scale-95"
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-2xl text-sm font-semibold transition-all shadow-2xl shadow-[#009EB9]/25 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             <span>AÑADIR</span>

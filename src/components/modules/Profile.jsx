@@ -424,7 +424,7 @@ const Profile = () => {
                                                 <button
                                                     type="submit"
                                                     disabled={isLoading}
-                                                    className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
+                                                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
                                                 >
                                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                                     Guardar Cambios
@@ -516,7 +516,7 @@ const Profile = () => {
                         </div>
                         <button
                             onClick={() => setIsCreatingNote(true)}
-                            className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
                         >
                             <Plus className="w-4 h-4" /> Nueva Nota
                         </button>
@@ -554,7 +554,7 @@ const Profile = () => {
                                                 />
                                                 <div className="flex justify-end gap-2">
                                                     <button onClick={() => setIsCreatingNote(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"><X className="w-4 h-4 text-zinc-500" /></button>
-                                                    <button onClick={handleCreateNote} className="bg-primary text-white p-2 rounded-xl shadow-md"><Check className="w-4 h-4" /></button>
+                                                    <button onClick={handleCreateNote} className="bg-primary text-primary-foreground p-2 rounded-xl shadow-md"><Check className="w-4 h-4" /></button>
                                                 </div>
                                             </CardContent>
                                         </Card>
@@ -641,7 +641,7 @@ const Profile = () => {
                         {isAdmin && (
                             <button
                                 onClick={() => setIsCreatingFeedback(!isCreatingFeedback)}
-                                className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
                             >
                                 {isCreatingFeedback ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                                 {isCreatingFeedback ? 'Cancelar' : 'Registrar Feedback'}
@@ -750,7 +750,7 @@ const Profile = () => {
                                                 <button
                                                     type="submit"
                                                     disabled={isLoading}
-                                                    className="bg-primary text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 flex items-center gap-2"
+                                                    className="bg-primary text-primary-foreground px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 flex items-center gap-2"
                                                 >
                                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                                     Guardar Registro

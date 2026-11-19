@@ -132,7 +132,7 @@ export default function BriaMemoryPanel() {
             type="button"
             onClick={syncNow}
             disabled={isSyncing}
-            className="inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
+            className="inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground transition-transform active:scale-95 disabled:opacity-60"
           >
             <RefreshCw className={cn('h-4 w-4', isSyncing && 'animate-spin')} />
             {isSyncing ? 'Indexando…' : 'Sincronizar memoria'}

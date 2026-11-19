@@ -97,7 +97,7 @@ export default function MailboxConnections({ isAdmin = false, className }) {
           </label>
           {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
           <div className="flex items-center gap-2">
-            <button type="submit" disabled={busy} className="min-h-10 rounded-xl bg-primary px-4 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Probando la entrada…' : 'Probar y conectar'}</button>
+            <button type="submit" disabled={busy} className="min-h-10 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground disabled:opacity-50">{busy ? 'Probando la entrada…' : 'Probar y conectar'}</button>
             <button type="button" disabled={busy} onClick={() => { setOpen(false); setPassword(''); setError(''); }} className="min-h-10 rounded-xl px-3 text-xs font-semibold text-zinc-600 hover:bg-zinc-200/60 dark:text-zinc-300 dark:hover:bg-white/10">Cancelar</button>
           </div>
         </form>

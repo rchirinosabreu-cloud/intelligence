@@ -19,8 +19,10 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
 
-    /* Brainstudio positive action: official cyan #009BBF */
-    --primary: 191.3 100% 37.5%;
+    /* Acción principal (Rodny, 18 de noviembre de 2026: «botón oscuro y letra oscura … cómo manejar los contrastes»):
+       un botón es claro con letra oscura u oscuro con letra clara, nunca de tono medio. En claro, el cian profundo de la
+       paleta (#007A96) con letra blanca: 4,9:1. El cian #009BBF con blanco daba 3,2:1. */
+    --primary: 191.2 100% 29.4%;
     --primary-foreground: 0 0% 100%;
 
     /* Official Brain palette as RGB triplets (rgb(var(--brand-x) / alpha)). */
@@ -71,9 +73,11 @@
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
 
-    /* Brainstudio positive action: official cyan #009BBF */
-    --primary: 191.3 100% 37.5%;
-    --primary-foreground: 0 0% 100%;
+    /* En oscuro, botón claro y letra oscura (Rodny, 18 de noviembre de 2026: el cian #009BBF con letra azul noche medía
+       5,1:1 pero «oscuro sobre oscuro»): un cian claro de la marca con letra azul noche, y el mismo cian claro sirve
+       de texto sobre el fondo oscuro. */
+    --primary: 191.3 75% 72%;
+    --primary-foreground: 211 72% 13%; /* #092038 */
 
     /* Same brand hues; only the readable text tones lift on dark surfaces. */
     --status-positive-fg: 92 201 171;
@@ -222,7 +226,7 @@
   .brain-notice-band[data-leaving] .brain-notice-content { pointer-events: none; }
   .brain-notice-band[data-level="IMPORTANTE"] {
     --notice-hue: var(--brand-coral);
-    --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black);
+    --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 90%, black); /* 5,2:1 con letra blanca */
   }
   .dark .brain-notice-band {
     --notice-ink: 255 255 255;
@@ -271,7 +275,7 @@
   .brain-notice-content [role="group"] { justify-content: center; }
   /* Fuera de la banda (la confirmación de continuidad) el botón principal sigue siendo de color con texto blanco. */
   .brain-notice-primary { background: var(--notice-action); color: white; }
-  .contract-continuity-dialog { --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 96%, black); }
+  .contract-continuity-dialog { --notice-action: color-mix(in srgb, theme('colors.brand.coral.deep') 90%, black); /* 5,2:1 con letra blanca */ }
   .brain-notice-primary:hover { background: color-mix(in srgb, var(--notice-action) 92%, black); }
   .brain-notice-primary:active { background: color-mix(in srgb, var(--notice-action) 84%, black); }
   .brain-notice-ghost { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px rgb(212 212 216); }
