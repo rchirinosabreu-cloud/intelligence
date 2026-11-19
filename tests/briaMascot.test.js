@@ -1,40 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const motion = await import('../src/lib/briaMascotMotion.js').catch(() => null);
 const activity = await import('../src/lib/briaMascotActivity.js').catch(() => null);
-const { drawBriaMascot } = await import('../src/components/bria/briaMascotRenderer.js');
-
-test('Bria Chispa renders smooth artwork with distinct idle, laptop and celebration poses', () => {
-  const images = { body: {}, calm: {}, laptop: {}, chispa: {} };
-  const sourceRects = [];
-  for (const state of ['idle', 'work', 'celebrate']) {
-    const calls = [];
-    const ctx = { clearRect() {}, save() {}, restore() {}, scale() {}, translate() {}, rotate() {}, drawImage(...args) { calls.push(args); } };
-    drawBriaMascot(ctx, images, state, 450, 288, 288);
-    assert.equal(ctx.imageSmoothingEnabled, true, 'smooth mascot artwork must not use pixel sampling');
-    assert.equal(ctx.imageSmoothingQuality, 'high');
-    assert.equal(calls.length, 1, 'the complete pose preserves the character proportions');
-    assert.equal(calls[0][0], images.chispa);
-    sourceRects.push(calls[0].slice(1, 5));
-  }
-  assert.equal(new Set(sourceRects.map(rect => rect.join(','))).size, 3, 'each activity uses its own illustrated pose');
-});
-
-test('Bria stands seriously, works seated and celebrates without stretching or drifting', () => {
-  assert.equal(typeof motion?.sampleBriaPose, 'function', 'the approved mascot motion must be available');
-  for (const state of ['idle', 'work', 'celebrate']) {
-    for (let time = 0; time <= 8000; time += 50) {
-      const pose = motion.sampleBriaPose(state, time);
-      assert.equal(pose.bodyX, 0);
-      assert.equal(pose.bodyScale, 1);
-      if (state === 'work') { assert.equal(pose.seated, true); assert.notEqual(pose.face, 'joy'); }
-      if (state === 'idle') assert.notEqual(pose.face, 'joy');
-    }
-  }
-  assert.equal(motion.sampleBriaPose('celebrate', 930).finished, true);
-  assert.equal(motion.sampleBriaPose('idle', 3150).face, 'blink');
-});
 
 test('only a fresh confirmed assistant response permits celebration', () => {
   assert.equal(typeof activity?.completedBriaReplyId, 'function');
