@@ -20,11 +20,10 @@ test('popup uses the authenticated endpoint, explains the threshold and links to
   assert.match(source, /excessive-task-alert:v6/);
   assert.match(source, /h-8 gap-1\.5 rounded-lg/);
   assert.match(source, /DialogContent/);
-  assert.match(source, /from-\[#00AC8A\].*to-\[#009EB9\]/s);
-  assert.match(source, /BriaPortrait/);
+  assert.match(source, /<BriaNoticeHeader[\s\S]*?mood="sorprendida"/);
   assert.match(source, /const firstName = String\(userName/);
   assert.match(source, /Hola\{firstName/);
-  assert.match(source, /sm:whitespace-nowrap/);
+  assert.doesNotMatch(source, /whitespace-nowrap/, 'the title wraps by width, never forced on one line');
   assert.match(source, /estas tareas todavía siguen activas/);
   assert.match(source, /evaluación de tu desempeño/);
   assert.match(source, /Sigo trabajando/);

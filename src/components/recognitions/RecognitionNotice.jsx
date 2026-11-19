@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from '@/components/ui/icons';
 import { Bria3D, BriaIsotipo } from '@/components/bria/BriaBrand';
-import { recognitionLabels, recognitionMotion } from '@/lib/recognitionPresentation';
+import { recognitionLabels, recognitionMotion, recognitionParagraphs } from '@/lib/recognitionPresentation';
 import { RECOGNITION_POINTS } from '@/lib/platformLeague';
 import { cn } from '@/lib/utils';
 
@@ -60,7 +60,8 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
   }, [durationMs, hovered, focused, hidden, open]);
   const title = recognitionLabels[event.kind];
   const message = event.personalMessage || event.description;
-  const firstLine = String(message || '').split('\n')[0];
+  const paragraphs = recognitionParagraphs(message);
+  const firstLine = paragraphs[0] || '';
   const close = <button type="button" onClick={onDismiss} aria-label="Cerrar reconocimiento" className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan', open ? 'text-bria-night hover:bg-white/30' : 'text-bria-muted hover:bg-bria-night/5 dark:text-zinc-300 dark:hover:bg-white/10')}><X className="h-4 w-4" aria-hidden="true" /></button>;
   return (
     <motion.aside
@@ -96,7 +97,7 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
         </motion.span>
         <div className="absolute right-0.5 top-0.5">{close}</div>
         <div className="flex flex-col gap-3 px-[18px] pb-4 pt-1.5">
-          <p className="whitespace-pre-line text-base leading-6 text-bria-ink dark:text-zinc-200">{message}</p>
+          {paragraphs.map((text, index) => <p key={index} className="text-pretty text-base leading-6 text-bria-ink dark:text-zinc-200">{text}</p>)}
           {event.demo && <p className="text-xs text-bria-muted dark:text-zinc-400">Ejemplo local · No se otorgan premios reales</p>}
           {leagueEnabled && <div className="flex items-center gap-2">
             <span className={POINTS_CHIP}>{STAR}+{RECOGNITION_POINTS} puntos</span>

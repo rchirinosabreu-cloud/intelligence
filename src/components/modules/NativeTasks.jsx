@@ -1,4 +1,4 @@
-import BriaPortrait from '@/components/bria/BriaPortrait';
+import BriaNoticeHeader from '@/components/bria/BriaNoticeHeader';
 import Select from '@/components/ui/Select';
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import UserAvatarPopover from "../../components/ui/UserAvatarPopover";
@@ -1200,26 +1200,22 @@ const NativeTasks = () => {
                     overlayClassName="z-[190]"
                     className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
                 >
-                    <div className="relative overflow-hidden brain-ai-header px-6 py-7 pr-28 text-white">
-                        <BriaPortrait mood="feliz"  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain" />
-                        <DialogHeader className="relative z-10">
-                            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Novedad</span>
-                            <DialogTitle className="text-lg text-white sm:whitespace-nowrap">El tiempo de trabajo será visible para ti</DialogTitle>
-                            <DialogDescription className="text-sm leading-relaxed text-white">
-                                Ahora tenemos una forma más clara de comprender el trabajo de la agencia, aprender de nuestros tiempos para poder planificar mejor.
-                            </DialogDescription>
-                        </DialogHeader>
-                    </div>
-                    <div className="space-y-3 px-6 py-5">
-                        <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+                    <BriaNoticeHeader
+                        mood="feliz"
+                        badge="Novedad"
+                        title="El tiempo de trabajo será visible para ti"
+                        description="Ahora tenemos una forma más clara de comprender el trabajo de la agencia y aprender de nuestros tiempos para planificar mejor."
+                    />
+                    <div className="space-y-4 px-6 pb-5 pt-6">
+                        <div className="flex gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400"><Clock className="h-4 w-4" /></div>
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">El cronómetro comenzará con las tareas “En proceso”</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Cada vez que muevas una tarea, podrás ver su cronómetro directamente en la tarjeta.</p></div>
                         </div>
-                        <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+                        <div className="flex gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive"><AlertTriangle className="h-4 w-4 text-destructive" /></div>
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Tú decides si mantienes activa más de una tarea</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si ya estás registrando tiempo en una tarea, te avisaremos, pero tú decides continuar. Si quieres pausar el cronómetro, puedes regresar la tarea a “Pendiente” y continuar cuando quieras.</p></div>
                         </div>
-                        <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+                        <div className="flex gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-magenta-soft text-brand-magenta-deep dark:bg-brand-magenta/10 dark:text-brand-magenta"><TaskReintegrateIcon className="h-4 w-4" /></div>
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Las tareas pueden reabrirse</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si una tarea realizada necesita una corrección, no necesitas crear un pendiente nuevo. Puedes buscar la tarea realizada y regresarla a “Pendiente” para conservar el ID de la tarea y su historial. Esto nos garantiza una mejor trazabilidad.</p></div>
                         </div>

@@ -1,4 +1,4 @@
-import BriaPortrait from '@/components/bria/BriaPortrait';
+import BriaNoticeHeader from '@/components/bria/BriaNoticeHeader';
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,43 +20,37 @@ export default function FocusCommitmentNotice({ task, open, onClose }) {
         overlayClassName="z-[190]"
         className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
       >
-        <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
-          <BriaPortrait mood="pensando"  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain" />
-          <DialogHeader className="relative z-10">
-            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Compromiso</span>
-            <DialogTitle className="text-lg text-white">
-              Tienes un compromiso{time ? ` hasta las ${time}` : ''}
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed text-white/90">
-              {task?.title
-                ? <>«{task.title}» es tu prioridad hasta que la termines. Así funciona mientras tanto.</>
-                : 'Esta tarea es tu prioridad hasta que la termines. Así funciona mientras tanto.'}
-            </DialogDescription>
-          </DialogHeader>
-        </div>
-        <div className="space-y-3 px-6 py-5">
-          <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+        <BriaNoticeHeader
+          mood="pensando"
+          badge="Compromiso"
+          title={<>Tienes un compromiso{time ? ` hasta las ${time}` : ''}</>}
+          description={task?.title
+            ? <>«{task.title}» es tu prioridad hasta que la termines. Así funciona mientras tanto.</>
+            : 'Esta tarea es tu prioridad hasta que la termines. Así funciona mientras tanto.'}
+        />
+        <div className="space-y-4 px-6 pb-5 pt-6">
+          <div className="flex gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan"><Clock className="h-4 w-4" /></div>
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">Es lo único que trabajas{time ? ` hasta las ${time}` : ''}</p>
               <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">La verás con un reloj en la tarjeta. Puedes moverla entre Pendiente, En proceso y Realizado con normalidad.</p>
             </div>
           </div>
-          <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          <div className="flex gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300"><Lock className="h-4 w-4" /></div>
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">Tus demás pendientes esperan</p>
               <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Se ven atenuados y no se abren ni se mueven. Vuelven solos cuando marques el compromiso como realizado.</p>
             </div>
           </div>
-          <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          <div className="flex gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"><CheckCircle2 className="h-4 w-4" /></div>
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">Lo que ya tenías en proceso puedes terminarlo</p>
               <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si estabas trabajando en algo cuando llegó el compromiso, ciérralo con calma. Después sigues con este.</p>
             </div>
           </div>
-          <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          <div className="flex gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan"><ClockPlus className="h-4 w-4" /></div>
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">Si ves que no llegas, pide más tiempo</p>

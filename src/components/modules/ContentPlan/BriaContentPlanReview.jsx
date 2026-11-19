@@ -1,4 +1,5 @@
-import BriaPortrait from '@/components/bria/BriaPortrait';
+import { Bria3D } from '@/components/bria/BriaBrand';
+import BriaNoticeHeader from '@/components/bria/BriaNoticeHeader';
 import Select from '@/components/ui/Select';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
@@ -260,11 +261,11 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
     >
       <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-5 py-5 text-white sm:px-6">
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-4" aria-label="Revisión de Bria">
-            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-              <BriaPortrait  alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
-            </span>
-            <span className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 items-end gap-3" aria-label="Revisión de Bria">
+            {/* De cuerpo entero y con los pies en el borde de la cabecera: la cara sola se perdía en el turquesa. */}
+            <Bria3D mood={isReviewing || result?.meta?.state === 'RUNNING' ? 'trabajando' : 'reposo'} alt="" aria-hidden="true" data-bria-review
+              className="-mb-5 w-[72px] shrink-0 sm:w-[84px]" />
+            <span className="min-w-0 flex-1 self-center">
               <span className="text-base font-semibold sm:text-lg">Revisión de Bria</span>
               <span className="mt-1 block text-xs leading-relaxed text-white/90 sm:text-sm">
                 {result?.review
@@ -491,15 +492,11 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
 
       <Dialog open={Boolean(dismissFinding)} onOpenChange={(open) => !open && setDismissFinding(null)}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-lg">
-          <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-6 pr-28 text-white">
-            <BriaPortrait mood="pensando"  alt="Mascota de Brainstudio" className="pointer-events-none absolute -bottom-4 right-2 h-24 w-24 object-contain" />
-            <DialogHeader className="relative z-10 text-left">
-              <DialogTitle className="text-white">Descartar recomendación</DialogTitle>
-              <DialogDescription className="max-w-sm text-white/90">
-                El motivo quedará guardado para todo el equipo y evita que la misma observación reaparezca sin cambios.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+          <BriaNoticeHeader
+            mood="pensando"
+            title="Descartar recomendación"
+            description="El motivo queda guardado para todo el equipo y evita que la misma observación vuelva a aparecer sin cambios."
+          />
           <div className="space-y-5 p-6">
             <label className="grid gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               Motivo
