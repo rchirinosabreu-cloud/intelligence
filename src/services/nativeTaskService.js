@@ -15,6 +15,7 @@ import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, 
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { notifyTeamCompletion } from './teamCompletionNoticeService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
+import { recordTaskCreated, recordTaskDiff } from './taskChangeHistoryService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession, formatTaskReturnEventContent, reassignmentEffect } from '../lib/taskTiming.js';
@@ -261,6 +262,7 @@ export const createTask = async ({
                     startedAt: mappedStatus === 'REALIZADA' ? new Date() : null
                 }
             });
+            await recordTaskCreated(tx, { taskId: task.id, actorId: creatorId, assigneeId });
 
             // Colaboradores (5 de octubre de 2026): cada uno registra su tiempo por separado.
             createdCollaborators = (await replaceTaskCollaborators(tx, {
@@ -562,6 +564,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 returnedAt: true,
                 comments: true,
                 isPriority: true,
+                priority: true,
+                dueDate: true,
                 isSpecial: true,
                 assigneeId: true,
                 creatorId: true,
@@ -988,7 +992,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                                 select: { id: true }
                             });
 
-                            if (!existingPublicationTask) await tx.task.create({
+                            if (!existingPublicationTask) {
+                                const publicationTask = await tx.task.create({
                                 data: {
                                     title: publicationTitle,
                                     dueDate: linkedItem.publishDate,
@@ -1001,6 +1006,9 @@ export const updateTask = async (id, data, updaterId = null) => {
                                     comments: `Pieza lista para publicar. Referencia: ${referenceText}`
                                 }
                             });
+                                // Lo crea la plataforma, no quien cerró la producción.
+                                await recordTaskCreated(tx, { taskId: publicationTask.id, assigneeId: linkedItem.plan.ownerId });
+                            }
                         }
 
                         // El cierre de un pendiente «Publicar» lo escribe el espejo de más abajo, que es
@@ -1096,6 +1104,8 @@ export const updateTask = async (id, data, updaterId = null) => {
         if (currentTask.status === 'DEVUELTA' && updatedTask.status !== 'DEVUELTA') {
             await recordQualityStreakTransition(tx, currentTask, updatedTask);
         }
+        // El historial de la tarea: quién cambió responsable, estado, fecha… (19 de noviembre de 2026).
+        await recordTaskDiff(tx, { taskId: id, actorId: updaterId, before: currentTask, after: updatedTask });
         if (collaboratorChange?.shared) await applyTaskAggregateEffects(tx, currentTask, updatedTask.status, updaterId);
         const recognitionAt = recognitionBefore?.task.status !== 'REALIZADA' && updatedTask.status === 'REALIZADA' ? updatedTask.completedAt : new Date();
         await finishTaskRecognition(tx, recognitionBefore, updatedTask, recognitionAt);

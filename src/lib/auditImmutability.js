@@ -34,6 +34,8 @@ export const AUDIT_TABLES = Object.freeze([
     { schema: 'public', name: 'TaskParticipationArchive', retention: null, nullableRefs: ['currentTaskId'] },
     { schema: 'public', name: 'ClientContractDecision', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'TaskDeliverableEvent', retention: null, nullableRefs: [] },
+    // El historial de cada tarea (19 de noviembre de 2026): quién cambió responsable, estado, fecha…
+    { schema: 'public', name: 'TaskChangeEvent', retention: null, nullableRefs: ['actorId'] },
     { schema: 'public', name: 'ContentItemDeliveryChange', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'ContentItemPeriodChange', retention: null, nullableRefs: [] },
     { schema: 'public', name: 'AdBudgetEvent', retention: null, nullableRefs: [] },

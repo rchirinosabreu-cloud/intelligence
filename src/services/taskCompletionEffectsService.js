@@ -1,4 +1,5 @@
 import { nextTaskOrder } from './taskOrderService.js';
+import { recordTaskCreated } from './taskChangeHistoryService.js';
 import { ACTIVE_PUBLICATION_STATUSES } from '../lib/socialPublishing.js';
 import { contentItemStatusFromTask } from '../lib/contentTaskMirror.js';
 
@@ -11,12 +12,15 @@ export async function applyTaskAggregateEffects(tx, task, status, actorId) {
     if (item?.plan?.ownerId) {
       const title = `[Publicar] ${item.format}: ${item.objective}`;
       const existing = await tx.task.findFirst({ where: { contentItemId: item.id, title }, select: { id: true } });
-      if (!existing) await tx.task.create({ data: {
+      if (!existing) {
+        const created = await tx.task.create({ data: {
         title, dueDate: item.publishDate, assigneeId: item.plan.ownerId,
         creatorId: actorId || task.creatorId, status: 'PENDIENTE', sortOrder: await nextTaskOrder(tx, 'PENDIENTE'),
         clientId: item.plan.clientId, contentItemId: item.id,
         comments: `Pieza lista para publicar. Referencia: ${Array.isArray(item.mediaUrl) ? item.mediaUrl.join(', ') : (item.mediaUrl || 'N/A')}`,
       } });
+        await recordTaskCreated(tx, { taskId: created.id, assigneeId: item.plan.ownerId });
+      }
     }
   }
   const piece = publication ? await tx.contentItem.findUnique({ where: { id: task.contentItemId }, select: { status: true } }) : null;
