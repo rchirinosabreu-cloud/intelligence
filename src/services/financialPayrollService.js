@@ -65,7 +65,8 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
       const next = nextPayrollPeriod({ year, month, contractStart: contract.startDate, contractEnd: contract.endDate, periods: known });
       // Ya generado con este mismo tramo: se devuelve el existente, nunca se duplica.
       const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === next.start && range.end === next.end; });
-      if (covered) { transactions.push(covered); existingCount++; continue; }
+      // Dos contratos de la misma persona ven el mismo tramo: se cuenta una sola vez.
+      if (covered) { if (!transactions.some(row => row.id === covered.id)) { transactions.push(covered); existingCount++; } continue; }
       if (next.done) continue;
       if (next.problem) { requiresPeriodReview.push({ contractId: contract.id, name, reason: next.problem }); continue; }
       if (live.some(row => payrollUnknownMayOverlap(row, next.start, next.end, contract.id))) {
