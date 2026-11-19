@@ -14,6 +14,7 @@ import { verifyContentPlanFindings } from './briaFindingVerification.js';
 import { getReviewBatchProgress } from './briaReviewBatches.js';
 import { generateContentPlanReview, CONTENT_PLAN_REVIEW_PROMPT_VERSION } from './briaContentPlanReviewGenerator.js';
 import { createClientCriterionService } from './briaClientCriterionService.js';
+import { brandSheetEvidence } from '../lib/brandEvidence.js';
 export { CONTENT_PLAN_REVIEW_PROMPT_VERSION } from './briaContentPlanReviewGenerator.js';
 export { parseBriaContentPlanReview, calculateContentPlanReviewScore } from './briaContentPlanReviewContract.js';
 
@@ -217,6 +218,8 @@ const guardReviewPublication = async (tx, { planId, execution, revisionHash, now
 
 export const createContentPlanReviewRepository = (db = prisma) => ({
   findApprovedCriteria: (clientId, planId) => createClientCriterionService(db).approved(clientId, planId),
+  // La ficha de marca entra como un documento más: voz, reglas, colores y tipografías que Bria contrasta en MARCA.
+  findBrandSheet: (clientId) => (clientId ? db.clientBrand.findUnique({ where: { clientId } }) : null),
   async loadCheckpoint(planId) {
     const plan = await db.contentPlan.findUnique({ where: { id: planId }, select: { briaReviewCheckpoint: true } });
     return plan?.briaReviewCheckpoint;
@@ -415,7 +418,11 @@ export const reviewContentPlanWithBria = async ({
     query: buildContentPlanReviewQuery(plan), clientId: client.id, includeUnscoped: true, limit: 16
   }) : [];
   signal?.throwIfAborted();
+  // Una ficha que no se puede leer no frena la revisión: se revisa sin ella, como antes de que existieran.
+  const brand = await Promise.resolve(persistence?.findBrandSheet?.(client.id)).catch(() => null);
+  const brandEvidence = brandSheetEvidence(brand, { clientName: client.name });
   const evidence = [
+    ...(brandEvidence ? [brandEvidence] : []),
     ...plan.approvedCriteria.map(criterion => ({
       id: `criterion:${criterion.id}:v${criterion.version}`, title: `Criterio validado · ${criterion.category}`,
       sourceKind: 'CLIENT_CRITERION', sourceUrl: `/parrillas/${plan.id}`, content: criterion.text, score: 1
