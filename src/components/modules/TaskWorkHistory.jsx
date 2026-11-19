@@ -87,7 +87,7 @@ function TimeCorrectionDialog({ taskId, session, user, onClose, onCorrected }) {
           {error && <p id="time-correction-error" role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
           <DialogFooter>
             <button type="button" className="min-h-11 rounded-lg px-4 text-sm text-zinc-700 dark:text-zinc-200" onClick={onClose} disabled={saving}>Cancelar</button>
-            <button type="submit" className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={saving}>{saving ? 'Guardando…' : 'Corregir tiempo'}</button>
+            <button type="submit" className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50" disabled={saving}>{saving ? 'Guardando…' : 'Corregir tiempo'}</button>
           </DialogFooter>
         </form>
       </DialogContent>

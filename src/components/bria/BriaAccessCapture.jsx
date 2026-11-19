@@ -44,7 +44,7 @@ export default function BriaAccessCapture({ capture, active = false, onSaved, re
               <input id={`secreto-${capture.captureId}`} type={visible ? 'text' : 'password'} value={secret} onChange={(event) => setSecret(event.target.value)} maxLength={4000} autoComplete="new-password" required className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 pr-11 text-sm text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
               <button type="button" onClick={() => setVisible((value) => !value)} aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'} title={visible ? 'Ocultar' : 'Mostrar'} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"><Eye className="h-4 w-4" /></button>
             </div>
-            <button type="submit" disabled={busy || !secret} className="min-h-11 shrink-0 rounded-xl bg-[#009EB9] px-4 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{busy ? 'Guardando…' : 'Guardar en la bóveda'}</button>
+            <button type="submit" disabled={busy || !secret} className="min-h-11 shrink-0 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{busy ? 'Guardando…' : 'Guardar en la bóveda'}</button>
           </div>
           {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         </form>

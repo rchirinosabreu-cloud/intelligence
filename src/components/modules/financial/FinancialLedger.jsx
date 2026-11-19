@@ -694,7 +694,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     {canWrite && <button
                         type="button"
                         onClick={openCreate}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 text-sm font-semibold text-white transition hover:bg-[#008CA4] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/30"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-[#009EB9]/30"
                     >
                         <Plus className="h-4 w-4" />
                         Registrar movimiento
@@ -711,7 +711,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                         {' '}Se guardó como borrador.
                     </span>
                     <span className="flex gap-2">
-                        <button type="button" onClick={continueDraft} className="rounded-lg bg-[#009EB9] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#008CA4]">Continuar</button>
+                        <button type="button" onClick={continueDraft} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Continuar</button>
                         <button type="button" onClick={discardDraft} className="rounded-lg px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10">Descartar borrador</button>
                     </span>
                 </div>
@@ -1009,7 +1009,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                         )}
                         <DialogFooter className="gap-2 sm:justify-between">
                             <p className="self-center text-xs text-zinc-500 dark:text-zinc-400">{storedDraft ? <>Borrador guardado · <button type="button" onClick={discardDraft} className="font-medium text-destructive hover:underline">Descartar borrador</button></> : 'Se guarda un borrador mientras escribes.'}</p>
-                            <div className="flex gap-2"><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></div></DialogFooter>
+                            <div className="flex gap-2"><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></div></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
@@ -1053,7 +1053,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             </div>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">El saldo de la cuenta es este saldo inicial más los movimientos registrados desde esa fecha.</p>
                         </fieldset>
-                        <DialogFooter><button type="button" onClick={() => { setIsAccountEditorOpen(false); setEditingAccount(null); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}{editingAccount ? 'Guardar cambios' : 'Crear cuenta'}</button></DialogFooter>
+                        <DialogFooter><button type="button" onClick={() => { setIsAccountEditorOpen(false); setEditingAccount(null); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}{editingAccount ? 'Guardar cambios' : 'Crear cuenta'}</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
@@ -1062,7 +1062,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
                     <DialogHeader><DialogTitle>Cerrar mes</DialogTitle><DialogDescription>Después del cierre no se podrán editar, anular ni registrar movimientos en este periodo. Todos los ejecutados deben tener su cuenta de caja o banco asignada.</DialogDescription></DialogHeader>
                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota de cierre<textarea rows={3} value={closePeriodNotes} onChange={(event) => setClosePeriodNotes(event.target.value)} placeholder="Ej. Movimientos y cartera revisados" className={inputClass} /></label>
-                    <DialogFooter><button type="button" onClick={() => setIsClosePeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={closeSelectedPeriod} disabled={isClosingPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isClosingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar cierre</button></DialogFooter>
+                    <DialogFooter><button type="button" onClick={() => setIsClosePeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={closeSelectedPeriod} disabled={isClosingPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{isClosingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar cierre</button></DialogFooter>
                 </DialogContent>
             </Dialog>
 
@@ -1070,7 +1070,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
                     <DialogHeader><DialogTitle>Reabrir mes</DialogTitle><DialogDescription>Esta acción vuelve a permitir cambios en el período. El motivo y el usuario quedarán registrados en la auditoría.</DialogDescription></DialogHeader>
                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Motivo<textarea autoFocus rows={3} value={reopenPeriodReason} onChange={(event) => setReopenPeriodReason(event.target.value)} placeholder="Ej. Corregir un movimiento conciliado" className={inputClass} /></label>
-                    <DialogFooter><button type="button" onClick={() => setIsReopenPeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={reopenSelectedPeriod} disabled={!reopenPeriodReason.trim() || isReopeningPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isReopeningPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar reapertura</button></DialogFooter>
+                    <DialogFooter><button type="button" onClick={() => setIsReopenPeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={reopenSelectedPeriod} disabled={!reopenPeriodReason.trim() || isReopeningPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{isReopeningPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar reapertura</button></DialogFooter>
                 </DialogContent>
             </Dialog>
 
@@ -1112,7 +1112,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                     : <span />}
                                 <div className="flex gap-2">
                                     <button type="button" onClick={() => setIsAllocationOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button>
-                                    <button type="submit" disabled={!allocationComplete} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">Aplicar desglose</button>
+                                    <button type="submit" disabled={!allocationComplete} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Aplicar desglose</button>
                                 </div>
                             </DialogFooter>
                         </form>

@@ -113,7 +113,7 @@ const MoodboardDashboard = () => {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="w-full md:w-auto flex items-center justify-center gap-2 bg-[#009EB9] hover:bg-[#008CA4] text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-[#009EB9]/20 active:scale-95"
+          className="w-full md:w-auto flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-[#009EB9]/20 active:scale-95"
         >
           <Plus className="w-4 h-4" />
           Nuevo Tablero
@@ -242,7 +242,7 @@ const MoodboardDashboard = () => {
               <button
                 disabled={creating}
                 type="submit"
-                className="min-h-11 flex-1 rounded-xl bg-[#009EB9] px-6 py-3 font-bold text-white shadow-lg shadow-[#009EB9]/20 transition-all hover:bg-[#008CA4] disabled:opacity-50"
+                className="min-h-11 flex-1 rounded-xl bg-primary px-6 py-3 font-bold text-primary-foreground shadow-lg shadow-[#009EB9]/20 transition-all hover:bg-primary/90 disabled:opacity-50"
               >
                 {creating ? 'Creando...' : 'Crear Tablero'}
               </button>

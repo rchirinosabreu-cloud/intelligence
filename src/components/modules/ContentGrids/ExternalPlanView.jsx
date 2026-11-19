@@ -88,7 +88,7 @@ function ReplyBox({ onSend, onCancel, sending }) {
         </label>
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={onCancel} className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">Cancelar</button>
-          <button type="submit" disabled={sending || !text.trim() || tooLong} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan px-4 text-sm font-semibold text-white disabled:opacity-50" data-reply-send>
+          <button type="submit" disabled={sending || !text.trim() || tooLong} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50" data-reply-send>
             {sending && <Loader2 className="h-4 w-4 animate-spin" />}Responder
           </button>
         </div>

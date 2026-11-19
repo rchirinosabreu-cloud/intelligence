@@ -14,7 +14,7 @@ const Empty = ({ onCreate, filtered, archived }) => (
     <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{archived ? 'No hay oportunidades archivadas.' : filtered ? 'Ninguna oportunidad coincide con estos filtros.' : 'Todavía no hay oportunidades registradas.'}</p>
     <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{archived ? 'Las que archives desde la lista o desde su ficha aparecen aquí.' : filtered ? 'Prueba limpiando los filtros.' : 'Registra la primera y el CRM empieza a medir desde hoy.'}</p>
     {!filtered && !archived && onCreate && (
-      <button type="button" onClick={onCreate} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition-transform hover:shadow-md active:scale-95">
+      <button type="button" onClick={onCreate} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-transform hover:shadow-md active:scale-95">
         <Plus className="h-4 w-4" /> Nueva oportunidad
       </button>
     )}

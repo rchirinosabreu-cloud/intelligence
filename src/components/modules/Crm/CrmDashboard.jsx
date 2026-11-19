@@ -122,7 +122,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
             <section className="rounded-2xl border border-brand-cyan/30 bg-brand-cyan/[0.06] p-5 dark:bg-brand-cyan/10" aria-label="Registradas sin primer contacto" data-crm-fresh>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-cyan text-white"><Plus className="h-4 w-4" /></span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></span>
                   {metrics.fresh === 1 ? '1 oportunidad registrada sin primer contacto' : `${metrics.fresh} oportunidades registradas sin primer contacto`}
                 </h2>
                 <button type="button" onClick={() => { onFiltersChange({ ...filters, stage: 'POR_GESTIONAR' }); onShowTab?.('oportunidades'); }} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep transition-colors hover:bg-brand-cyan/10 dark:text-brand-cyan">Ver todas <ArrowRight className="h-3.5 w-3.5" /></button>

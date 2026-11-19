@@ -124,7 +124,7 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
                   type="button"
                   onClick={() => confirmationMutation.mutate(task.id)}
                   disabled={confirmationMutation.isPending}
-                  className="h-8 rounded-lg bg-[#009EB9] px-3 text-xs text-white hover:bg-[#008CA4]"
+                  className="h-8 rounded-lg bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
                 >
                   {confirmationMutation.isPending && confirmationMutation.variables === task.id ? 'Confirmando...' : 'Sigo trabajando'}
                 </Button>

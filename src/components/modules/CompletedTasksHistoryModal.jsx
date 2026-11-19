@@ -517,7 +517,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
               type="button"
               onClick={handleReopenTask}
               disabled={isSubmittingReopen || !reopenNote.trim()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />}
               Regresar a Pendiente

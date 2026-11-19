@@ -1956,7 +1956,7 @@ await invalidateFinancialQueries(queryClient);
                             />
                         )}
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota<textarea rows={3} value={receivableForm.comments} onChange={(event) => setReceivableForm((current) => ({ ...current, comments: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" placeholder="Factura, compromiso o detalle de seguimiento" /></label>
-                        <DialogFooter><button type="button" onClick={() => setIsReceivableEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingReceivable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingReceivable && <Loader2 className="h-4 w-4 animate-spin" />}Guardar</button></DialogFooter>
+                        <DialogFooter><button type="button" onClick={() => setIsReceivableEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingReceivable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{isSavingReceivable && <Loader2 className="h-4 w-4 animate-spin" />}Guardar</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
@@ -2184,7 +2184,7 @@ await invalidateFinancialQueries(queryClient);
                         {noticeError && <p role="alert" className="text-sm text-destructive">{noticeError}</p>}
                         <DialogFooter>
                             <button type="button" onClick={() => { setDebtToIssue(null); setIssueForm(null); setIsCorrecting(false); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
-                            <button type="submit" disabled={isIssuing || issueTotal <= 0 || !issueIdentityReady || !issueMoneyReady} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
+                            <button type="submit" disabled={isIssuing || issueTotal <= 0 || !issueIdentityReady || !issueMoneyReady} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                                 {isIssuing && <Loader2 className="h-4 w-4 animate-spin" />}{isCorrecting ? 'Guardar y rehacer PDF' : 'Emitir cuenta de cobro'}
                             </button>
                         </DialogFooter>

@@ -238,7 +238,7 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
                                         e.preventDefault();
                                         handleDownloadImage(previewImage?.downloadUrl);
                                     }}
-                                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg cursor-pointer"
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-primary-foreground text-xs font-bold transition-all shadow-lg cursor-pointer"
                                 >
                                     <Download className="w-3.5 h-3.5" />
                                     DESCARGAR ARCHIVO
@@ -2065,7 +2065,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {isEdition && !formData.sharedProgress && formData.status === 'DEVUELTA' && !showReintegratePrompt && (
                             <button
                                 onClick={() => setShowReintegratePrompt(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-[#009EB9] text-white rounded-lg text-xs font-medium hover:bg-[#008CA4] transition-all shadow-md shadow-[#009EB9]/20"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-all shadow-md shadow-[#009EB9]/20"
                             >
                                 <TaskReintegrateIcon size={11} /> Reintegrar Tarea
                             </button>

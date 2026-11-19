@@ -14,7 +14,7 @@ function Preview() {
   const simulateSend = () => setNotice('Muestra local: no se ha enviado ni guardado ningún comentario.');
   return <>
     <main className="min-h-screen bg-zinc-50 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <button className="rounded-lg bg-primary px-4 py-2 text-white" onClick={() => setOpen(true)}>Abrir muestra de Formato</button>
+      <button className="rounded-lg bg-primary px-4 py-2 text-primary-foreground" onClick={() => setOpen(true)}>Abrir muestra de Formato</button>
     </main>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent style={{ height: '85vh' }} className="flex max-w-6xl flex-col overflow-clip rounded-2xl border-zinc-200 bg-zinc-50 p-0 dark:border-zinc-800 dark:bg-zinc-950" onOpenAutoFocus={event => {
@@ -40,7 +40,7 @@ function Preview() {
           <RichTextEditor ref={editorRef} value={text} onChange={setText} onSend={simulateSend}
             attachmentAction={<span title="Adjuntos no habilitados en esta muestra" className="flex h-9 w-9 items-center justify-center text-zinc-400"><Paperclip size={16} /></span>}
             emojiAction={<button title="Insertar emoji de prueba" onClick={() => editorRef.current?.insertEmoji('🙂')} className="flex h-9 w-9 items-center justify-center text-zinc-400">🙂</button>}
-            sendAction={<button title="Simular envío local" onClick={simulateSend} className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white"><Send size={16} /></button>}
+            sendAction={<button title="Simular envío local" onClick={simulateSend} className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Send size={16} /></button>}
           />
           {notice && <p role="status" className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">{notice}</p>}
         </div>
