@@ -116,6 +116,22 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
             });
         }
 
+        // Una ficha que creó esta carga y que nadie ha editado (revisión 1, origen distinto de «Pantalla») y que quedó sin colores o sin tipografías recibe los
+        // del manual cuando el dataset los trae después (Finas y Lettufresh tenían la paleta en imagen). Si el
+        // equipo ya la editó, no se toca.
+        if (item.action === 'COMPLETAR' && brandId) {
+            const current = await db.clientBrand.findUnique({ where: { clientId: item.client.id } });
+            const fill = {};
+            if (current?.revision === 1 && current.source && current.source !== 'Pantalla') {
+                if (!(current.colors || []).length && item.brand.colors.length) fill.colors = item.brand.colors;
+                if (!(current.fonts || []).length && item.brand.fonts.length) fill.fonts = item.brand.fonts;
+            }
+            if (Object.keys(fill).length) {
+                await db.clientBrand.updateMany({ where: { id: current.id, revision: 1 }, data: fill });
+                line.filled = Object.keys(fill);
+            }
+        }
+
         let added = 0;
         for (let start = 0; start < pending.length; start += concurrency) {
             const batch = pending.slice(start, start + concurrency);

@@ -390,9 +390,34 @@
         "Félix Finas",
         "FINAS by Félix Rodríguez Peña"
       ],
-      "source": "Manual de marca FINAS by félix rodríguez peña.pdf (Drive), leído el 18 nov 2026. Los colores del manual son imagen: faltan por cargar.",
+      "source": "Manual de marca FINAS by félix rodríguez peña.pdf (Drive), leído el 18 nov 2026. Colores de las páginas 6 y 7.",
       "manualUrl": "https://drive.google.com/file/d/14Tkm4U1qsvXL7N3s4M0Iw3Vb30ETBcay/view",
-      "colors": [],
+      "colors": [
+        {
+          "hex": "#3A5D6F",
+          "role": "PRINCIPAL",
+          "name": "Azul Real",
+          "cmyk": "82, 56, 42, 19"
+        },
+        {
+          "hex": "#798B94",
+          "role": "SECUNDARIO",
+          "name": "Gris Denim",
+          "cmyk": "56, 38, 35, 3"
+        },
+        {
+          "hex": "#0689A9",
+          "role": "ACENTO",
+          "name": "Azul complementario",
+          "cmyk": "84, 33, 25, 1"
+        },
+        {
+          "hex": "#FAED25",
+          "role": "ACENTO",
+          "name": "Amarillo complementario",
+          "cmyk": "5, 0, 93, 0"
+        }
+      ],
       "fonts": [
         {
           "family": "Josefin Sans",
@@ -1017,9 +1042,35 @@
         "Lettufresh",
         "Lettu Fresh"
       ],
-      "source": "Lettufresh-Propuesta identidad digital v4.pdf (Drive), leído el 18 nov 2026. Los colores son imagen: faltan por cargar.",
+      "source": "Lettufresh-Propuesta identidad digital v4.pdf (Drive), leído el 18 nov 2026. Colores tomados de la paleta (página 2).",
       "manualUrl": "https://drive.google.com/file/d/1y8dmYoho78COuCKW7Gte_waS6PimcgE7/view",
-      "colors": [],
+      "colors": [
+        {
+          "hex": "#A9D72F",
+          "role": "PRINCIPAL",
+          "name": "Verde lechuga"
+        },
+        {
+          "hex": "#DF1983",
+          "role": "PRINCIPAL",
+          "name": "Rosa"
+        },
+        {
+          "hex": "#FF6A00",
+          "role": "ACENTO",
+          "name": "Naranja"
+        },
+        {
+          "hex": "#025A4E",
+          "role": "SECUNDARIO",
+          "name": "Verde oscuro"
+        },
+        {
+          "hex": "#C8DD2B",
+          "role": "ACENTO",
+          "name": "Verde claro"
+        }
+      ],
       "fonts": [
         {
           "family": "Fields",
@@ -1211,6 +1262,200 @@
       "matchWords": [
         "sunpartners",
         "sun partners"
+      ]
+    },
+    {
+      "aliases": [
+        "2X Global",
+        "2XGlobal",
+        "2X Global Summit"
+      ],
+      "matchWords": [
+        "2x global",
+        "2xglobal"
+      ],
+      "source": "Logos 2XG Primary Colour (Drive, carpeta de 2X Global). Colores tomados del logo.",
+      "colors": [
+        {
+          "hex": "#DDA63A",
+          "role": "PRINCIPAL",
+          "name": "Dorado"
+        },
+        {
+          "hex": "#FF3A21",
+          "role": "PRINCIPAL",
+          "name": "Rojo"
+        },
+        {
+          "hex": "#19486A",
+          "role": "SECUNDARIO",
+          "name": "Azul"
+        },
+        {
+          "hex": "#3F7E44",
+          "role": "SECUNDARIO",
+          "name": "Verde"
+        },
+        {
+          "hex": "#21191D",
+          "role": "NEUTRO",
+          "name": "Negro"
+        }
+      ],
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "17pQZC5vXZI1vjWeJdfoqhW6s9yljkF7J",
+          "label": "Principal a color"
+        },
+        {
+          "driveId": "1DkGVb_gC68RcHxWpZAklEsHzCoWdtHnc",
+          "label": "Negativo (para fondo oscuro)"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Mima's Kitchen",
+        "Mima's",
+        "Mimas",
+        "Mimas Kitchen"
+      ],
+      "matchWords": [
+        "mima s",
+        "mimas"
+      ],
+      "source": "LOGO MIMAS PNG.png (Drive). Colores tomados del logo.",
+      "colors": [
+        {
+          "hex": "#ED1B24",
+          "role": "PRINCIPAL",
+          "name": "Rojo"
+        },
+        {
+          "hex": "#231F20",
+          "role": "NEUTRO",
+          "name": "Negro"
+        },
+        {
+          "hex": "#FFFFFF",
+          "role": "FONDO"
+        }
+      ],
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "1bwgVN7eNb2lgDD7dv18fZwK0znc7nuBC",
+          "label": "Principal (fondo blanco)"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Nattal",
+        "NATTAL",
+        "Nattal Coffee Food Market"
+      ],
+      "matchWords": [
+        "nattal"
+      ],
+      "source": "Logo Nattal.png (Drive). Colores tomados del logo.",
+      "colors": [
+        {
+          "hex": "#9C361F",
+          "role": "PRINCIPAL",
+          "name": "Terracota"
+        }
+      ],
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "1EPxH0JAKosiSo0nOzI7sbW5OfrpeypNK",
+          "label": "Principal"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Wine & Food Summit",
+        "Wine Summit",
+        "Wine and Food Summit",
+        "Wine & Food Summit PR"
+      ],
+      "matchWords": [
+        "wine"
+      ],
+      "source": "Carpeta LOGOS NUEVOS WINE & FOOD PR (Drive). Colores tomados del logo.",
+      "colors": [
+        {
+          "hex": "#7D122E",
+          "role": "PRINCIPAL",
+          "name": "Vino"
+        },
+        {
+          "hex": "#C6A26B",
+          "role": "SECUNDARIO",
+          "name": "Dorado"
+        }
+      ],
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "1p1oirS7Lsni7mlUohQI-2bBQ5DM4OEF2",
+          "label": "Principal"
+        },
+        {
+          "driveId": "1oIHOvaxr5fq0Ven7i48XVkTuStpL3UDH",
+          "label": "Fondo blanco"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Pablo Hoff",
+        "Colegio Pablo Hoff",
+        "CPH"
+      ],
+      "matchWords": [
+        "pablo hoff",
+        "hoff"
+      ],
+      "source": "Logos CPH (Drive, carpeta de Pablo Hoff). Colores tomados del logo.",
+      "colors": [
+        {
+          "hex": "#2B4E79",
+          "role": "PRINCIPAL",
+          "name": "Azul"
+        },
+        {
+          "hex": "#D99A2F",
+          "role": "SECUNDARIO",
+          "name": "Dorado"
+        },
+        {
+          "hex": "#CF7D31",
+          "role": "ACENTO",
+          "name": "Naranja"
+        }
+      ],
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "1XHS-hzsRB-_N7DopxSu7ECfgI80IFjJs",
+          "label": "Horizontal"
+        },
+        {
+          "driveId": "1VP_2k6pmalwAlVt11dXbI1gc-F7Y1ME_",
+          "label": "Horizontal con borde blanco"
+        },
+        {
+          "driveId": "14qOJqGlgEw1ESS8qy73IwiftdBMBVeFp",
+          "label": "Vertical"
+        },
+        {
+          "driveId": "1tS8rcwn4RSheSN2D--MTEf-hsGy81PH9",
+          "label": "Vertical con borde blanco"
+        }
       ]
     }
   ]

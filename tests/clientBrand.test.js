@@ -239,6 +239,26 @@ test('cargar los manuales: crea lo que falta, sube solo PNG de Drive, no pisa fi
     assert.ok(isPng(png) && !isPng(Buffer.from('<html>')));
 });
 
+test('una ficha cargada que nadie editó recibe los colores que el manual trajo después; una editada, no', async () => {
+    const { runBrandImport } = await import('../src/services/clientBrandImport.js');
+    const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
+    const db = createBrandsDb([
+        { id: 'c1', name: 'Finas', slug: 'finas', isArchived: false },
+        { id: 'c2', name: 'Lettufresh', slug: 'lettufresh', isArchived: false }
+    ]);
+    const service = clientBrandService({ db, storage: () => ({}) });
+    const fetchImpl = async () => ({ ok: false });
+    const first = { brands: [{ aliases: ['Finas'], source: 'Manual', fonts: [{ family: 'Josefin Sans', source: 'GOOGLE' }] }, { aliases: ['Lettufresh'], source: 'Manual', fonts: [{ family: 'Gotham', source: 'COMERCIAL' }] }] };
+    await runBrandImport({ db, service, dataset: first, apply: true, fetchImpl });
+    const edited = await service.get('c2');
+    await service.save('c2', { revision: edited.brand.revision, fonts: [{ family: 'Gotham', source: 'COMERCIAL' }], usageNotes: 'del equipo' }, { userId: 'u1' });
+    const later = { brands: first.brands.map((b) => ({ ...b, colors: [{ hex: '#3A5D6F', role: 'PRINCIPAL' }] })) };
+    const done = await runBrandImport({ db, service, dataset: later, apply: true, fetchImpl });
+    assert.deepEqual(done.report[0].filled, ['colors']);
+    assert.equal((await service.get('c1')).brand.colors[0].hex, '#3A5D6F');
+    assert.equal((await service.get('c2')).brand.colors.length, 0, 'lo que el equipo ya editó no se toca');
+});
+
 test('los logos del dataset vienen de Drive con etiqueta y no hay botón de carga en bloque', () => {
     const data = JSON.parse(readFileSync(new URL('../data/client-brands.json', import.meta.url), 'utf8'));
     const logos = data.brands.flatMap((b) => (b.logos || []).map((l) => ({ ...l, brand: b.aliases[0] })));
