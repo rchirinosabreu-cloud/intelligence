@@ -31,22 +31,23 @@ const spoken = (day) => `${Number(day.slice(8, 10))} de ${MONTHS[Number(day.slic
 /**
  * El período que «Generar» crea para un contrato en un mes. **El ciclo sale del contrato, no del calendario**
  * (Elisa, 13 de noviembre de 2026: «si es del 14 al 13 … ella debe permitir y generar independiente de las
- * fechas»; Rodny: «haz los ajustes»). Mariceth empezó el 14 de octubre y su mes va del 14 al 13; antes, «Generar»
- * intentaba el 1 al 30, chocaba con los días ya pagados y la saltaba.
+ * fechas»; Rodny: «haz los ajustes»). Mariceth empezó el 14 de octubre y su mes va del 14 al 13.
  *
  * Cada período **continúa donde terminó el anterior** y dura un mes; sin historial, el ancla es el día en que
- * empezó el contrato. **El período pertenece al mes en que termina, que es el mes en que se paga**: generar
- * noviembre prepara, para quien es del 26, el 26 de octubre → 25 de noviembre; para Mariceth (del 14), diciembre
- * es el 14 de noviembre → 13 de diciembre. Así un contrato de mes calendario sigue siendo del 1 al 30, y el primer
- * tramo parcial de quien entró a mitad de mes no tuerce los siguientes. Con un ancla a fin de mes (29–31) el
- * corte se corre al día que exista; lo que importa es que no queden días sueltos entre períodos.
+ * empezó el contrato. **El período pertenece al mes en que empieza** (Rodny, 19 de noviembre de 2026: «la idea es
+ * que no siga pasando eso sino que esas flexibilidades estén según lo que yo mismo estoy registrando»): generar
+ * noviembre prepara, para Mariceth (del 14), el 14 de noviembre → 13 de diciembre, que es como Elisa lleva la
+ * nómina. Entre el 13 y el 19 de noviembre pertenecía al mes en que terminaba, y «Generar» en noviembre pedía el
+ * 14 de octubre → 13 de noviembre, ya pagado, y no creaba nada. Un contrato de mes calendario sigue siendo del 1
+ * al 30, y el primer tramo parcial de quien entró a mitad de mes no tuerce los siguientes. Con un ancla a fin de
+ * mes (29–31) el corte se corre al día que exista; lo que importa es que no queden días sueltos entre períodos.
  *
  * `periods` son los tramos ya liquidados de esa persona con fechas conocidas (`payrollServiceRange`); las
  * liquidaciones sin fechas las vigila el servicio aparte (`payrollUnknownMayOverlap`), y una anulada no cuenta
  * para nada. Lo que no se sabe se dice, nunca se inventa: días ya incluidos en otra liquidación y un contrato que
  * no cubre el período completo devuelven `problem`, y el tramo se define a mano en «Períodos e historial». Un
- * período anterior al contrato, o un contrato ya liquidado hasta su fin, devuelven `done`: no hay nada que
- * generar y no es un problema.
+ * período anterior al contrato, uno que empezaría después de su fin, o un contrato ya liquidado hasta su fin,
+ * devuelven `done`: no hay nada que generar y no es un problema.
  */
 export function nextPayrollPeriod({ year, month, contractStart, contractEnd = null, periods = [] }) {
   const known = periods.map(row => ({ start: payrollDay(row.start), end: payrollDay(row.end) }));
@@ -54,28 +55,17 @@ export function nextPayrollPeriod({ year, month, contractStart, contractEnd = nu
   const firstDay = payrollDay(contractStart);
   const lastDay = contractEnd ? payrollDay(contractEnd) : null;
   const anchorDay = Number((latestEnd ? shiftDays(latestEnd, 1) : firstDay).slice(8, 10));
-  // Termina el día antes del ancla de este mes y empieza en el ancla del mes anterior. Con ancla 1 es el mes
+  // Empieza en el ancla de este mes y termina el día antes del ancla del mes siguiente. Con ancla 1 es el mes
   // calendario entero: del 1 al último día.
-  const before = month === 1 ? [year - 1, 12] : [year, month - 1];
   const after = month === 12 ? [year + 1, 1] : [year, month + 1];
-  const start = anchorDay === 1 ? clampDay(year, month, 1) : clampDay(before[0], before[1], anchorDay);
-  const end = anchorDay === 1 ? shiftDays(clampDay(after[0], after[1], 1), -1) : shiftDays(clampDay(year, month, anchorDay), -1);
+  const start = clampDay(year, month, anchorDay);
+  const end = shiftDays(clampDay(after[0], after[1], anchorDay), -1);
   // `start` y `end` viajan también con `done`: el servicio mira primero si ese tramo ya existe, para devolverlo
   // en vez de crearlo dos veces, y solo después da el contrato por terminado.
   if (lastDay && latestEnd && latestEnd >= lastDay) return { done: true, start, end };
-  if (end < firstDay) {
-    // El período de este mes es anterior al contrato. Casi siempre es que la persona todavía no empezaba (su
-    // primer tramo termina el mes siguiente) y no hay nada que generar. Pero un contrato que empieza este mes y
-    // termina antes de completar su primer ciclo es un tramo suelto, y eso sí se dice: nunca se le cobra el mes
-    // completo ni se le deja en silencio.
-    const [fy, fm] = [Number(firstDay.slice(0, 4)), Number(firstDay.slice(5, 7))];
-    const afterFirst = fm === 12 ? [fy + 1, 1] : [fy, fm + 1];
-    const firstCycleEnd = shiftDays(clampDay(afterFirst[0], afterFirst[1], anchorDay), -1);
-    if (lastDay && lastDay < firstCycleEnd && fy === year && fm === month) {
-      return { start: firstDay, end: lastDay, problem: `El contrato cubre solo una parte del período (del ${spoken(firstDay)} al ${spoken(lastDay)}). Define sus fechas e importe en «Períodos e historial».` };
-    }
-    return { done: true, start, end };
-  }
+  // El período de este mes es anterior al contrato (la persona todavía no empezaba) o empezaría cuando el
+  // contrato ya terminó (su último tramo es del mes anterior): no hay nada que generar.
+  if (end < firstDay || (lastDay && start > lastDay)) return { done: true, start, end };
   const span = `del ${spoken(start)} al ${spoken(end)}`;
   if (firstDay > start || (lastDay && lastDay < end)) {
     return { start, end, problem: `El contrato cubre solo una parte del período (${span}). Define sus fechas e importe en «Períodos e historial».` };
