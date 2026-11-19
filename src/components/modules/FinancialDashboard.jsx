@@ -66,7 +66,8 @@ import MoneyInput from '@/components/ui/MoneyInput';
 import FinancialPartiesDirectory from '@/components/modules/financial/FinancialPartiesDirectory';
 import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
 import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/financial/PayrollPayments';
-import { PayrollPeriodsDialog, PayrollDeductionsDialog } from '@/components/modules/financial/PayrollPeriods';
+import { PayrollPeriodsDialog, PayrollDeductionsDialog, PayrollAdditionsDialog } from '@/components/modules/financial/PayrollPeriods';
+import { listedAdditionsTotal } from '@/lib/payrollAdditions';
 import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
 import { retentionCertificateApi, uploadRecordDocument } from '@/lib/financialDocumentsClient';
 import { payrollDraftNeedsContract } from '@/lib/payrollPeriods';
@@ -179,6 +180,7 @@ const FinancialDashboard = () => {
     const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
     const [payrollPeriods, setPayrollPeriods] = useState(null);
     const [payrollDeductions, setPayrollDeductions] = useState(null);
+    const [payrollAdditions, setPayrollAdditions] = useState(null);
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
     // El aviso de arriba de la pantalla: lo que salió bien o mal de la última acción.
@@ -1797,6 +1799,7 @@ await invalidateFinancialQueries(queryClient);
                                                     </td>
                                                     <td className="brain-type-value p-4 text-right">
                                                         {transaction ? formatCurrency(netAmount) : "—"}
+                                                        {listedAdditionsTotal(transaction?.additions) > 0 && <p className="brain-type-help mt-0.5 font-normal">Incluye adicionales {formatCurrency(listedAdditionsTotal(transaction.additions))}</p>}
                                                         {transaction?.status === 'APPROVED' && Number(transaction.paidAmount) > 0 && (
                                                             <p className="brain-type-help mt-0.5 font-normal">Falta {formatCurrency(transaction.outstanding)}</p>
                                                         )}
@@ -1804,6 +1807,7 @@ await invalidateFinancialQueries(queryClient);
                                                     <td className="p-4 text-right">
                                                         <div className="flex flex-wrap items-center justify-end gap-2" role="group" aria-label={`Acciones de la liquidación de ${collab.name}`}>
                                                             {transaction && (transaction.status !== 'PAID' || transaction.loanDeductions?.length > 0) && <button type="button" aria-label={`Descuentos de ${collab.name}`} title="Descuentos de préstamos" onClick={() => setPayrollDeductions({ ...transaction, collaboratorName: collab.name })} className="brain-button-quiet">Descuentos</button>}
+                                                            {transaction && !transaction.voidedAt && (canWriteFinancials || transaction.additions?.length > 0) && <button type="button" aria-label={`Adicionales de ${collab.name}`} title="Bonos, comisiones y otros pagos adicionales" onClick={() => setPayrollAdditions({ ...transaction, collaboratorName: collab.name })} className="brain-button-quiet">Adicionales</button>}
                                                             {draftChanged && canWriteFinancials && <button type="button" onClick={() => setPayrollPeriods(collab)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10">Revisar importe</button>}
                                                             {transaction?.status === 'DRAFT' && !draftChanged && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50">Aprobar</button>}
                                                             {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-cyan-deep px-3 text-sm font-semibold text-white hover:bg-brand-cyan-deep/90">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
@@ -1973,6 +1977,7 @@ await invalidateFinancialQueries(queryClient);
             {externalDocumentDebt && <ReceivableExternalDocumentDialog key={externalDocumentDebt.id} debt={externalDocumentDebt} saving={isRecordingExternalDocument} error={noticeError} onClose={() => setExternalDocumentDebt(null)} onSubmit={handleExternalDocument} />}
             {payrollPeriods && <PayrollPeriodsDialog collaborator={payrollPeriods} year={selectedYear} month={payrollMonth} canWrite={canWriteFinancials} canApprove={canApproveFinancials} onClose={() => setPayrollPeriods(null)} onSaved={handlePayrollChanged} />}
             {payrollDeductions && <PayrollDeductionsDialog transaction={payrollDeductions} canApprove={canApproveFinancials} onClose={() => setPayrollDeductions(null)} onSaved={handlePayrollChanged} />}
+            {payrollAdditions && <PayrollAdditionsDialog transaction={payrollAdditions} canWrite={canWriteFinancials} onClose={() => setPayrollAdditions(null)} onSaved={handlePayrollChanged} />}
             {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={noticeError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} onOpenDocument={openClientStatementDocument} openingDocument={downloadingDocumentId === `statement:${statementClient.id}`} />}
 

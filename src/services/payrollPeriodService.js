@@ -32,7 +32,7 @@ export async function syncPayrollPeriod(db, id, input, actor) {
       if (prior.fingerprint !== fingerprint || prior.actorId !== user.id) throw conflict();
       return { transaction: row, replayed: true };
     }
-    if (row.voidedAt || row.status !== 'DRAFT' || row.financialRecordId || row.payments.some(p => !p.reversedAt) || row.adjustments.some(a => !a.reversedAt) || Number(row.deductions)) throw fail('PAYROLL_DRAFT_REQUIRED', 'Solo se actualizan borradores sin pagos ni descuentos. Las liquidaciones aprobadas y pagadas conservan sus valores.');
+    if (row.voidedAt || row.status !== 'DRAFT' || row.financialRecordId || row.payments.some(p => !p.reversedAt) || row.adjustments.some(a => !a.reversedAt) || Number(row.deductions)) throw fail('PAYROLL_DRAFT_REQUIRED', 'Solo se actualizan borradores sin pagos, descuentos ni adicionales. Las liquidaciones aprobadas y pagadas conservan sus valores.');
     const ctx = await load(tx, row.contractId);
     if (ctx.revision !== input.expectedRevision || (input.reviewContractId && input.reviewContractId !== row.contractId)) throw conflict();
     if (ctx.contract.importBatchId || ctx.contract.collaborator?.isActive === false) throw fail('PAYROLL_CONTRACT_UNAVAILABLE', 'El contrato no está disponible para nuevas liquidaciones.');
@@ -118,7 +118,7 @@ export async function reversePayrollPeriod(db, id, input, actor) {
     if (!ctx.rows.some(item => item.id === id)) throw conflict();
     if (ctx.revision !== input.expectedRevision) throw conflict();
     await openPayrollPeriod(tx, row);
-    if (row.financialRecordId || row.payments.some(p => !p.reversedAt) || row.adjustments.some(a => !a.reversedAt)) throw fail('PAYROLL_PERIOD_HAS_APPLICATIONS', 'Primero revierte los pagos y descuentos vigentes desde esta liquidación. Sus comprobantes e historial se conservarán.');
+    if (row.financialRecordId || row.payments.some(p => !p.reversedAt) || row.adjustments.some(a => !a.reversedAt)) throw fail('PAYROLL_PERIOD_HAS_APPLICATIONS', 'Primero revierte los pagos, descuentos y adicionales vigentes desde esta liquidación. Sus comprobantes e historial se conservarán.');
     const transaction = await tx.payrollTransaction.update({ where: { id }, data: { voidedAt: new Date(), voidReason: reason, periodDetails: clone({ ...row.periodDetails, reversal: { requestId, fingerprint, actorId: user.id, actorName: user.name } }) } });
     await audit(tx, 'PayrollTransaction', id, row, { operation: 'PERIOD_REVERSED', transaction, reason }, user);
     return { transaction };

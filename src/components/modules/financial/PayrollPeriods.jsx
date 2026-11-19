@@ -9,6 +9,7 @@ import Select from '@/components/ui/Select';
 import DraftNotice from '@/components/ui/DraftNotice';
 import FigureList from '@/components/ui/FigureList';
 import { useFormDraft } from '@/hooks/useFormDraft';
+import { PAYROLL_ADDITION_TYPES, payrollAdditionLabel } from '@/lib/payrollAdditions';
 
 const api = path => `${getApiBaseUrl()}/api/financials${path}`;
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
@@ -149,6 +150,47 @@ export function PayrollDeductionsDialog({ transaction, canApprove, onClose, onSa
         {row.status === 'DRAFT' && <p className="brain-type-body">Aprueba la liquidación desde Nómina antes de aplicar un descuento.</p>}
         {data.unavailable.map(item => <p key={item.id} className="brain-type-body">{item.name}: {item.reason}</p>)}
         <div className="flex justify-end"><button type="button" className={button} onClick={onClose}>Cerrar</button></div>
+      </>}
+    </>}
+  </DialogContent></Dialog>;
+}
+
+// Bonos, comisiones y otros pagos adicionales de una liquidación (Rodny, 19 de noviembre de 2026). Suben el neto;
+// el dinero se registra después con «Registrar pago». Revertir uno ya pagado exige revertir antes el pago.
+export function PayrollAdditionsDialog({ transaction, canWrite, onClose, onSaved }) {
+  const [saving, setSaving] = useState(false);
+  const context = useReview(`/payroll-transactions/${transaction.id}/additions`), [action, setAction] = useState(null), [message, setMessage] = useState('');
+  const data = context.data, row = data?.transaction;
+  const done = async () => { setMessage(action?.type === 'reverse' ? 'Adicional revertido.' : 'Adicional agregado.'); setAction(null); await context.load(); await onSaved('Adicional actualizado en Nómina.'); };
+  const choose = next => { setMessage(''); setAction(next); };
+  const paid = Number(data?.paidAmount || 0);
+  return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}><DialogContent data-payroll-additions className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900" onInteractOutside={event => event.preventDefault()}>
+    <DialogHeader><DialogTitle>Adicionales · {transaction.collaboratorName}</DialogTitle><DialogDescription>Un bono, una comisión u otro pago que no está en el contrato. Sube el neto de esta liquidación; el dinero se registra después con «Registrar pago».</DialogDescription></DialogHeader>
+    {context.error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{context.error}</p>}
+    {!data && !context.error && <p className="brain-type-body">Cargando la liquidación…</p>}
+    {message && <p role="status" className="text-sm text-status-positive-fg">{message}</p>}
+    {data && <><Figures rows={[["Bruto del período", money(row.grossAmount)], ['Neto', money(row.netAmount)], ['Pagado', money(paid)], ['Pendiente de transferencia', money(data.outstanding)]]} />
+      {action ? <ReviewForm key={`${action.type}:${action.item?.id || 'new'}`} scope={`payroll:addition:${row.id}:${action.type}:${action.item?.id || 'new'}`} revision={data.revision} initial={{ type: 'BONUS', amount: '', reason: '' }} onCancel={() => setAction(null)} onDone={done} onBusy={setSaving} onRefresh={async () => { await context.load(); setAction(null); }}
+        summarize={form => {
+          if (action.type === 'reverse') {
+            const amount = Number(action.item.amount), after = Number(row.netAmount) - amount;
+            if (after < paid) throw new Error('Ese adicional ya se pagó. Revierte o desglosa primero el pago desde la liquidación.');
+            return [['Adicional que se quita', `${payrollAdditionLabel(action.item.type)} · ${money(amount)}`], ['Neto después', money(after)], ['Pendiente de transferencia', money(after - paid)], ['Pagos ya realizados', 'Se conservan sin cambios']];
+          }
+          const amount = Number(form.amount);
+          if (!Number.isFinite(amount) || amount <= 0) throw new Error('Indica el valor del adicional.');
+          const after = Number(row.netAmount) + amount;
+          return [['Adicional', `${payrollAdditionLabel(form.type)} · ${money(amount)}`], ['Neto después', money(after)], ['Pendiente de transferencia', money(after - paid)], ['Estado', row.status === 'DRAFT' ? 'Sigue en borrador' : 'Queda aprobada, lista para registrar el pago']];
+        }}
+        send={payload => action.type === 'reverse' ? axios.post(api(`/payroll-adjustments/${action.item.id}/reverse-addition`), payload, auth()) : axios.post(api(`/payroll-transactions/${row.id}/additions`), payload, auth())}>
+        {(form, set) => action.type === 'reverse'
+          ? <p className="brain-type-body">Se quitará {money(action.item.amount)} del neto. El adicional queda en el historial como revertido.</p>
+          : <div className="grid gap-4 sm:grid-cols-2"><label className={label}><span>Tipo</span><Select className={field} value={form.type} onChange={event => set({ type: event.target.value })}>{Object.entries(PAYROLL_ADDITION_TYPES).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</Select></label><label className={label}><span>Valor</span><MoneyInput required min="0.01" className={field} aria-label="Valor del adicional" value={form.amount} onChange={amount => set({ amount })} /></label></div>}
+      </ReviewForm> : <>
+        {data.additions.length > 0 && <section className="space-y-3"><h3 className="brain-type-section">Adicionales de esta liquidación</h3>{data.additions.map(item => <article key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-white/10"><div className="flex flex-wrap items-center justify-between gap-2"><p className="brain-type-value">{payrollAdditionLabel(item.type)} · {money(item.amount)} <span className="brain-type-help">· {item.reversedAt ? 'Revertido' : 'Vigente'}</span></p>{!item.reversedAt && canWrite && !row.voidedAt && <button type="button" className={button} onClick={() => choose({ type: 'reverse', item })}>Revertir</button>}</div><p className="brain-type-body">{item.description}</p><p className="brain-type-help">{item.detail?.actorName}</p>{item.reversedAt && <p className="brain-type-help mt-1">Revertido: {item.reversalReason} · {item.detail?.reversal?.actorName}</p>}</article>)}</section>}
+        {data.additions.length === 0 && <p className="brain-type-body">Esta liquidación no tiene adicionales.</p>}
+        {row.voidedAt && <p className="brain-type-body">La liquidación está revertida; no admite adicionales.</p>}
+        <div className="flex justify-end gap-2"><button type="button" className={button} onClick={onClose}>Cerrar</button>{canWrite && !row.voidedAt && <button type="button" className={primary} onClick={() => choose({ type: 'create' })}>Agregar adicional</button>}</div>
       </>}
     </>}
   </DialogContent></Dialog>;
