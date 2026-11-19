@@ -4,7 +4,7 @@ import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
 import {createFinalMediaPreview} from '../../scripts/preview-final-media.mjs';
 
-test('visor de entregables: ojo, proporción original, carga lenta, cancelación y reintento', {timeout:120000},async()=>{
+test('visor de entregables: ojo, proporción original, carga lenta, caché y reintento', {timeout:120000},async()=>{
   const preview=await createFinalMediaPreview({port:0});let browser;
   try{
     browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
@@ -33,7 +33,7 @@ test('visor de entregables: ojo, proporción original, carga lenta, cancelación
     const mobile=await viewer.boundingBox();assert.ok(mobile.x>=8&&mobile.y>=8&&mobile.x+mobile.width<=382&&mobile.y+mobile.height<=836,'el visor entero debe caber en la pantalla móvil');
     assert.ok(await viewer.evaluate(e=>e.scrollWidth<=e.clientWidth));await page.keyboard.press('Escape');await page.setViewportSize({width:1440,height:1000});
     preview.state.mode='slow';await page.getByRole('button',{name:'Cambiar entrega'}).click();await tile.getByText('Cargando vídeo…',{exact:true}).waitFor();assert.equal(await tile.locator('video[src^="blob:"]').count(),0,'no mostrar bytes anteriores al cambiar la fuente');
-    await page.getByRole('button',{name:'Mostrar u ocultar'}).click();await new Promise(r=>setTimeout(r,250));assert.equal(preview.state.aborted,2);
+    await page.getByRole('button',{name:'Mostrar u ocultar'}).click();await new Promise(r=>setTimeout(r,250));assert.equal(preview.state.aborted,0,'ocultar a media carga no la cancela: queda en la caché de la pestaña para la próxima vez');
     preview.state.mode='error';await page.getByRole('button',{name:'Mostrar u ocultar'}).click();await tile.getByRole('alert').waitFor();
     preview.state.mode='normal';await tile.getByRole('button',{name:'Reintentar vista previa'}).click();await page.waitForFunction(()=>document.querySelector('[data-final-asset-tile="vertical"] video')?.readyState>=2);
     const download=page.waitForEvent('download');await tile.getByRole('button',{name:'Descargar Vídeo vertical.webm',exact:true}).click();assert.equal((await download).suggestedFilename(),'Vídeo vertical.webm');

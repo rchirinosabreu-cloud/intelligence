@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Download, Loader2 } from '@/components/ui/icons';
+import { acquirePrivateMedia, cachedPrivateMedia, forgetPrivateMedia } from '@/lib/privateMediaCache';
 
-// La tarjeta y el visor comparten bytes mientras la tarjeta existe. No se conserva una
-// caché global de archivos privados ni se reutilizan bytes tras cambiar la entrega.
+// La tarjeta y el visor comparten los mismos bytes, y quedan en la memoria de la pestaña
+// (`privateMediaCache`): reabrir la pieza no vuelve a bajar el video. Una entrega nueva trae
+// otra dirección (`?v=`), así que nunca se muestran bytes viejos; cerrar sesión los suelta.
 export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOpenChange, triggerRef, onDownload, downloading, downloadError }) {
   const [attempt, setAttempt] = useState(0);
   const [preview, setPreview] = useState(null);
@@ -19,27 +21,25 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
 
   useEffect(() => {
     if (!sourceUrl) return undefined;
-    const controller = new AbortController();
-    let objectUrl;
+    let active = true;
+    let release = null;
     position.current = 0;
-    fetch(sourceUrl, { signal: controller.signal, headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })
-      .then(response => {
-        if (!response.ok) throw Object.assign(new Error('No pudimos cargar la vista previa. Revisa tu conexión o tu acceso e inténtalo de nuevo.'), { status: response.status });
-        return response.blob();
-      })
-      .then(blob => {
-        if (controller.signal.aborted) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPreview({ source: sourceUrl, attempt, url: objectUrl });
+    const cached = cachedPrivateMedia(sourceUrl);
+    if (cached) setPreview({ source: sourceUrl, attempt, url: cached });
+    acquirePrivateMedia(sourceUrl)
+      .then(result => {
+        if (!active) { result.release(); return; }
+        release = result.release;
+        setPreview({ source: sourceUrl, attempt, url: result.url });
       })
       .catch(failure => {
-        if (controller.signal.aborted) return;
+        if (!active) return;
         console.error('[Entregables] Falló la vista previa:', failure.status || failure.name);
         setPreview({ source: sourceUrl, attempt, error: 'No pudimos cargar la vista previa. Revisa tu conexión o tu acceso e inténtalo de nuevo.' });
       });
     return () => {
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      active = false;
+      release?.();
     };
   }, [sourceUrl, attempt]);
 
@@ -66,7 +66,7 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
       : 'El navegador no pudo mostrar esta imagen. Puedes reintentar o descargarla.' });
   };
   const feedback = error ? <div role="alert" className="flex min-h-36 flex-col items-center justify-center gap-3 p-5 text-center text-sm text-destructive">
-    <p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 px-3 font-medium hover:bg-zinc-200 dark:border-zinc-600 dark:hover:bg-zinc-800">Reintentar vista previa</button>
+    <p>{error}</p><button type="button" onClick={() => { if (sourceUrl) forgetPrivateMedia(sourceUrl); setAttempt(value => value + 1); }} className="min-h-11 rounded-xl border border-zinc-300 px-3 font-medium hover:bg-zinc-200 dark:border-zinc-600 dark:hover:bg-zinc-800">Reintentar vista previa</button>
   </div> : loading ? <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-100 p-4 text-center text-sm text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300">
     <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" />{isVideo ? 'Cargando vídeo…' : 'Cargando imagen…'}
   </div> : null;

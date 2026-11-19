@@ -1,4 +1,5 @@
 import React from 'react';
+import { acquirePrivateMedia } from '@/lib/privateMediaCache';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
@@ -58,20 +59,10 @@ export function brandFontUrl(clientId, family) {
 // Los archivos de marca piden sesión, y una etiqueta <img> o un enlace <a> no la llevan (en producción cada
 // logo respondía «No token provided»). Se piden con el `fetch` de la plataforma, que sí la lleva, y se guardan
 // como URL local mientras la pestaña esté abierta: volver a abrir una ficha no vuelve a bajar nada.
-const objectUrls = new Map();
-
+// Comparte la caché de archivos privados de la plataforma (`privateMediaCache`): mientras la pestaña esté
+// abierta un logo o un manual no se vuelve a bajar, y cerrar sesión lo suelta.
 export function loadBrandObjectUrl(url) {
-    if (!objectUrls.has(url)) {
-        const pending = fetch(url)
-            .then((response) => {
-                if (!response.ok) throw new Error('No se pudo cargar el archivo.');
-                return response.blob();
-            })
-            .then((blob) => URL.createObjectURL(blob))
-            .catch((error) => { objectUrls.delete(url); throw error; });
-        objectUrls.set(url, pending);
-    }
-    return objectUrls.get(url);
+    return acquirePrivateMedia(url).then(({ url: objectUrl, release }) => { release(); return objectUrl; });
 }
 
 /** Una imagen privada de la marca, lista para un <img>. `null` mientras carga o si falla. */

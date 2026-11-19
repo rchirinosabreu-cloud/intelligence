@@ -4,6 +4,7 @@ import { QueryClientContext } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { clearManagementFilters } from '@/lib/managementFilterSession';
 import { clearChatDrafts } from '@/lib/teamChatDrafts';
+import { clearPrivateMedia } from '@/lib/privateMediaCache';
 
 const AuthContext = createContext(null);
 
@@ -12,6 +13,7 @@ const clearAuthSession = (queryClient) => {
     // clear también cancela lecturas pendientes para que no repueblen la caché después de salir.
     queryClient?.clear();
     clearChatDrafts();
+    clearPrivateMedia();
     clearManagementFilters(sessionStorage);
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
