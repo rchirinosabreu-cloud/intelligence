@@ -1656,7 +1656,13 @@ const ContentPlanDetail = () => {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
           <div className="flex min-w-0 items-center gap-2" data-plan-owner>
             <TeamAvatar member={team?.find(member => member.id === plan.ownerId) || plan.owner || null} size={28} className="h-7 w-7" />
-            <Select
+            {/* Con community asignado, el responsable es él (19 de noviembre de 2026) y se cambia en la ficha del cliente. */}
+            {plan.client?.responsibleId && plan.ownerId === plan.client.responsibleId ? (
+              <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400" title="Se cambia en la ficha del cliente, al cambiar su community.">
+                {team?.find(member => member.id === plan.ownerId)?.name || plan.owner?.name || 'Community del cliente'}
+                <span className="font-normal"> · community del cliente</span>
+              </span>
+            ) : <Select
               aria-label="Responsable de la parrilla"
               value={plan.ownerId || ''}
               onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
@@ -1666,7 +1672,7 @@ const ContentPlanDetail = () => {
               {team?.map(member => (
                 <option key={member.id} value={member.id}>{member.name}</option>
               ))}
-            </Select>
+            </Select>}
           </div>
       </div>
 

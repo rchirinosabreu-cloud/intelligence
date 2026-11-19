@@ -1,3 +1,4 @@
+import { syncClientPlanOwners } from './planOwnerService.js';
 import { publishAnnouncement, changeAnnouncement, archiveAnnouncement } from './announcementDeliveryService.js';
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
@@ -1016,13 +1017,18 @@ export const assignClientOwner = async ({ requester, clientId, memberId }) => {
     throw error;
   }
 
-  return prisma.client.update({
-    where: { id: clientId },
-    data: { responsibleId: member.id },
-    include: {
-      responsible: {
-        select: { id: true, name: true, role: true, userId: true, avatarUrl: true }
+  return prisma.$transaction(async (tx) => {
+    const client = await tx.client.update({
+      where: { id: clientId },
+      data: { responsibleId: member.id },
+      include: {
+        responsible: {
+          select: { id: true, name: true, role: true, userId: true, avatarUrl: true }
+        }
       }
-    }
+    });
+    // Las parrillas abiertas del cliente pasan a su nuevo community (19 de noviembre de 2026).
+    await syncClientPlanOwners(tx, clientId);
+    return client;
   });
 };

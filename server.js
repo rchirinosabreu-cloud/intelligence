@@ -307,6 +307,20 @@ async function bootstrap() {
         }, 15_000);
     }
 
+    // 7. Parrillas (19 de noviembre de 2026): el responsable de cada parrilla abierta es el community del cliente.
+    // Idempotente; corrige lo que haya quedado distinto, sin bloquear el arranque.
+    setTimeout(async () => {
+        try {
+            const [{ syncPlanOwnersOnBoot }, { default: prismaClient }] = await Promise.all([
+                import('./src/services/planOwnerService.js'),
+                import('./src/lib/prisma.js')
+            ]);
+            await syncPlanOwnersOnBoot({ db: prismaClient });
+        } catch (ownerError) {
+            console.error('[Parrillas] No se pudo revisar el responsable de las parrillas:', ownerError.message);
+        }
+    }, 20_000);
+
     // Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
     server.timeout = 300000;
 }

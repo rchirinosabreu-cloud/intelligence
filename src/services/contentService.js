@@ -22,6 +22,7 @@ import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from 
 import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { planCycle as cycleOfPlan, periodMovePreview } from '../lib/publicationPeriod.js';
+import { communityOf } from './planOwnerService.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
 import { retireContentTasks } from './contentTaskRetirementService.js';
@@ -347,7 +348,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
 const createContentPlanInTransaction = async (db, data) => {
   const { clientId, month, year, status, strategicObjectives } = data;
   // Un cliente con hoja de MIO no lleva parrillas nativas, tampoco restauradas de la papelera (29 de octubre de 2026).
-  const owner = clientId ? await db.client.findUnique({ where: { id: clientId }, select: { name: true, externalPlanUrl: true } }) : null;
+  const owner = clientId ? await db.client.findUnique({ where: { id: clientId }, select: { name: true, externalPlanUrl: true, responsibleId: true, responsible: { select: { isActive: true } } } }) : null;
   const sheetProblem = nativePlanProblem(owner);
   if (sheetProblem) throw Object.assign(new Error(sheetProblem), { status: 409, code: 'PLAN_IN_SHEET' });
   // Un cliente suspendido por cartera no estrena parrilla del mes congelado; el mes en curso se termina.
@@ -371,6 +372,7 @@ const createContentPlanInTransaction = async (db, data) => {
           deletedAt: null,
           autoCreatedForTransfer: false,
           status: status || 'PLANIFICACION',
+          ...(communityOf(owner) ? { ownerId: communityOf(owner) } : {}),
           ...buildContentPlanReviewPendingData(),
           ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives ?? existingPlan.strategicObjectives } : {})
         },
@@ -393,6 +395,8 @@ const createContentPlanInTransaction = async (db, data) => {
         month,
         year,
         status: status || 'PLANIFICACION',
+        // El responsable es el community del cliente (19 de noviembre de 2026); sin community, el que venga pedido.
+        ownerId: communityOf(owner) || data.ownerId || null,
         ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives || null } : {})
       },
       select: await getContentPlanSelect({
@@ -415,15 +419,22 @@ const createContentPlanInTransaction = async (db, data) => {
 export const createContentPlan = async (data) => recognitionTransaction(prisma, tx => createContentPlanInTransaction(tx, data));
 
 export const updateContentPlan = async (id, data) => {
-  if (data?.ownerId) {
-    const current = await prisma.contentPlan.findUnique({ where: { id }, select: { ownerId: true } });
-    await assertActiveTeamMembers(prisma, [data.ownerId], [current?.ownerId]);
+  const current = await prisma.contentPlan.findUnique({ where: { id }, select: { ownerId: true, clientId: true,
+    client: { select: { responsibleId: true, responsible: { select: { isActive: true } } } } } });
+  // Con community asignado, el responsable de la parrilla es él y se cambia en la ficha del cliente.
+  if (Object.prototype.hasOwnProperty.call(data || {}, 'ownerId') && communityOf(current?.client)
+    && data.ownerId !== communityOf(current.client)) {
+    throw Object.assign(new Error('El responsable de la parrilla es el community del cliente. Cámbialo en la ficha del cliente.'), { status: 409 });
   }
+  if (data?.ownerId) await assertActiveTeamMembers(prisma, [data.ownerId], [current?.ownerId]);
   const safeData = await filterContentPlanData(data);
+  // Una parrilla que se reabre vuelve a quedar a cargo del community vigente.
+  const reopensWithCommunity = data?.status && data.status !== 'FINALIZADO' && communityOf(current?.client);
   return await recognitionTransaction(prisma, async tx => tx.contentPlan.update({
     where: { id },
     data: {
       ...safeData,
+      ...(reopensWithCommunity ? { ownerId: communityOf(current.client) } : {}),
       autoCreatedForTransfer: false,
       ...buildContentPlanReviewPendingData()
     },
