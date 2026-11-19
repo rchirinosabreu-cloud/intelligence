@@ -1201,7 +1201,7 @@ const NativeTasks = () => {
                     className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
                 >
                     <div className="relative overflow-hidden brain-ai-header px-6 py-7 pr-28 text-white">
-                        <BriaPortrait  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
+                        <BriaPortrait mood="feliz"  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain" />
                         <DialogHeader className="relative z-10">
                             <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Novedad</span>
                             <DialogTitle className="text-lg text-white sm:whitespace-nowrap">El tiempo de trabajo será visible para ti</DialogTitle>

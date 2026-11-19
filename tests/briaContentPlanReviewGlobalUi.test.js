@@ -65,7 +65,7 @@ test('an existing Bria review exposes rerun as a compact icon button with an acc
 test('Bria header keeps compact controls aligned and the disclosure action at the far right', async () => {
   const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
 
-  assert.match(panel, /rounded-2xl bg-white[\s\S]*BriaPortrait/);
+  assert.match(panel, /BriaPortrait/); // Bria va sin caja ni círculo (Rodny, 18 de noviembre de 2026)
   assert.match(panel, /\{result\.review\.score \?\? 0\}\/100/);
   assert.doesNotMatch(panel, />de 100</);
   assert.match(panel, /aria-label="Revisar nuevamente"[\s\S]*aria-label=\{isExpanded \? 'Cerrar' : 'Ver más'\}/);

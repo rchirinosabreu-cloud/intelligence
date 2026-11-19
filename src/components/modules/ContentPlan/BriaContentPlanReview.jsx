@@ -261,7 +261,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
       <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-5 py-5 text-white sm:px-6">
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-4" aria-label="Revisión de Bria">
-            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-white">
+            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
               <BriaPortrait  alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
             </span>
             <span className="min-w-0 flex-1">
@@ -492,7 +492,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
       <Dialog open={Boolean(dismissFinding)} onOpenChange={(open) => !open && setDismissFinding(null)}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-lg">
           <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-6 pr-28 text-white">
-            <BriaPortrait  alt="Mascota de Brainstudio" className="pointer-events-none absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
+            <BriaPortrait mood="pensando"  alt="Mascota de Brainstudio" className="pointer-events-none absolute -bottom-4 right-2 h-24 w-24 object-contain" />
             <DialogHeader className="relative z-10 text-left">
               <DialogTitle className="text-white">Descartar recomendación</DialogTitle>
               <DialogDescription className="max-w-sm text-white/90">

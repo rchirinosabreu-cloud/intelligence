@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from '@/components/ui/icons';
-import { BriaIsotipo, BriaPose } from '@/components/bria/BriaBrand';
+import { Bria3D, BriaIsotipo } from '@/components/bria/BriaBrand';
 import { recognitionLabels, recognitionMotion } from '@/lib/recognitionPresentation';
 import { RECOGNITION_POINTS } from '@/lib/platformLeague';
 import { cn } from '@/lib/utils';
@@ -92,7 +92,7 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
         </div>
         <motion.span aria-hidden="true" className="pointer-events-none absolute -top-[34px] left-1.5 w-[88px]"
           initial={animation.duration ? { y: 12, rotate: -6 } : false} animate={{ y: 0, rotate: 0 }} transition={{ duration: animation.duration ? 0.45 : 0, ease: [0.22, 1, 0.36, 1] }}>
-          <BriaPose pose="celebra" className="w-full" />
+          <Bria3D mood="celebra" className="w-full" />
         </motion.span>
         <div className="absolute right-0.5 top-0.5">{close}</div>
         <div className="flex flex-col gap-3 px-[18px] pb-4 pt-1.5">
