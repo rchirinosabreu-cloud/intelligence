@@ -4,6 +4,7 @@
  * las tareas; nada de eso se escribe a mano. Lo único que este servicio guarda es lo que la plataforma no
  * puede saber sola: la ficha operativa, el contrato y que el informe de un mes se entregó.
  */
+import { syncClientPlanOwners } from './planOwnerService.js';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
@@ -461,6 +462,10 @@ export const createClientOperationsService = ({
           ...(Object.hasOwn(input, 'externalPlanUrl') ? { externalPlanUrl: profile.externalPlanUrl } : {}),
         },
       });
+      // Cambiar el community cambia el responsable de las parrillas abiertas del cliente (19 de noviembre de 2026).
+      if (Object.hasOwn(input, 'communityManagerId') && profile.communityManagerId && profile.communityManagerId !== client.responsibleId) {
+        await syncClientPlanOwners(tx, client.id, { community: profile.communityManagerId });
+      }
       if (profile.contract) {
         const data = { ...profile.contract, ...(approvals ? { adBudgets: approvals } : {}), updatedById: actorUserId || null };
         if (Object.hasOwn(data, 'scopeDetails') && data.scopeDetails === null) data.scopeDetails = Prisma.DbNull;

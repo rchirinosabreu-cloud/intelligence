@@ -3,6 +3,7 @@ import { nativePlanProblem } from '../lib/externalPlan.js';
 import { markContentPlanReviewPending } from './briaContentPlanReviewState.js';
 import { itemStatusForQueue, isPublishInstantTooSoon, publishAtIso } from '../lib/socialPublishing.js';
 import { publicationPeriod } from '../lib/publicationPeriod.js';
+import { communityOf } from './planOwnerService.js';
 
 const fail = (message, status = 409) => Object.assign(new Error(message), { status, statusCode: status });
 
@@ -42,7 +43,7 @@ export async function syncPublicationSchedule(tx, itemId, now = new Date()) {
 /** Identity and every child stay on the same ContentItem. Drive derives its folder from this relation. */
 export async function transferContentPeriod(tx, { itemId, date, actorId = null }) {
   const item = await tx.contentItem.findUnique({ where: { id: itemId }, include: { plan: { include: {
-    client: { include: { contracts: { select: { startDate: true, cutDay: true, createdAt: true } } } }
+    client: { include: { contracts: { select: { startDate: true, cutDay: true, createdAt: true } }, responsible: { select: { isActive: true } } } }
   } } } });
   if (!item || item.deletedAt || item.plan.deletedAt) throw fail('La pieza o su parrilla ya no está disponible.', 404);
   // La parrilla destino respeta el día de corte del contrato (19 de noviembre de 2026): ver src/lib/publicationPeriod.js.
@@ -62,7 +63,9 @@ export async function transferContentPeriod(tx, { itemId, date, actorId = null }
       deletedAt: { not: null }, autoCreatedForTransfer: true, contentItems: { none: { deletedAt: null } } }, orderBy: { createdAt: 'desc' } });
     if (target) target = await tx.contentPlan.update({ where: { id: target.id }, data: { deletedAt: null, status: 'PLANIFICACION' } });
     else {
-      target = await tx.contentPlan.create({ data: { clientId: source.clientId, year, month, ownerId: source.ownerId, autoCreatedForTransfer: true } });
+      // El responsable de la parrilla nueva es el community del cliente (19 de noviembre de 2026).
+      target = await tx.contentPlan.create({ data: { clientId: source.clientId, year, month,
+        ownerId: communityOf(source.client) || source.ownerId, autoCreatedForTransfer: true } });
       created = true;
     }
   }
