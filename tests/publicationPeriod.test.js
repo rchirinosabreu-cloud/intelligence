@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { publicationPeriod, cutDayOn } from '../src/lib/publicationPeriod.js';
+import { transferContentPeriod } from '../src/services/contentPeriodTransferService.js';
+
+const day = (key) => new Date(`${key}T00:00:00.000Z`);
+
+test('con corte 10, las piezas del 1 al 9 de diciembre son de la parrilla de noviembre (Bonsai)', () => {
+  const contracts = [{ startDate: '2026-01-10', cutDay: 10, createdAt: '2026-01-01' }];
+  assert.deepEqual(publicationPeriod(day('2026-12-05'), contracts), { year: 2026, month: 11 });
+  assert.deepEqual(publicationPeriod(day('2026-12-09'), contracts), { year: 2026, month: 11 });
+  assert.deepEqual(publicationPeriod(day('2026-12-10'), contracts), { year: 2026, month: 12 });
+  assert.deepEqual(publicationPeriod(day('2026-11-09'), contracts), { year: 2026, month: 10 });
+  assert.deepEqual(publicationPeriod(day('2027-01-04'), contracts), { year: 2026, month: 12 });
+});
+
+test('con corte 1, o sin contrato, sigue siendo el mes del calendario', () => {
+  assert.deepEqual(publicationPeriod(day('2026-12-05'), [{ startDate: '2026-01-01', cutDay: 1 }]), { year: 2026, month: 12 });
+  assert.deepEqual(publicationPeriod(day('2026-12-05'), []), { year: 2026, month: 12 });
+  assert.deepEqual(publicationPeriod(day('2026-12-01'), null), { year: 2026, month: 12 });
+});
+
+test('el corte es el del contrato vigente ese día; antes del primero, el del primero', () => {
+  const contracts = [
+    { startDate: '2026-01-01', cutDay: 1, createdAt: '2026-01-01' },
+    { startDate: '2026-11-10', cutDay: 10, createdAt: '2026-11-10' }
+  ];
+  assert.equal(cutDayOn(contracts, '2026-10-20'), 1);
+  assert.equal(cutDayOn(contracts, '2026-12-05'), 10);
+  assert.equal(cutDayOn([{ startDate: '2027-02-15', cutDay: 15 }], '2026-12-01'), 15);
+});
+
+// El traslado real: una pieza de la parrilla de noviembre que se fecha el 5 de diciembre se queda donde está.
+const fakeTx = (plans) => {
+  const calls = [];
+  return {
+    calls,
+    contentItem: {
+      findUnique: async () => ({ id: 'i1', status: 'EN_PRODUCCION', manualPublish: null, plan: plans.source }),
+      update: async (args) => calls.push(['item', args]),
+      count: async () => 1,
+      findMany: async () => []
+    },
+    contentPlan: {
+      findMany: async ({ where }) => (plans.byMonth[`${where.year}-${where.month}`] ? [plans.byMonth[`${where.year}-${where.month}`]] : []),
+      findFirst: async () => null,
+      create: async ({ data }) => ({ id: 'nuevo', ...data, status: 'PLANIFICACION' }),
+      update: async () => null
+    },
+    contentItemPeriodChange: { create: async (args) => calls.push(['change', args]) },
+    clientSuspension: { findFirst: async () => null, findMany: async () => [] },
+    $queryRaw: async () => []
+  };
+};
+
+test('mover una pieza dentro de su ciclo no la cambia de parrilla; salir del ciclo sí', async () => {
+  const client = { id: 'c1', name: 'Bonsai', externalPlanUrl: null, contracts: [{ startDate: '2026-01-10', cutDay: 10, createdAt: '2026-01-01' }] };
+  const source = { id: 'nov', clientId: 'c1', year: 2026, month: 11, deletedAt: null, client, status: 'ACTIVO' };
+  const plans = { source, byMonth: { '2026-11': source, '2026-12': { id: 'dic', clientId: 'c1', year: 2026, month: 12, status: 'ACTIVO' } } };
+  const stay = fakeTx(plans);
+  assert.equal(await transferContentPeriod(stay, { itemId: 'i1', date: day('2026-12-05') }).catch((error) => error), null);
+  assert.equal(stay.calls.length, 0);
+  const move = fakeTx(plans);
+  const result = await transferContentPeriod(move, { itemId: 'i1', date: day('2026-12-12') });
+  assert.deepEqual(result.toPlan, { id: 'dic', year: 2026, month: 12 });
+});
