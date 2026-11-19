@@ -113,7 +113,7 @@ test('los descuentos usan la misma identidad y no ofrecen deudas ya vinculadas a
  }finally{await f.close();}
 });
 
-test('Francys: generar noviembre prepara el ciclo completo 26 oct–25 nov sin prorratear ni duplicarlo',async()=>{
+test('Francys: generar octubre, el mes en que empieza, prepara el ciclo completo 26 oct–25 nov sin prorratear ni duplicarlo',async()=>{
  const f=await financialCorrectionDatabase({additionalTables:['PayrollAdjustment']});
  try{
   const party=await f.db.thirdParty.create({data:{name:'Francys Caballero',kind:'COLABORADOR'}});
@@ -122,12 +122,14 @@ test('Francys: generar noviembre prepara el ciclo completo 26 oct–25 nov sin p
   const contract=await f.db.payrollContract.create({data:{collaboratorId:current.id,baseSalary:2500000,socialSecurity:0,startDate:new Date('2026-10-26'),endDate:new Date('2026-11-25')}});
   const previous=await f.db.payrollContract.create({data:{collaboratorId:old.id,baseSalary:3000000,socialSecurity:0,startDate:new Date('2026-09-15'),endDate:new Date('2026-10-14')}});
   await f.db.payrollTransaction.create({data:{contractId:previous.id,year:2026,month:10,baseSalary:3000000,netAmount:3000000,status:'PAID'}});
-  const result=await generatePayrollPeriod(f.db,{year:2026,month:11},f.actor);
+  const result=await generatePayrollPeriod(f.db,{year:2026,month:10},f.actor);
   assert.equal(result.createdCount,1);
   const row=result.transactions[0];assert.equal(row.contractId,contract.id);
   assert.equal(row.serviceStart.toISOString().slice(0,10),'2026-10-26');assert.equal(row.serviceEnd.toISOString().slice(0,10),'2026-11-25');
   assert.equal(Number(row.netAmount),2500000);
-  assert.equal((await generatePayrollPeriod(f.db,{year:2026,month:11},f.actor)).existingCount,1);
+  assert.equal((await generatePayrollPeriod(f.db,{year:2026,month:10},f.actor)).existingCount,1);
+  // En noviembre su período empezaría el 26, con el contrato ya terminado: nada que crear.
+  assert.equal((await generatePayrollPeriod(f.db,{year:2026,month:11},f.actor)).createdCount,0);
   assert.equal(await f.db.payrollTransaction.count(),2);
  }finally{await f.close();}
 });

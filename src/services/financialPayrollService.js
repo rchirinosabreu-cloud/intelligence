@@ -58,12 +58,15 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
       const name = contract.collaborator?.displayName || contract.sourceLabel;
       // El ciclo sale del contrato y continúa donde terminó el último período (src/lib/payrollPeriods.js): del 1
       // al 30 para quien es de mes calendario, del 14 al 13 para quien entró un 14 (Elisa, 13 de noviembre de 2026).
+      // El período pertenece al mes en que empieza (Rodny, 19 de noviembre de 2026): generar noviembre crea el
+      // 14 de noviembre → 13 de diciembre.
       // Las liquidaciones sin fechas conocidas no entran al cálculo: se vigilan abajo, como antes.
       const known = live.map(payrollServiceRange).filter(Boolean);
       const next = nextPayrollPeriod({ year, month, contractStart: contract.startDate, contractEnd: contract.endDate, periods: known });
       // Ya generado con este mismo tramo: se devuelve el existente, nunca se duplica.
       const covered = live.find(row => { const range = payrollServiceRange(row); return range && range.start === next.start && range.end === next.end; });
-      if (covered) { transactions.push(covered); existingCount++; continue; }
+      // Dos contratos de la misma persona ven el mismo tramo: se cuenta una sola vez.
+      if (covered) { if (!transactions.some(row => row.id === covered.id)) { transactions.push(covered); existingCount++; } continue; }
       if (next.done) continue;
       if (next.problem) { requiresPeriodReview.push({ contractId: contract.id, name, reason: next.problem }); continue; }
       if (live.some(row => payrollUnknownMayOverlap(row, next.start, next.end, contract.id))) {
