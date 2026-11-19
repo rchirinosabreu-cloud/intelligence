@@ -31,6 +31,11 @@ export const isPdf = (bytes) => bytes?.length > 5 && bytes.subarray(0, 5).toStri
 
 export const isPng = (bytes) => bytes?.length > 8 && PNG_MAGIC.every((value, index) => bytes[index] === value);
 
+// PostgreSQL (jsonb) reordena las claves: se compara con las claves ordenadas para no reescribir en cada arranque.
+const canonical = (value) => JSON.stringify(value, (key, inner) => (inner && typeof inner === 'object' && !Array.isArray(inner)
+    ? Object.fromEntries(Object.keys(inner).sort().map((k) => [k, inner[k]]))
+    : inner));
+
 const safeName = (text) => String(text || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
 
 /** Qué haría la carga con cada ficha, sin escribir nada. */
@@ -98,7 +103,7 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
         if (brandId) {
             const files = await db.clientBrandFile.findMany({ where: { brandId }, select: { label: true, kind: true } });
             for (const file of files) {
-                if (file.kind === 'LOGO' && file.label) existingLabels.add(file.label.trim().toLowerCase());
+                if ((file.kind === 'LOGO' || file.kind === 'RECURSO') && file.label) existingLabels.add(file.label.trim().toLowerCase());
                 if (file.kind === 'MANUAL') hasManual = true;
             }
         }
@@ -130,15 +135,19 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
             });
         }
 
-        // Una ficha que creó esta carga y que nadie ha editado (revisión 1, origen distinto de «Pantalla») y que quedó sin colores o sin tipografías recibe los
-        // del manual cuando el dataset los trae después (Finas y Lettufresh tenían la paleta en imagen). Si el
-        // equipo ya la editó, no se toca.
+        // Una ficha que creó esta carga y que nadie ha editado (revisión 1, origen distinto de «Pantalla») se pone al
+        // día con el dataset: así llegan los colores que estaban en imagen (Finas, Lettufresh) o las tres marcas de
+        // FoobeSpain. En cuanto alguien del equipo la guarda, la revisión sube y ya no se toca.
         if (item.action === 'COMPLETAR' && brandId) {
             const current = await db.clientBrand.findUnique({ where: { clientId: item.client.id } });
             const fill = {};
             if (current?.revision === 1 && current.source && current.source !== 'Pantalla') {
-                if (!(current.colors || []).length && item.brand.colors.length) fill.colors = item.brand.colors;
-                if (!(current.fonts || []).length && item.brand.fonts.length) fill.fonts = item.brand.fonts;
+                for (const key of ['colors', 'fonts']) {
+                    if (item.brand[key].length && canonical(current[key] || []) !== canonical(item.brand[key])) fill[key] = item.brand[key];
+                }
+                for (const key of ['tagline', 'voice', 'usageNotes']) {
+                    if (item.brand[key] && item.brand[key] !== current[key]) fill[key] = item.brand[key];
+                }
             }
             if (Object.keys(fill).length) {
                 await db.clientBrand.updateMany({ where: { id: current.id, revision: 1 }, data: fill });
@@ -157,7 +166,7 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
                 if (error) { line.logoProblems.push(`${logo.label}: ${error}`); continue; }
                 const file = { originalname: `${safeName(item.client.name)} - ${safeName(logo.label)}.png`, mimetype: 'image/png', size: bytes.length, buffer: bytes };
                 try {
-                    await service.addFile(item.client.id, { kind: 'LOGO', label: logo.label, file }, user);
+                    await service.addFile(item.client.id, { kind: logo.kind === 'RECURSO' ? 'RECURSO' : 'LOGO', label: logo.label, file }, user);
                     added += 1;
                 } catch (uploadError) {
                     line.logoProblems.push(`${logo.label}: ${uploadError.message}`);

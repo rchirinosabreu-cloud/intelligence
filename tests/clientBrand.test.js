@@ -364,3 +364,23 @@ test('un logo y un manual que no viven en Drive se cargan desde el repositorio (
     assert.equal(done.totals.manuals, 1);
     assert.deepEqual(done.report[0].logoProblems, []);
 });
+
+test('una ficha cargada que nadie editó se pone al día con el dataset y recibe sus recursos; dos arranques no repiten', async () => {
+    const { runBrandImport } = await import('../src/services/clientBrandImport.js');
+    const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
+    const db = createBrandsDb([{ id: 'f', name: 'Foobespain', slug: 'foobespain', isArchived: false }]);
+    const kinds = [];
+    const service = clientBrandService({ db, storage: () => ({ uploadToS3: async (file, folder) => ({ key: `${folder}/${file.originalname}`, name: file.originalname, size: file.size, mimeType: file.mimetype }) }) });
+    const original = service.addFile.bind(service);
+    service.addFile = async (id, input, user) => { kinds.push(input.kind); return original(id, input, user); };
+    const fetchImpl = async () => ({ ok: false });
+    await runBrandImport({ db, service, dataset: { brands: [{ aliases: ['Foobespain'], source: 'Manual', colors: [{ hex: '#7D122E' }] }] }, apply: true, fetchImpl });
+    const data = JSON.parse(readFileSync(new URL('../data/client-brands.json', import.meta.url), 'utf8'));
+    const foobe = data.brands.find((b) => b.aliases.includes('Foobespain'));
+    const done = await runBrandImport({ db, service, dataset: { brands: [foobe] }, apply: true, fetchImpl });
+    assert.ok(done.report[0].filled.includes('colors'));
+    assert.equal((await service.get('f')).brand.colors.length, 10, 'las tres marcas');
+    assert.ok(kinds.includes('RECURSO'), 'la imagen de las tres marcas va como recurso');
+    const again = await runBrandImport({ db, service, dataset: { brands: [foobe] }, apply: true, fetchImpl });
+    assert.equal(again.report[0].filled, undefined, 'con todo al día no cambia nada');
+});
