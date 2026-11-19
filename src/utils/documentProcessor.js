@@ -1,5 +1,6 @@
 
-import * as pdfjsLib from 'pdfjs-dist';
+// Versión legacy: la normal falla en Safari anterior a 18.4 («Iterator is not defined»). Ver PdfDocumentPreview.jsx.
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
 
 /**
@@ -11,7 +12,7 @@ import mammoth from 'mammoth';
  */
 const ensureWorker = async () => {
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
   }
 };
 

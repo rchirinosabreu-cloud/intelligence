@@ -7,8 +7,12 @@ import { AlertCircle, FileText, Loader2 } from '@/components/ui/icons';
  *
  * **El `?url` va aquí dentro, nunca arriba del archivo**: es una marca que solo entiende el empaquetador, y a nivel de
  * módulo rompe cualquier arnés que importe esta pantalla en Node (el del chat lo hace con `packages: 'external'`).
+ *
+ * **Se usa la versión `legacy` de pdf.js** (18 nov 2026): la normal da por hecho que el navegador trae los «Iterator
+ * helpers», y en Safari anterior a 18.4 (iPhone, iPad, Mac sin actualizar) el visor fallaba con «ReferenceError:
+ * Iterator is not defined». La legacy trae esos complementos incluidos; librería y worker deben ser los dos legacy.
  */
-const workerUrl = async () => (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+const workerUrl = async () => (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
 
 const PdfPage = ({ document, pageNumber, name }) => {
   const canvasRef = useRef(null);
@@ -78,7 +82,7 @@ const PdfDocumentPreview = ({ data, name }) => {
         if (bytes.length === 0) {
           throw Object.assign(new Error('El archivo llegó vacío al visor (0 bytes).'), { name: 'EmptyBufferError' });
         }
-        const pdfjsLib = await import('pdfjs-dist');
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
         if (!active) return;
         const source = await workerUrl();
         if (!active) return;
