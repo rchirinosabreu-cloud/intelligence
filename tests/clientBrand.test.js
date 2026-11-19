@@ -337,6 +337,8 @@ test('la ficha es de lectura: subir y quitar viven en «Editar marca»; la fuent
     assert.doesNotMatch(sheet, /Copiar el nombre/, 'el nombre de la fuente no se copia');
     assert.doesNotMatch(sheet, /<\/?[A-Za-z]+[^>]*>\s*Descargar\s*</, 'la descarga es solo el icono');
     assert.match(sheet, /data-brand-manual-row/, 'ver el manual y los enlaces van en una sola fila');
+    assert.match(sheet, /aria-label="Editar marca"[^>]*data-brand-edit/, 'editar es un icono junto a la X del diálogo, en la misma fila');
+    assert.doesNotMatch(sheet, /<\/Edit[^>]*>\s*Editar marca|\/> Editar marca/, 'sin el botón grande con texto');
     for (const kind of ['LOGO', 'FUENTE', 'MANUAL']) assert.match(editor, new RegExp(`kind="${kind}"`));
     assert.match(editor, /useRemoveBrandFile/);
 });
