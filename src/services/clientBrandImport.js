@@ -5,7 +5,7 @@ import { matchBrandToClient, normalizeBrandInput } from '../lib/clientBrand.js';
 // 2026: «cárgale todo lo que encontraste en los manuales … los logos yo quiero que se puedan descargar desde
 // la plataforma». Lo usan el botón de dirección en la pestaña Marcas y `scripts/import-client-brands.js`.
 //
-// Reglas: solo clientes activos y por nombre o slug exactos; una ficha que ya existe no se pisa (lo que
+// Reglas: por nombre o slug exactos, primero entre los activos y luego entre los archivados; una ficha que ya existe no se pisa (lo que
 // escribió el equipo manda), pero sí recibe los logos que le falten; un logo se reconoce por su etiqueta,
 // también entre los retirados, así que uno que el equipo quitó no vuelve. Los logos se bajan de Drive (las
 // carpetas están compartidas por enlace) y solo se aceptan si el archivo es de verdad un PNG.
@@ -19,6 +19,10 @@ export const MANUAL_LABEL = 'Manual de marca';
 // 115 a 3 MB); si no hay copia, se baja el original de Drive.
 const MANUALS_DIR = new URL('../../data/brand-manuals/', import.meta.url);
 const localManual = async (id) => readFile(new URL(`${id}.pdf`, MANUALS_DIR)).catch(() => null);
+// Logos que no viven en Drive (los de Bria salieron de su guía de marca): `data/brand-assets/<carpeta>/<archivo>.png`.
+const LOCAL_FILE = /^[a-z0-9-]+(\/[a-z0-9-]+)?(\.png)?$/;
+const ASSETS_DIR = new URL('../../data/brand-assets/', import.meta.url);
+const localAsset = async (file) => readFile(new URL(file, ASSETS_DIR)).catch(() => null);
 const driveIdOf = (url) => String(url || '').match(/\/file\/d\/([A-Za-z0-9_-]{20,80})/)?.[1] || null;
 
 export const driveDownloadUrl = (id) => `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download`;
@@ -32,25 +36,36 @@ const safeName = (text) => String(text || '').replace(/[\\/:*?"<>|]+/g, ' ').rep
 /** Qué haría la carga con cada ficha, sin escribir nada. */
 export function planBrandImport(dataset, clients) {
     return (dataset?.brands || []).map((entry) => {
-        const { client, problem } = matchBrandToClient(entry, clients);
+        // Primero los activos; si no está entre ellos, un archivado: su ficha se ve en «Clientes inactivos», igual
+        // que en el Directorio (Rodny: «todo debe estar integrado entre sí»).
+        const active = clients.filter((client) => !client.isArchived);
+        let { client, problem } = matchBrandToClient(entry, active);
+        if (!client) ({ client, problem } = matchBrandToClient(entry, clients.filter((c) => c.isArchived)));
         const name = client?.name || entry.aliases?.[0] || 'Sin nombre';
         if (!client) return { name, action: 'OMITIR', reason: problem || 'No hay un cliente activo con ese nombre.' };
         const { brand, problems } = normalizeBrandInput(entry);
         if (problems.length) return { name, client, action: 'OMITIR', reason: problems.join(' ') };
-        const logos = (Array.isArray(entry.logos) ? entry.logos : []).filter((logo) => DRIVE_ID.test(String(logo?.driveId || '')) && String(logo?.label || '').trim());
+        const logos = (Array.isArray(entry.logos) ? entry.logos : []).filter((logo) => (DRIVE_ID.test(String(logo?.driveId || '')) || LOCAL_FILE.test(String(logo?.file || ''))) && String(logo?.label || '').trim());
         return {
             name,
             client,
             entry,
             brand,
             logos,
-            manualDriveId: driveIdOf(brand.manualUrl),
+            // Un manual que no está en Drive (el de Bria llegó por el chat) va con su copia en `data/brand-manuals`.
+            manualDriveId: LOCAL_FILE.test(String(entry.manualFile || '')) ? entry.manualFile : driveIdOf(brand.manualUrl),
             action: client.brand ? 'COMPLETAR' : 'CREAR'
         };
     });
 }
 
-async function downloadLogo(fetchImpl, logo) {
+async function downloadLogo(fetchImpl, logo, readLocal = localAsset) {
+    if (logo.file) {
+        const bytes = await readLocal(logo.file);
+        if (!bytes) throw new Error('no está el archivo en data/brand-assets');
+        if (!isPng(bytes)) throw new Error('no es un PNG');
+        return bytes;
+    }
     const response = await fetchImpl(driveDownloadUrl(logo.driveId));
     if (!response.ok) throw new Error(`Drive respondió ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());
@@ -65,8 +80,7 @@ async function downloadLogo(fetchImpl, logo) {
  */
 export async function runBrandImport({ db, service, dataset, apply = false, user = null, fetchImpl = (...args) => fetch(...args), concurrency = 4, ...options }) {
     const clients = await db.client.findMany({
-        where: { isArchived: false },
-        select: { id: true, name: true, slug: true, brand: { select: { id: true } } }
+        select: { id: true, name: true, slug: true, isArchived: true, brand: { select: { id: true } } }
     });
     const plan = planBrandImport(dataset, clients);
     const report = [];
@@ -136,7 +150,7 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
         for (let start = 0; start < pending.length; start += concurrency) {
             const batch = pending.slice(start, start + concurrency);
             const downloaded = await Promise.all(batch.map(async (logo) => {
-                try { return { logo, bytes: await downloadLogo(fetchImpl, logo) }; }
+                try { return { logo, bytes: await downloadLogo(fetchImpl, logo, options.localAsset) }; }
                 catch (error) { return { logo, error: error.message }; }
             }));
             for (const { logo, bytes, error } of downloaded) {
