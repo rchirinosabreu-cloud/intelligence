@@ -2035,7 +2035,7 @@
         "casa bella",
         "casabella"
       ],
-      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "source": "Sin manual de marca: logo, colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
       "colors": [
         {
           "hex": "#3B2315",
@@ -2062,7 +2062,165 @@
           "weights": "Usada en sus piezas de Canva"
         }
       ],
-      "logos": []
+      "logos": [
+        {
+          "file": "casabella/logo-cafe.png",
+          "label": "Logo café"
+        },
+        {
+          "file": "casabella/logo-blanco.png",
+          "label": "Logo blanco"
+        },
+        {
+          "file": "casabella/sello-todo-incluido.png",
+          "label": "Sello Todo incluido",
+          "kind": "RECURSO"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Museo de Arte y Memoria de Mampuján",
+        "Museo de Arte y Memoria de Mampujan",
+        "Museo Mampuján",
+        "Museo Mampujan",
+        "Mampuján",
+        "Mampujan",
+        "MAMM"
+      ],
+      "matchWords": [
+        "mampujan"
+      ],
+      "source": "Manual de marca del Museo de Arte y Memoria de Mampuján (PDF que Rodny compartió el 18 nov 2026).",
+      "manualFile": "mampujan",
+      "colors": [
+        {
+          "hex": "#5FB34E",
+          "role": "PRINCIPAL",
+          "name": "Verde"
+        },
+        {
+          "hex": "#54B0E3",
+          "role": "PRINCIPAL",
+          "name": "Azul"
+        },
+        {
+          "hex": "#FFD42E",
+          "role": "PRINCIPAL",
+          "name": "Amarillo"
+        },
+        {
+          "hex": "#C4D553",
+          "role": "SECUNDARIO",
+          "name": "Verde claro"
+        },
+        {
+          "hex": "#C1E2E2",
+          "role": "SECUNDARIO",
+          "name": "Azul claro"
+        },
+        {
+          "hex": "#FEEE56",
+          "role": "SECUNDARIO",
+          "name": "Amarillo claro"
+        },
+        {
+          "hex": "#008B88",
+          "role": "SECUNDARIO",
+          "name": "Verde oscuro"
+        },
+        {
+          "hex": "#0876A6",
+          "role": "SECUNDARIO",
+          "name": "Azul oscuro"
+        },
+        {
+          "hex": "#E0BC26",
+          "role": "SECUNDARIO",
+          "name": "Amarillo oscuro"
+        },
+        {
+          "hex": "#E5005D",
+          "role": "ACENTO",
+          "name": "Magenta"
+        },
+        {
+          "hex": "#EF7D00",
+          "role": "ACENTO",
+          "name": "Naranja"
+        },
+        {
+          "hex": "#6A4293",
+          "role": "ACENTO",
+          "name": "Violeta"
+        },
+        {
+          "hex": "#453167",
+          "role": "ACENTO",
+          "name": "Morado"
+        },
+        {
+          "hex": "#878787",
+          "role": "NEUTRO",
+          "name": "Gris"
+        },
+        {
+          "hex": "#E3E3E2",
+          "role": "NEUTRO",
+          "name": "Gris claro"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Mampuján",
+          "use": "LOGO",
+          "source": "COMERCIAL",
+          "weights": "Fuente propia del museo (MampujanPrueba1), solo para logo y títulos. No está en el Drive: pedirla al diseñador."
+        },
+        {
+          "family": "Catamaran",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Thin a Black"
+        },
+        {
+          "family": "Source Serif 4",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "El manual la llama Source Serif Pro (hoy Source Serif 4 en Google Fonts)"
+        }
+      ],
+      "usageNotes": "Tres principales (verde, azul, amarillo) con auxiliares claros y oscuros; los acentos y los neutros son de uso museográfico. Sobre verdes no usar el magenta (efecto óptico): mejor amarillos o azules. Sobre fotos con mucho color, la marca en monocromo blanco o negro; opacidad nunca menor a 70 %. Dentro del imagotipo nada de degradados, texturas ni colores fuera de la paleta. Catamaran para textos, Source Serif como complementaria y la fuente Mampuján solo en logo y títulos.",
+      "logos": [
+        {
+          "file": "mampujan/imagotipo-principal.png",
+          "label": "Imagotipo principal"
+        },
+        {
+          "file": "mampujan/horizontal-policromo.png",
+          "label": "Horizontal policromo"
+        },
+        {
+          "file": "mampujan/horizontal-naranja.png",
+          "label": "Horizontal naranja"
+        },
+        {
+          "file": "mampujan/boton-policromo.png",
+          "label": "Botón policromo"
+        },
+        {
+          "file": "mampujan/boton-naranja.png",
+          "label": "Botón naranja"
+        },
+        {
+          "file": "mampujan/monocromo-negro.png",
+          "label": "Monocromo negro"
+        },
+        {
+          "file": "mampujan/monocromo-negativo.png",
+          "label": "Monocromo negativo"
+        }
+      ]
     }
   ]
 }
