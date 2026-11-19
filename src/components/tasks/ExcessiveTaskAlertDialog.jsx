@@ -1,4 +1,4 @@
-import BriaPortrait from '@/components/bria/BriaPortrait';
+import BriaNoticeHeader from '@/components/bria/BriaNoticeHeader';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -92,18 +92,12 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
         overlayClassName="z-[190]"
         className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
       >
-        <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
-          <BriaPortrait  alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
-          <DialogHeader className="relative z-10">
-            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Atención</span>
-            <DialogTitle className="text-base leading-snug text-white sm:whitespace-nowrap sm:text-lg">
-              Hola{firstName ? ` ${firstName}` : ''}, {tasks.length === 1 ? 'esta tarea necesita' : `${tasks.length} tareas necesitan`} tu atención
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed text-cyan-50/90">
-              Revisemos si {tasks.length === 1 ? 'esta tarea todavía sigue activa' : 'estas tareas todavía siguen activas'} o si necesitas algún apoyo para poder avanzar.
-            </DialogDescription>
-          </DialogHeader>
-        </div>
+        <BriaNoticeHeader
+          mood="sorprendida"
+          badge="Atención"
+          title={<>Hola{firstName ? ` ${firstName}` : ''}, {tasks.length === 1 ? 'esta tarea necesita' : `${tasks.length} tareas necesitan`} tu atención</>}
+          description={`Revisemos si ${tasks.length === 1 ? 'esta tarea todavía sigue activa' : 'estas tareas todavía siguen activas'} o si necesitas algún apoyo para poder avanzar.`}
+        />
 
         <div className="space-y-3 px-6 py-5">
           {tasks.map((task) => (

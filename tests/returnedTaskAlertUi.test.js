@@ -20,7 +20,7 @@ test('returned-task popup uses the approved reminder copy and offers review or s
 
   assert.match(source, /api\/tasks\/returned-alerts/);
   assert.match(source, /returned-reminder\/snooze/);
-  assert.match(source, /recuerda que tienes una tarea devuelta/);
+  assert.match(source, /recuerda que tienes \{tasks\.length === 1 \? 'una tarea devuelta' : 'tareas devueltas'\}/);
   assert.match(source, /Hay una tarea que está esperando tu revisión/);
   assert.match(source, /Hay varias tareas que están esperando tu revisión/);
   assert.match(source, /Revisar tarea/);
@@ -28,8 +28,7 @@ test('returned-task popup uses the approved reminder copy and offers review or s
   assert.match(source, /\/gestion\?taskId=/);
   assert.match(source, /previewReturnedAlert=0/);
   assert.doesNotMatch(source, /pospone este aviso/);
-  assert.match(source, /from-\[#00AC8A\].*to-\[#009EB9\]/s);
-  assert.match(source, /BriaPortrait/);
+  assert.match(source, /<BriaNoticeHeader[\s\S]*?mood="triste"/);
   assert.match(source, /onBlockingChange/);
   assert.match(source, /isLoading \|\| isOpen \|\| hasPendingDialog/);
   assert.match(source, /previewTasks/);

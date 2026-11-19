@@ -195,7 +195,7 @@ export default function ManagerMeetingTasks() {
     <div data-manager-meeting-tasks className="space-y-10">
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <div className="brain-ai-header flex items-center gap-4 px-5 py-5 text-white sm:px-7">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/95"><BriaPortrait className="h-12 w-12 object-contain" /></span>
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center"><BriaPortrait className="h-12 w-12 object-contain" /></span>
           <div className="min-w-0">
             <h2 className="text-lg font-semibold sm:text-xl">
               {totals.pending ? `Armé ${plural(totals.pending, 'pendiente', 'pendientes')} de ${plural(totals.minutes, 'reunión', 'reuniones')}. Tú decides cuáles entran.` : 'No hay compromisos de reuniones esperando tu decisión'}

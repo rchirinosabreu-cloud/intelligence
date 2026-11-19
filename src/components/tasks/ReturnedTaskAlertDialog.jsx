@@ -1,4 +1,4 @@
-import BriaPortrait from '@/components/bria/BriaPortrait';
+import BriaNoticeHeader from '@/components/bria/BriaNoticeHeader';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -126,20 +126,12 @@ export default function ReturnedTaskAlertDialog({
         overlayClassName="z-[210]"
         className="z-[220] max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
       >
-        <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
-          <BriaPortrait  alt="Bria" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
-          <DialogHeader className="relative z-10">
-            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">Tarea devuelta</span>
-            <DialogTitle className="text-base leading-snug text-white sm:text-lg">
-              Hola{firstName ? ` ${firstName}` : ''}, recuerda que tienes una tarea devuelta
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed text-cyan-50/90">
-              {tasks.length === 1
-                ? 'Hay una tarea que está esperando tu revisión.'
-                : 'Hay varias tareas que están esperando tu revisión.'}
-            </DialogDescription>
-          </DialogHeader>
-        </div>
+        <BriaNoticeHeader
+          mood="triste"
+          badge="Tarea devuelta"
+          title={<>Hola{firstName ? ` ${firstName}` : ''}, recuerda que tienes {tasks.length === 1 ? 'una tarea devuelta' : 'tareas devueltas'}</>}
+          description={tasks.length === 1 ? 'Hay una tarea que está esperando tu revisión.' : 'Hay varias tareas que están esperando tu revisión.'}
+        />
 
         <div className="space-y-3 px-6 py-5">
           {tasks.map((task) => (

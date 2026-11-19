@@ -31,14 +31,14 @@ test('task recognition titles require the same explicit task and recipient, neve
   assert.deepEqual(recognitionTitlesForTask(null, all), []);
 });
 
-test('copy preserves the explicit line break and distinguishes eight daily tasks from fifty weekly tasks', async () => {
+test('copy runs as one paragraph (no forced line breaks) and distinguishes eight daily tasks from fifty weekly tasks', async () => {
   const { recognitionMessages } = await load();
   assert.deepEqual(recognitionMessages, {
-    FIRST_TASK: 'Eres el primero del equipo en completar una tarea.\nCada avance cuenta.',
+    FIRST_TASK: 'Eres el primero del equipo en completar una tarea. Cada avance cuenta.',
     EARLY_DELIVERY: 'Terminaste ese pendiente antes de lo previsto. Anticiparte también suma.',
     DAILY_EIGHT: 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!',
     CAUGHT_UP: 'Cerraste el día sin dejar nada vencido, buen trabajo.',
-    PLAN_APPROVED: 'El cliente aprobó tu parrilla, mandemos a producción',
+    PLAN_APPROVED: 'El cliente aprobó tu parrilla. ¡A producción!',
     WEEKLY_FIFTY: 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!',
   });
 });
@@ -63,4 +63,11 @@ test('reduced motion disables movement and particles regardless of selected styl
   assert.deepEqual(recognitionMotion('quiet', false), { offset: 0, duration: 0, particles: 0 });
   assert.equal(recognitionMotion('subtle', false).particles, 0);
   assert.ok(recognitionMotion('celebration', false).particles <= 30);
+});
+
+test('a stored single line break reads as a space; only a blank line starts a new paragraph', async () => {
+  const { recognitionParagraphs } = await load();
+  assert.deepEqual(recognitionParagraphs('Eres el primero del equipo en completar una tarea.\nCada avance cuenta.'), ['Eres el primero del equipo en completar una tarea. Cada avance cuenta.']);
+  assert.deepEqual(recognitionParagraphs('Uno.\n\nDos.'), ['Uno.', 'Dos.']);
+  assert.deepEqual(recognitionParagraphs(''), []);
 });

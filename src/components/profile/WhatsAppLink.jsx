@@ -91,7 +91,7 @@ const WhatsAppLink = () => {
   return (
     <div data-whatsapp-link className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="brain-ai-header flex items-center gap-3 px-6 py-4 text-white">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center">
           <BriaPortrait alt="" className="h-9 w-9" />
         </span>
         <div className="min-w-0">

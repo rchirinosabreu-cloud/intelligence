@@ -9,14 +9,21 @@ export const recognitionLabels = Object.freeze({
 });
 
 export const recognitionMessages = Object.freeze({
-  FIRST_TASK: 'Eres el primero del equipo en completar una tarea.\nCada avance cuenta.',
+  FIRST_TASK: 'Eres el primero del equipo en completar una tarea. Cada avance cuenta.',
   EARLY_DELIVERY: 'Terminaste ese pendiente antes de lo previsto. Anticiparte también suma.',
   DAILY_EIGHT: 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!',
   // Desde el 12 de noviembre de 2026 se entrega al cierre de la jornada a quien terminó sin nada vencido.
   CAUGHT_UP: 'Cerraste el día sin dejar nada vencido, buen trabajo.',
-  PLAN_APPROVED: 'El cliente aprobó tu parrilla, mandemos a producción',
+  PLAN_APPROVED: 'El cliente aprobó tu parrilla. ¡A producción!',
   WEEKLY_FIFTY: 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!',
 });
+
+// El texto de una tarjeta corre como un párrafo: un salto de línea suelto (como los que traen los mensajes guardados
+// antes del 18 de noviembre de 2026) se lee como espacio, y solo una línea en blanco separa párrafos. Así el ancho de
+// la tarjeta decide dónde cortar, nunca el texto (Rodny: «no esos saltos de línea sin razón»).
+export function recognitionParagraphs(text) {
+  return String(text || '').split(/\n\s*\n/).map(part => part.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
 
 export function mergeRecognitions(previous = [], incoming = []) {
   const records = new Map();

@@ -1,4 +1,4 @@
-import { BriaLogo, BriaPose } from '@/components/bria/BriaBrand';
+import { Bria3D, BriaLogo } from '@/components/bria/BriaBrand';
 import React, { useRef } from 'react';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { LayoutDashboard, Brain, CheckSquare, Map, FileBarChart, Palette, LayoutGrid, FileText, FolderOpen, DollarSign, Wallet, Zap, Users, UserCheck, Activity, Target, Megaphone, X } from '@/components/ui/icons';
@@ -20,7 +20,7 @@ export default function WelcomeDialog({ user, open, onOpenChange, returnFocusRef
       onInteractOutside={event => event.preventDefault()}>
       <div aria-hidden="true" className="relative flex h-36 shrink-0 items-end justify-center overflow-hidden bg-bria sm:h-auto sm:w-64">
         <svg viewBox="0 0 340 520" preserveAspectRatio="none" className="absolute inset-0 h-full w-full"><path d="M0 330 C90 280 170 380 340 300 L340 520 L0 520 Z" className="fill-white/15" /><path d="M0 410 C110 360 210 450 340 390 L340 520 L0 520 Z" className="fill-white/20" /></svg>
-        <BriaPose pose="atenta" className="relative -mb-6 w-24 sm:mb-8 sm:w-48" />
+        <Bria3D mood="feliz" className="relative -mb-6 w-24 sm:mb-8 sm:w-48" />
       </div>
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <DialogClose asChild><button disabled={busy} type="button" aria-label="Cerrar bienvenida" className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-xl text-bria-muted hover:bg-bria-night/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:text-zinc-300 dark:hover:bg-white/10"><X className="h-4 w-4" /></button></DialogClose>

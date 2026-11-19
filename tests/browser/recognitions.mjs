@@ -73,16 +73,19 @@ test('real dashboard, matching panel heights, personal notice never blocks searc
   await notice.getByRole('button', { name: 'Abrir el logro Buen comienzo' }).click();
   assert.equal(await notice.getAttribute('data-recognition-state'), 'open');
   assert.match(await notice.innerText(), /Eres el primero del equipo en completar una tarea\.\s+Cada avance cuenta\./);
-  const lines = await notice.locator('p').filter({ hasText: 'Cada avance cuenta.' }).evaluate(element => {
+  // Sin saltos forzados (Rodny, 18 de noviembre de 2026): las dos frases son un solo párrafo y «Cada avance cuenta.»
+  // sigue en la misma línea cuando cabe.
+  assert.equal(await notice.locator('p').filter({ hasText: 'Cada avance cuenta.' }).count(), 1);
+  const flow = await notice.locator('p').filter({ hasText: 'Cada avance cuenta.' }).evaluate(element => {
     const text = element.firstChild;
     const range = document.createRange();
     const start = text.textContent.indexOf('Cada avance cuenta.');
     range.setStart(text, start);
-    range.setEnd(text, start + 'Cada avance cuenta.'.length);
-    return { sentence: range.getBoundingClientRect().toJSON(), paragraph: element.getBoundingClientRect().toJSON() };
+    range.setEnd(text, start + 1);
+    return { startsLine: Math.abs(range.getBoundingClientRect().left - element.getBoundingClientRect().left) < 1, hasNewline: text.textContent.includes('\n') };
   });
-  assert.ok(Math.abs(lines.sentence.left - lines.paragraph.left) < 1, 'Cada avance cuenta starts at the left of a new line');
-  assert.ok(lines.sentence.top > lines.paragraph.top + 10, 'the final sentence is below the first line');
+  assert.equal(flow.hasNewline, false);
+  assert.equal(flow.startsLine, false, 'Cada avance cuenta flows after the first sentence instead of starting its own line');
   assert.doesNotMatch(await notice.innerText(), /Bria celebra contigo/);
   const firstOfTeam = page.locator('[data-achievements-feed] [data-completed-task-id]').filter({ hasText: 'Buen comienzo' });
   assert.equal(await firstOfTeam.count(), 1, 'the local scenario has only one team opener today');
@@ -160,11 +163,11 @@ test('only six agreed scenarios render the approved copy and remain single demo 
   const page = await pageFor({ reducedMotion: 'reduce' });
   assert.equal(await page.getByRole('button', { name: /^Probar / }).count(), 6);
   const cases = [
-    ['buen comienzo', 'Buen comienzo', 'Eres el primero del equipo en completar una tarea.\nCada avance cuenta.'],
+    ['buen comienzo', 'Buen comienzo', 'Eres el primero del equipo en completar una tarea. Cada avance cuenta.'],
     ['entrega anticipada', 'Entrega anticipada', 'Terminaste ese pendiente antes de lo previsto. Anticiparte también suma.'],
     ['on fire', 'On fire', 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!'],
     ['al día', 'Al día', 'Cerraste el día sin dejar nada vencido, buen trabajo.'],
-    ['parrilla aprobada', 'Parrilla aprobada', 'El cliente aprobó tu parrilla, mandemos a producción'],
+    ['parrilla aprobada', 'Parrilla aprobada', 'El cliente aprobó tu parrilla. ¡A producción!'],
     ['50 tareas semanales', 'Ya son 50', 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!'],
   ];
   const notice = page.getByRole('status', { name: 'Reconocimiento personal' });
