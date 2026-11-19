@@ -1,9 +1,8 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { BookOpen, Check, Copy, Download, Edit, ExternalLink, FileText, Image, Loader2, Palette, Sparkles, Trash2, Type } from '@/components/ui/icons';
+import { BookOpen, Check, Copy, Download, Edit, ExternalLink, FileText, Image, Loader2, Palette, Sparkles, Type } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
-import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import {
     BRAND_COLOR_ROLE_LABELS,
@@ -15,8 +14,7 @@ import {
     rgbText
 } from '@/lib/clientBrand';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { brandFileUrl, brandFontUrl, downloadBrandFile, loadBrandObjectUrl, useBrandImage, useRemoveBrandFile } from './brandsApi';
-import BrandFileUpload from './BrandFileUpload';
+import { brandFileUrl, brandFontUrl, downloadBrandFile, loadBrandObjectUrl, useBrandImage } from './brandsApi';
 
 // La ficha de marca de un cliente, tal como la consulta el equipo: lo que más se pregunta (colores) arriba,
 // con un toque para copiar el HEX. Sirve en la página de Marcas y dentro del espacio del cliente.
@@ -98,40 +96,39 @@ function ColorSwatch({ color }) {
     );
 }
 
+// Botón de descarga de la ficha: el mismo en logos, fuentes y archivos (solo el icono, con su nombre para el lector).
+function DownloadIcon({ label, onClick }) {
+    return (
+        <button type="button" onClick={onClick} className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label={label} title={label}>
+            <Download className="h-4 w-4" aria-hidden="true" />
+        </button>
+    );
+}
+
+const fontFileFor = (font, files) => files.find((file) => file.kind === 'FUENTE' && file.name.toLowerCase().includes(font.family.toLowerCase().split(' ')[0]));
+
+// Vista de lectura (Rodny, 18 de noviembre de 2026): sin copiar el nombre y con la descarga siempre en el mismo
+// sitio, a la derecha del nombre. Si no hay de dónde descargarla, no se pinta nada.
 function FontCard({ font, files, clientId }) {
     const isGoogle = font.source === 'GOOGLE';
     useGoogleFont(font.family, isGoogle);
-    const fontFile = files.find((file) => file.kind === 'FUENTE' && file.name.toLowerCase().includes(font.family.toLowerCase().split(' ')[0]));
+    const fontFile = fontFileFor(font, files);
+    const download = fontFile
+        ? () => downloadBrandFile(brandFileUrl(clientId, fontFile.id, { download: true }), fontFile.name).catch((e) => toast.error(e.message))
+        : isGoogle ? () => downloadFont(clientId, font.family) : null;
     return (
-        <li className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-start justify-between gap-2">
+        <li className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900" data-brand-font={font.family}>
+            <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                     <p className="brain-type-value truncate text-zinc-900 dark:text-white">{font.family}</p>
                     <p className="brain-type-label">{BRAND_FONT_USE_LABELS[font.use]}{font.weights ? ` · ${font.weights}` : ''} · {BRAND_FONT_SOURCE_LABELS[font.source]}</p>
                 </div>
-                <div className="flex gap-1">
-                    <Button type="button" variant="ghost" size="sm" className="brain-button-quiet min-h-11" onClick={() => copy(font.family, 'Nombre')} aria-label={`Copiar el nombre ${font.family}`}>
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    {fontFile ? (
-                        <button type="button" onClick={() => downloadBrandFile(brandFileUrl(clientId, fontFile.id, { download: true }), fontFile.name).catch((e) => toast.error(e.message))} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10">
-                            <Download className="h-4 w-4" aria-hidden="true" /> Descargar
-                        </button>
-                    ) : isGoogle ? (
-                        <button type="button" onClick={() => downloadFont(clientId, font.family)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10" aria-label={`Descargar la tipografía ${font.family}`}>
-                            <Download className="h-4 w-4" aria-hidden="true" /> Descargar
-                        </button>
-                    ) : font.url ? (
-                        <a href={font.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10">
-                            <ExternalLink className="h-4 w-4" aria-hidden="true" /> Abrir
-                        </a>
-                    ) : null}
-                </div>
+                {download && <DownloadIcon label={`Descargar la tipografía ${font.family}`} onClick={download} />}
             </div>
             <p className="mt-3 truncate text-2xl text-zinc-900 dark:text-white" style={isGoogle ? { fontFamily: `'${font.family}', sans-serif` } : undefined}>
                 Aa Bb Cc 123
             </p>
-            {!isGoogle && !fontFile && <p className="brain-type-help mt-1">La muestra usa la letra de la plataforma: esta fuente no es de Google. Sube el archivo (.ttf, .otf) para que el equipo la descargue.</p>}
+            {!isGoogle && !fontFile && <p className="brain-type-help mt-1">Fuente comercial: todavía no hay archivo para descargar. Se sube desde «Editar marca».</p>}
         </li>
     );
 }
@@ -156,9 +153,9 @@ function LogoThumb({ clientId, file }) {
         : <span className="h-12 w-20 animate-pulse rounded bg-zinc-300/60 dark:bg-white/10" aria-hidden="true" />;
 }
 
-function FileTile({ file, clientId, canEdit, onRemove, removing }) {
+function FileTile({ file, clientId }) {
     return (
-        <li className="group overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
+        <li className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
             <div className="flex h-28 items-center justify-center bg-zinc-50 p-3 dark:bg-zinc-800/60" style={isImage(file) ? TRANSPARENCY_GRID : undefined}>
                 {isImage(file)
                     ? <LogoThumb clientId={clientId} file={file} />
@@ -169,16 +166,7 @@ function FileTile({ file, clientId, canEdit, onRemove, removing }) {
                     <p className="brain-type-body truncate text-zinc-900 dark:text-white" title={file.name}>{file.label || file.name}</p>
                     <p className="brain-type-label">{BRAND_FILE_KIND_LABELS[file.kind]}</p>
                 </div>
-                <div className="flex shrink-0">
-                    <button type="button" onClick={() => downloadBrandFile(brandFileUrl(clientId, file.id, { download: true }), file.name).catch((e) => toast.error(e.message))} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label={`Descargar ${file.name}`}>
-                        <Download className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                    {canEdit && (
-                        <button type="button" disabled={removing} onClick={() => onRemove(file)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={`Quitar ${file.name}`}>
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                    )}
-                </div>
+                <DownloadIcon label={`Descargar ${file.name}`} onClick={() => downloadBrandFile(brandFileUrl(clientId, file.id, { download: true }), file.name).catch((e) => toast.error(e.message))} />
             </div>
         </li>
     );
@@ -192,34 +180,27 @@ function LinkPill({ href, children }) {
     );
 }
 
+// La ficha es de lectura (Rodny, 18 de noviembre de 2026: «necesito hacer una distinción entre el formato de
+// visión … y el formato de edición»): aquí solo se mira, se copia un color y se descarga. Subir y quitar logos,
+// fuentes y manuales vive en «Editar marca» (`BrandEditorDialog`).
 export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
-    const confirm = useConfirmDialog();
-    const remove = useRemoveBrandFile();
     const { client, brand, completeness } = data;
     const files = brand?.files || [];
     const logos = files.filter((file) => file.kind === 'LOGO');
-    const otherFiles = files.filter((file) => file.kind !== 'LOGO' && file.kind !== 'FUENTE');
-    const manuals = otherFiles.filter((file) => file.kind === 'MANUAL' && /pdf$/i.test(file.mimeType || file.name || ''));
+    const manuals = files.filter((file) => file.kind === 'MANUAL' && /pdf$/i.test(file.mimeType || file.name || ''));
+    const otherFiles = files.filter((file) => file.kind !== 'LOGO' && file.kind !== 'FUENTE' && !manuals.includes(file));
     const [reading, setReading] = useState(null);
     const fontFiles = files.filter((file) => file.kind === 'FUENTE');
     const colors = brand?.colors || [];
     const fonts = brand?.fonts || [];
+    // Un archivo de fuente que ya descarga una tarjeta no se repite abajo.
+    const looseFontFiles = fontFiles.filter((file) => !fonts.some((font) => fontFileFor(font, [file])));
     const links = [
         brand?.manualUrl && { label: 'Manual en Drive', url: brand.manualUrl },
         brand?.logosUrl && { label: 'Carpeta de logos', url: brand.logosUrl },
         brand?.canvaUrl && { label: 'Canva', url: brand.canvaUrl },
         ...(brand?.links || [])
     ].filter(Boolean);
-
-    const removeFile = async (file) => {
-        if (!(await confirm({ title: 'Quitar archivo', description: `«${file.name}» deja de verse en la marca de ${client.name}.`, confirmLabel: 'Quitar' }))) return;
-        try {
-            await remove.mutateAsync({ clientId: client.id, fileId: file.id });
-            toast.success('Archivo quitado de la marca');
-        } catch (error) {
-            toast.error(error.message);
-        }
-    };
 
     return (
         <div className="space-y-8" data-brand-sheet={client.slug}>
@@ -249,18 +230,18 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
                     : <Empty>Esta marca todavía no tiene colores cargados.</Empty>}
             </Section>
 
-            <Section icon={Image} title="Logos" action={canEdit && <BrandFileUpload clientId={client.id} kind="LOGO" label="Subir logo" />}>
+            <Section icon={Image} title="Logos">
                 {logos.length
-                    ? <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{logos.map((file) => <FileTile key={file.id} file={file} clientId={client.id} canEdit={canEdit} onRemove={removeFile} removing={remove.isPending} />)}</ul>
-                    : <Empty>{brand?.logosUrl ? 'Los logos están en la carpeta enlazada abajo; súbelos aquí para descargarlos directo.' : 'Todavía no hay logos en la ficha.'}</Empty>}
+                    ? <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{logos.map((file) => <FileTile key={file.id} file={file} clientId={client.id} />)}</ul>
+                    : <Empty>{brand?.logosUrl ? 'Los logos están en la carpeta enlazada abajo.' : 'Todavía no hay logos en la ficha.'}</Empty>}
             </Section>
 
-            <Section icon={Type} title="Tipografías" action={canEdit && <BrandFileUpload clientId={client.id} kind="FUENTE" label="Subir fuente" />}>
+            <Section icon={Type} title="Tipografías">
                 {fonts.length
                     ? <ul className="grid gap-3 sm:grid-cols-2">{fonts.map((font) => <FontCard key={`${font.family}-${font.use}`} font={font} files={fontFiles} clientId={client.id} />)}</ul>
                     : <Empty>Esta marca todavía no tiene tipografías cargadas.</Empty>}
-                {fontFiles.length > 0 && (
-                    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{fontFiles.map((file) => <FileTile key={file.id} file={file} clientId={client.id} canEdit={canEdit} onRemove={removeFile} removing={remove.isPending} />)}</ul>
+                {looseFontFiles.length > 0 && (
+                    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{looseFontFiles.map((file) => <FileTile key={file.id} file={file} clientId={client.id} />)}</ul>
                 )}
             </Section>
 
@@ -273,20 +254,20 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
                 </Section>
             )}
 
-            <Section icon={BookOpen} title="Manual y archivos" action={canEdit && <BrandFileUpload clientId={client.id} kind="MANUAL" label="Subir manual" />}>
-                {links.length > 0 && <div className="flex flex-wrap gap-2">{links.map((link) => <LinkPill key={link.url} href={link.url}>{link.label}</LinkPill>)}</div>}
-                {manuals.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
+            <Section icon={BookOpen} title="Manual y archivos">
+                {(manuals.length > 0 || links.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-2" data-brand-manual-row="">
                         {manuals.map((file) => (
                             <Button key={file.id} type="button" className="min-h-11 gap-2" onClick={() => setReading(file)}>
                                 <BookOpen className="h-4 w-4" aria-hidden="true" /> Ver {manuals.length > 1 ? `«${file.label || file.name}»` : 'el manual'}
                             </Button>
                         ))}
+                        {links.map((link) => <LinkPill key={link.url} href={link.url}>{link.label}</LinkPill>)}
                     </div>
                 )}
                 {reading && <ManualViewer file={reading} clientId={client.id} onClose={() => setReading(null)} />}
-                {otherFiles.length > 0 && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{otherFiles.map((file) => <FileTile key={file.id} file={file} clientId={client.id} canEdit={canEdit} onRemove={removeFile} removing={remove.isPending} />)}</ul>}
-                {!links.length && !otherFiles.length && <Empty>Todavía no hay manual. Súbelo en PDF con «Subir manual».</Empty>}
+                {otherFiles.length > 0 && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{otherFiles.map((file) => <FileTile key={file.id} file={file} clientId={client.id} />)}</ul>}
+                {!links.length && !manuals.length && !otherFiles.length && <Empty>Todavía no hay manual.</Empty>}
             </Section>
         </div>
     );

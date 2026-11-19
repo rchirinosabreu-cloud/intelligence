@@ -1377,38 +1377,40 @@
     },
     {
       "aliases": [
-        "Wine & Food Summit",
-        "Wine Summit",
-        "Wine and Food Summit",
-        "Wine & Food Summit PR"
+        "Foobespain",
+        "FoobeSpain",
+        "Foobe Spain",
+        "FOOBESPAIN"
       ],
       "matchWords": [
-        "wine"
+        "foobespain",
+        "foobe spain"
       ],
-      "source": "Carpeta LOGOS NUEVOS WINE & FOOD PR (Drive). Colores tomados del logo.",
+      "source": "Carpeta LOGOS NUEVOS WINE & FOOD PR (Drive). FoobeSpain reúne tres marcas: FoobeSpain, Wine Summit y Wine & Wonder.",
       "colors": [
         {
           "hex": "#7D122E",
           "role": "PRINCIPAL",
-          "name": "Vino"
+          "name": "Wine Summit · Vino"
         },
         {
           "hex": "#C6A26B",
           "role": "SECUNDARIO",
-          "name": "Dorado"
+          "name": "Wine Summit · Dorado"
         }
       ],
       "fonts": [],
       "logos": [
         {
           "driveId": "1p1oirS7Lsni7mlUohQI-2bBQ5DM4OEF2",
-          "label": "Principal"
+          "label": "Wine Summit · Principal"
         },
         {
           "driveId": "1oIHOvaxr5fq0Ven7i48XVkTuStpL3UDH",
-          "label": "Fondo blanco"
+          "label": "Wine Summit · Fondo blanco"
         }
-      ]
+      ],
+      "usageNotes": "FoobeSpain es un ecosistema con tres marcas: FoobeSpain, Wine Summit (Wine & Food Summit Puerto Rico) y Wine & Wonder. Cada una tiene sus propios logos y colores; los colores y logos llevan el nombre de su marca delante."
     },
     {
       "aliases": [
@@ -1455,6 +1457,85 @@
         {
           "driveId": "1tS8rcwn4RSheSN2D--MTEf-hsGy81PH9",
           "label": "Vertical con borde blanco"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Bria Intelligence",
+        "Bria",
+        "Brain Intelligence",
+        "BRIA Brain Intelligence",
+        "Bria IA"
+      ],
+      "matchWords": [
+        "bria"
+      ],
+      "source": "Guía de marca de Bria (PDF que Rodny compartió el 18 nov 2026).",
+      "tagline": "Inteligencia para crear, analizar y avanzar.",
+      "manualFile": "bria-intelligence",
+      "colors": [
+        {
+          "hex": "#72DD9B",
+          "role": "PRINCIPAL",
+          "name": "Menta"
+        },
+        {
+          "hex": "#2BC1AF",
+          "role": "PRINCIPAL",
+          "name": "Turquesa"
+        },
+        {
+          "hex": "#14AEBC",
+          "role": "PRINCIPAL",
+          "name": "Cian"
+        },
+        {
+          "hex": "#FBC219",
+          "role": "ACENTO",
+          "name": "Chispa"
+        },
+        {
+          "hex": "#092038",
+          "role": "NEUTRO",
+          "name": "Azul noche"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Roc Grotesk",
+          "use": "LOGO",
+          "source": "COMERCIAL",
+          "weights": "Solo dentro del logo"
+        },
+        {
+          "family": "Montserrat",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Títulos y textos de Bria"
+        }
+      ],
+      "usageNotes": "Degradado menta → turquesa → cian. La chispa amarilla solo para la estrella y los puntos. Sobre el degradado, el texto va en azul noche (el blanco no se lee sobre la menta). El personaje va siempre sobre fondo transparente, nunca dentro de un círculo ni de una caja.",
+      "logos": [
+        {
+          "file": "bria/logo-principal.png",
+          "label": "Marca principal"
+        },
+        {
+          "file": "bria/logo-negativo.png",
+          "label": "Marca principal negativo"
+        },
+        {
+          "file": "bria/isotipo.png",
+          "label": "Isotipo"
+        },
+        {
+          "file": "bria/personaje.png",
+          "label": "Personaje"
+        },
+        {
+          "file": "bria/poses.png",
+          "label": "Personaje en sus tres poses"
         }
       ]
     }

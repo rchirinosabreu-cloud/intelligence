@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
     brandCompleteness,
     brandFileProblem,
@@ -205,7 +205,7 @@ test('una tipografía de Google de la ficha se baja en .zip; una que no está en
     assert.equal(parseGoogleFontCss('').length, 0);
 });
 
-test('cargar los manuales: crea lo que falta, sube solo PNG de Drive, no pisa fichas ni repite logos', async () => {
+test('cargar los manuales: crea lo que falta (también a los archivados), sube solo PNG de Drive, no pisa fichas ni repite logos', async () => {
     const { runBrandImport, isPng } = await import('../src/services/clientBrandImport.js');
     const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
     const db = createBrandsDb([
@@ -226,7 +226,7 @@ test('cargar los manuales: crea lo que falta, sube solo PNG de Drive, no pisa fi
     ] };
     const preview = await runBrandImport({ db, service, dataset, apply: false, fetchImpl });
     assert.equal(uploads.length, 0, 'simular no sube nada');
-    assert.deepEqual(preview.report.map((l) => l.action), ['CREAR', 'COMPLETAR', 'OMITIR'], 'un archivado no se carga');
+    assert.deepEqual(preview.report.map((l) => l.action), ['CREAR', 'COMPLETAR', 'CREAR'], 'un archivado también tiene ficha: se ve en «Clientes inactivos»');
     const done = await runBrandImport({ db, service, dataset, apply: true, fetchImpl });
     assert.equal(done.totals.logos, 2);
     assert.match(done.report[0].logoProblems[0], /no es un PNG/);
@@ -267,7 +267,7 @@ test('los logos del dataset vienen de Drive con etiqueta y no hay botón de carg
         const labels = (brand.logos || []).map((l) => l.label);
         assert.equal(new Set(labels).size, labels.length, `etiquetas repetidas en ${brand.aliases[0]}`);
     }
-    assert.ok(logos.every((l) => /^[A-Za-z0-9_-]{20,}$/.test(l.driveId) && l.label.trim()));
+    assert.ok(logos.every((l) => (/^[A-Za-z0-9_-]{20,}$/.test(l.driveId) || existsSync(new URL(`../data/brand-assets/${l.file}`, import.meta.url))) && l.label.trim()));
     const board = readFileSync(new URL('../src/components/modules/Brands/Brands.jsx', import.meta.url), 'utf8');
     assert.doesNotMatch(board, /Cargar fichas de los manuales/, 'Rodny pidió quitar ese botón: se carga desde la ficha');
 });
@@ -328,4 +328,39 @@ test('los archivos de marca se piden con la sesión: nada de <img src> ni <a hre
     assert.match(api, /export function useBrandImage/);
     assert.match(api, /export async function downloadBrandFile/);
     assert.match(readFileSync(new URL('../scripts/preview-brands.js', import.meta.url), 'utf8'), /No token provided/, 'la muestra exige la sesión como producción');
+});
+
+test('la ficha es de lectura: subir y quitar viven en «Editar marca»; la fuente se descarga con el botón de icono', () => {
+    const sheet = readFileSync(new URL('../src/components/modules/Brands/BrandSheet.jsx', import.meta.url), 'utf8');
+    const editor = readFileSync(new URL('../src/components/modules/Brands/BrandEditorDialog.jsx', import.meta.url), 'utf8');
+    assert.doesNotMatch(sheet, /BrandFileUpload|Subir logo|Subir fuente|Subir manual|Trash2|useRemoveBrandFile/, 'la vista no sube ni quita');
+    assert.doesNotMatch(sheet, /Copiar el nombre/, 'el nombre de la fuente no se copia');
+    assert.doesNotMatch(sheet, /<\/?[A-Za-z]+[^>]*>\s*Descargar\s*</, 'la descarga es solo el icono');
+    assert.match(sheet, /data-brand-manual-row/, 'ver el manual y los enlaces van en una sola fila');
+    for (const kind of ['LOGO', 'FUENTE', 'MANUAL']) assert.match(editor, new RegExp(`kind="${kind}"`));
+    assert.match(editor, /useRemoveBrandFile/);
+});
+
+test('con el mismo nombre, un cliente activo gana al archivado', async () => {
+    const { planBrandImport } = await import('../src/services/clientBrandImport.js');
+    const plan = planBrandImport({ brands: [{ aliases: ['Verona'], colors: [{ hex: '#111111' }] }] }, [
+        { id: 'old', name: 'Verona', slug: 'verona-2024', isArchived: true },
+        { id: 'new', name: 'Verona', slug: 'verona', isArchived: false }
+    ]);
+    assert.equal(plan[0].client.id, 'new');
+});
+
+test('un logo y un manual que no viven en Drive se cargan desde el repositorio (la guía de Bria)', async () => {
+    const { runBrandImport } = await import('../src/services/clientBrandImport.js');
+    const { createBrandsDb } = await import('./fixtures/brandsMemoryDb.js');
+    const db = createBrandsDb([{ id: 'b', name: 'Bria Intelligence', slug: 'bria', isArchived: false }]);
+    const uploads = [];
+    const service = clientBrandService({ db, storage: () => ({ uploadToS3: async (file, folder) => { uploads.push(file.originalname); return { key: `${folder}/${file.originalname}`, name: file.originalname, size: file.size, mimeType: file.mimetype }; } }) });
+    const data = JSON.parse(readFileSync(new URL('../data/client-brands.json', import.meta.url), 'utf8'));
+    const bria = data.brands.find((b) => b.aliases.includes('Bria Intelligence'));
+    const fetchImpl = async () => { throw new Error('no debe ir a Drive'); };
+    const done = await runBrandImport({ db, service, dataset: { brands: [bria] }, apply: true, fetchImpl });
+    assert.equal(done.totals.logos, 5);
+    assert.equal(done.totals.manuals, 1);
+    assert.deepEqual(done.report[0].logoProblems, []);
 });

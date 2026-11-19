@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { Plus, Trash2 } from '@/components/ui/icons';
+import { FileText, Plus, Trash2 } from '@/components/ui/icons';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,12 +13,15 @@ import {
     BRAND_FONT_USES,
     BRAND_FONT_USE_LABELS,
     normalizeBrandInput,
-    normalizeHex
+    normalizeHex,
+    BRAND_FILE_KIND_LABELS
 } from '@/lib/clientBrand';
-import { useSaveBrand } from './brandsApi';
+import { useRemoveBrandFile, useSaveBrand } from './brandsApi';
+import BrandFileUpload from './BrandFileUpload';
 
 // Editar la ficha de marca. Frena con la misma regla del servidor (`normalizeBrandInput`) y solo se cierra
-// cuando el servidor respondió. Los archivos (logos, fuentes, manual) se suben desde la ficha, no aquí.
+// cuando el servidor respondió. Aquí también se suben y quitan logos, fuentes y manuales: la ficha es solo de
+// lectura (Rodny, 18 de noviembre de 2026). Un archivo se guarda en cuanto se sube, sin esperar a «Guardar marca».
 
 const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
 
@@ -42,9 +46,12 @@ export default function BrandEditorDialog({ open, onClose, data }) {
     const [form, setForm] = useState(() => fromBrand(data?.brand));
     const [error, setError] = useState(null);
 
+    // Se rellena al abrir, no cada vez que cambia la marca: subir un archivo refresca `data` y no puede borrar
+    // lo que la persona lleva escrito.
     useEffect(() => {
         if (open) { setForm(fromBrand(data?.brand)); setError(null); }
-    }, [open, data?.brand]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
     const setItem = (list, index, patch) => setForm((current) => ({ ...current, [list]: current[list].map((item, i) => (i === index ? { ...item, ...patch } : item)) }));
@@ -68,7 +75,7 @@ export default function BrandEditorDialog({ open, onClose, data }) {
             <DialogContent data-brand-editor="" overlayClassName="z-[80]" className="z-[81] max-h-[90vh] overflow-y-auto dark:bg-zinc-900 sm:max-w-2xl" onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
                 <DialogHeader>
                     <DialogTitle>Marca de {data?.client?.name}</DialogTitle>
-                    <DialogDescription>Lo que el equipo necesita para diseñar sin preguntar. Logos, fuentes y manual se suben desde la ficha.</DialogDescription>
+                    <DialogDescription>Lo que el equipo necesita para diseñar sin preguntar.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-6">
                     <fieldset className="space-y-3">
@@ -138,6 +145,8 @@ export default function BrandEditorDialog({ open, onClose, data }) {
                         <Label text="Canva del cliente (opcional)"><input className={field} type="url" value={form.canvaUrl} onChange={(e) => set('canvaUrl', e.target.value)} placeholder="https://www.canva.com/…" /></Label>
                     </fieldset>
 
+                    <BrandFilesEditor data={data} />
+
                     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="ghost" className="min-h-11" onClick={onClose} disabled={save.isPending}>Cancelar</Button>
@@ -146,5 +155,49 @@ export default function BrandEditorDialog({ open, onClose, data }) {
                 </form>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function BrandFilesEditor({ data }) {
+    const confirm = useConfirmDialog();
+    const remove = useRemoveBrandFile();
+    const client = data?.client;
+    const files = data?.brand?.files || [];
+    if (!client) return null;
+    const removeFile = async (file) => {
+        if (!(await confirm({ title: 'Quitar archivo', description: `«${file.name}» deja de verse en la marca de ${client.name}.`, confirmLabel: 'Quitar' }))) return;
+        try {
+            await remove.mutateAsync({ clientId: client.id, fileId: file.id });
+            toast.success('Archivo quitado de la marca');
+        } catch (failure) {
+            toast.error(failure.message);
+        }
+    };
+    return (
+        <fieldset className="space-y-3" data-brand-files-editor="">
+            <legend className="brain-type-section mb-2 text-zinc-900 dark:text-white">Archivos</legend>
+            <p className="brain-type-help">Se guardan en cuanto se suben.</p>
+            <div className="flex flex-wrap gap-2">
+                <BrandFileUpload clientId={client.id} kind="LOGO" label="Subir logo" />
+                <BrandFileUpload clientId={client.id} kind="FUENTE" label="Subir fuente" />
+                <BrandFileUpload clientId={client.id} kind="MANUAL" label="Subir manual" />
+            </div>
+            {files.length > 0 && (
+                <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-white/5 dark:border-white/10">
+                    {files.map((file) => (
+                        <li key={file.id} className="flex items-center justify-between gap-2 px-3 py-1">
+                            <span className="flex min-w-0 items-center gap-2">
+                                <FileText className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
+                                <span className="brain-type-body truncate text-zinc-900 dark:text-white" title={file.name}>{file.label || file.name}</span>
+                                <span className="brain-type-label shrink-0">{BRAND_FILE_KIND_LABELS[file.kind]}</span>
+                            </span>
+                            <button type="button" disabled={remove.isPending} onClick={() => removeFile(file)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={`Quitar ${file.name}`}>
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </fieldset>
     );
 }
