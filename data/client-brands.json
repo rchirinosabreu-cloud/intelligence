@@ -2355,10 +2355,10 @@
       "matchWords": [
         "calzado andino"
       ],
-      "source": "Sin manual de marca: logos y colores tomados de sus archivos en Drive (carpeta CALZADO ANDINO).",
+      "source": "Manual de identidad corporativa de Calzado Andino (Drive).",
       "colors": [
         {
-          "hex": "#F39523",
+          "hex": "#F79633",
           "role": "PRINCIPAL",
           "name": "Naranja"
         },
@@ -2373,7 +2373,20 @@
           "name": "Café"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Fertigo",
+          "use": "LOGO",
+          "source": "COMERCIAL",
+          "weights": "Regular, modificada en el logotipo (la A editada). Gratuita en exljbris"
+        },
+        {
+          "family": "Helvetica LT Std",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "Condensed y Light, para textos complementarios"
+        }
+      ],
       "logos": [
         {
           "driveId": "1I3ezb7WGl8XT4-LWfKd95ieZnV2Z6vy3",
@@ -2383,7 +2396,9 @@
           "driveId": "1_f9ycA0m5VnoJhQc4vdzEmMTilekI0at",
           "label": "Logo blanco"
         }
-      ]
+      ],
+      "manualUrl": "https://drive.google.com/file/d/1LPM-pK4-GhXc9msP-oCAGDaxRo2Lvzz_/view",
+      "usageNotes": "El fondo ideal para el logo a todo color es el blanco. Para papelería interna, versión de una sola tinta en naranja (#F79633). En blanco y negro: negro al 100 %, 60 % o 30 %. No usar colores no corporativos, logo en línea, sombras o efectos, otra fuente distinta a Fertigo ni el nombre distorsionado."
     },
     {
       "aliases": [
@@ -2397,22 +2412,32 @@
         "villa montana",
         "villa montaña"
       ],
-      "source": "Sin manual de marca: logo del Drive (HOTEL VILLA MONTAÑA PR) y tipografías de sus piezas en Canva (18 nov 2026).",
+      "source": "Sin manual de marca: logo de su identidad digital en el Drive (HOTEL VILLA MONTAÑA PR) y tipografías de sus piezas en Canva.",
       "colors": [
         {
-          "hex": "#8A532A",
+          "hex": "#361C0D",
           "role": "PRINCIPAL",
-          "name": "Café del logo"
+          "name": "Café oscuro del logo"
         },
         {
-          "hex": "#EDE3D1",
+          "hex": "#9B5D00",
+          "role": "SECUNDARIO",
+          "name": "Dorado de la línea"
+        },
+        {
+          "hex": "#8F6558",
+          "role": "SECUNDARIO",
+          "name": "Café rosado"
+        },
+        {
+          "hex": "#F9E6CF",
           "role": "FONDO",
           "name": "Crema"
         },
         {
-          "hex": "#000000",
-          "role": "NEUTRO",
-          "name": "Negro"
+          "hex": "#EDE3D1",
+          "role": "FONDO",
+          "name": "Arena"
         }
       ],
       "fonts": [
@@ -2431,8 +2456,12 @@
       ],
       "logos": [
         {
-          "driveId": "1p-6Df13QbLCr54EpGDwaORT-GrA1r6zg",
-          "label": "Logo (fondo blanco)"
+          "file": "villamontana/logo-cafe.png",
+          "label": "Logo café"
+        },
+        {
+          "file": "villamontana/logo-blanco.png",
+          "label": "Logo blanco"
         }
       ]
     }
