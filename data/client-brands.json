@@ -790,6 +790,18 @@
           "use": "TITULOS",
           "source": "GOOGLE",
           "weights": "Regular y Bold"
+        },
+        {
+          "family": "Montserrat",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Kief Montaser",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
         }
       ],
       "matchWords": [
@@ -974,9 +986,43 @@
           "hex": "#CC467B",
           "name": "Rosado",
           "role": "PRINCIPAL"
+        },
+        {
+          "hex": "#FF57AA",
+          "role": "PRINCIPAL",
+          "name": "Rosa"
+        },
+        {
+          "hex": "#4BAEBB",
+          "role": "SECUNDARIO",
+          "name": "Turquesa"
+        },
+        {
+          "hex": "#151514",
+          "role": "NEUTRO",
+          "name": "Negro"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Open Sans",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Source Sans 3",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Six Hands Marker",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
       "usageNotes": "Usar el rosado #CC467B en botones y llamados a la acción, no rojo.",
       "logos": [
         {
@@ -1008,6 +1054,12 @@
           "family": "TT Drugs",
           "use": "TITULOS",
           "source": "COMERCIAL"
+        },
+        {
+          "family": "Gotham",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
         }
       ],
       "logos": [
@@ -1265,8 +1317,37 @@
       ],
       "source": "Manual Basico Sun Partners.pdf (Drive). El manual es imagen: colores y tipografías faltan por cargar.",
       "manualUrl": "https://drive.google.com/file/d/1mVR96pauw4EDKh4HfWbedG90CDZICqUe/view",
-      "colors": [],
-      "fonts": [],
+      "colors": [
+        {
+          "hex": "#004B6A",
+          "role": "PRINCIPAL",
+          "name": "Azul petróleo"
+        },
+        {
+          "hex": "#4EC4D2",
+          "role": "SECUNDARIO",
+          "name": "Turquesa"
+        },
+        {
+          "hex": "#FBAE17",
+          "role": "ACENTO",
+          "name": "Amarillo sol"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Montserrat",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Virtual",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
       "logos": [
         {
           "driveId": "1_7EmWyU-5UnF-xWaqVr5HDBrZkDcpcJn",
@@ -1316,7 +1397,20 @@
           "name": "Negro"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Petrona",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Work Sans",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
       "logos": [
         {
           "driveId": "17pQZC5vXZI1vjWeJdfoqhW6s9yljkF7J",
@@ -1354,9 +1448,49 @@
         {
           "hex": "#FFFFFF",
           "role": "FONDO"
+        },
+        {
+          "hex": "#F47A20",
+          "role": "ACENTO",
+          "name": "Naranja"
+        },
+        {
+          "hex": "#F1C139",
+          "role": "ACENTO",
+          "name": "Amarillo"
+        },
+        {
+          "hex": "#5F2411",
+          "role": "SECUNDARIO",
+          "name": "Café"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Paytone One",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Poppins",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Open Sans",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Handelson Three",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
       "logos": [
         {
           "driveId": "1bwgVN7eNb2lgDD7dv18fZwK0znc7nuBC",
@@ -1453,7 +1587,44 @@
           "name": "Wine & Wonder · Dorado"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Gabriel Sans",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "FoobeSpain. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "TT Drugs",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "FoobeSpain y Wine & Wonder. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "The Seasons",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Wine & Wonder. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Allura",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Wine & Wonder, caligráfica. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "TT Ramillas",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Wine Summit. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Proxima Nova",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "Wine Summit. Usada en sus piezas de Canva"
+        }
+      ],
       "logos": [
         {
           "file": "foobespain/las-tres-marcas.png",
@@ -1507,7 +1678,26 @@
           "name": "Naranja"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Francois One",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Roboto Condensed",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Gotham",
+          "use": "COMPLEMENTARIA",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
       "logos": [
         {
           "driveId": "1XHS-hzsRB-_N7DopxSu7ECfgI80IFjJs",
@@ -1639,7 +1829,239 @@
           "name": "Blanco"
         }
       ],
-      "fonts": [],
+      "fonts": [
+        {
+          "family": "Barlow Condensed",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Bold Italic. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Maven Pro",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Lato",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
+      "logos": []
+    },
+    {
+      "aliases": [
+        "MultiK",
+        "Multi K",
+        "Multik"
+      ],
+      "matchWords": [
+        "multik"
+      ],
+      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "colors": [
+        {
+          "hex": "#051D5D",
+          "role": "PRINCIPAL",
+          "name": "Azul oscuro"
+        },
+        {
+          "hex": "#00B5D4",
+          "role": "SECUNDARIO",
+          "name": "Cian"
+        },
+        {
+          "hex": "#FA5C00",
+          "role": "ACENTO",
+          "name": "Naranja"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Poppins",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
+      "logos": []
+    },
+    {
+      "aliases": [
+        "Titanes"
+      ],
+      "matchWords": [
+        "titanes"
+      ],
+      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "colors": [
+        {
+          "hex": "#245494",
+          "role": "PRINCIPAL",
+          "name": "Azul"
+        },
+        {
+          "hex": "#DC0014",
+          "role": "SECUNDARIO",
+          "name": "Rojo"
+        },
+        {
+          "hex": "#0CC0DF",
+          "role": "ACENTO",
+          "name": "Cian"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Quatro",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Dic Sans",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
+      "logos": []
+    },
+    {
+      "aliases": [
+        "New Pueblito"
+      ],
+      "matchWords": [
+        "pueblito"
+      ],
+      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "colors": [
+        {
+          "hex": "#003B4A",
+          "role": "PRINCIPAL",
+          "name": "Azul petróleo"
+        },
+        {
+          "hex": "#147F81",
+          "role": "SECUNDARIO",
+          "name": "Verde azulado"
+        },
+        {
+          "hex": "#46C9D0",
+          "role": "ACENTO",
+          "name": "Turquesa"
+        },
+        {
+          "hex": "#F8DCBF",
+          "role": "FONDO",
+          "name": "Arena"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Vistol Sans",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Montserrat",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
+      "logos": []
+    },
+    {
+      "aliases": [
+        "Salvador de Bahía",
+        "Salvador de Bahia"
+      ],
+      "matchWords": [
+        "salvador de bahia",
+        "bahia"
+      ],
+      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "colors": [
+        {
+          "hex": "#242953",
+          "role": "PRINCIPAL",
+          "name": "Azul noche"
+        },
+        {
+          "hex": "#86B8D4",
+          "role": "SECUNDARIO",
+          "name": "Azul cielo"
+        },
+        {
+          "hex": "#E8816D",
+          "role": "ACENTO",
+          "name": "Coral"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Lora",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Montserrat",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Lato",
+          "use": "COMPLEMENTARIA",
+          "source": "GOOGLE",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
+      "logos": []
+    },
+    {
+      "aliases": [
+        "Mi Casa Bella",
+        "Casa Bella",
+        "Casabella",
+        "Mi Casa Bella PR"
+      ],
+      "matchWords": [
+        "casa bella",
+        "casabella"
+      ],
+      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "colors": [
+        {
+          "hex": "#3B2315",
+          "role": "PRINCIPAL",
+          "name": "Café"
+        },
+        {
+          "hex": "#9CCB3A",
+          "role": "ACENTO",
+          "name": "Verde"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Mona Sans",
+          "use": "TITULOS",
+          "source": "GOOGLE",
+          "weights": "Wide. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "TT Runs",
+          "use": "TEXTOS",
+          "source": "COMERCIAL",
+          "weights": "Usada en sus piezas de Canva"
+        }
+      ],
       "logos": []
     }
   ]
