@@ -1,3 +1,4 @@
+import { recordTaskChanges } from './taskChangeHistoryService.js';
 // El responsable de una parrilla es el community manager del cliente (Rodny, 19 de noviembre de 2026: «el
 // responsable de la parrilla se coloque automáticamente según el community asignado en los clientes»). Al
 // responsable le llegan las tareas de publicación y el reconocimiento de parrilla aprobada, así que tiene que ser
@@ -16,14 +17,18 @@ export const communityOf = (client) => (client?.responsibleId && client.responsi
 // nuevo. Uno que un administrador le dio a otra persona se respeta.
 export async function movePublicationTasks(db, { planId, from, to }) {
   if (!planId || !to || from === to) return 0;
-  const { count } = await db.task.updateMany({
-    where: {
-      contentItem: { planId }, title: { startsWith: '[Publicar]' }, status: { not: 'REALIZADA' },
-      OR: [{ assigneeId: null }, ...(from ? [{ assigneeId: from }] : [])]
-    },
-    data: { assigneeId: to }
-  });
-  return count;
+  const where = {
+    contentItem: { planId }, title: { startsWith: '[Publicar]' }, status: { not: 'REALIZADA' },
+    OR: [{ assigneeId: null }, ...(from ? [{ assigneeId: from }] : [])]
+  };
+  const moving = await db.task.findMany({ where, select: { id: true, assigneeId: true } });
+  if (!moving.length) return 0;
+  await db.task.updateMany({ where: { id: { in: moving.map((task) => task.id) } }, data: { assigneeId: to } });
+  // Lo cambia la plataforma al cambiar el responsable de la parrilla; queda en el historial de cada pendiente.
+  for (const task of moving) {
+    await recordTaskChanges(db, { taskId: task.id, changes: [{ kind: 'ASSIGNEE', fromValue: task.assigneeId, toValue: to }] });
+  }
+  return moving.length;
 }
 
 // `community` lo pasa quien ya comprobó que esa persona está activa (la ficha del cliente) y se ahorra la lectura.

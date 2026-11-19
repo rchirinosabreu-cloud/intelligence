@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { communityOf, syncClientPlanOwners, syncAllPlanOwners } from '../src/services/planOwnerService.js';
 import { publicationAssigneeProblem } from '../src/lib/contentTaskReciprocity.js';
 
+const link = (db) => { db.taskChangeEvent.parent = db; return db; };
 // Base en memoria con lo justo: clientes con su community, parrillas con su responsable y pendientes.
-const fakeDb = ({ clients, plans, tasks = [] }) => ({
+const fakeDb = ({ clients, plans, tasks = [] }) => link({
   plans, tasks,
   client: {
     findUnique: async ({ where }) => clients.find(c => c.id === where.id) || null,
@@ -17,14 +18,19 @@ const fakeDb = ({ clients, plans, tasks = [] }) => ({
     update: async ({ where, data }) => Object.assign(plans.find(p => p.id === where.id), data)
   },
   task: {
-    updateMany: async ({ where, data }) => {
+    findMany: async ({ where }) => {
       const owners = where.OR.map(cond => cond.assigneeId);
-      const hits = tasks.filter(t => t.planId === where.contentItem.planId && t.title.startsWith(where.title.startsWith)
-        && t.status !== 'REALIZADA' && owners.includes(t.assigneeId));
+      return tasks.filter(t => t.planId === where.contentItem.planId && t.title.startsWith(where.title.startsWith)
+        && t.status !== 'REALIZADA' && owners.includes(t.assigneeId)).map(t => ({ id: t.id, assigneeId: t.assigneeId }));
+    },
+    updateMany: async ({ where, data }) => {
+      const hits = tasks.filter(t => where.id.in.includes(t.id));
       for (const task of hits) task.assigneeId = data.assigneeId;
       return { count: hits.length };
     }
-  }
+  },
+  events: [],
+  taskChangeEvent: { createMany: async function ({ data }) { this.parent.events.push(...data); return { count: data.length }; } }
 });
 
 const kamila = { responsibleId: 'kamila', responsible: { isActive: true } };
@@ -82,6 +88,8 @@ test('los «Publicar» abiertos pasan del responsable anterior al nuevo; uno que
   });
   await syncClientPlanOwners(db, 'promo');
   assert.deepEqual(db.tasks.map(t => t.assigneeId), ['kamila', 'mariceth', 'rodny', 'rodny']);
+  // Queda en el historial del pendiente, a nombre de la plataforma.
+  assert.deepEqual(db.events.map(e => [e.taskId, e.kind, e.fromValue, e.toValue, e.actorId]), [['t1', 'ASSIGNEE', 'rodny', 'kamila', null]]);
 });
 
 test('solo un administrador cambia el responsable de un «Publicar» automático', () => {

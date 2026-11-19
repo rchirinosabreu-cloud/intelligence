@@ -60,6 +60,7 @@ import { useLocation } from 'react-router-dom';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
+import TaskChangeHistory from './TaskChangeHistory';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 
@@ -2846,6 +2847,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+
+                            {/* Quién cambió qué y cuándo (19 de noviembre de 2026); lo ve quien puede abrir la tarea. */}
+                            {isEdition && <TaskChangeHistory taskId={formData.id} refreshKey={taskData?.updatedAt || null} />}
 
                             {isEdition && ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role) && (
                                 <TaskWorkHistory
