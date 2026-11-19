@@ -1855,7 +1855,9 @@
       "aliases": [
         "MultiK",
         "Multi K",
-        "Multik"
+        "Multik",
+        "Multicap",
+        "Multimateriales Cartagena"
       ],
       "matchWords": [
         "multik"
@@ -1886,7 +1888,16 @@
           "weights": "Usada en sus piezas de Canva"
         }
       ],
-      "logos": []
+      "logos": [
+        {
+          "file": "multik/logo-color.png",
+          "label": "Logo a color"
+        },
+        {
+          "file": "multik/logo-blanco.png",
+          "label": "Logo blanco"
+        }
+      ]
     },
     {
       "aliases": [
@@ -1931,12 +1942,13 @@
     },
     {
       "aliases": [
-        "New Pueblito"
+        "New Pueblito",
+        "New Pueblito Suites"
       ],
       "matchWords": [
         "pueblito"
       ],
-      "source": "Sin manual de marca: colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
+      "source": "Sin manual de marca: logo, colores y tipografías tomados de sus piezas en Canva (18 nov 2026).",
       "colors": [
         {
           "hex": "#003B4A",
@@ -1973,7 +1985,16 @@
           "weights": "Usada en sus piezas de Canva"
         }
       ],
-      "logos": []
+      "logos": [
+        {
+          "file": "newpueblito/logo-azul.png",
+          "label": "Logo azul"
+        },
+        {
+          "file": "newpueblito/logo-blanco.png",
+          "label": "Logo blanco"
+        }
+      ]
     },
     {
       "aliases": [
@@ -2219,6 +2240,190 @@
         {
           "file": "mampujan/monocromo-negativo.png",
           "label": "Monocromo negativo"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "La Sazón de Iris",
+        "La Sazon de Iris",
+        "Sazón de Iris",
+        "Sazon de Iris",
+        "La Sazón"
+      ],
+      "matchWords": [
+        "sazon de iris",
+        "sazón de iris"
+      ],
+      "source": "Manual de marca de La Sazón de Iris (Drive, carpeta Marca La Sazón de Iris).",
+      "manualDriveId": "12DEuFiCneY1JN1hJBdADU4H5C7QMGKEb",
+      "colors": [
+        {
+          "hex": "#F7931E",
+          "role": "PRINCIPAL",
+          "name": "Naranja"
+        },
+        {
+          "hex": "#F15A24",
+          "role": "PRINCIPAL",
+          "name": "Naranja rojizo"
+        },
+        {
+          "hex": "#00A99D",
+          "role": "PRINCIPAL",
+          "name": "Verde azulado"
+        },
+        {
+          "hex": "#5C402B",
+          "role": "PRINCIPAL",
+          "name": "Café"
+        },
+        {
+          "hex": "#FBB03B",
+          "role": "SECUNDARIO",
+          "name": "Amarillo"
+        },
+        {
+          "hex": "#FAE886",
+          "role": "SECUNDARIO",
+          "name": "Amarillo claro"
+        },
+        {
+          "hex": "#A75933",
+          "role": "SECUNDARIO",
+          "name": "Canela"
+        },
+        {
+          "hex": "#2A1600",
+          "role": "NEUTRO",
+          "name": "Café oscuro"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Blinders Rock",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Regular. Fuente corporativa, estilo escrito a mano"
+        },
+        {
+          "family": "Butterscotch",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Fuente corporativa, estilo escrito a mano"
+        },
+        {
+          "family": "Nunito",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Regular, Semibold y Extrabold"
+        }
+      ],
+      "usageNotes": "Usar siempre que se pueda la versión principal del logo (con el círculo amarillo); las demás versiones son para cuando no se pueda por razones técnicas. Elegir la versión que dé mejor contraste con el fondo. Los colores secundarios son para posts, carteles y tarjetas.",
+      "logos": [
+        {
+          "file": "sazon-de-iris/principal.png",
+          "label": "Logo principal"
+        },
+        {
+          "file": "sazon-de-iris/contorno.png",
+          "label": "Logo sin círculo"
+        },
+        {
+          "file": "sazon-de-iris/personaje-con-nombre.png",
+          "label": "Personaje con nombre"
+        },
+        {
+          "file": "sazon-de-iris/solo-texto.png",
+          "label": "Solo el nombre"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Calzado Andino"
+      ],
+      "matchWords": [
+        "calzado andino"
+      ],
+      "source": "Sin manual de marca: logos y colores tomados de sus archivos en Drive (carpeta CALZADO ANDINO).",
+      "colors": [
+        {
+          "hex": "#F39523",
+          "role": "PRINCIPAL",
+          "name": "Naranja"
+        },
+        {
+          "hex": "#7BB93C",
+          "role": "SECUNDARIO",
+          "name": "Verde"
+        },
+        {
+          "hex": "#6B2E0E",
+          "role": "SECUNDARIO",
+          "name": "Café"
+        }
+      ],
+      "fonts": [],
+      "logos": [
+        {
+          "driveId": "1I3ezb7WGl8XT4-LWfKd95ieZnV2Z6vy3",
+          "label": "Logo a color"
+        },
+        {
+          "driveId": "1_f9ycA0m5VnoJhQc4vdzEmMTilekI0at",
+          "label": "Logo blanco"
+        }
+      ]
+    },
+    {
+      "aliases": [
+        "Villa Montaña",
+        "Villa Montana",
+        "Villa Montaña Beach Resort",
+        "Villa Montana Beach Resort",
+        "Hotel Villa Montaña"
+      ],
+      "matchWords": [
+        "villa montana",
+        "villa montaña"
+      ],
+      "source": "Sin manual de marca: logo del Drive (HOTEL VILLA MONTAÑA PR) y tipografías de sus piezas en Canva (18 nov 2026).",
+      "colors": [
+        {
+          "hex": "#8A532A",
+          "role": "PRINCIPAL",
+          "name": "Café del logo"
+        },
+        {
+          "hex": "#EDE3D1",
+          "role": "FONDO",
+          "name": "Crema"
+        },
+        {
+          "hex": "#000000",
+          "role": "NEUTRO",
+          "name": "Negro"
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Montserrat",
+          "use": "TEXTOS",
+          "source": "GOOGLE",
+          "weights": "Regular, SemiBold y Bold. Usada en sus piezas de Canva"
+        },
+        {
+          "family": "Vintage Goods",
+          "use": "TITULOS",
+          "source": "COMERCIAL",
+          "weights": "Script de acentos (p. ej. «starts here!»). Usada en sus piezas de Canva"
+        }
+      ],
+      "logos": [
+        {
+          "driveId": "1p-6Df13QbLCr54EpGDwaORT-GrA1r6zg",
+          "label": "Logo (fondo blanco)"
         }
       ]
     }
