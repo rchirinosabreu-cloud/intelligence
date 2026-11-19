@@ -56,7 +56,10 @@ test('el worker de PDF sale de la versión instalada, no de una copia suelta', a
   // Node (el del chat usa esbuild con `packages: 'external'`). Por eso va dentro de una función, en los dos.
   for (const path of ['src/components/modules/Drive/PdfDocumentPreview.jsx', 'src/utils/documentProcessor.js']) {
     const source = await read(path);
-    assert.match(source, /await import\('pdfjs-dist\/build\/pdf\.worker\.min\.mjs\?url'\)/, `${path} resuelve el worker desde el paquete`);
+    assert.match(source, /await import\('pdfjs-dist\/legacy\/build\/pdf\.worker\.min\.mjs\?url'\)/, `${path} resuelve el worker desde el paquete`);
+    // Legacy en librería y worker: la normal falla en Safari anterior a 18.4 («Iterator is not defined», 18 nov 2026).
+    assert.match(source, /pdfjs-dist\/legacy\/build\/pdf\.mjs/, `${path} usa la librería legacy`);
+    assert.doesNotMatch(source, /from 'pdfjs-dist'|import\('pdfjs-dist'\)/, `${path} no puede usar la versión normal`);
     assert.doesNotMatch(source, /^import .*pdf\.worker/m, `${path} no puede importar el worker a nivel de módulo`);
     assert.doesNotMatch(source, /workerSrc = ['"]\//, `${path} no puede apuntar a una ruta fija`);
   }
