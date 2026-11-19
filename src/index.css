@@ -54,7 +54,8 @@
 
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
+    /* El anillo de foco es el cian de la marca, no negro (Rodny, 18 de noviembre de 2026: «por qué aparecen esos bordes negros»). */
+    --ring: 191.3 100% 37.5%; /* #009BBF */
 
     --radius: 0.75rem;
   }
@@ -92,7 +93,7 @@
 
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --ring: 191.3 80% 58%; /* cian claro: legible sobre el fondo oscuro */
   }
 
   body {
@@ -812,4 +813,15 @@
 
 .dark .brain-datepicker-months .react-datepicker__month-text--disabled {
   color: rgb(113 113 122) !important;
+}
+
+/* El foco se dibuja solo cuando se navega con el teclado (Rodny, 18 de noviembre de 2026: «por qué aparecen esos bordes
+   negros sobre botones y muchas cosas»). Una ventana que se abre con el mouse pone el foco en su primer botón —casi
+   siempre la X— y los botones con `focus:ring` lo pintaban igual. En botones, enlaces y controles que se pulsan, el anillo
+   se apaga cuando el foco no es de teclado (`:focus-visible` lo decide el navegador); con Tab sigue saliendo. Los campos
+   de texto no entran: ahí el borde de foco dice dónde se escribe. */
+:is(button, a, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [role="checkbox"], [role="radio"]):focus:not(:focus-visible) {
+  outline: none;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
 }
