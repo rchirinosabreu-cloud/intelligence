@@ -1042,7 +1042,7 @@
         "Lettufresh",
         "Lettu Fresh"
       ],
-      "source": "Lettufresh-Propuesta identidad digital v4.pdf (Drive), leído el 18 nov 2026. Colores tomados de la paleta (página 2).",
+      "source": "Lettufresh-Propuesta identidad digital v4.pdf (Drive), leído el 18 nov 2026. Colores tomados de la paleta (página 2). Logos recortados de la página 2 del manual.",
       "manualUrl": "https://drive.google.com/file/d/1y8dmYoho78COuCKW7Gte_waS6PimcgE7/view",
       "colors": [
         {
@@ -1089,7 +1089,21 @@
         }
       ],
       "usageNotes": "El logo de Lettufresh siempre va junto a Salanova (lockup «Salanova @Lettufresh»).",
-      "voice": "«Lo que comes sí importa». Frescura y calidad, 100 % boricua."
+      "voice": "«Lo que comes sí importa». Frescura y calidad, 100 % boricua.",
+      "logos": [
+        {
+          "file": "lettufresh/principal.png",
+          "label": "Principal"
+        },
+        {
+          "file": "lettufresh/salanova.png",
+          "label": "Lettufresh Salanova"
+        },
+        {
+          "file": "lettufresh/romaine.png",
+          "label": "Lettufresh Romaine"
+        }
+      ]
     },
     {
       "aliases": [
@@ -1386,21 +1400,70 @@
         "foobespain",
         "foobe spain"
       ],
-      "source": "Carpeta LOGOS NUEVOS WINE & FOOD PR (Drive). FoobeSpain reúne tres marcas: FoobeSpain, Wine Summit y Wine & Wonder.",
+      "source": "Imagen de las tres marcas que Rodny compartió el 18 nov 2026 y carpeta LOGOS NUEVOS WINE & FOOD PR (Drive).",
       "colors": [
         {
-          "hex": "#7D122E",
+          "hex": "#A8093F",
           "role": "PRINCIPAL",
+          "name": "FoobeSpain · Carmesí"
+        },
+        {
+          "hex": "#D6183E",
+          "role": "PRINCIPAL",
+          "name": "FoobeSpain · Rojo"
+        },
+        {
+          "hex": "#1F1F1F",
+          "role": "NEUTRO",
+          "name": "FoobeSpain · Negro"
+        },
+        {
+          "hex": "#930A36",
+          "role": "SECUNDARIO",
           "name": "Wine Summit · Vino"
         },
         {
-          "hex": "#C6A26B",
+          "hex": "#D7B97D",
           "role": "SECUNDARIO",
           "name": "Wine Summit · Dorado"
+        },
+        {
+          "hex": "#830422",
+          "role": "SECUNDARIO",
+          "name": "Wine Summit · Vino oscuro"
+        },
+        {
+          "hex": "#502B33",
+          "role": "ACENTO",
+          "name": "Wine & Wonder · Ciruela"
+        },
+        {
+          "hex": "#88234F",
+          "role": "ACENTO",
+          "name": "Wine & Wonder · Vino"
+        },
+        {
+          "hex": "#BF4784",
+          "role": "ACENTO",
+          "name": "Wine & Wonder · Rosa"
+        },
+        {
+          "hex": "#A5824C",
+          "role": "ACENTO",
+          "name": "Wine & Wonder · Dorado"
         }
       ],
       "fonts": [],
       "logos": [
+        {
+          "file": "foobespain/las-tres-marcas.png",
+          "label": "Las tres marcas y sus colores",
+          "kind": "RECURSO"
+        },
+        {
+          "file": "foobespain/foobespain.png",
+          "label": "FoobeSpain · Logo (fondo blanco)"
+        },
         {
           "driveId": "1p1oirS7Lsni7mlUohQI-2bBQ5DM4OEF2",
           "label": "Wine Summit · Principal"
@@ -1408,9 +1471,13 @@
         {
           "driveId": "1oIHOvaxr5fq0Ven7i48XVkTuStpL3UDH",
           "label": "Wine Summit · Fondo blanco"
+        },
+        {
+          "file": "foobespain/wine-and-wonder.png",
+          "label": "Wine & Wonder · Logo (fondo blanco)"
         }
       ],
-      "usageNotes": "FoobeSpain es un ecosistema con tres marcas: FoobeSpain, Wine Summit (Wine & Food Summit Puerto Rico) y Wine & Wonder. Cada una tiene sus propios logos y colores; los colores y logos llevan el nombre de su marca delante."
+      "usageNotes": "FoobeSpain es un ecosistema con tres marcas: FoobeSpain, Wine Summit (Wine & Food Summit Puerto Rico) y Wine & Wonder. Cada una tiene sus propios logos y colores: los colores y logos llevan delante el nombre de su marca. Los logos de FoobeSpain y Wine & Wonder son de baja resolución; si hace falta uno mejor, pedirlo al cliente."
     },
     {
       "aliases": [
@@ -1538,6 +1605,42 @@
           "label": "Personaje en sus tres poses"
         }
       ]
+    },
+    {
+      "aliases": [
+        "Bonsai",
+        "Bonsai CTG",
+        "Restaurante Bonsai",
+        "Bonsai Restaurante"
+      ],
+      "matchWords": [
+        "bonsai"
+      ],
+      "source": "Sin manual de marca: colores tomados de sus piezas (Rodny: «el rojo es el principal»).",
+      "colors": [
+        {
+          "hex": "#B01820",
+          "role": "PRINCIPAL",
+          "name": "Rojo"
+        },
+        {
+          "hex": "#9C1814",
+          "role": "SECUNDARIO",
+          "name": "Rojo oscuro"
+        },
+        {
+          "hex": "#0C0C0C",
+          "role": "NEUTRO",
+          "name": "Negro"
+        },
+        {
+          "hex": "#FFFFFF",
+          "role": "FONDO",
+          "name": "Blanco"
+        }
+      ],
+      "fonts": [],
+      "logos": []
     }
   ]
 }
