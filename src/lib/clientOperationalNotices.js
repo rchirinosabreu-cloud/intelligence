@@ -2,11 +2,17 @@ import { cycleForDate, previousCycle } from './clientOperations.js';
 import { selectedContract, orderedContracts } from './clientContractSelection.js';
 import { dayLabel } from './contractCycleAlerts.js';
 import { bogotaDate } from './colombiaBusinessDays.js';
+import { CLOSE_OPENS_DAYS_BEFORE } from './monthlyClose.js';
 
 const days = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
 export const operationalDayAfter = (day, count) => new Date(Date.parse(`${day}T12:00:00Z`) + count * 86400000).toISOString().slice(0, 10);
 export const isOperationalNotice = n => String(n?.kind || '').startsWith('OPERACION_');
-export const operationalNoticeAcknowledges = n => ['OPERACION_SUSPENSION', 'OPERACION_REACTIVACION'].includes(n?.kind);
+// La revisión de mitad de ciclo (Rodny, 19 de noviembre de 2026: «al darle al botón de revisar pues ya debería cerrarse
+// la banda»): a esa altura el cierre todavía no se puede confirmar, así que el aviso no tenía salida y volvía en cada
+// lectura. Abrirla deja un acuse personal (REVISADO) para esa persona y ese ciclo. El del cierre no se acusa: se va
+// solo cuando el cierre queda confirmado en su registro.
+export const isMidCycleReview = n => n?.kind === 'OPERACION_CICLO' && String(n.subjectId || '').endsWith(':MITAD');
+export const operationalNoticeAcknowledges = n => ['OPERACION_SUSPENSION', 'OPERACION_REACTIVACION'].includes(n?.kind) || isMidCycleReview(n);
 export const operationalCycleSubject = notice => {
     if (notice?.kind !== 'OPERACION_CICLO') return null;
     const parts = String(notice.subjectId).split(':');
@@ -67,13 +73,15 @@ export function clientOperationalNotices(client, today, { isPm = false, projects
         const start = cycle.start < contract.startDate ? contract.startDate : cycle.start;
         const middle = operationalDayAfter(start, Math.floor(days(start, end) / 2));
         if (today < middle) continue;
-        const closing = today >= operationalDayAfter(end, -4);
+        // El aviso del cierre aparece el mismo día en que la ficha habilita «Confirmar cierre» (`closeOpensOn`): antes
+        // salía un día antes y pedía algo que todavía no se podía hacer.
+        const closing = today >= operationalDayAfter(end, -CLOSE_OPENS_DAYS_BEFORE);
         const report = (client.monthlyReports || []).find(r => r.year === cycle.year && r.month === cycle.month);
         const reportDue = isPm && contract.monthlyReport && report?.status !== 'ENVIADO' && today >= operationalDayAfter(end, -2);
         add('CICLO', `${contract.id}:${cycle.start}:${closing ? 'CIERRE' : 'MITAD'}`,
             closing ? `Cierre del ${dayLabel(end)}` : 'Revisión de mitad de ciclo',
             `${closing ? 'Revisa contenidos, jornadas y servicios contratados antes del cierre.' : 'Revisa el avance y la planificación de este período: contenidos, jornadas y servicios contratados.'}${reportDue ? '\nEl informe sigue pendiente de envío.' : ''}`,
-            closing, { cycle: { year: cycle.year, month: cycle.month }, actionLabel: 'Revisar operación' });
+            closing, { cycle: { year: cycle.year, month: cycle.month }, actionLabel: 'Revisar operación', ...(closing ? {} : { acknowledge: true }) });
     }
     return rows;
 }

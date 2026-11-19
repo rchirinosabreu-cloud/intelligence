@@ -24,7 +24,7 @@ import { isAdNotice } from '../lib/adBudgetNotices.js';
 import { clientOperationPlanPath } from '../lib/clientOperationAlerts.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 import { readOperationalNotices, syncOperationalNotices } from './operationalNoticeService.js';
-import { isOperationalNotice, operationalNoticeAcknowledges, operationalCycleSubject } from '../lib/clientOperationalNotices.js';
+import { isOperationalNotice, operationalNoticeAcknowledges, operationalCycleSubject, isMidCycleReview } from '../lib/clientOperationalNotices.js';
 import { assertNoticeResponsePolicy, noticeAllows, noticeResponsePolicy } from '../lib/alertResponsePolicy.js';
 import { CRM_NOTICE_KINDS, nextFollowUpPlan, plannedNoticeProjection } from '../lib/crmNextFollowUp.js';
 export { readOperationalNotices };
@@ -448,7 +448,8 @@ export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = 
 
 /**
  * Acuse personal, nunca declaración de cumplimiento ni autorización de trabajo: «Recibido» en una suspensión o
- * reactivación; «Ya la revisé» en la facturación o la renovación de la banda de Administrativa.
+ * reactivación; «Ya la revisé» en la facturación o la renovación de la banda de Administrativa; abrir la revisión de mitad
+ * de ciclo del project manager (no el cierre, que se resuelve al confirmarlo en la ficha).
  */
 export const acknowledgeNotice = async (db, id, actor, { now = new Date(), log } = {}) => noticeDecisionTransaction(db, async db => {
     const notice = await ownOpenNotice(db, id, actor, now, { action: 'acknowledge' });
@@ -458,7 +459,7 @@ export const acknowledgeNotice = async (db, id, actor, { now = new Date(), log }
         const fresh = await whyNotNeeded(db, notice, now);
         if (fresh?.reason) throw httpError(409, 'El contrato cambió. Actualiza el aviso.');
     }
-    const outcome = isCycleNotice(notice) ? 'REVISADO' : 'RECIBIDO';
+    const outcome = isCycleNotice(notice) || isMidCycleReview(notice) ? 'REVISADO' : 'RECIBIDO';
     await resolve(db, notice, outcome, now);
     await traceNotice(db, NOTICE_TRACE_EVENTS.CLOSED, { notice, actor, subject: await readSubjectName(db, notice), extra: { outcome }, now, log });
     return { ok: true };

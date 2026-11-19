@@ -78,7 +78,8 @@ test('el catálogo vigente declara origen y efecto; solo CRM/cartera admiten reg
     assert.ok(noticeAllows({kind},policy.family === 'ANNOUNCEMENT' ? 'preview' : 'open'));
     assert.equal(noticeAllows({kind},'follow-up'),['CRM','COLLECTION'].includes(policy.family));
     assert.equal(noticeAllows({kind},'close'),policy.family==='CRM');
-    // El acuse personal: «Recibido» en suspensión/reactivación y «Ya la revisé» en el cierre de mes de Administrativa.
-    assert.equal(noticeAllows({kind},'acknowledge'),['OPERACION_SUSPENSION','OPERACION_REACTIVACION'].includes(kind) || policy.family==='CYCLE');
+    // El acuse personal: «Recibido» en suspensión/reactivación, «Ya la revisé» en el cierre de mes de Administrativa y
+    // abrir la revisión de mitad de ciclo (el servidor lo limita a la fase MITAD con `operationalNoticeAcknowledges`).
+    assert.equal(noticeAllows({kind},'acknowledge'),['OPERACION_SUSPENSION','OPERACION_REACTIVACION','OPERACION_CICLO'].includes(kind) || policy.family==='CYCLE');
   }
 });

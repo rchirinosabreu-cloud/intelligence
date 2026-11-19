@@ -20,7 +20,9 @@ export const NOTICE_RESPONSE_POLICIES = Object.freeze({
   OPERACION_RENOVACION: operation('ClientContract', 'Registrar renovación', 'La renovación se registra en la ficha. Si el cliente no continúa, confirma esa decisión aquí.', ['open', 'renew', 'continuity', 'snooze']),
   OPERACION_SUSPENSION: operation('ClientSuspension', 'Revisar suspensión', '«Recibido» confirma que viste la suspensión; no la levanta ni cierra pendientes.', ['open', 'acknowledge', 'snooze']),
   OPERACION_REACTIVACION: operation('ClientSuspension', 'Revisar reactivación', '«Recibido» confirma que viste la reactivación; no declara el trabajo cumplido.', ['open', 'acknowledge', 'snooze']),
-  OPERACION_CICLO: operation('ClientMonthlyClose / ClientMonthlyReport / ContentItem', 'Revisar cierre y avance', 'El cierre y el envío del informe se confirman en sus registros, conservando lo pendiente.'),
+  // Mitad de ciclo: abrirla es un acuse personal (REVISADO) que cierra la banda; el aviso del cierre no se acusa y solo se
+  // va cuando el cierre queda confirmado. `operationalNoticeAcknowledges` distingue las dos fases.
+  OPERACION_CICLO: operation('ClientMonthlyClose / ClientMonthlyReport / ContentItem', 'Revisar cierre y avance', 'Al abrirla queda anotada como revisada por ti. El cierre y el informe se confirman en sus registros.', ['open', 'acknowledge', 'snooze']),
   // Cierre de mes para Administrativa (Elisa, 13 de noviembre de 2026): lo que antes iba solo a la campana.
   CICLO_FACTURACION: policy('CYCLE', 'ClientContract / ContractCycleAlert / AccountsReceivable', ['open', 'acknowledge', 'snooze'], 'Abrir Cuentas por cobrar', '«Ya la revisé» es un acuse personal: no emite la cuenta de cobro ni cierra el mes.'),
   CICLO_RENOVACION: policy('CYCLE', 'ClientContract / ContractCycleAlert', ['open', 'acknowledge', 'snooze'], 'Abrir el cliente', '«Ya la revisé» es un acuse personal: la renovación se registra en la ficha del cliente.'),
