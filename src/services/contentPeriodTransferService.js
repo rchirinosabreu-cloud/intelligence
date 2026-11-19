@@ -2,6 +2,7 @@ import { assertNotSuspended } from './clientSuspensionGate.js';
 import { nativePlanProblem } from '../lib/externalPlan.js';
 import { markContentPlanReviewPending } from './briaContentPlanReviewState.js';
 import { itemStatusForQueue, isPublishInstantTooSoon, publishAtIso } from '../lib/socialPublishing.js';
+import { publicationPeriod } from '../lib/publicationPeriod.js';
 
 const fail = (message, status = 409) => Object.assign(new Error(message), { status, statusCode: status });
 
@@ -40,9 +41,12 @@ export async function syncPublicationSchedule(tx, itemId, now = new Date()) {
 
 /** Identity and every child stay on the same ContentItem. Drive derives its folder from this relation. */
 export async function transferContentPeriod(tx, { itemId, date, actorId = null }) {
-  const item = await tx.contentItem.findUnique({ where: { id: itemId }, include: { plan: { include: { client: true } } } });
+  const item = await tx.contentItem.findUnique({ where: { id: itemId }, include: { plan: { include: {
+    client: { include: { contracts: { select: { startDate: true, cutDay: true, createdAt: true } } } }
+  } } } });
   if (!item || item.deletedAt || item.plan.deletedAt) throw fail('La pieza o su parrilla ya no está disponible.', 404);
-  const year = date.getUTCFullYear(), month = date.getUTCMonth() + 1, source = item.plan;
+  // La parrilla destino respeta el día de corte del contrato (19 de noviembre de 2026): ver src/lib/publicationPeriod.js.
+  const { year, month } = publicationPeriod(date, item.plan.client?.contracts), source = item.plan;
   if (year === source.year && month === source.month) return null;
   const problem = nativePlanProblem(source.client);
   if (problem) throw fail(problem);
