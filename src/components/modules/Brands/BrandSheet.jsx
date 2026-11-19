@@ -204,7 +204,7 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
 
     return (
         <div className="space-y-8" data-brand-sheet={client.slug}>
-            <div className={cn('flex flex-wrap items-start justify-between gap-4', !compact && 'sm:pr-10')}>
+            <div className={cn('flex flex-wrap items-start justify-between gap-4', canEdit ? 'pr-24' : 'pr-12')}>
                 <div className="flex min-w-0 items-center gap-4">
                     <ClientAvatar client={client} size={compact ? 40 : 56} />
                     <div className="min-w-0">
@@ -217,10 +217,13 @@ export default function BrandSheet({ data, canEdit, onEdit, compact = false }) {
                         </p>
                     </div>
                 </div>
+                {/* Editar es un icono en la misma fila que la X del diálogo, como en el panel de una tarea (Rodny, 18 de
+                    noviembre de 2026: «que sea solo un símbolo al lado de la X … organizado en la misma línea»). */}
                 {canEdit && (
-                    <Button type="button" variant="outline" className="min-h-11 gap-2" onClick={onEdit}>
-                        <Edit className="h-4 w-4" aria-hidden="true" /> Editar marca
-                    </Button>
+                    <button type="button" onClick={onEdit} aria-label="Editar marca" title="Editar marca" data-brand-edit
+                        className="absolute right-[3.25rem] top-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-600 opacity-70 transition-opacity hover:bg-zinc-100 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-300 dark:hover:bg-zinc-800 sm:right-[3.75rem] sm:top-3">
+                        <Edit className="h-4 w-4" aria-hidden="true" />
+                    </button>
                 )}
             </div>
 
