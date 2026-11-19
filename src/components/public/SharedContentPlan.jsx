@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { formatContentPlanDate, getContentPlanMonthName } from '@/lib/contentPlanPeriod';
+import { formatContentPlanDate, planPeriodName, planPeriodRange } from '@/lib/contentPlanPeriod';
 import { driveEmbedAspect } from '@/lib/finalAssetShape';
 import { APPROVAL_STATES, approvalState, isSettled } from '@/lib/contentApproval';
 import { CLIENT_COMMENT_COUNTER_FROM, CLIENT_COMMENT_MAX_CHARS, clientCommentProblem } from '@/lib/clientComment';
@@ -609,7 +609,7 @@ const SharedContentPlan = () => {
           <div className="min-w-0">
             <h1 className="truncate text-lg font-bold tracking-tight text-zinc-900 dark:text-white">{plan.client.name}</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Parrilla de {getContentPlanMonthName(plan.month)} {plan.year}
+              Parrilla de {planPeriodName(plan)}{planPeriodRange(plan) ? ` · ${planPeriodRange(plan)}` : ''}
             </p>
           </div>
           <div className="flex-grow" />

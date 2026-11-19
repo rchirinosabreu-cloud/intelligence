@@ -5,7 +5,7 @@ import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
+import { getContentPlanMonthName, planPeriodName, planPeriodRange, periodMoveMessage } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { uploadFinalPiece } from '@/lib/contentFinalDelivery';
 import { driveLinkProblem } from '@/lib/driveLinks';
@@ -934,6 +934,9 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
   );
 };
 
+// La persona eligió «Cambiar la fecha» en el aviso: no es un error y no lleva mensaje.
+const PUBLISH_DATE_KEPT = Object.freeze({ kept: true });
+
 const ContentPlanDetail = () => {
   const confirm = useConfirmDialog();
   const { planId, clientSlug, period } = useParams();
@@ -1084,7 +1087,7 @@ const ContentPlanDetail = () => {
   // las quitaba tres segundos después; con una pieza a la vez no hay a dónde desplazarse.
 
   const currentPlanId = plan?.id || planId;
-  usePageLabel(plan ? `Parrilla · ${plan.client?.name || 'Cliente'} · ${getContentPlanMonthName(plan.month)} ${plan.year}` : null);
+  usePageLabel(plan ? `Parrilla · ${plan.client?.name || 'Cliente'} · ${planPeriodName(plan)}` : null);
   const planInternalNotes = parsePlanInternalNotes(plan?.internalNotes);
 
   // Mutations
@@ -1162,8 +1165,30 @@ const ContentPlanDetail = () => {
     }
   });
 
+  // Antes de guardar una fecha nueva se pregunta si la pieza cambiaría de parrilla o quedaría después del fin del
+  // contrato (Rodny, 19 de noviembre de 2026): ninguna pieza se va a otra parrilla sin que se note. Si la consulta
+  // falla se guarda igual; el servidor la deja en la parrilla correcta por el día de corte.
+  const confirmPublishDate = async (date) => {
+    const dayKey = String(date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey) || !currentPlanId) return true;
+    let preview = null;
+    try {
+      preview = (await axios.get(`${getApiBaseUrl()}/api/content/items/period-preview`, {
+        params: { planId: currentPlanId, date: dayKey },
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      })).data;
+    } catch { return true; }
+    const message = periodMoveMessage(preview);
+    return message ? confirm(message) : true;
+  };
+  const dayKeyOfItem = (id) => {
+    const value = (plan?.items || []).find(item => item.id === id)?.publishDate;
+    return value ? new Date(value).toISOString().slice(0, 10) : '';
+  };
+
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
+      if (data?.publishDate && !(await confirmPublishDate(data.publishDate))) throw PUBLISH_DATE_KEPT;
       const response = await axios.post(`${getApiBaseUrl()}/api/content/items`, { ...data, planId: currentPlanId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
@@ -1186,6 +1211,8 @@ const ContentPlanDetail = () => {
 
   const updateItemMutation = useMutation({
     mutationFn: async ({ id, ...data }) => {
+      if (data.publishDate && String(data.publishDate).slice(0, 10) !== dayKeyOfItem(id)
+        && !(await confirmPublishDate(data.publishDate))) throw PUBLISH_DATE_KEPT;
       const response = await axios.patch(`${getApiBaseUrl()}/api/content/items/${id}`, { ...data, expectedPlanId: currentPlanId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
@@ -1213,6 +1240,11 @@ const ContentPlanDetail = () => {
       }
     },
     onError: (error) => {
+      if (error === PUBLISH_DATE_KEPT) {
+        // «Cambiar la fecha»: no se guardó nada y el calendario vuelve a la fecha que tenía.
+        queryClient.invalidateQueries({ queryKey: ['content-plan'] });
+        return;
+      }
       toast.error(error.response?.data?.error || 'No se pudo actualizar la pieza. Se conserva su ubicación anterior.');
       queryClient.invalidateQueries({ queryKey: ['content-item-location'] });
       queryClient.invalidateQueries({ queryKey: ['content-plan'] });
@@ -1563,8 +1595,8 @@ const ContentPlanDetail = () => {
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
       <PageHeader
-        title={`${getContentPlanMonthName(plan.month)} ${plan.year}`}
-        subtitle="Planificación estratégica de contenidos digitales."
+        title={planPeriodName(plan)}
+        subtitle={planPeriodRange(plan) ? `Del ${planPeriodRange(plan)}, según el día de corte del contrato.` : 'Planificación estratégica de contenidos digitales.'}
 
         breadcrumbs={[
           { label: 'Parrillas', href: '/parrillas' },

@@ -2,7 +2,8 @@ import { getContentPlanMonthName } from './contentPlanPeriod.js';
 
 const clientIdOf = plan => plan?.clientId || plan?.client?.id;
 const periodLabel = plan => {
-  const month = getContentPlanMonthName(plan?.month);
+  // Con día de corte distinto al 1 la parrilla toca dos meses: «Noviembre–diciembre 2026».
+  const month = plan?.cycle?.mixed && plan.cycle.label ? plan.cycle.label.toLowerCase() : getContentPlanMonthName(plan?.month);
   return month && Number.isInteger(Number(plan?.year)) && Number(plan.year) > 0
     ? `${month[0].toUpperCase()}${month.slice(1)} ${plan.year}` : null;
 };

@@ -4,7 +4,7 @@ import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
+import { getContentPlanMonthName, planPeriodName, planPeriodRange } from '@/lib/contentPlanPeriod';
 import {
   Plus, Calendar, Filter, Search, MoreHorizontal,
   ChevronRight, ChevronDown, Loader2, Trash2, Eye,
@@ -147,7 +147,7 @@ const ContentGrids = () => {
       const clientName = group.client?.name?.toLowerCase() || '';
       const matchesClient = clientName.includes(term);
       const matchesPlan = group.plans.some(p =>
-        getContentPlanMonthName(p.month).includes(term) ||
+        getContentPlanMonthName(p.month).includes(term) || planPeriodName(p).includes(term) ||
         p.year.toString().includes(term)
       );
       return matchesClient || matchesPlan;
@@ -316,8 +316,9 @@ const ContentGrids = () => {
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
-                                  {getContentPlanMonthName(plan.month)} {plan.year}
+                                  {planPeriodName(plan)}
                                 </span>
+                                {planPeriodRange(plan) && <span className="text-xs text-zinc-500 dark:text-zinc-400">{planPeriodRange(plan)}</span>}
                                 <span className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${
                                   plan.status === 'FINALIZADO' ? 'text-brand-green-deep dark:text-brand-green' : 'text-zinc-400'
                                 }`}>

@@ -21,6 +21,7 @@ import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
+import { planCycle as cycleOfPlan, periodMovePreview } from '../lib/publicationPeriod.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
 import { retireContentTasks } from './contentTaskRetirementService.js';
@@ -205,6 +206,32 @@ const getPlanContentItemsSelect = async () => ({
   orderBy: { publishDate: 'asc' }
 });
 
+
+// El período que cubre cada parrilla según el día de corte de su cliente (19 de noviembre de 2026). Solo sale el
+// rango y su nombre, nunca el contrato: la parrilla compartida con el cliente también lo muestra.
+const CYCLE_CONTRACT_SELECT = { clientId: true, startDate: true, cutDay: true, endDate: true, renewalDecision: true, createdAt: true };
+const contractsByClient = async (clientIds, db = prisma) => {
+  const ids = [...new Set(clientIds.filter(Boolean))];
+  const rows = ids.length ? await db.clientContract.findMany({ where: { clientId: { in: ids } }, select: CYCLE_CONTRACT_SELECT }) : [];
+  const byClient = new Map(ids.map(id => [id, []]));
+  for (const row of rows) byClient.get(row.clientId).push(row);
+  return byClient;
+};
+const withCycles = async (plans) => {
+  const byClient = await contractsByClient(plans.map(plan => plan?.clientId));
+  return plans.map(plan => (plan ? { ...plan, cycle: cycleOfPlan(plan, byClient.get(plan.clientId) || []) } : plan));
+};
+const withCycle = async (plan) => (plan ? (await withCycles([plan]))[0] : plan);
+
+/** Qué pasaría si una pieza de `planId` queda con fecha `date`: si cambia de parrilla y si se sale del contrato. */
+export const previewPeriodMove = async ({ planId, date }) => {
+  const key = publicationDate(date).toISOString().slice(0, 10);
+  const plan = planId ? await prisma.contentPlan.findFirst({ where: { id: planId, deletedAt: null }, select: { year: true, month: true, clientId: true } }) : null;
+  if (!plan) throw Object.assign(new Error('La parrilla ya no está disponible.'), { status: 404 });
+  const contracts = (await contractsByClient([plan.clientId])).get(plan.clientId) || [];
+  return periodMovePreview(plan, key, contracts);
+};
+
 /**
  * ContentPlan Services
  */
@@ -237,7 +264,7 @@ export const getContentPlans = async (clientId) => {
     console.log(`[Service] getContentPlans: Found ${plans.length} plans`);
 
     // Map for frontend compatibility: contentItems -> items
-    return plans.map(plan => ({
+    return (await withCycles(plans)).map(plan => ({
       ...normalizeContentPlan(plan),
       _count: {
         ...plan._count,
@@ -266,7 +293,7 @@ export const getContentPlanById = async (id) => {
   if (plan) {
     const items = planItems(plan);
     return {
-      ...normalizeContentPlan(plan),
+      ...normalizeContentPlan(await withCycle(plan)),
       contentItems: items,
       items,
       // Por qué esta parrilla está congelada por una suspensión de cartera, o null. La pantalla lo dice arriba en vez
@@ -308,7 +335,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
   if (plan) {
     const items = planItems(plan);
     return {
-      ...normalizeContentPlan(plan),
+      ...normalizeContentPlan(await withCycle(plan)),
       contentItems: items,
       items
     };
@@ -448,7 +475,7 @@ export const getContentPlanByToken = async (token) => {
   if (plan) {
     const items = planItems(plan);
     return {
-      ...normalizeContentPlan(plan),
+      ...normalizeContentPlan(await withCycle(plan)),
       contentItems: items,
       items
     };

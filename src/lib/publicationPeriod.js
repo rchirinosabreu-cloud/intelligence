@@ -4,7 +4,7 @@
 // pieza del 5 de diciembre de un cliente con corte 10 es de la parrilla de noviembre, no de la de diciembre. Antes el
 // traslado de período miraba solo el mes del calendario y la sacaba a diciembre: la parrilla de noviembre se veía
 // incompleta en Operación y la siguiente, inflada. Con corte 1 (el de casi todos) el resultado es el de siempre.
-import { cycleForDate } from './clientOperations.js';
+import { cycleForDate, cycleOf, shortDate } from './clientOperations.js';
 import { orderedContracts, contractAt } from './clientContractSelection.js';
 
 const dayKeyOf = (date) => date.toISOString().slice(0, 10);
@@ -21,4 +21,41 @@ export function publicationPeriod(date, contracts) {
   const key = dayKeyOf(date);
   const { year, month } = cycleForDate(key, cutDayOn(contracts, key));
   return { year, month };
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+
+// El período que cubre la parrilla de `month` (Rodny, 19 de noviembre de 2026: «la parrilla debería entenderse y
+// aparecer como bimensual, según las fechas de corte»). Manda el contrato vigente el día 28 de ese mes, el último que
+// puede ser día de corte, así un contrato que arranca a mitad de mes ya nombra su primera parrilla. `mixed` dice si el
+// ciclo toca dos meses; con corte 1 es el mes calendario y la parrilla se sigue llamando como siempre.
+export function planCycle({ year, month }, contracts) {
+  const cut = cutDayOn(contracts, `${year}-${pad(month)}-28`);
+  const cycle = cycleOf(year, month, cut);
+  return { cutDay: Math.min(28, Math.max(1, cut)), label: cycle.label, start: cycle.start, end: cycle.end,
+    mixed: cycle.start.slice(0, 7) !== cycle.end.slice(0, 7) };
+}
+
+// «10 nov – 9 dic»; si el ciclo cruza el año, «10 dic 2026 – 9 ene 2027».
+export function cycleRangeLabel(cycle) {
+  if (!cycle?.start || !cycle?.end) return '';
+  const crossesYear = cycle.start.slice(0, 4) !== cycle.end.slice(0, 4);
+  return `${shortDate(cycle.start, { year: crossesYear })} – ${shortDate(cycle.end, { year: crossesYear })}`;
+}
+
+// Si la fecha cae después del fin del último contrato. Uno que ya arrancó después del que termina es la renovación.
+export function contractEndNotice(dayKey, contracts) {
+  const latest = orderedContracts(contracts || [])[0];
+  if (!latest?.endDate || dayKey <= latest.endDate) return null;
+  return { endDate: latest.endDate, noRenewal: latest.renewalDecision === 'NO_RENOVAR' };
+}
+
+// Lo que pasaría al poner `dayKey` a una pieza de la parrilla `plan`: si cambia de parrilla y si se sale del contrato.
+// La pantalla lo pregunta antes de guardar, para que ninguna pieza cambie de parrilla sin que se note.
+export function periodMovePreview(plan, dayKey, contracts) {
+  const { year, month } = cycleForDate(dayKey, cutDayOn(contracts, dayKey));
+  const moves = year !== plan.year || month !== plan.month;
+  const describe = (period) => ({ year: period.year, month: period.month, ...planCycle(period, contracts) });
+  return { date: dayKey, moves, from: describe(plan), to: moves ? describe({ year, month }) : null,
+    contractEnd: contractEndNotice(dayKey, contracts) };
 }

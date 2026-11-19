@@ -12,6 +12,7 @@ import {
   createContentItem,
   updateContentItem,
   getContentItemLocation,
+  previewPeriodMove,
   deleteContentItem,
   sendItemToKanban,
   generateShareToken,
@@ -294,6 +295,12 @@ router.post('/items', async (req, res) => {
     console.error('[API] Error creating content item:', error);
     return res.status(error.status || error.statusCode || 500).json({ error: error.status ? error.message : 'Failed to create content item', details: error.message });
   }
+});
+
+// Antes de guardar una fecha: ¿la pieza cambiaría de parrilla o se saldría del contrato? No cambia nada.
+router.get('/items/period-preview', async (req, res) => {
+  try { return res.json(await previewPeriodMove({ planId: String(req.query.planId || ''), date: String(req.query.date || '') })); }
+  catch (error) { return res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudo revisar la fecha.' }); }
 });
 
 router.get('/items/:id/location', async (req, res) => {
