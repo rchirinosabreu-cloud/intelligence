@@ -78,7 +78,7 @@ const DialogContent = React.forwardRef(({
       {showCloseButton && (
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="absolute right-2 top-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl opacity-70 ring-offset-background transition-opacity hover:bg-zinc-100 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground dark:hover:bg-zinc-800 sm:right-3 sm:top-3"
+          className="absolute right-2 top-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl opacity-70 ring-offset-background transition-opacity hover:bg-zinc-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground dark:hover:bg-zinc-800 sm:right-3 sm:top-3"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">{closeLabel}</span>
