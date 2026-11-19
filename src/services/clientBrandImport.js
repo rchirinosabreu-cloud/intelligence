@@ -181,7 +181,8 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
             completed: report.filter((line) => line.action === 'COMPLETAR').length,
             skipped: report.filter((line) => line.action === 'OMITIR').length,
             logos: report.reduce((sum, line) => sum + (apply ? (line.logosAdded || 0) : (line.logosNew || 0)), 0),
-            manuals: report.filter((line) => (apply ? line.manualAdded : line.manualNew)).length
+            manuals: report.filter((line) => (apply ? line.manualAdded : line.manualNew)).length,
+            filled: report.filter((line) => line.filled?.length).length
         }
     };
 }
@@ -195,8 +196,8 @@ export async function runBrandImport({ db, service, dataset, apply = false, user
 export async function seedBrandsOnBoot({ db, service, dataset, fetchImpl, log = console } = {}) {
     try {
         const result = await runBrandImport({ db, service, dataset, apply: true, ...(fetchImpl ? { fetchImpl } : {}) });
-        if (result.totals.created || result.totals.logos || result.totals.manuals) {
-            log.log?.(`[Brands] Fichas de los manuales: ${result.totals.created} nuevas, ${result.totals.logos} logos, ${result.totals.manuals} manuales.`);
+        if (result.totals.created || result.totals.logos || result.totals.manuals || result.totals.filled) {
+            log.log?.(`[Brands] Fichas de los manuales: ${result.totals.created} nuevas, ${result.totals.logos} logos, ${result.totals.manuals} manuales, ${result.totals.filled} completadas con colores o tipografías.`);
         }
         for (const line of result.report) {
             if (line.action === 'OMITIR') log.log?.(`[Brands] Sin cargar ${line.name}: ${line.reason}`);
