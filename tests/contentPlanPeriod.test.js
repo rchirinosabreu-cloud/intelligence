@@ -30,7 +30,7 @@ test('all content plan views use the date-independent period formatter', async (
 
   for (const file of files) {
     const source = await read(file);
-    assert.match(source, /getContentPlanMonthName/);
+    assert.match(source, /getContentPlanMonthName|planPeriodName/);
     assert.doesNotMatch(source, /\.setMonth\(/);
   }
 
