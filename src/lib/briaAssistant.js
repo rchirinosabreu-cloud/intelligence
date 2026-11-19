@@ -140,6 +140,7 @@ const TOOL_PROGRESS = {
   operacion_de_cliente: 'Revisando la operación del cliente…',
   cartera_de_operacion: 'Revisando la cartera…',
   criterios_y_hallazgos: 'Revisando criterios y hallazgos…',
+  ficha_de_marca: 'Leyendo la ficha de marca…',
   memoria_de_reuniones: 'Buscando en las reuniones…',
   publicaciones_programadas: 'Revisando lo programado en redes…',
   memoria_de_agencia: 'Buscando en los documentos de la agencia…',
