@@ -122,3 +122,15 @@ export const buildLinkedTaskUpdates = ({
     return Object.keys(data).length ? [{ id: task.id, data }] : [];
   });
 };
+
+// El pendiente «Publicar» que crea la plataforma es del responsable de la parrilla (Rodny, 19 de noviembre de 2026:
+// «que a los pendientes automáticos de publicar no se les pueda cambiar el responsable, a menos que uno sea el
+// admin»). Solo los que nacen de una pieza; un pendiente suelto que alguien tituló «[Publicar]» no entra.
+export const isAutomaticPublicationTask = (task) => Boolean(task?.contentItemId) && isPublicationTask(task?.title || '');
+
+export const publicationAssigneeProblem = ({ task, payload = {}, role }) => {
+  if (!isAutomaticPublicationTask(task) || !('assigneeId' in payload) || payload.assigneeId === undefined) return null;
+  if ((payload.assigneeId || null) === (task.assigneeId || null)) return null;
+  if (String(role || '').toUpperCase() === 'ADMIN') return null;
+  return 'El responsable de un pendiente de publicar es el responsable de la parrilla. Solo un administrador lo cambia.';
+};
