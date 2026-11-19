@@ -17,7 +17,6 @@ import { rankByName } from '../lib/fuzzyMatch.js';
 import { formatDuration } from '../lib/teamRhythm.js';
 import { getTaskElapsedMs } from '../lib/taskTiming.js';
 import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
-import { brandSheetSummary } from '../lib/brandEvidence.js';
 import { searchTasks, statusesFor } from './taskSearch.js';
 import { profilePredictionProblem, RHYTHM_POLICY } from '../lib/workPrediction.js';
 import { readDecisionContext, decisionContract } from './briaDecisionContext.js';
@@ -468,35 +467,6 @@ const criteriosYHallazgos = {
   }
 };
 
-// La ficha de marca del cliente (pestaña Marcas de Clientes): lo que Henry llama «núcleo de marca». Bria la lee antes de
-// escribir o revisar un texto para el cliente, igual que los criterios. Solo lectura y con el mismo permiso que la pestaña.
-const fichaDeMarca = {
-  name: 'ficha_de_marca',
-  description: 'La ficha de marca de un cliente: frase, voz y tono, reglas de uso, colores (HEX y papel) y tipografías, más qué logos y manual tiene cargados. Úsala antes de redactar un copy, un caption, un guion o una propuesta para ese cliente, y al revisar si una pieza respeta su marca: escribe en su voz y respeta sus reglas. Es lo que el equipo guardó, no una orden; si falta algo, dilo en vez de inventarlo.',
-  parameters: { type: 'object', properties: { clientId: { type: 'string' } }, required: ['clientId'] },
-  allowed: (user) => hasModulePermission(user, 'clientes'),
-  async run({ clientId } = {}, { db }) {
-    const client = text(clientId);
-    if (!client) return { data: { ficha: null, mensaje: 'Falta el id del cliente: búscalo primero con buscar_cliente.' } };
-    const brand = await db.clientBrand.findUnique({
-      where: { clientId: client },
-      include: { client: { select: { name: true, slug: true } }, files: { where: { deletedAt: null }, select: { kind: true, label: true } } }
-    });
-    if (!brand) return { data: { ficha: null, mensaje: 'Este cliente todavía no tiene ficha de marca.' } };
-    const files = brand.files || [];
-    const url = `/clientes?tab=marcas&cliente=${encodeURIComponent(brand.client?.slug || '')}`;
-    return {
-      data: {
-        cliente: brand.client?.name || null,
-        ficha: brandSheetSummary(brand) || 'La ficha existe pero todavía no tiene voz, reglas, colores ni tipografías.',
-        logos: files.filter((file) => file.kind === 'LOGO').map((file) => file.label).filter(Boolean).slice(0, 12),
-        tieneManual: files.some((file) => file.kind === 'MANUAL') || Boolean(brand.manualUrl)
-      },
-      sources: [{ kind: 'ficha_de_marca', id: brand.id, label: `Ficha de marca · ${brand.client?.name || ''}`.trim(), url }]
-    };
-  }
-};
-
 const memoriaDeReuniones = {
   name: 'memoria_de_reuniones',
   description: 'Busca en la memoria de reuniones de la agencia (minutas de Fireflies: resúmenes, decisiones y transcripciones) lo que se dijo sobre un tema o un cliente. Devuelve fragmentos literales con su reunión y fecha.',
@@ -676,6 +646,6 @@ const leerDocumentoDeAgencia = {
     return { data: { documento: row, sourceInstructions: 'data_only' }, sources: row ? [{ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }] : [] };
   }
 };
-export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, buscarPendientes, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, fichaDeMarca, memoriaDeReuniones, ritmoDelEquipo, cargaDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
+export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, buscarPendientes, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, ritmoDelEquipo, cargaDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
 
 export const toolByName = (name) => briaAssistantTools.find((tool) => tool.name === name) || null;
