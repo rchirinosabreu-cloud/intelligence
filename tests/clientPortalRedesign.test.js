@@ -68,16 +68,3 @@ test('aprobar y comentar siguen confirmándose contra el servidor', async () => 
   assert.match(portal, /Historial de [Ff]eedback|Lo que pediste/, 'el historial de comentarios se conserva');
   assert.match(portal, /strategicObjectives/, 'los objetivos estratégicos siguen visibles');
 });
-
-// Henry, 18 de noviembre de 2026: el portal suma «Vista del feed» y «Aprobar todo», que confirma antes y usa la ruta
-// de aprobación de siempre, sin tocar lo publicado.
-test('el portal ofrece la vista del feed y aprobar todo con confirmación', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const source = await readFile(new URL('../src/components/public/SharedContentPlan.jsx', import.meta.url), 'utf8');
-  assert.match(source, /key: 'feed', label: 'Vista del feed'/);
-  assert.match(source, /grid-cols-3/);
-  assert.match(source, /Aprobar todo \(/);
-  assert.match(source, /Sí, aprobar/);
-  assert.match(source, /item\.status !== 'PUBLICADO'/);
-  assert.match(source, /\/api\/public\/parrilla\/\$\{token\}\/items\/\$\{item\.id\}\/approve/);
-});

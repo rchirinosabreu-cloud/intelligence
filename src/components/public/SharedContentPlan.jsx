@@ -206,31 +206,6 @@ const PieceCard = ({ item, index, onOpen }) => (
   </button>
 );
 
-/** La vista del feed (Rodny, 18 de noviembre de 2026, tras ver Henry): el mes como se verá en el perfil, en tres columnas
- * y de la más nueva a la más vieja, como Instagram. Es para mirar el conjunto: tocar una pieza abre su detalle. */
-const feedOrder = (items) => [...items].sort((a, b) => String(b.publishDate || '').localeCompare(String(a.publishDate || '')));
-
-const FeedGrid = ({ items, allItems, onOpen }) => (
-  <div className="mx-auto w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
-    <div className="grid grid-cols-3 gap-0.5 bg-white dark:bg-zinc-900">
-      {feedOrder(items).map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onOpen(item.id)}
-          aria-label={`Pieza ${allItems.indexOf(item) + 1}: ${item.objective || item.format}`}
-          className="relative aspect-[4/5] overflow-hidden bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-cyan dark:bg-zinc-800"
-        >
-          <FinalAssetThumb item={item} />
-          <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm" aria-hidden="true">
-            <span className={`h-1.5 w-1.5 rounded-full ${pieceStatusPresentation(item, { publicView: true }).dot}`} />
-          </span>
-        </button>
-      ))}
-    </div>
-  </div>
-);
-
 /** El detalle: la pieza en grande y, al lado, lo que se va a publicar. */
 const PieceDetail = ({
   item, index, total, onBack, onPrev, onNext,
@@ -478,8 +453,6 @@ const SharedContentPlan = () => {
   const [loading, setLoading] = useState(true);
   const [openItemId, setOpenItemId] = useState(null);
   const [filter, setFilter] = useState('all');
-  const [confirmApproveAll, setConfirmApproveAll] = useState(false);
-  const [bulkApproving, setBulkApproving] = useState(false);
   const [commentingItemId, setCommentingItemId] = useState(null);
   const [clientComment, setClientComment] = useState('');
   // Por qué no se pudo enviar, para enseñárselo junto al campo. Se borra en cuanto vuelve a escribir.
@@ -553,29 +526,6 @@ const SharedContentPlan = () => {
       console.error('Approve error:', error.response?.data || error);
       toast.error('Error al aprobar la pieza');
     }
-  };
-
-  // «Aprobar todo» (Rodny, 18 de noviembre de 2026, tras ver Henry): el cliente que ya revisó el mes aprueba de una vez
-  // lo que queda, pieza por pieza por la misma ruta de siempre, después de confirmarlo. Lo publicado no se toca.
-  const approvableItems = useMemo(() => items.filter((item) => !isApproved(item) && item.status !== 'PUBLICADO'), [items]);
-  const handleApproveAll = async () => {
-    if (bulkApproving || approvableItems.length === 0) return;
-    setBulkApproving(true);
-    let done = 0;
-    for (const item of approvableItems) {
-      try {
-        await axios.post(`${getApiBaseUrl()}/api/public/parrilla/${token}/items/${item.id}/approve`);
-        done += 1;
-      } catch (error) {
-        console.error('Bulk approve error:', error.response?.data || error);
-      }
-    }
-    await fetchPlan();
-    setBulkApproving(false);
-    setConfirmApproveAll(false);
-    const missing = approvableItems.length - done;
-    if (missing === 0) toast.success(done === 1 ? 'Pieza aprobada' : `${done} piezas aprobadas`);
-    else toast.error(`Aprobadas ${done}; ${missing} no se pudieron aprobar. Reinténtalo.`);
   };
 
   const handleSubmitComment = async (itemId) => {
@@ -724,8 +674,7 @@ const SharedContentPlan = () => {
               {[
                 { key: 'all', label: `Todas · ${items.length}` },
                 { key: 'pending', label: `Por revisar · ${pendingCount}` },
-                { key: 'approved', label: `Aprobadas · ${approvedCount}` },
-                { key: 'feed', label: 'Vista del feed' }
+                { key: 'approved', label: `Aprobadas · ${approvedCount}` }
               ].map(option => (
                 <button
                   key={option.key}
@@ -742,31 +691,13 @@ const SharedContentPlan = () => {
                 </button>
               ))}
               <div className="flex-grow" />
-              {approvableItems.length > 0 && (confirmApproveAll ? (
-                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Confirmar aprobación">
-                  <p className="text-sm text-zinc-700 dark:text-zinc-200">
-                    ¿Aprobar {approvableItems.length === 1 ? 'la pieza que falta' : `las ${approvableItems.length} piezas que faltan`}?
-                  </p>
-                  <button type="button" onClick={handleApproveAll} disabled={bulkApproving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-green-deep px-4 text-sm font-semibold text-white hover:bg-brand-green-deep/90 disabled:opacity-60">
-                    {bulkApproving && <Loader2 className="h-4 w-4 animate-spin" />} Sí, aprobar
-                  </button>
-                  <button type="button" onClick={() => setConfirmApproveAll(false)} disabled={bulkApproving} className="min-h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200">
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => setConfirmApproveAll(true)} className="min-h-11 rounded-xl border border-brand-green/40 bg-white px-4 text-sm font-semibold text-brand-green-deep hover:bg-brand-green-soft dark:border-brand-green/30 dark:bg-zinc-900 dark:text-brand-green">
-                  Aprobar todo ({approvableItems.length})
-                </button>
-              ))}
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Toca una pieza para verla completa</p>
             </div>
 
             {visibleItems.length === 0 ? (
               <div className="rounded-[2rem] border border-dashed border-zinc-200 bg-white p-12 text-center dark:border-white/10 dark:bg-zinc-900">
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay piezas en esta vista.</p>
               </div>
-            ) : filter === 'feed' ? (
-              <FeedGrid items={visibleItems} allItems={items} onOpen={openPiece} />
             ) : (
               <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
                 {visibleItems.map((item) => (

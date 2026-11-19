@@ -4,7 +4,7 @@ import { knowledgeError } from './briaKnowledge.js';
 // Capacidades de lectura, no frases del usuario. El modelo decide qué necesita investigar.
 export const INVESTIGATION_READS = {
   tareas_de_cliente: 'TAREAS', buscar_pendientes: 'TAREAS', mis_tareas: 'TAREAS', leer_pendiente: 'TAREAS',
-  parrilla_de_cliente: 'CONTENIDO', leer_piezas_de_parrilla: 'CONTENIDO', criterios_y_hallazgos: 'CONTENIDO', ficha_de_marca: 'CONTENIDO', publicaciones_programadas: 'CONTENIDO',
+  parrilla_de_cliente: 'CONTENIDO', leer_piezas_de_parrilla: 'CONTENIDO', criterios_y_hallazgos: 'CONTENIDO', publicaciones_programadas: 'CONTENIDO',
   actividad_del_equipo: 'ACTIVIDAD',
   operacion_de_cliente: 'CONTEXTO', memoria_de_reuniones: 'CONTEXTO',
   cartera_de_operacion: 'CONTEXTO', lectura_de_la_agencia: 'CONTEXTO',
