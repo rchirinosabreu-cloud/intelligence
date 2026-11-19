@@ -12,6 +12,15 @@ test('mitad de ciclo usa el corte del cliente, sin afirmar 50% de cumplimiento',
   assert.ok(rows.some(n => n.kind === 'OPERACION_CICLO' && n.subjectId.includes('MITAD')));
   assert.ok(!rows.some(n => /50%|vencid|incumpl/.test(n.message)));
 });
+test('el aviso de cierre aparece el mismo día en que se puede confirmar el cierre', () => {
+  // Ciclo 15 oct–14 nov: «Confirmar cierre» se habilita el 11 de noviembre (tres días antes del fin).
+  const before = plan(client(), '2026-11-10').find(n => n.kind === 'OPERACION_CICLO');
+  assert.ok(before.subjectId.endsWith(':MITAD'));
+  assert.equal(before.acknowledge, true);
+  const closing = plan(client(), '2026-11-11').find(n => n.kind === 'OPERACION_CICLO');
+  assert.ok(closing.subjectId.endsWith(':CIERRE'));
+  assert.equal(closing.acknowledge, undefined);
+});
 test('precierre reúne informe y revisión; un cierre registrado no vuelve a pedir cierre', () => {
   const rows = plan(client(), '2026-11-12');
   assert.equal(rows.filter(n => n.kind === 'OPERACION_CICLO').length, 1);

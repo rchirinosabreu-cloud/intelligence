@@ -56,3 +56,20 @@ test('el resumen de parrillas conserva otras cuentas con un rótulo actualizado'
   assert.doesNotMatch(result.notice.label,/4 cuentas/);
   assert.match(result.notice.message,/1 período tiene/);
 });
+
+test('abrir la revisión de mitad de ciclo la anota como vista y no vuelve en ese ciclo; el cierre sí vuelve',async()=>{
+  const {db,data,actor}=fixture();
+  const mid=new Date('2026-11-02T15:00:00Z'); // ciclo 15 oct–14 nov: mitad desde el 30 de octubre
+  const {notice}=await currentImportantNotice(db,actor.id,mid);
+  assert.equal(notice.kind,'OPERACION_CICLO');
+  assert.equal(notice.acknowledge,true);
+  const before=JSON.stringify(data.client);
+  await acknowledgeOperationalNotice(db,notice.id,actor,{now:mid});
+  assert.equal(data.importantNotice.find(n=>n.id===notice.id).resolution,'REVISADO');
+  assert.equal((await currentImportantNotice(db,actor.id,new Date('2026-11-05T15:00:00Z'))).notice,null,'no vuelve en la misma fase');
+  assert.equal(JSON.stringify(data.client),before,'acusar no registra cierre ni informe');
+  const closing=(await currentImportantNotice(db,actor.id,new Date('2026-11-11T15:00:00Z'))).notice;
+  assert.match(closing?.label || '',/^Cierre del/,'el cierre llega como aviso nuevo');
+  assert.equal(closing.acknowledge,false);
+  await assert.rejects(acknowledgeOperationalNotice(db,closing.id,actor,{now:new Date('2026-11-11T15:00:00Z')}),/registro de origen/);
+});

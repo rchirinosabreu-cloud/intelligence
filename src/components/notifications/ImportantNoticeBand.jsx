@@ -114,6 +114,8 @@ function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightCha
   // Cierre de mes para Administrativa (Elisa, 13 de noviembre de 2026: «que me invadan la pantalla, en la campanita si
   // no entro no lo veo»): facturación y renovación. «Ya la revisé» es un acuse personal; no emite ni renueva nada.
   const isCycle = policy?.family === 'CYCLE';
+  // Solo la mitad de ciclo se acusa con el botón principal; el cierre se resuelve en la ficha (el servidor lo dice en `acknowledge`).
+  const isMidCycle = notice.kind === 'OPERACION_CICLO' && notice.acknowledge === true;
   const selectOutcome = (value, action) => {
     // Descartar es una decisión directa pedida por Comercial; conserva revisión e historial nativos.
     if (value === 'DESCARTADO') {
@@ -172,6 +174,20 @@ function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightCha
       setBusy(false);
       if (error.status === 409) { setMode('base'); onRefresh(); }
     }
+  };
+
+  // Revisión de mitad de ciclo (Rodny, 19 de noviembre de 2026): «al darle al botón de revisar pues ya debería cerrarse
+  // la banda». El botón anota el acuse personal y lleva a la ficha del cliente. Si el acuse falla se avisa y se viaja igual:
+  // la persona pidió ir a revisar, y el aviso sigue ahí para la próxima.
+  const openMidCycleReview = async () => {
+    setBusy(true);
+    try {
+      await post(`${notice.id}/acknowledge`, {});
+      onDecided();
+    } catch (error) {
+      toast.error(error.message); setBusy(false); onRefresh();
+    }
+    navigateFrom(notice.url);
   };
 
   const dismissAnnouncement = async () => {
@@ -234,7 +250,7 @@ function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightCha
                   <NoticeButton primary disabled={busy} data-notice-action="preview" onClick={() => openAnnouncementPreview(notice.announcement.id)}>Ver anuncio</NoticeButton>
                   <NoticeButton disabled={busy} data-notice-action="dismiss" onClick={dismissAnnouncement}>Cerrar</NoticeButton>
                 </> : isOperational ? (
-                  <NoticeButton primary disabled={busy} data-notice-action="open-operation" onClick={() => navigateFrom(notice.kind === 'OPERACION_RENOVACION' ? `${notice.url}?action=renew-contract` : notice.url)}>
+                  <NoticeButton primary disabled={busy} data-notice-action="open-operation" onClick={() => (isMidCycle ? openMidCycleReview() : navigateFrom(notice.kind === 'OPERACION_RENOVACION' ? `${notice.url}?action=renew-contract` : notice.url))}>
                     {policy.openLabel}
                   </NoticeButton>
                 ) : isPlan ? (
@@ -275,7 +291,7 @@ function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightCha
                     Archivar
                   </NoticeButton>
                 )}
-                {noticeAllows(notice, 'acknowledge') && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, isCycle ? 'Revisión anotada' : 'Aviso recibido')}>{isCycle ? 'Ya la revisé' : 'Recibido'}</NoticeButton>}
+                {noticeAllows(notice, 'acknowledge') && notice.kind !== 'OPERACION_CICLO' && <NoticeButton disabled={busy} data-notice-action="acknowledge" onClick={() => decide('acknowledge', {}, isCycle ? 'Revisión anotada' : 'Aviso recibido')}>{isCycle ? 'Ya la revisé' : 'Recibido'}</NoticeButton>}
                 {isOperational && notice.continuity && <ContractContinuityDecision clientId={notice.continuity.clientId}
                   clientName={notice.label.split(' · ').slice(1).join(' · ')} onDecided={onDecided}
                   contract={{ id: notice.continuity.contractId, endDate: notice.continuity.endDate, updatedAt: notice.continuity.expectedUpdatedAt }} />}
