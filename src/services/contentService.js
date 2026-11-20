@@ -676,13 +676,14 @@ export const createContentItem = async (data, { actorId = null } = {}) => {
  * fecha —tareas, Drive, cola de publicación, historial—, guardando otra vez la fecha que ya tiene. Una que no se pueda
  * mover (se está publicando, parrilla congelada) no frena a las demás: se devuelve con su motivo.
  */
-export const realignContentPlan = async (planId, { actorId = null } = {}) => {
+export const realignContentPlan = async (planId, { actorId = null, onlyIds = null } = {}) => {
   const plan = await prisma.contentPlan.findFirst({ where: { id: planId, deletedAt: null },
     select: { id: true, clientId: true, year: true, month: true,
       contentItems: { where: { deletedAt: null }, select: { id: true, objective: true, publishDate: true } } } });
   if (!plan) throw Object.assign(new Error('La parrilla ya no está disponible.'), { status: 404 });
   const moved = [], failed = [];
   for (const row of await misplacedOf(plan, plan.contentItems)) {
+    if (onlyIds && !onlyIds.includes(row.id)) continue;
     try {
       const item = await updateContentItem(row.id, { publishDate: row.date, expectedPlanId: plan.id }, { actorId });
       if (item?.periodTransfer) moved.push({ id: row.id, toPlan: item.periodTransfer.toPlan });
@@ -692,6 +693,29 @@ export const realignContentPlan = async (planId, { actorId = null } = {}) => {
     }
   }
   return { moved, failed };
+};
+
+/**
+ * Al arrancar (Rodny, 20 de noviembre de 2026: «la idea es que se arregle todo al desplegar»): lleva a su parrilla las
+ * piezas que quedaron en otra por el mes calendario. Solo las que todavía no se publicaron: lo publicado es historia y
+ * se mueve desde la parrilla, con el botón. Una vez hecho no encuentra nada, así que repetirlo en cada arranque no pesa.
+ */
+export const realignPendingContentItems = async ({ db = prisma, realign = realignContentPlan } = {}) => {
+  const plans = await db.contentPlan.findMany({ where: { deletedAt: null, contentItems: { some: { deletedAt: null, status: { not: 'PUBLICADO' } } } },
+    select: { id: true, clientId: true, year: true, month: true,
+      contentItems: { where: { deletedAt: null, status: { not: 'PUBLICADO' } }, select: { id: true, publishDate: true } } } });
+  const contracts = await contractsByClient(plans.map(plan => plan.clientId), db);
+  const summary = { moved: 0, failed: [] };
+  for (const plan of plans) {
+    const ids = outOfPeriodItems(plan, plan.contentItems, contracts.get(plan.clientId) || []).map(row => row.id);
+    if (!ids.length) continue;
+    try {
+      const result = await realign(plan.id, { onlyIds: ids });
+      summary.moved += result.moved.length;
+      summary.failed.push(...result.failed.map(row => ({ planId: plan.id, ...row })));
+    } catch (error) { summary.failed.push({ planId: plan.id, error: error.message }); }
+  }
+  return summary;
 };
 
 export const updateContentItem = async (id, data, { fromClientReview = false, actorId = null } = {}) => {

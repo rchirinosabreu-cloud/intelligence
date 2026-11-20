@@ -29,6 +29,7 @@ import { initCrmFollowUpAlertScheduler } from './src/services/crmFollowUpAlertSe
 import { initCollectionAlertScheduler } from './src/services/collectionAlertService.js';
 import { initFormalizationScheduler } from './src/services/projectFormalizationService.js';
 import { initContractCycleAlertScheduler } from './src/services/contractCycleAlertService.js';
+import { realignPendingContentItems } from './src/services/contentService.js';
 import { initPlanCloseNoticeScheduler } from './src/services/planCloseNoticeService.js';
 import { initAdBudgetAlertScheduler } from './src/services/adBudgetNoticeService.js';
 import { initAdMetaSyncScheduler } from './src/services/adBudgetMetaService.js';
@@ -254,6 +255,11 @@ async function bootstrap() {
         initCollectionAlertScheduler();
         initFormalizationScheduler();
         initContractCycleAlertScheduler();
+        // Piezas sin publicar que quedaron en otra parrilla por el mes calendario: vuelven a la suya al desplegar
+        // (20 de noviembre de 2026). No frena el arranque; si falla, la parrilla sigue ofreciendo el botón.
+        realignPendingContentItems()
+            .then(({ moved, failed }) => { if (moved || failed.length) console.log(`[Parrillas] Piezas llevadas a su parrilla: ${moved}; sin mover: ${failed.length}`, failed.slice(0, 20)); })
+            .catch(error => console.error('[Parrillas] No se pudieron reubicar las piezas al arrancar:', error.message));
         initPlanCloseNoticeScheduler();
         initAdBudgetAlertScheduler();
         initAdMetaSyncScheduler();
