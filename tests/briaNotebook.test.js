@@ -105,3 +105,15 @@ test('the production assistant wires the notebook for the person who asks', asyn
   assert.equal(asked, 'u');
   assert.equal(result.answer, 'con cuaderno');
 });
+
+test('in a fixed chat with many deliveries the notebook takes the note of that day or week, never the first one nor what the person wrote', async () => {
+  const thread = { get: async (actor, id) => ({ id, turns: id === 'focus'
+    ? [{ role: 'assistant', text: 'Foco viejo', note: 'FOCO_SEMANAL', weekKey: '2026-W43' }, { role: 'assistant', text: 'Foco de esta semana', note: 'FOCO_SEMANAL', weekKey: '2026-W44' }]
+    : id === 'close'
+      ? [{ role: 'assistant', text: 'Cierre del 29', note: 'CIERRE_DIA', dayKey: '2026-10-29' }]
+      : [{ role: 'assistant', text: 'Lectura del 30', note: 'LECTURA_MANANA', dayKey: '2026-10-30' }, { role: 'user', text: 'gracias' }, { role: 'assistant', text: 'De nada', sources: [] }, { role: 'assistant', text: 'Lectura del 31', note: 'LECTURA_MANANA', dayKey: '2026-10-31' }] }) };
+  const notebook = await createBriaNotebookService({ repository: repository(), conversations: thread, readings, now }).today(admin);
+  assert.equal(notebook.lecturaManana, 'Lectura del 31');
+  assert.equal(notebook.focoSemana, 'Foco de esta semana');
+  assert.equal(notebook.cierre, null, 'a marked chat without the note of that day gives nothing instead of another day’s close');
+});
