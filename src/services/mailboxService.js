@@ -215,6 +215,17 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
       return repo.recentImportant(new Date(now().getTime() - hours * H));
     },
 
+    /**
+     * Lo que la lectura de la mañana dice del correo (20 de noviembre de 2026): lo importante que Bria leyó desde
+     * `since` y lo que ya avisó como «sin respuesta» en la última semana y sigue así. Solo lee lo guardado.
+     */
+    async morningDigest({ since, at = now() } = {}) {
+      const seen = new Set();
+      const once = (rows) => rows.filter((row) => row.messageId && !seen.has(row.messageId) && seen.add(row.messageId));
+      const unanswered = typeof repo.stillUnanswered === 'function' ? once(await repo.stillUnanswered({ from: new Date(at.getTime() - UNANSWERED_WINDOW_MS) })) : [];
+      return { unanswered, recent: once(await repo.recentImportant(since)) };
+    },
+
     /** Un correo concreto, con cuerpo acotado, buscado en todos los buzones activos; para resumirlo a pedido. */
     async readMessage(messageId) {
       const id = String(messageId || '').replace(/^<|>$/g, '').trim();

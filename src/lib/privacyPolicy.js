@@ -51,4 +51,6 @@
 // 2.21 (20 de noviembre de 2026): de un correo importante de los buzones compartidos Bria deja listos un resumen
 // corto y un borrador de respuesta (se guardan 30 días con la fila del correo; el cuerpo sigue sin guardarse) y avisa
 // si sigue sin respuesta, mirando solo los encabezados de la carpeta de enviados. Sigue sin enviar correos.
-export const PRIVACY_POLICY_VERSION = '2.21 · 2026-11-20';
+// 2.22 (20 de noviembre de 2026): la lectura de la mañana nombra las reuniones de hoy de la persona y el remitente
+// y el asunto de los correos importantes de los buzones compartidos; esa mención queda en su chat con Bria.
+export const PRIVACY_POLICY_VERSION = '2.22 · 2026-11-20';
