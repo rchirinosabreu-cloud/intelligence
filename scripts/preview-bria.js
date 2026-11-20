@@ -150,7 +150,7 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   const morningNudge = { key: 'LECTURA_DIA:2026-10-20', kind: 'LECTURA_DIA', title: 'Bria dejó tu lectura de la mañana.', body: 'Cómo amanecieron las cuentas y el equipo, lo que haría hoy y lo que no haría.', url: null, conversationId: morningChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: morningChat.id }] };
   // El borrador listo de un correo (20 de noviembre de 2026), con los botones que arma el mismo código de producción
   // y datos ficticios. `?correo` muestra el aviso; `?correo=sinrespuesta`, el de un correo que sigue sin contestar.
-  const mailDraft = { summary: 'María confirma el pago de la primera cuota y pide el contrato firmado y la fecha de inicio de la campaña.', reply: 'Hola, María:\n\nGracias por compartir el soporte de pago; ya lo registramos. Adjuntamos el contrato firmado por nuestra parte para tu archivo.\n\nLa campaña inicia el [fecha de inicio]. Te confirmamos el cronograma completo en cuanto lo validemos con el equipo.\n\nQuedamos atentos.\n\nUn saludo,\nBrain Studio' };
+  const mailDraft = { summary: 'María confirma el pago de la primera cuota y pide el contrato firmado y la fecha de inicio de la campaña.', reply: 'Hola, María:\n\nGracias por compartir el soporte de pago; ya lo registramos. Adjuntamos el contrato firmado por nuestra parte para tu archivo.\n\nLa campaña inicia el [fecha de inicio]. Te confirmamos el cronograma completo en cuanto lo validemos con el equipo.\n\nQuedamos atentos.\n\nUn saludo,\nBrain Studio', to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota', canSend: true };
   const mailNudges = (referer) => {
     if (!/[?&]correo/.test(referer)) return null;
     const unanswered = /correo=sinrespuesta/.test(referer);
@@ -198,6 +198,8 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     res.json({ decided: true, request: permissionDecided, message: permissionDecisionMessage(permissionDecided) });
   });
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
+  // Enviar con aprobación, de muestra: nada sale de aquí; responde como el servidor cuando el correo se envía.
+  api.post('/api/bria/mail/reply', (req, res) => (/\[[^\]]+\]/.test(String(req.body?.text || '')) ? res.status(400).json({ message: 'Completa lo que quedó entre corchetes antes de enviarla.' }) : res.json({ sent: true, to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota' })));
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
     res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (mailNudges(referer) ?? accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });

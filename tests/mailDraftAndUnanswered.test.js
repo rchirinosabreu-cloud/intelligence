@@ -249,14 +249,14 @@ test('the pulse service reads the unanswered mails once an hour, in the first sl
   assert.deepEqual(old.facts, [], 'a mailbox service without the capability is skipped');
 });
 
-test('the card shows the draft in place, with a copy button, and never a way to send', () => {
+test('the card shows the draft in place, with a copy button, and never a link that opens a mail client', () => {
   const nudge = readFileSync('src/components/bria/BriaNudge.jsx', 'utf8');
   assert.match(nudge, /item\.draft\s*\?\s*<button key=\{item\.label\} type="button" aria-expanded=\{draftOpen\} data-bria-nudge-draft-toggle/);
   assert.match(nudge, /const draftOpen = Boolean\(draft\) && draftFor === nudge\.key;/, 'the next notice never opens with the previous draft');
-  assert.match(nudge, /navigator\.clipboard\.writeText\(draft\.reply\)/);
+  assert.match(nudge, /navigator\.clipboard\.writeText\(reply\)/, 'copies what the person corrected');
   assert.match(nudge, /data-bria-nudge-draft-reply className="[^"]*whitespace-pre-wrap/);
   assert.match(nudge, /console\.error\('\[BriaNudge\] No se pudo copiar el borrador:'/);
-  assert.doesNotMatch(nudge, /Enviar correo|mailto:/);
+  assert.doesNotMatch(nudge, /mailto:/);
 });
 
 test('a mail already reported unanswered on a previous day is still checked against the sent folders, noted when the reply appears, and never reported again', async () => {

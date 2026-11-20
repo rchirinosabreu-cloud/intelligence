@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { X, ArrowUpRight, CheckCircle } from '@/components/ui/icons';
 import { BriaIsotipo } from './BriaBrand';
 import { askBria, openBriaConversation } from '@/lib/briaAsk';
-import { requestBriaNudges } from '@/lib/briaNudgeRequest';
+import { requestBriaNudges, sendMailReply } from '@/lib/briaNudgeRequest';
 import { requestVault } from '@/lib/vaultRequest';
 import { cn } from '@/lib/utils';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
@@ -47,11 +47,14 @@ function NudgeProgress({ progress }) {
   );
 }
 
-export default function BriaNudge({ userId, hidden = false, request = requestBriaNudges, decide = decideAccess, refreshMs = NUDGE_REFRESH_MS, className }) {
+export default function BriaNudge({ userId, hidden = false, request = requestBriaNudges, decide = decideAccess, sendReply = sendMailReply, refreshMs = NUDGE_REFRESH_MS, className }) {
   const [nudges, setNudges] = useState([]), [busy, setBusy] = useState(false), mounted = useRef(true);
   // El borrador listo de un correo (20 de noviembre de 2026) se despliega en la misma tarjeta; guarda de qué aviso es,
   // así el aviso siguiente nunca aparece con el borrador del anterior abierto.
   const [draftFor, setDraftFor] = useState(null);
+  // Enviar con aprobación (20 de noviembre de 2026): el texto que la persona corrige, si ya pidió enviar (falta el sí)
+  // y los correos que ya salieron en esta sesión. Todo atado al aviso, como el borrador.
+  const [replyText, setReplyText] = useState({}), [confirmFor, setConfirmFor] = useState(null), [sentFor, setSentFor] = useState({});
   // Ir a un sitio desde el aviso lleva de dónde se salió: allá se ofrece volver (30 de octubre de 2026).
   const navigateFrom = useNavigateFrom();
   const load = async () => {
@@ -92,9 +95,26 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
   const kind = (index) => (index === 0 ? primary : secondary);
   const draft = (nudge.actions || []).find((item) => item.draft?.reply)?.draft || null;
   const draftOpen = Boolean(draft) && draftFor === nudge.key;
-  // Bria nunca envía correos: la persona copia la respuesta, la pega en su correo y la revisa antes de mandarla.
+  // Bria no envía sola: la persona corrige la respuesta y la envía con dos pasos (pedir y confirmar), o la copia.
+  const reply = draft ? (replyText[nudge.key] ?? draft.reply) : '';
+  const sent = Boolean(sentFor[nudge.key]);
+  const canSend = Boolean(draft?.canSend && draft?.messageId) && !sent;
+  const confirming = canSend && confirmFor === nudge.key;
+  const pending = /\[[^\]\n]{1,80}\]/.test(reply);
+  const send = async () => {
+    setBusy(true);
+    try {
+      const out = await sendReply({ messageId: draft.messageId, text: reply });
+      if (mounted.current) { setSentFor(rows => ({ ...rows, [nudge.key]: out.to || draft.to })); setConfirmFor(null); }
+      toast.success(`Respuesta enviada a ${out.to || draft.to}.`);
+    } catch (failure) {
+      console.error('[BriaNudge] No se pudo enviar la respuesta:', failure.message);
+      toast.error(failure.message);
+      if (mounted.current) setConfirmFor(null);
+    } finally { if (mounted.current) setBusy(false); }
+  };
   const copyDraft = async () => {
-    try { await navigator.clipboard.writeText(draft.reply); toast.success('Respuesta copiada. Revísala en tu correo antes de enviarla.'); }
+    try { await navigator.clipboard.writeText(reply); toast.success('Respuesta copiada. Revísala en tu correo antes de enviarla.'); }
     catch (failure) { console.error('[BriaNudge] No se pudo copiar el borrador:', failure.message); toast.error('No se pudo copiar. Selecciona el texto y cópialo a mano.'); }
   };
   return (
@@ -138,8 +158,25 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
         {draftOpen && (
           <div data-bria-nudge-draft className="mt-3 rounded-2xl border border-bria-line bg-bria-mist/40 px-3 py-2.5 dark:border-white/10 dark:bg-white/5">
             {draft.summary && <p className="text-sm leading-5 text-bria-muted dark:text-zinc-300">{draft.summary}</p>}
-            <p data-bria-nudge-draft-reply className="mt-2 max-h-52 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-bria-ink dark:text-zinc-200">{draft.reply}</p>
-            <button type="button" onClick={copyDraft} className={cn(secondary, 'mt-2.5')}>Copiar respuesta</button>
+            {canSend
+              ? <textarea data-bria-nudge-draft-reply aria-label="Respuesta que se enviará" value={reply} disabled={busy || confirming} rows={7} maxLength={4000} onChange={(event) => setReplyText(rows => ({ ...rows, [nudge.key]: event.target.value }))} className="mt-2 block max-h-64 w-full resize-y whitespace-pre-wrap rounded-xl border border-bria-line bg-white px-3 py-2 text-sm leading-6 text-bria-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan disabled:opacity-70 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200" />
+              : <p data-bria-nudge-draft-reply className="mt-2 max-h-52 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-bria-ink dark:text-zinc-200">{reply}</p>}
+            {sent && <p data-bria-nudge-sent role="status" className="mt-2 text-sm font-medium text-brand-green-deep dark:text-brand-green">Respuesta enviada a {sentFor[nudge.key]}.</p>}
+            {canSend && pending && <p className="mt-2 text-sm text-bria-muted dark:text-zinc-300">Completa lo que quedó entre corchetes para poder enviarla.</p>}
+            {confirming ? (
+              <div data-bria-nudge-send-confirm role="group" aria-label="Confirmar el envío" className="mt-2.5">
+                <p className="text-sm leading-5 text-bria-night dark:text-white">Se enviará desde <strong>{draft.from}</strong> a <strong>{draft.to}</strong> con el asunto «{draft.subject}». No se puede deshacer.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" disabled={busy} onClick={send} className={primary}>{busy ? 'Enviando…' : 'Sí, enviar'}</button>
+                  <button type="button" disabled={busy} onClick={() => setConfirmFor(null)} className={secondary}>Volver</button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {canSend && <button type="button" data-bria-nudge-send disabled={busy || pending || !reply.trim()} onClick={() => setConfirmFor(nudge.key)} className={cn(primary, 'disabled:opacity-50')}>Enviar respuesta</button>}
+                <button type="button" onClick={copyDraft} className={secondary}>Copiar respuesta</button>
+              </div>
+            )}
           </div>
         )}
       </div>

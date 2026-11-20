@@ -74,8 +74,10 @@ export const createMailAccountRepository = ({ pool, key }) => ({
   /** Los borradores vigentes de esos correos, por id de correo: lo que la tarjeta muestra al abrirse. */
   async draftsFor(messageIds = []) {
     if (!messageIds.length) return new Map();
-    const { rows } = await pool.query('SELECT DISTINCT ON (message_id) message_id, draft_summary, draft_reply FROM bria_memory.mail_seen WHERE message_id = ANY($1::text[]) AND draft_reply IS NOT NULL ORDER BY message_id, created_at', [messageIds]);
-    return new Map(rows.map((row) => [row.message_id, { summary: row.draft_summary || '', reply: row.draft_reply }]));
+    const { rows } = await pool.query(`SELECT DISTINCT ON (s.message_id) s.message_id, s.draft_summary, s.draft_reply, s.from_address, s.subject, a.email AS account_email, a.is_active,
+        EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id AND r.replied_at IS NOT NULL) AS replied
+      FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id WHERE s.message_id = ANY($1::text[]) AND s.draft_reply IS NOT NULL ORDER BY s.message_id, s.created_at`, [messageIds]);
+    return new Map(rows.map((row) => [row.message_id, { summary: row.draft_summary || '', reply: row.draft_reply, from: row.from_address || null, subject: row.subject || '', accountEmail: row.is_active ? row.account_email : null, replied: Boolean(row.replied) }]));
   },
   /**
    * Los correos importantes que siguen sin respuesta vista: recibidos entre `from` y `until`, de importancia 2 o más,
@@ -105,6 +107,29 @@ export const createMailAccountRepository = ({ pool, key }) => ({
     const { rows } = await pool.query(`SELECT s.account_id, s.message_id FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
       WHERE s.important AND a.is_active AND s.answered_at IS NULL AND s.unanswered_notified_at < $2 AND s.received_at >= $1 ORDER BY s.received_at DESC LIMIT $3`, [from, notifiedBefore, limit]);
     return rows.map((row) => ({ accountId: row.account_id, messageId: row.message_id }));
+  },
+  /**
+   * Enviar con aprobación (20 de noviembre de 2026). `replyTarget`: el correo importante al que se responde, en el
+   * primer buzón activo que lo recibió. `claimReply` lo aparta antes de enviar para que dos clics no manden dos
+   * respuestas (vale para el mismo correo en dos buzones); `releaseReply` lo suelta si el envío falló.
+   */
+  async replyTarget(messageId) {
+    const { rows } = await pool.query(`SELECT s.account_id, s.message_id, s.from_address, s.subject, s.important,
+        (SELECT max(r.replied_at) FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id) AS replied_at
+      FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id WHERE s.message_id=$1 AND a.is_active ORDER BY s.created_at LIMIT 1`, [messageId]);
+    const row = rows[0];
+    return row ? { accountId: row.account_id, messageId: row.message_id, from: row.from_address, subject: row.subject, important: Boolean(row.important), repliedAt: row.replied_at || null } : null;
+  },
+  async repliesSince(actorRef, since) {
+    return Number((await pool.query('SELECT count(DISTINCT message_id)::int AS n FROM bria_memory.mail_seen WHERE replied_by_ref=$1 AND replied_at >= $2', [actorRef, since])).rows[0]?.n || 0);
+  },
+  async claimReply(accountId, messageId, actor, at) {
+    const { rowCount } = await pool.query(`UPDATE bria_memory.mail_seen SET replied_at=$2, replied_by_ref=$3, replied_by_name=$4 WHERE message_id=$1
+      AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=$1 AND r.replied_at IS NOT NULL)`, [messageId, at, actor.ref, actor.name || null]);
+    return rowCount > 0;
+  },
+  async releaseReply(accountId, messageId) {
+    await pool.query('UPDATE bria_memory.mail_seen SET replied_at=NULL, replied_by_ref=NULL, replied_by_name=NULL WHERE message_id=$1', [messageId]);
   },
   async markAnswered(accountId, messageId, at) {
     await pool.query('UPDATE bria_memory.mail_seen SET answered_at=$3 WHERE account_id=$1 AND message_id=$2 AND answered_at IS NULL', [accountId, messageId, at]);
