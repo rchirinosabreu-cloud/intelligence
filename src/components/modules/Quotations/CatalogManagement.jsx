@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,12 @@ import { toast } from 'react-hot-toast';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 import ServiceCatalogModal, { SERVICE_CATEGORIES as CATEGORIES } from './ServiceCatalogModal';
+import { CatalogUploadButton, useCatalogDownload } from './CatalogSpreadsheet';
 
 const CatalogManagement = () => {
     const confirm = useConfirmDialog();
+    const queryClient = useQueryClient();
+    const catalogDownload = useCatalogDownload();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,7 +103,7 @@ const CatalogManagement = () => {
                     <h2 className="text-2xl font-bold tracking-tight">Catálogo de Servicios</h2>
                     <p className="text-zinc-500 text-sm">Gestiona los productos y tarifas oficiales de la agencia.</p>
                 </div>
-                <div className="flex w-full md:w-auto items-center gap-2">
+                <div className="flex w-full md:w-auto flex-wrap items-center gap-2">
                     <div className="relative flex-1 md:w-72">
                         <Search className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-zinc-400" />
                         <input
@@ -111,6 +114,10 @@ const CatalogManagement = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
+                    <Button type="button" variant="outline" className="rounded-xl shrink-0" disabled={catalogDownload.busy} onClick={catalogDownload.download}>
+                        {catalogDownload.busy && <Loader2 className="w-4 h-4 animate-spin" />}Descargar Excel
+                    </Button>
+                    <CatalogUploadButton />
                     <Button onClick={() => openModal()} className="rounded-xl flex shrink-0 items-center gap-2">
                         <Plus className="w-4 h-4" /> Nuevo Servicio
                     </Button>

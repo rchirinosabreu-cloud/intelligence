@@ -1,3 +1,3 @@
 {
-  "$comentario": "Avisos altos o críticos de npm audit que hoy no tienen un arreglo sin cambio de versión mayor. Los lee scripts/security-audit-gate.mjs. Cada uno lleva su motivo y una fecha «revisarAntesDe»: vencida, la puerta de CI vuelve a fallar. Hoy no hay ninguno: el de deepmerge-ts (vía Prisma) se cerró el 15 de noviembre de 2026 fijando la versión corregida en «overrides» de package.json."
+  "$comentario": "Avisos altos o críticos de npm audit que hoy no tienen un arreglo sin cambio de versión mayor. Los lee scripts/security-audit-gate.mjs. Cada uno lleva su motivo y una fecha «revisarAntesDe»: vencida, la puerta de CI vuelve a fallar. Hoy no hay ninguno: el de deepmerge-ts (vía Prisma) se cerró el 15 de noviembre de 2026 fijando la versión corregida en «overrides» de package.json, y el de effect (GHSA-7589-6fvf-x4pw, también vía Prisma) el 20 de noviembre de 2026 de la misma forma (3.22.5)."
 }
