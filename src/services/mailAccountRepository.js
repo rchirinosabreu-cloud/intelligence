@@ -10,6 +10,12 @@ const publicAccount = (row) => ({
   connectedBy: row.connected_by_name || null, connectedAt: row.connected_at, lastReadAt: row.last_read_at || null, lastError: row.last_error || null, lastErrorAt: row.last_error_at || null
 });
 
+// «Esperando por ti»: un correo importante de un buzón activo, con borrador listo o ya avisado sin respuesta, que nadie
+// ha respondido (ni por fuera ni desde Bria) en ninguno de los buzones que lo recibieron. Una sola regla para contar y listar.
+const WAITING_MAIL = `FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
+  WHERE s.important AND a.is_active AND s.received_at >= $1 AND s.answered_at IS NULL AND s.replied_at IS NULL AND (s.draft_reply IS NOT NULL OR s.unanswered_notified_at IS NOT NULL)
+    AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id AND (r.answered_at IS NOT NULL OR r.replied_at IS NOT NULL))`;
+
 export const createMailAccountRepository = ({ pool, key }) => ({
   async list() {
     const { rows } = await pool.query('SELECT * FROM bria_memory.mail_accounts ORDER BY connected_at');
@@ -114,9 +120,13 @@ export const createMailAccountRepository = ({ pool, key }) => ({
    * respuestas (vale para el mismo correo en dos buzones); `releaseReply` lo suelta si el envío falló.
    */
   async waitingCount(since) {
-    return Number((await pool.query(`SELECT count(DISTINCT s.message_id)::int AS n FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
-      WHERE s.important AND a.is_active AND s.received_at >= $1 AND s.answered_at IS NULL AND s.replied_at IS NULL AND (s.draft_reply IS NOT NULL OR s.unanswered_notified_at IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id AND (r.answered_at IS NOT NULL OR r.replied_at IS NOT NULL))`, [since])).rows[0]?.n || 0);
+    return Number((await pool.query(`SELECT count(DISTINCT s.message_id)::int AS n ${WAITING_MAIL}`, [since])).rows[0]?.n || 0);
+  },
+  /** Los mismos correos que cuenta `waitingCount`, uno por correo, para que Bria los nombre cuando se los piden. */
+  async waitingList(since, { limit = 20 } = {}) {
+    const { rows } = await pool.query(`SELECT DISTINCT ON (s.message_id) s.*, a.email AS account_email, a.label AS account_label ${WAITING_MAIL} ORDER BY s.message_id, s.created_at`, [since]);
+    return rows.sort((a, b) => new Date(b.received_at || 0) - new Date(a.received_at || 0)).slice(0, limit)
+      .map((row) => ({ accountEmail: row.account_email, accountLabel: row.account_label || null, messageId: row.message_id, from: row.from_address, fromName: row.from_name, subject: row.subject, date: row.received_at, reasons: row.reasons || [], clientName: row.client_name || null, hasDraft: Boolean(row.draft_reply), notifiedUnanswered: Boolean(row.unanswered_notified_at) }));
   },
   async replyTarget(messageId) {
     const { rows } = await pool.query(`SELECT s.account_id, s.message_id, s.from_address, s.subject, s.important,

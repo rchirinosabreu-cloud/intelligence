@@ -77,7 +77,7 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
     {/* Encima de la navegación (60), debajo de los formularios compartidos (70/71).
         El panel permanece montado: abrir un formulario no cierra el chat ni pierde su borrador. */}
     <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[65] overflow-hidden border border-bria-line bg-white text-bria-night shadow-[0_30px_60px_-36px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:text-white dark:shadow-[0_30px_60px_-32px_rgba(0,0,0,0.7)]', !open && 'hidden', fullScreen ? 'inset-0' : 'inset-x-0 top-0 h-[100dvh] border-0 sm:inset-x-auto sm:bottom-3 sm:right-3 sm:top-20 sm:h-auto sm:w-[440px] sm:rounded-[28px] sm:border')}>
-      <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />
+      <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); if (phone) setOpen(false); navigate(source.url); }} />
     </aside>
   </>, document.body);
 }

@@ -177,6 +177,7 @@ const TOOL_PROGRESS = {
   lectura_de_la_agencia: 'Repasando cómo viene la agencia…',
   anotar_decision: 'Anotándolo en el libro de decisiones…',
   correos_importantes: 'Revisando los correos que llegaron…',
+  correos_sin_respuesta: 'Revisando los correos que esperan respuesta…',
   leer_correo: 'Leyendo el correo…',
   pendientes_de_reunion: 'Leyendo los compromisos de la reunión…',
   proponer_parrilla: 'Armando la propuesta de la parrilla…'

@@ -66,3 +66,26 @@ test('the block lives in Bria’s home, the route is for people with Bria, and M
   assert.match(readFileSync('src/routes/index.js', 'utf8'), /router\.use\('\/bria\/waiting', createBriaWaitingRouter\(\)\)/);
   assert.match(readFileSync('src/routes/api/briaWaiting.js', 'utf8'), /canUseBria\(req\.user\)/);
 });
+
+test('el correo que espera se lista con la misma regla que se cuenta, y en el celular ir a una pantalla cierra a Bria', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createMailAccountRepository } = await import('../src/services/mailAccountRepository.js');
+  const { createBriaMailTools } = await import('../src/services/briaMailTools.js');
+  const queries = [];
+  const repo = createMailAccountRepository({ pool: { async query(sql, params) { queries.push(String(sql)); return /count\(/.test(sql) ? { rows: [{ n: 2 }] } : { rows: [
+    { message_id: 'a@x', from_address: 'ana@cliente.co', from_name: 'Ana', subject: 'Contrato', received_at: '2026-11-18T15:00:00Z', draft_reply: 'Hola', unanswered_notified_at: null, account_email: 'contacto@agencia.co', reasons: ['cliente'] },
+    { message_id: 'b@x', from_address: 'luis@cliente.co', subject: 'Factura', received_at: '2026-11-19T15:00:00Z', draft_reply: null, unanswered_notified_at: '2026-11-20T15:00:00Z', account_email: 'contacto@agencia.co' }
+  ] }; } } });
+  const since = new Date('2026-11-13T00:00:00Z');
+  assert.equal(await repo.waitingCount(since), 2);
+  const list = await repo.waitingList(since);
+  assert.deepEqual(list.map((row) => row.messageId), ['b@x', 'a@x'], 'el más reciente primero');
+  const rule = (sql) => sql.slice(sql.indexOf('FROM bria_memory.mail_seen s'), sql.includes('ORDER BY') ? sql.indexOf('ORDER BY') : undefined).replace(/\s+/g, ' ').trim();
+  assert.equal(rule(queries[0]), rule(queries[1]), 'contar y listar usan exactamente la misma regla');
+  const tools = createBriaMailTools({ waitingMail: async () => list });
+  const tool = tools.find((row) => row.name === 'correos_sin_respuesta');
+  const { data } = await tool.run();
+  assert.equal(data.count, 2); assert.equal(data.correos[0].avisado_sin_respuesta, true); assert.equal(data.correos[1].borrador_listo, true);
+  assert.equal(tool.allowed({ role: 'EDITOR', modulePermissions: { bria: true } }), false);
+  assert.match(readFileSync('src/components/bria/BriaAssistant.jsx', 'utf8'), /onOpenSource=\{source => \{ setFullScreen\(false\); if \(phone\) setOpen\(false\); navigate\(source\.url\); \}\}/);
+});
