@@ -12,7 +12,7 @@ import MeetingAward from './MeetingAward';
 import RecognitionCollection, { RecognitionHistory, RecognitionStatus } from './RecognitionCollection';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, KUDOS_WEEKLY, CAUGHT_UP_MIN_CLOSED, EFFORT_DAILY_CAP, EFFORT_KEY, effortPoints, habitPoints, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
+import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, EARLY_DELIVERY_EXTRA_POINTS, KUDOS_WEEKLY, CAUGHT_UP_MIN_CLOSED, EFFORT_DAILY_CAP, EFFORT_KEY, effortPoints, habitPoints, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
 
 // El nombre de archivo conserva compatibilidad con el dock y ?carrera.
 // Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
@@ -149,7 +149,7 @@ function Rules() {
       <li>La primera actividad registrada desde las 8:00 am suma {EXTRA_POINTS} puntos.</li>
       <li>Si estás entre las dos primeras personas en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
-      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 6:00 pm sin dejar nada vencido.</li>
+      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos; desde la segunda entrega anticipada del mismo día, cada una suma {EARLY_DELIVERY_EXTRA_POINTS}. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 6:00 pm sin dejar nada vencido.</li>
     </ul>
   </details>;
 }

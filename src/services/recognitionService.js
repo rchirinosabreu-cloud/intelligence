@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { recognitionPointsById } from '../lib/platformLeague.js';
 import { dayStartCutoff, recognitionCalendar, recognitionDueDay, taskAwardKinds, planIsApproved } from './recognitionRules.js';
 import { recognitionMessages } from '../lib/recognitionPresentation.js';
 import { hasModulePermission } from '../config/security.js';
@@ -136,7 +137,11 @@ export async function claimRecognition(db, userId, at = new Date()) {
       if (!valid) { await tx.recognitionAward.update({ where: { id: award.id }, data: { seenAt: at } }); continue; }
       const leaseToken = randomUUID();
       await tx.recognitionAward.update({ where: { id: award.id }, data: { leaseToken, leaseUntil: new Date(at.getTime() + 60000) } });
-      return { ...serialize(award), leaseToken };
+      // La segunda entrega anticipada del día vale menos (`recognitionPointsById`): el aviso dice los puntos de verdad.
+      const sameDay = award.kind === 'EARLY_DELIVERY'
+        ? await tx.recognitionAward.findMany({ where: { recipientId: userId, kind: 'EARLY_DELIVERY', dayKey: award.dayKey }, select: { id: true, kind: true, recipientId: true, occurredAt: true } })
+        : [award];
+      return { ...serialize(award), points: recognitionPointsById(sameDay).get(award.id), leaseToken };
     }
     return null;
   });

@@ -45,13 +45,13 @@ test('the 8:00 cutoff is Bogotá time and the badge text does not mention the ho
 
 test('the requested correction retires only a dawn Buen comienzo of that day, keeps the row and runs once', async () => {
   const { applyRecognitionCorrections, RECOGNITION_CORRECTIONS } = await import('../src/services/recognitionCorrections.js');
-  assert.deepEqual(RECOGNITION_CORRECTIONS.map(c => [c.kind, c.day]), [['FIRST_TASK', '2026-11-20']]);
+  assert.deepEqual(RECOGNITION_CORRECTIONS.map(c => [c.kind, c.day || c.month]), [['FIRST_TASK', '2026-11-20'], ['EARLY_DELIVERY', '2026-11']]);
   const rows = [
     { id: 'sara', kind: 'FIRST_TASK', dayKey: '2026-11-20', recipientId: 'u-sara', occurredAt: new Date('2026-11-20T06:07:00Z'), evidence: { teamDayCount: 1 } },
     { id: 'otro-dia', kind: 'FIRST_TASK', dayKey: '2026-11-19', recipientId: 'u-x', occurredAt: new Date('2026-11-19T06:00:00Z'), evidence: {} },
     { id: 'manana', kind: 'FIRST_TASK', dayKey: '2026-11-21', recipientId: 'u-y', occurredAt: new Date('2026-11-21T14:00:00Z'), evidence: {} },
   ];
-  const db = { recognitionAward: {
+  const db = { task: { findMany: async () => [] }, recognitionAward: {
     findMany: async ({ where }) => rows.filter(r => r.kind === where.kind && r.dayKey === where.dayKey && (!where.occurredAt || r.occurredAt < where.occurredAt.lt)),
     update: async ({ where, data }) => Object.assign(rows.find(r => r.id === where.id), data),
   } };
@@ -71,4 +71,62 @@ test('a retired recognition no longer shows on the task card', () => {
   const service = readFileSync('src/services/recognitionService.js', 'utf8');
   const attach = service.slice(service.indexOf('export async function attachTaskRecognitions'));
   assert.match(attach, /NOT: \{ kind: \{ endsWith: '_RETIRADO' \} \}/);
+});
+
+function correctionDb(rows, tasks) {
+  return { task: { findMany: async ({ where }) => tasks.filter(t => where.id.in.includes(t.id)) }, recognitionAward: {
+    findMany: async ({ where }) => rows.filter(r => r.kind === where.kind
+      && (typeof where.dayKey === 'string' ? r.dayKey === where.dayKey : r.dayKey.startsWith(where.dayKey.startsWith))
+      && (!where.recipient || r.name.startsWith(where.recipient.name.startsWith))),
+    update: async ({ where, data }) => Object.assign(rows.find(r => r.id === where.id), data),
+  } };
+}
+const saraCorrection = async () => (await import('../src/services/recognitionCorrections.js')).RECOGNITION_CORRECTIONS.filter(c => c.kind === 'EARLY_DELIVERY');
+
+test('Sara: retires only her early deliveries on Elar and Nattal, and only when there are exactly two', async () => {
+  const { applyRecognitionCorrections } = await import('../src/services/recognitionCorrections.js');
+  const corrections = await saraCorrection();
+  const tasks = [{ id: 't-elar', title: 'Pieza Elar', client: { name: 'Elar' } }, { id: 't-nattal', title: 'Pieza Nattal', client: { name: 'Nattal' } }, { id: 't-grit', title: 'Enviar para aprobación', client: { name: 'Fundación Grit' } }];
+  const rows = [
+    { id: 'a1', kind: 'EARLY_DELIVERY', dayKey: '2026-11-19', name: 'Sara Pérez', taskId: 't-elar', occurredAt: new Date('2026-11-19T15:00:00Z'), evidence: {} },
+    { id: 'a2', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Pérez', taskId: 't-nattal', occurredAt: new Date('2026-11-20T15:00:00Z'), evidence: {} },
+    { id: 'a3', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Pérez', taskId: 't-grit', occurredAt: new Date('2026-11-20T15:39:00Z'), evidence: {} },
+    { id: 'a4', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Helen', taskId: 't-elar', occurredAt: new Date('2026-11-20T16:00:00Z'), evidence: {} },
+  ];
+  const retired = await applyRecognitionCorrections(correctionDb(rows, tasks), { corrections });
+  assert.deepEqual(retired.map(r => r.id).sort(), ['a1', 'a2']);
+  assert.equal(rows.find(r => r.id === 'a3').kind, 'EARLY_DELIVERY', 'la de Fundación Grit se queda');
+  assert.equal(rows.find(r => r.id === 'a4').kind, 'EARLY_DELIVERY', 'la de otra persona se queda');
+  assert.deepEqual(await applyRecognitionCorrections(correctionDb(rows, tasks), { corrections }), [], 'no se repite');
+});
+
+test('Sara: with three matches nothing is retired and the list is logged for review', async () => {
+  const { applyRecognitionCorrections } = await import('../src/services/recognitionCorrections.js');
+  const tasks = [{ id: 't-elar', title: 'Pieza Elar', client: { name: 'Elar' } }];
+  const rows = ['b1', 'b2', 'b3'].map((id, i) => ({ id, kind: 'EARLY_DELIVERY', dayKey: `2026-11-1${i}`, name: 'Sara', taskId: 't-elar', occurredAt: new Date(`2026-11-1${i}T15:00:00Z`), evidence: {} }));
+  const warn = console.warn; const logged = []; console.warn = (...args) => logged.push(args.join(' '));
+  try { assert.deepEqual(await applyRecognitionCorrections(correctionDb(rows, tasks), { corrections: await saraCorrection() }), []); }
+  finally { console.warn = warn; }
+  assert.ok(rows.every(r => r.kind === 'EARLY_DELIVERY'));
+  assert.match(logged.join('\n'), /se esperaban 2 y hay 3/);
+});
+
+test('early delivery: the first of the day is worth 5, each additional one 2; other days start over', async () => {
+  const { recognitionPointsById, recognitionPoints, leagueScore } = await import('../src/lib/platformLeague.js');
+  const awards = [
+    { id: 'e1', kind: 'EARLY_DELIVERY', recipientId: 'sara', occurredAt: '2026-11-20T14:00:00Z' },
+    { id: 'e2', kind: 'EARLY_DELIVERY', recipientId: 'sara', occurredAt: '2026-11-20T16:00:00Z' },
+    { id: 'e3', kind: 'EARLY_DELIVERY', recipientId: 'sara', occurredAt: '2026-11-20T22:00:00Z' },
+    { id: 'e4', kind: 'EARLY_DELIVERY', recipientId: 'sara', occurredAt: '2026-11-21T14:00:00Z' },
+    { id: 'e5', kind: 'EARLY_DELIVERY', recipientId: 'helen', occurredAt: '2026-11-20T15:00:00Z' },
+    { id: 'f1', kind: 'FIRST_TASK', recipientId: 'sara', occurredAt: '2026-11-20T13:30:00Z' },
+  ];
+  const points = recognitionPointsById(awards);
+  assert.deepEqual(['e1', 'e2', 'e3', 'e4', 'e5', 'f1'].map(id => points.get(id)), [5, 2, 2, 5, 5, 5]);
+  assert.equal(recognitionPoints(awards.filter(a => a.recipientId === 'sara')), 19);
+  assert.equal(leagueScore({ recognitionPoints: 9 }), 9);
+  assert.equal(leagueScore({ recognitions: 2 }), 10, 'quien solo cuenta reconocimientos sigue igual');
+  const service = readFileSync('src/services/platformLeagueService.js', 'utf8');
+  assert.doesNotMatch(service, /recognitions: awardsOf\(memberId\)\.length/);
+  assert.match(readFileSync('src/components/recognitions/RecognitionNotice.jsx', 'utf8'), /event\.points \?\? RECOGNITION_POINTS/);
 });

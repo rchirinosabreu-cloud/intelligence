@@ -10,7 +10,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace } from '../lib/leagueDay.js';
-import { KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
+import { KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
 import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
@@ -230,7 +230,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const awardsTo = new Date(Math.max(monthEnd.getTime(), dayWindow(week.to).end.getTime()));
       const [{ members, byMember }, saved, gifts, given, meetings, awards, weekSaved, weekGifts, weekMeetings, lastWeekSaved, lastWeekGifts, lastWeekMeetings] = await Promise.all([
         this.readDay(today), repo.daysOfMonth(monthKey, { before }), repo.kudosOfMonth(monthKey), repo.givenInWeek(me.id, weekKey), repo.meetingsOfMonth(monthKey),
-        db.recognitionAward.findMany({ where: { kind: { in: LEAGUE_RECOGNITION_KINDS }, occurredAt: { gte: awardsFrom, lt: awardsTo } }, select: { id: true, recipientId: true, occurredAt: true } }),
+        db.recognitionAward.findMany({ where: { kind: { in: LEAGUE_RECOGNITION_KINDS }, occurredAt: { gte: awardsFrom, lt: awardsTo } }, select: { id: true, kind: true, recipientId: true, occurredAt: true } }),
         repo.daysInRange(week.from, week.to, { before }), repo.kudosOfWeek(week.weekKey), repo.meetingsOfWeek(week.weekKey),
         repo.daysInRange(lastWeek.from, lastWeek.to, { before }), repo.kudosOfWeek(lastWeek.weekKey), repo.meetingsOfWeek(lastWeek.weekKey)
       ]);
@@ -255,7 +255,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const inMonth = award => new Date(award.occurredAt) >= monthStart && new Date(award.occurredAt) < monthEnd;
       const awardsOf = memberId => awards.filter(award => inMonth(award) && award.recipientId === userOfMember.get(memberId));
       const scoreOf = (memberId) => leagueScore({ days: daysByMember.get(memberId) || [], kudos: receivedBy.get(memberId) || [],
-        meetings: meetings.filter(meeting => meeting.member_id === memberId).length, recognitions: awardsOf(memberId).length }) ?? 0;
+        meetings: meetings.filter(meeting => meeting.member_id === memberId).length, recognitionPoints: recognitionPoints(awardsOf(memberId)) }) ?? 0;
       const avatarKeys = resolveLeagueAvatarKeys(members);
       // El puntaje de una semana: sus días guardados (más hoy en vivo si cae en ella), sus regalos, su tráfico y sus reconocimientos.
       const weekScores = ({ range, rows, kudos, awardsWeek, withToday }) => {
@@ -265,7 +265,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const inWeek = value => { const day = bogotaDate(value); return day >= range.from && day <= range.to; };
         return members.map(member => ({ id: member.id, name: firstName(member.name), fullName: member.name, avatarUrl: member.avatarUrl || null, pixelAvatarKey: avatarKeys[member.id] || null, isSelf: member.id === me.id,
           score: leagueScore({ days: days.get(member.id), kudos: kudos.filter(gift => gift.receiver_member_id === member.id), meetings: awardsWeek.meetings.filter(meeting => meeting.member_id === member.id).length,
-            recognitions: awards.filter(award => award.recipientId === member.user.id && inWeek(award.occurredAt)).length }) ?? 0 }));
+            recognitionPoints: recognitionPoints(awards.filter(award => award.recipientId === member.user.id && inWeek(award.occurredAt))) }) ?? 0 }));
       };
       const weekLanes = weekScores({ range: week, rows: weekSaved, kudos: weekGifts, awardsWeek: { meetings: weekMeetings }, withToday: true });
       const weekRanked = weekLanes.filter(lane => lane.score > 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));
@@ -287,7 +287,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const rawToday = todayByMember.get(me.id);
       const myToday = rawToday ? { ...rawToday, extras: { ...rawToday.extras, PRIMERO_EN_REUNION: meetingsToday.length ? meetingsToday.some(meeting => meeting.member_id === me.id) : null },
         evidence: { ...rawToday.evidence, PRIMERO_EN_REUNION: meetingsToday.length ? `Registrado por un administrador: ${meetingsToday.map(meeting => firstName(nameOf.get(meeting.member_id) || '')).join(' y ')}.` : 'Pendiente de registro del administrador.' } } : null;
-      const todayAwardPoints = awardsOf(me.id).filter(award => bogotaDate(award.occurredAt) === today).length * RECOGNITION_POINTS;
+      const myPoints = recognitionPointsById(awardsOf(me.id));
+      const todayAwardPoints = awardsOf(me.id).filter(award => bogotaDate(award.occurredAt) === today).reduce((sum, award) => sum + (myPoints.get(award.id) || 0), 0);
       const todayGiftPoints = kudosScore((receivedBy.get(me.id) || []).filter(gift => bogotaDate(gift.created_at) === today));
       const todaySummary = todayPoints(myToday);
       const received = (receivedBy.get(me.id) || []).map((gift) => ({ from: firstName(nameOf.get(gift.giver_member_id) || 'Alguien del equipo'), note: gift.note, week: gift.week_key, points: gift.points }));
@@ -313,7 +314,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         score,
         scoreBreakdown: lanes.find(lane => lane.isSelf)?.scoreBreakdown,
         today: myToday ? { ...myToday, ...todaySummary, points: todaySummary.points + todayAwardPoints + todayGiftPoints } : null,
-        recognitionPoints: awardsOf(me.id).length * RECOGNITION_POINTS,
+        recognitionPoints: recognitionPoints(awardsOf(me.id)),
         meetings: { canManage: me.user.role === 'ADMIN', minDate: [bogotaDate(startedAt), `${monthKey}-01`].sort().at(-1), maxDate: today,
           entries: meetings.map(meeting => ({ date: meeting.day_key, weekKey: meeting.week_key, memberId: meeting.member_id, name: firstName(nameOf.get(meeting.member_id) || 'Alguien del equipo'), points: MEETING_POINTS })) },
         nextStep: leagueNextStep(myDays),
@@ -341,12 +342,21 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         gte: new Date(Math.max(Date.parse(`${month}-01T05:00:00.000Z`), startedAt.getTime())),
         lt: new Date(Date.UTC(year, monthNumber, 1, 5)),
       } };
-      const [groups, rows] = await Promise.all([
+      const [groups, rows, early] = await Promise.all([
         db.recognitionAward.groupBy({ by: ['kind'], where, _count: { _all: true } }),
         db.recognitionAward.findMany({ where, select: { id: true, kind: true, occurredAt: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }], take: 13 }),
+        // Las entregas anticipadas del mes, para saber cuál fue la primera de cada día (`recognitionPointsById`).
+        kinds.includes('EARLY_DELIVERY')
+          ? db.recognitionAward.findMany({ where: { ...where, kind: 'EARLY_DELIVERY' }, select: { id: true, kind: true, recipientId: true, occurredAt: true } })
+          : [],
       ]);
       const counts = Object.fromEntries(groups.map((row) => [row.kind, row._count._all]));
-      return { month, counts, total: Object.values(counts).reduce((sum, count) => sum + count, 0), recent: rows.slice(0, 12), hasMore: rows.length > 12 };
+      const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+      const earlyPoints = recognitionPointsById(early || []);
+      const pointsOf = (row) => earlyPoints.get(row.id) ?? RECOGNITION_POINTS;
+      const extraEarly = [...earlyPoints.values()].filter(value => value < RECOGNITION_POINTS);
+      const points = total * RECOGNITION_POINTS - extraEarly.reduce((sum, value) => sum + (RECOGNITION_POINTS - value), 0);
+      return { month, counts, total, points, recent: rows.slice(0, 12).map(row => ({ ...row, points: pointsOf(row) })), hasMore: rows.length > 12 };
     },
 
     /** Regalar cinco puntos una vez por semana ISO de Bogotá. */
