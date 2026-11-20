@@ -72,7 +72,7 @@ export function outOfPeriodItems(plan, items, contracts) {
     if (Number.isNaN(date.getTime())) continue;
     const period = publicationPeriod(date, contracts);
     if (period.year === plan.year && period.month === plan.month) continue;
-    out.push({ id: item.id, date: dayKeyOf(date), to: { ...period, ...planCycle(period, contracts) } });
+    out.push({ id: item.id, date: dayKeyOf(date), publishDate: date.toISOString(), to: { ...period, ...planCycle(period, contracts) } });
   }
   return out;
 }

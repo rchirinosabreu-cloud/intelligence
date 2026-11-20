@@ -685,7 +685,8 @@ export const realignContentPlan = async (planId, { actorId = null, onlyIds = nul
   for (const row of await misplacedOf(plan, plan.contentItems)) {
     if (onlyIds && !onlyIds.includes(row.id)) continue;
     try {
-      const item = await updateContentItem(row.id, { publishDate: row.date, expectedPlanId: plan.id }, { actorId });
+      // El instante que ya tiene, no solo su día: así los plazos de sus tareas en Gestión no se corren.
+      const item = await updateContentItem(row.id, { publishDate: row.publishDate, expectedPlanId: plan.id }, { actorId });
       if (item?.periodTransfer) moved.push({ id: row.id, toPlan: item.periodTransfer.toPlan });
     } catch (error) {
       failed.push({ id: row.id, objective: plan.contentItems.find(item => item.id === row.id)?.objective || '',

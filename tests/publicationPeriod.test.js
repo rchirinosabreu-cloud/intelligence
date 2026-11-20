@@ -77,6 +77,7 @@ test('Promogroup, corte 15: la parrilla de noviembre admite del 15 de noviembre 
   const out = outOfPeriodItems(november, items, contracts);
   assert.deepEqual(out.map(row => [row.id, row.to.year, row.to.month]), [['c', 2026, 12], ['d', 2026, 10]]);
   assert.equal(out[0].to.start, '2026-12-15');
+  assert.equal(out[0].publishDate, '2026-12-15T12:00:00.000Z');
   // Lo que quedó en la parrilla de diciembre por el mes calendario vuelve a la de noviembre.
   assert.deepEqual(outOfPeriodItems(december, [{ id: 'x', publishDate: noon('2026-12-05') }], contracts).map(row => row.to.month), [11]);
   assert.deepEqual(outOfPeriodItems(december, [{ id: 'x', publishDate: noon('2026-12-05') }], []), []);

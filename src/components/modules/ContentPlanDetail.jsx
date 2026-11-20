@@ -1166,7 +1166,10 @@ const ContentPlanDetail = () => {
       if (moved) toast.success(moved === 1 ? 'Una pieza pasó a su parrilla' : `${moved} piezas pasaron a su parrilla`);
       if (failed.length) toast.error(`${failed.length === 1 ? 'Una pieza no se pudo mover' : `${failed.length} piezas no se pudieron mover`}: ${failed[0].error}`, { duration: 8000 });
     },
-    onError: (error) => toast.error(error.response?.data?.error || 'No se pudieron mover las piezas')
+    onError: (error) => {
+      console.error('Error realigning plan pieces:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudieron mover las piezas');
+    }
   });
 
   const requestItemRevisionMutation = useMutation({
@@ -1209,6 +1212,7 @@ const ContentPlanDetail = () => {
 
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
+      if (data?.publishDate && !(await confirmPublishDate(data.publishDate))) throw PUBLISH_DATE_KEPT;
       const response = await axios.post(`${getApiBaseUrl()}/api/content/items`, { ...data, planId: currentPlanId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
