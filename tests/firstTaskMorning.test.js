@@ -45,7 +45,7 @@ test('the 8:00 cutoff is Bogotá time and the badge text does not mention the ho
 
 test('the requested correction retires only a dawn Buen comienzo of that day, keeps the row and runs once', async () => {
   const { applyRecognitionCorrections, RECOGNITION_CORRECTIONS } = await import('../src/services/recognitionCorrections.js');
-  assert.deepEqual(RECOGNITION_CORRECTIONS.map(c => [c.kind, c.day || c.month]), [['FIRST_TASK', '2026-11-20'], ['EARLY_DELIVERY', '2026-11']]);
+  assert.deepEqual(RECOGNITION_CORRECTIONS.map(c => [c.kind, c.day || c.month]), [['FIRST_TASK', '2026-11-20'], ['EARLY_DELIVERY', '2026-11-20']]);
   const rows = [
     { id: 'sara', kind: 'FIRST_TASK', dayKey: '2026-11-20', recipientId: 'u-sara', occurredAt: new Date('2026-11-20T06:07:00Z'), evidence: { teamDayCount: 1 } },
     { id: 'otro-dia', kind: 'FIRST_TASK', dayKey: '2026-11-19', recipientId: 'u-x', occurredAt: new Date('2026-11-19T06:00:00Z'), evidence: {} },
@@ -83,27 +83,29 @@ function correctionDb(rows, tasks) {
 }
 const saraCorrection = async () => (await import('../src/services/recognitionCorrections.js')).RECOGNITION_CORRECTIONS.filter(c => c.kind === 'EARLY_DELIVERY');
 
-test('Sara: retires only her early deliveries on Elar and Nattal, and only when there are exactly two', async () => {
+test('Sara: retires only her two early deliveries of November 20 (Nattal and Fundación Grit), and only when there are exactly two', async () => {
   const { applyRecognitionCorrections } = await import('../src/services/recognitionCorrections.js');
   const corrections = await saraCorrection();
-  const tasks = [{ id: 't-elar', title: 'Pieza Elar', client: { name: 'Elar' } }, { id: 't-nattal', title: 'Pieza Nattal', client: { name: 'Nattal' } }, { id: 't-grit', title: 'Enviar para aprobación', client: { name: 'Fundación Grit' } }];
+  const tasks = [{ id: 't-nattal', title: 'Actualizar parrilla', client: { name: 'Nattal' } }, { id: 't-grit', title: 'Enviar para aprobación', client: { name: 'Fundación Grit' } }, { id: 't-otro', title: 'Otra', client: { name: 'Verona' } }];
   const rows = [
-    { id: 'a1', kind: 'EARLY_DELIVERY', dayKey: '2026-11-19', name: 'Sara Pérez', taskId: 't-elar', occurredAt: new Date('2026-11-19T15:00:00Z'), evidence: {} },
-    { id: 'a2', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Pérez', taskId: 't-nattal', occurredAt: new Date('2026-11-20T15:00:00Z'), evidence: {} },
-    { id: 'a3', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Pérez', taskId: 't-grit', occurredAt: new Date('2026-11-20T15:39:00Z'), evidence: {} },
-    { id: 'a4', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Helen', taskId: 't-elar', occurredAt: new Date('2026-11-20T16:00:00Z'), evidence: {} },
+    { id: 'a1', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Herrera', taskId: 't-nattal', occurredAt: new Date('2026-11-20T16:33:00Z'), evidence: {} },
+    { id: 'a2', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Herrera', taskId: 't-grit', occurredAt: new Date('2026-11-20T15:39:00Z'), evidence: {} },
+    { id: 'a3', kind: 'EARLY_DELIVERY', dayKey: '2026-11-19', name: 'Sara Herrera', taskId: 't-grit', occurredAt: new Date('2026-11-19T15:39:00Z'), evidence: {} },
+    { id: 'a4', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Helen', taskId: 't-nattal', occurredAt: new Date('2026-11-20T16:00:00Z'), evidence: {} },
+    { id: 'a5', kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara Herrera', taskId: 't-otro', occurredAt: new Date('2026-11-20T17:00:00Z'), evidence: {} },
   ];
   const retired = await applyRecognitionCorrections(correctionDb(rows, tasks), { corrections });
   assert.deepEqual(retired.map(r => r.id).sort(), ['a1', 'a2']);
-  assert.equal(rows.find(r => r.id === 'a3').kind, 'EARLY_DELIVERY', 'la de Fundación Grit se queda');
+  assert.equal(rows.find(r => r.id === 'a3').kind, 'EARLY_DELIVERY', 'otro día no se toca');
+  assert.equal(rows.find(r => r.id === 'a5').kind, 'EARLY_DELIVERY', 'otro cliente no se toca');
   assert.equal(rows.find(r => r.id === 'a4').kind, 'EARLY_DELIVERY', 'la de otra persona se queda');
   assert.deepEqual(await applyRecognitionCorrections(correctionDb(rows, tasks), { corrections }), [], 'no se repite');
 });
 
 test('Sara: with three matches nothing is retired and the list is logged for review', async () => {
   const { applyRecognitionCorrections } = await import('../src/services/recognitionCorrections.js');
-  const tasks = [{ id: 't-elar', title: 'Pieza Elar', client: { name: 'Elar' } }];
-  const rows = ['b1', 'b2', 'b3'].map((id, i) => ({ id, kind: 'EARLY_DELIVERY', dayKey: `2026-11-1${i}`, name: 'Sara', taskId: 't-elar', occurredAt: new Date(`2026-11-1${i}T15:00:00Z`), evidence: {} }));
+  const tasks = [{ id: 't-nattal', title: 'Actualizar parrilla', client: { name: 'Nattal' } }];
+  const rows = ['b1', 'b2', 'b3'].map((id, i) => ({ id, kind: 'EARLY_DELIVERY', dayKey: '2026-11-20', name: 'Sara', taskId: 't-nattal', occurredAt: new Date(`2026-11-20T1${i}:00:00Z`), evidence: {} }));
   const warn = console.warn; const logged = []; console.warn = (...args) => logged.push(args.join(' '));
   try { assert.deepEqual(await applyRecognitionCorrections(correctionDb(rows, tasks), { corrections: await saraCorrection() }), []); }
   finally { console.warn = warn; }

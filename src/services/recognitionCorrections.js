@@ -10,9 +10,10 @@ export const RECOGNITION_CORRECTIONS = Object.freeze([
   // Sara cerró a la 1:07 a. m., antes de que la regla empezara a contar desde las 8:00.
   { kind: 'FIRST_TASK', day: '2026-11-20', before: 'MORNING', requestedBy: 'Rodny',
     reason: '«Buen comienzo» cuenta desde las 8:00; este se otorgó en la madrugada.' },
-  // Rodny, 20 de noviembre de 2026: «Sara también se equivocó con dos fechas, entonces ni Elar ni Nattal serían entregas
-  // anticipadas». Solo se aplica si encuentra exactamente las dos; si no, no toca nada y deja la lista en el registro.
-  { kind: 'EARLY_DELIVERY', month: '2026-11', recipientName: 'Sara', clients: ['elar', 'nattal'], expected: 2, requestedBy: 'Rodny',
+  // Rodny, 20 de noviembre de 2026: «Sara también se equivocó con dos fechas … no serían entregas anticipadas», con la
+  // captura de sus tareas de ese día: «Actualizar parrilla» (Nattal, 11:33) y «Enviar para aprobación» (Fundación Grit,
+  // 10:39). Solo se aplica si encuentra exactamente esas dos; si no, no toca nada y deja la lista en el registro.
+  { kind: 'EARLY_DELIVERY', day: '2026-11-20', recipientName: 'Sara', clients: ['nattal', 'grit'], expected: 2, requestedBy: 'Rodny',
     reason: 'La fecha de entrega se puso por error: no fue una entrega anticipada.' },
 ]);
 
