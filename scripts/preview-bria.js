@@ -102,6 +102,9 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     chats.set(row.id, row); res.status(201).json(row);
   });
   const media = multer({ storage: multer.memoryStorage() });
+  // El adelanto del dictado, de muestra: el texto crece con cada tramo, como cuando la persona sigue hablando.
+  let previewStep = 0; const previewText = 'Bria, recuérdame mañana revisar la parrilla de Aristea y confirmar con Melissa las piezas que faltan'.split(' ');
+  api.post('/api/bria/conversations/dictation/preview', media.single('audio'), (_req, res) => { previewStep += 1; res.json({ text: previewText.slice(0, Math.min(previewText.length, previewStep * 6)).join(' ') }); });
   api.post('/api/bria/conversations/dictation', media.single('audio'), (_req, res) => res.json({ text: 'Este es un dictado de prueba.' }));
   api.get('/api/bria/conversations/:id', (req, res) => chats.has(req.params.id) ? res.json(chats.get(req.params.id)) : res.status(404).json({ message: 'Conversación no encontrada.' }));
   api.delete('/api/bria/conversations/:id', (req, res) => {
