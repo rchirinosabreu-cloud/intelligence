@@ -27,6 +27,7 @@ import { createBriaLivingRouter } from './api/briaLiving.js';
 import { createBriaKnowledgeRouter } from './api/briaKnowledge.js';
 import { createBriaConversationRouter } from './api/briaConversations.js';
 import { createBriaNudgeRouter } from './api/briaNudges.js';
+import { createBriaWaitingRouter } from './api/briaWaiting.js';
 import { createBriaMailRouter } from './api/briaMail.js';
 import { createWhatsAppWebhookRouter, createBriaWhatsAppRouter } from './api/whatsapp.js';
 import { createVaultRouter } from './api/vault.js';
@@ -162,6 +163,8 @@ router.use('/bria/knowledge', createBriaKnowledgeRouter());
 router.use('/bria/conversations', createBriaConversationRouter());
 // «Bria se adelanta» (10 de octubre de 2026): avisos discretos para quien dirige, encima del botón de Bria.
 router.use('/bria/nudges', createBriaNudgeRouter());
+// «Esperando por ti» (20 de noviembre de 2026): lo que espera una decisión de la persona, en el inicio de Bria.
+router.use('/bria/waiting', createBriaWaitingRouter());
 // Buzones compartidos que lee Bria (11 de octubre de 2026): la contraseña de aplicación entra una vez y se sella.
 router.use('/bria/mail', createBriaMailRouter());
 // Bria en WhatsApp (20 de octubre de 2026): el vínculo del número de la persona, desde su perfil y con su sesión.

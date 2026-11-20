@@ -200,6 +200,12 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
   // Enviar con aprobación, de muestra: nada sale de aquí; responde como el servidor cuando el correo se envía.
   api.post('/api/bria/mail/reply', (req, res) => (/\[[^\]]+\]/.test(String(req.body?.text || '')) ? res.status(400).json({ message: 'Completa lo que quedó entre corchetes antes de enviarla.' }) : res.json({ sent: true, to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota' })));
+  // «Esperando por ti», de muestra (`?esperando`): la lista que arma el mismo código de producción con conteos ficticios.
+  api.get('/api/bria/waiting', async (req, res) => {
+    if (!/[?&]esperando/.test(String(req.headers.referer || ''))) return res.json({ items: [], failed: [] });
+    const { buildWaiting } = await import('../src/lib/briaWaiting.js');
+    return res.json({ items: buildWaiting({ decisions: 6, meetings: 2, mail: 1, actions: [{ id: 'da11e000-0000-4000-8000-000000000003', title: 'Pendiente para Aristea' }] }), failed: [] });
+  });
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
     res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (mailNudges(referer) ?? accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });

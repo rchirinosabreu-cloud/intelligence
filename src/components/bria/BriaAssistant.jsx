@@ -42,6 +42,20 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
     const before = document.body.style.overflow; document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = before; };
   }, [open, fullScreen, available]);
+  // En el celular Bria se abre como una aplicación (Rodny, 20 de noviembre de 2026: «me parece todo feo, raro»): ocupa
+  // la pantalla, la página de atrás no se mueve y el panel sigue a la pantalla visible, así el cuadro de escribir queda
+  // justo encima del teclado en lugar de que el navegador empuje toda la página.
+  const [phone, setPhone] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  useEffect(() => { const media = window.matchMedia('(max-width: 639px)'), update = () => setPhone(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  const sheet = available && open && phone && !fullScreen;
+  useEffect(() => {
+    if (!sheet) return undefined;
+    const panel = document.getElementById('bria-assistant-panel'), view = window.visualViewport, before = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const fit = () => { if (!panel || !view) return; panel.style.top = `${view.offsetTop}px`; panel.style.height = `${view.height}px`; };
+    fit(); view?.addEventListener('resize', fit); view?.addEventListener('scroll', fit);
+    return () => { document.body.style.overflow = before; view?.removeEventListener('resize', fit); view?.removeEventListener('scroll', fit); if (panel) { panel.style.top = ''; panel.style.height = ''; } };
+  }, [sheet]);
   if (!available) return null;
   const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
   const closeQuickAsk = () => { setQuickAsk(null); requestAnimationFrame(() => trigger.current?.focus()); };
@@ -62,7 +76,7 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
     </div>
     {/* Encima de la navegación (60), debajo de los formularios compartidos (70/71).
         El panel permanece montado: abrir un formulario no cierra el chat ni pierde su borrador. */}
-    <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[65] overflow-hidden border border-bria-line bg-white text-bria-night shadow-[0_30px_60px_-36px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:text-white dark:shadow-[0_30px_60px_-32px_rgba(0,0,0,0.7)]', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-[28px]')}>
+    <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[65] overflow-hidden border border-bria-line bg-white text-bria-night shadow-[0_30px_60px_-36px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:text-white dark:shadow-[0_30px_60px_-32px_rgba(0,0,0,0.7)]', !open && 'hidden', fullScreen ? 'inset-0' : 'inset-x-0 top-0 h-[100dvh] border-0 sm:inset-x-auto sm:bottom-3 sm:right-3 sm:top-20 sm:h-auto sm:w-[440px] sm:rounded-[28px] sm:border')}>
       <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />
     </aside>
   </>, document.body);

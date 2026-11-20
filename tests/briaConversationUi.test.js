@@ -16,7 +16,7 @@ test('el inicio de Bria cabe completo: no recorta a Bria ni las sugerencias en v
   const home = source.slice(source.indexOf('data-bria-home'), source.indexOf('</ul></div>}', source.indexOf('data-bria-home')));
   assert.match(home, /data-bria-home className="[^"]*min-h-full/, 'crece con su contenido en vez de recortarlo');
   assert.doesNotMatch(home, /data-bria-home className="(?:[^"]* )?h-full/);
-  assert.match(home, /Bria3D mood="reposo" className="[^"]*clamp\([^"]*vh/, 'la mascota mide según el alto de la ventana');
+  assert.match(home, /Bria3D mood="reposo" className=[^>]*clamp\([^>]*vh/, 'la mascota mide según el alto de la ventana');
   assert.match(home, /\[@media\(max-height:760px\)\]:flex-row/, 'en ventanas bajas Bria pasa al lado del saludo');
   assert.equal((home.match(/suggestions\.map/g) || []).length, 1, 'las sugerencias siguen completas');
 });

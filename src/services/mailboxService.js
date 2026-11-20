@@ -274,6 +274,11 @@ export const createMailboxService = ({ db = prisma, repository, reader, sender, 
       return { unanswered, recent: once(await repo.recentImportant(since)) };
     },
 
+    /** «Esperando por ti»: cuántos correos importantes tienen un borrador listo o ya se avisaron sin respuesta, y siguen así. */
+    async waitingCount({ since } = {}) {
+      return typeof repo.waitingCount === 'function' ? repo.waitingCount(since || new Date(now().getTime() - UNANSWERED_WINDOW_MS)) : 0;
+    },
+
     /** Un correo concreto, con cuerpo acotado, buscado en todos los buzones activos; para resumirlo a pedido. */
     async readMessage(messageId) {
       const id = String(messageId || '').replace(/^<|>$/g, '').trim();

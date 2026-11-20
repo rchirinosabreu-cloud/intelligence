@@ -6,6 +6,19 @@ const fingerprint = actor => createHash('sha256').update(JSON.stringify({ role: 
 const summary = row => ({ id: row.id, title: row.title, revision: row.revision, updatedAt: row.updated_at });
 export const createBriaConversationRepository = ({ pool, workspace, storage, requireStorage = false }) => ({
   async list(actor) { return (await pool.query('SELECT id,title,revision,updated_at FROM bria_memory.conversations WHERE workspace=$1 AND actor_ref=$2 ORDER BY updated_at DESC LIMIT 100', [workspace, actor.ref])).rows.map(summary); },
+  /**
+   * «Esperando por ti» (20 de noviembre de 2026): los chats de la persona cuyo último mensaje de Bria dejó una acción
+   * lista (sin datos por pedir) que nadie confirmó ni canceló. Solo el último turno cuenta: es el único confirmable.
+   */
+  async waitingActions(actor, { since, limit = 5 } = {}) {
+    const { rows } = await pool.query(`SELECT c.id, c.title FROM bria_memory.conversations c
+      JOIN LATERAL (SELECT t.metadata FROM bria_memory.conversation_turns t WHERE t.conversation_id=c.id AND t.role='assistant' ORDER BY t.position DESC LIMIT 1) last ON true
+      WHERE c.workspace=$1 AND c.actor_ref=$2 AND c.updated_at >= $3 AND last.metadata->'pendingAction' IS NOT NULL
+        AND COALESCE(last.metadata->'pendingAction'->>'status', 'DRAFT') NOT IN ('DONE','CANCELLED')
+        AND jsonb_array_length(COALESCE(NULLIF(last.metadata->'pendingAction'->'missing', 'null'::jsonb), '[]'::jsonb)) = 0
+      ORDER BY c.updated_at DESC LIMIT $4`, [workspace, actor.ref, since, limit]);
+    return rows.map((row) => ({ id: row.id, title: row.title || '' }));
+  },
   async create(actor) { return { ...summary((await pool.query('INSERT INTO bria_memory.conversations(id,workspace,actor_ref) VALUES($1,$2,$3) RETURNING *', [randomUUID(), workspace, actor.ref])).rows[0]), turns: [] }; },
   async get(actor, id) {
     const row = (await pool.query('SELECT * FROM bria_memory.conversations WHERE workspace=$1 AND actor_ref=$2 AND id=$3', [workspace, actor.ref, id])).rows[0];

@@ -113,6 +113,11 @@ export const createMailAccountRepository = ({ pool, key }) => ({
    * primer buzón activo que lo recibió. `claimReply` lo aparta antes de enviar para que dos clics no manden dos
    * respuestas (vale para el mismo correo en dos buzones); `releaseReply` lo suelta si el envío falló.
    */
+  async waitingCount(since) {
+    return Number((await pool.query(`SELECT count(DISTINCT s.message_id)::int AS n FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
+      WHERE s.important AND a.is_active AND s.received_at >= $1 AND s.answered_at IS NULL AND s.replied_at IS NULL AND (s.draft_reply IS NOT NULL OR s.unanswered_notified_at IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id AND (r.answered_at IS NOT NULL OR r.replied_at IS NOT NULL))`, [since])).rows[0]?.n || 0);
+  },
   async replyTarget(messageId) {
     const { rows } = await pool.query(`SELECT s.account_id, s.message_id, s.from_address, s.subject, s.important,
         (SELECT max(r.replied_at) FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id) AS replied_at

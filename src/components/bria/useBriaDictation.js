@@ -1,20 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { BRIA_AUDIO_MAX_BYTES } from '@/lib/briaAttachments';
+import { levelOf, pushLevel } from '@/lib/briaComposer';
 
 // Un solo dictado para toda Bria (11 de octubre de 2026): el chat y la consulta rápida desde la mascota graban,
 // acotan y transcriben igual. El audio va al servidor (`POST /dictation`) y el texto vuelve por `onText`; quien
 // lo usa decide dónde lo pone. Hasta cinco minutos y 20 MB; una sesión cancelada o un panel que se cierra suelta
 // el micrófono de inmediato.
+//
+// La onda de grabación (Rodny, 20 de noviembre de 2026): mientras graba, `levels` trae el volumen reciente del
+// micrófono (0 a 1) para dibujar las barras. Se mide en el navegador con un analizador de audio; no sale nada más del
+// equipo que el audio que ya se enviaba a transcribir. Si el navegador no lo permite, se graba igual, sin onda.
+const meter = (stream, onLevel) => {
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) return () => {};
+  try {
+    const context = new Context(), source = context.createMediaStreamSource(stream), analyser = context.createAnalyser();
+    analyser.fftSize = 256; source.connect(analyser);
+    const samples = new Uint8Array(analyser.fftSize);
+    const interval = setInterval(() => { analyser.getByteTimeDomainData(samples); onLevel(levelOf(samples)); }, 90);
+    return () => { clearInterval(interval); try { source.disconnect(); } catch { /* ya suelto */ } context.close?.().catch?.(() => {}); };
+  } catch { return () => {}; }
+};
 export function useBriaDictation({ request, active = true, disabled = false, onText, onError, onBusy }) {
   const recording = useRef(null), mounted = useRef(true), isActive = useRef(active), generation = useRef(0), timer = useRef(null);
   const callbacks = useRef({}); callbacks.current = { onText, onError, onBusy };
-  const [voice, setVoice] = useState('idle'), [seconds, setSeconds] = useState(0), [retryAudio, setRetryAudio] = useState(null);
+  const [voice, setVoice] = useState('idle'), [seconds, setSeconds] = useState(0), [retryAudio, setRetryAudio] = useState(null), [levels, setLevels] = useState([]);
   const changeVoice = status => { setVoice(status); callbacks.current.onBusy?.(status !== 'idle'); };
   const fail = message => callbacks.current.onError?.(message);
   const cancel = () => {
     generation.current++; clearInterval(timer.current);
     const session = recording.current;
-    if (session) { session.cancelled = true; if (session.recorder?.state === 'recording') session.recorder.stop(); session.stream?.getTracks().forEach(track => track.stop()); }
+    if (session) { session.cancelled = true; session.unmeter?.(); if (session.recorder?.state === 'recording') session.recorder.stop(); session.stream?.getTracks().forEach(track => track.stop()); }
     recording.current = null; setRetryAudio(null);
     if (mounted.current) changeVoice('idle');
   };
@@ -57,20 +73,21 @@ export function useBriaDictation({ request, active = true, disabled = false, onT
       };
       recorder.onerror = () => { cancel(); fail('No se pudo grabar el dictado. Intenta de nuevo.'); };
       recorder.onstop = () => {
-        clearInterval(session.timer); stream.getTracks().forEach(track => track.stop());
+        clearInterval(session.timer); session.unmeter?.(); stream.getTracks().forEach(track => track.stop());
         if (recording.current !== session) return;
         recording.current = null;
         if (session.cancelled || !mounted.current || !isActive.current) { if (mounted.current) changeVoice('idle'); return; }
         transcribe(new Blob(session.chunks, { type: recorder.mimeType || 'audio/webm' }));
       };
-      recorder.start(1000); setSeconds(0); changeVoice('recording');
+      recorder.start(1000); setSeconds(0); setLevels([]); changeVoice('recording');
+      session.unmeter = meter(stream, value => { if (mounted.current && recording.current === session) setLevels(current => pushLevel(current, value)); });
       const started = Date.now(); session.timer = timer.current = setInterval(() => { const elapsed = Math.floor((Date.now() - started) / 1000); setSeconds(elapsed); if (elapsed >= 300) stop(); }, 1000);
     } catch (failure) {
       recording.current?.stream.getTracks().forEach(track => track.stop()); recording.current = null;
       if (mounted.current && current === generation.current) { changeVoice('idle'); fail(['NotAllowedError', 'SecurityError'].includes(failure.name) ? 'Permite el micrófono en el navegador para dictar.' : failure.message); }
     }
   };
-  return { voice, seconds, retryAudio, start, stop, cancel, retry: () => { if (retryAudio) transcribe(retryAudio); } };
+  return { voice, seconds, levels, retryAudio, start, stop, cancel, retry: () => { if (retryAudio) transcribe(retryAudio); } };
 }
 
 export const formatDictationClock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
