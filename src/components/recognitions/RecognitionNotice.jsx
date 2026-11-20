@@ -82,7 +82,7 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
             <span className="truncate font-bria text-base font-bold leading-5">{title}</span>
             <span className="truncate text-sm leading-5 text-bria-muted dark:text-zinc-300">{firstLine}</span>
           </span>
-          {leagueEnabled && <span className={POINTS_CHIP}>{STAR}+{RECOGNITION_POINTS}</span>}
+          {leagueEnabled && <span className={POINTS_CHIP}>{STAR}+{event.points ?? RECOGNITION_POINTS}</span>}
         </button>
         {close}
       </div> : <>
@@ -100,7 +100,7 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
           {paragraphs.map((text, index) => <p key={index} className="text-pretty text-base leading-6 text-bria-ink dark:text-zinc-200">{text}</p>)}
           {event.demo && <p className="text-xs text-bria-muted dark:text-zinc-400">Ejemplo local · No se otorgan premios reales</p>}
           {leagueEnabled && <div className="flex items-center gap-2">
-            <span className={POINTS_CHIP}>{STAR}+{RECOGNITION_POINTS} puntos</span>
+            <span className={POINTS_CHIP}>{STAR}+{event.points ?? RECOGNITION_POINTS} puntos</span>
             <button type="button" onClick={() => { openLeague(); onDismiss(); }} className="ml-auto flex h-11 items-center rounded-xl bg-bria-night px-3.5 text-sm font-semibold text-white hover:bg-bria-night/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:bg-white dark:text-bria-night dark:hover:bg-white/90">Ver la liga</button>
           </div>}
         </div>

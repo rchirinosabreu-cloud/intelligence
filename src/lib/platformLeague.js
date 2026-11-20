@@ -1,3 +1,4 @@
+import { bogotaDate } from './colombiaBusinessDays.js';
 // Liga mensual: 5 por hábito (la parte cumplida si se perdió), 1 por tarea cerrada con reloj (hasta 20 al día), 5 por primera actividad, 10 por tráfico registrado,
 // 5 por reconocimiento nativo y regalos semanales de 5. Los regalos históricos conservan su valor.
 // Los empates comparten puesto. Una lectura nunca concede premios.
@@ -41,6 +42,22 @@ export const MEETING_POINTS = 10;
 /** Los dos primeros en la reunión de tráfico reciben los diez puntos (Rodny, 9 de noviembre de 2026: dos personas entraron a la vez). */
 export const MEETING_WINNERS_PER_WEEK = 2;
 export const RECOGNITION_POINTS = 5;
+// Entrega anticipada (Rodny, 20 de noviembre de 2026: «una por día está bien, la primera que sume sus cinco puntos, una
+// entrega anticipada adicional suma 2 puntos»): por persona y día de Bogotá, la primera vale 5 y cada una más, 2.
+export const EARLY_DELIVERY_EXTRA_POINTS = 2;
+/** Los puntos de cada reconocimiento (id → puntos). Recibe todos los del período de cada persona, con `kind`. */
+export function recognitionPointsById(awards = []) {
+  const points = new Map(), firstOfDay = new Set();
+  const ordered = [...awards].sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt) || String(a.id).localeCompare(String(b.id)));
+  for (const award of ordered) {
+    if (award.kind !== 'EARLY_DELIVERY') { points.set(award.id, RECOGNITION_POINTS); continue; }
+    const key = `${award.recipientId}:${bogotaDate(award.occurredAt)}`;
+    points.set(award.id, firstOfDay.has(key) ? EARLY_DELIVERY_EXTRA_POINTS : RECOGNITION_POINTS);
+    firstOfDay.add(key);
+  }
+  return points;
+}
+export const recognitionPoints = (awards = []) => [...recognitionPointsById(awards).values()].reduce((sum, value) => sum + value, 0);
 export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'PLAN_APPROVED', 'WEEKLY_FIFTY'];
 
 /**
@@ -122,10 +139,11 @@ export function kudosScore(received = []) {
 }
 
 /** El puntaje del mes: hábitos, regalos, registros de tráfico y reconocimientos. */
-export function leagueScore({ days = [], kudos = [], meetings = 0, recognitions = 0 } = {}) {
+export function leagueScore({ days = [], kudos = [], meetings = 0, recognitions = 0, recognitionPoints: earned = null } = {}) {
   const habits = habitsScore(days);
   const team = kudosScore(kudos);
-  const awards = meetings * MEETING_POINTS + recognitions * RECOGNITION_POINTS;
+  // `recognitionPoints` ya trae la regla de la entrega anticipada; `recognitions` (cuántos) queda para quien no la usa.
+  const awards = meetings * MEETING_POINTS + (Number.isFinite(earned) ? earned : recognitions * RECOGNITION_POINTS);
   if (habits === null && !team && !awards) return null;
   return Math.round((habits || 0) + team + awards);
 }
