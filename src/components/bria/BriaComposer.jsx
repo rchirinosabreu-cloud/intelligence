@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { ArrowUp, Check, Mic, Paperclip, X } from '@/components/ui/icons';
+import { ArrowUp, AudioWave, Check, Mic, Paperclip, X } from '@/components/ui/icons';
 import { canSendMessage, waveBars } from '@/lib/briaComposer';
 import { formatDictationClock, useBriaDictation } from './useBriaDictation';
 
@@ -11,7 +11,7 @@ export const COMPOSER_BASE_PX = 32;
 export const COMPOSER_MAX_PX = 192;
 export const composerHeight = (scrollHeight) => Math.min(Math.max(Number(scrollHeight) || 0, COMPOSER_BASE_PX), COMPOSER_MAX_PX);
 
-export default function BriaComposer({ value, onChange, files, onFiles, onAddFiles, disabled, visible, allowAttachments, onSend, onError, onVoiceBusy, inputRef, request }) {
+export default function BriaComposer({ value, onChange, files, onFiles, onAddFiles, disabled, visible, allowAttachments, onSend, onError, onVoiceBusy, inputRef, request, onVoice }) {
   const picker = useRef(null);
   useLayoutEffect(() => {
     const box = inputRef?.current;
@@ -47,7 +47,9 @@ export default function BriaComposer({ value, onChange, files, onFiles, onAddFil
       {voice === 'starting' && <span role="status" className="px-2.5 text-xs text-bria-cyan-deep dark:text-bria-mint">Abriendo micrófono…</span>}
       {retryAudio && voice === 'idle' && <button type="button" disabled={disabled} className="min-h-11 px-2.5 text-xs text-bria-cyan-deep dark:text-bria-mint" onClick={retry}>Reintentar dictado</button>}
       <button type="button" title={recording ? 'Terminar dictado' : 'Grabar dictado'} aria-label={recording ? 'Terminar dictado' : 'Grabar dictado'} aria-pressed={recording} disabled={recording ? false : blocked} onClick={recording ? stop : start} className={`${control} ml-auto`}><span data-bria-mic className={`${disc} bg-gradient-to-br from-[#00AC8A] to-[#009EB9] text-white`}>{recording ? <Check className="h-[18px] w-[18px]" /> : <Mic className="h-[18px] w-[18px]" />}</span></button>
-      {!recording && <button type="submit" title="Enviar" aria-label="Enviar mensaje" disabled={!sendable} className={control}><span data-bria-send className={`${disc} bg-bria-night text-white dark:bg-white dark:text-bria-night`}><ArrowUp className="h-[18px] w-[18px]" /></span></button>}
+      {!recording && onVoice && !sendable && voice === 'idle' && !disabled
+        ? <button type="button" title="Hablar con Bria" aria-label="Hablar con Bria" onClick={onVoice} className={control}><span data-bria-voice-open className={`${disc} bg-bria-night text-white dark:bg-white dark:text-bria-night`}><AudioWave className="h-[18px] w-[18px]" /></span></button>
+        : !recording && <button type="submit" title="Enviar" aria-label="Enviar mensaje" disabled={!sendable} className={control}><span data-bria-send className={`${disc} bg-bria-night text-white dark:bg-white dark:text-bria-night`}><ArrowUp className="h-[18px] w-[18px]" /></span></button>}
     </div>
     {value.length > 12000 && <p role="alert" className="mt-2 text-xs text-destructive">Divide este dictado en mensajes de hasta 12.000 caracteres.</p>}
   </form>;

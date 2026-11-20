@@ -203,6 +203,15 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
   // Enviar con aprobación, de muestra: nada sale de aquí; responde como el servidor cuando el correo se envía.
   api.post('/api/bria/mail/reply', (req, res) => (/\[[^\]]+\]/.test(String(req.body?.text || '')) ? res.status(400).json({ message: 'Completa lo que quedó entre corchetes antes de enviarla.' }) : res.json({ sent: true, to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota' })));
+  // La voz de Bria, de muestra (`?voz`): nada sale a ElevenLabs; el «audio» es un segundo y medio de tono suave.
+  api.get('/api/bria/voice', (req, res) => res.json(/[?&]voz/.test(String(req.headers.referer || '')) ? { enabled: true, remaining: 20000 } : { enabled: false }));
+  api.post('/api/bria/voice/speak', (_req, res) => {
+    const rate = 8000, samples = rate * 1.5, data = Buffer.alloc(samples * 2), header = Buffer.alloc(44);
+    for (let i = 0; i < samples; i += 1) data.writeInt16LE(Math.round(Math.sin(i / rate * 2 * Math.PI * 330) * 2500 * Math.min(1, (samples - i) / 2000)), i * 2);
+    header.write('RIFF', 0); header.writeUInt32LE(36 + data.length, 4); header.write('WAVEfmt ', 8); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
+    header.writeUInt32LE(rate, 24); header.writeUInt32LE(rate * 2, 28); header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34); header.write('data', 36); header.writeUInt32LE(data.length, 40);
+    res.type('audio/wav').send(Buffer.concat([header, data]));
+  });
   // «Esperando por ti», de muestra (`?esperando`): la lista que arma el mismo código de producción con conteos ficticios.
   api.get('/api/bria/waiting', async (req, res) => {
     if (!/[?&]esperando/.test(String(req.headers.referer || ''))) return res.json({ items: [], failed: [] });
