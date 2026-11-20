@@ -64,7 +64,7 @@ test('the service keeps today’s meetings the person did not decline, leaves th
   const agenda = await service.forUser(user);
   assert.deepEqual(agenda.meetings.map((item) => item.title), ['Comité']);
   assert.equal(agenda.mail.recent.length, 1);
-  assert.equal(asked[0].where.AND.some((part) => part.googleCancelled === false), true, 'cancelled and hidden events never come');
+  assert.equal(asked[0].where.AND.some((part) => part.googleCancelled === false), false, 'cancelled exceptions must reach the expansion; visibility is applied after it');
   const pm = await service.forUser({ ...user, role: 'PROJECT_MANAGER' });
   assert.equal(pm.mail.recent.length, 1, 'a project manager with Bria sees the agency mail too, as in the pulse');
   const broken = createMorningAgendaService({ db: { ...db, operationalEvent: { findMany: async () => { throw new Error('calendario caído'); } } }, mailbox, expand, now: () => new Date('2026-11-23T12:30:00Z'), logger: { error() {} } });
@@ -83,4 +83,15 @@ test('the morning brief carries the agenda before the proposals and stays the sa
   assert.doesNotMatch(plain, /Tu agenda de hoy/);
   assert.match(withAgenda, /La agencia amaneció estable\.\n\n\*\*Tu agenda de hoy\*\*\n- 9:00 a\. m\. · Comité de cuentas\n\n1\. \*\*Revisar Endova\.\*\*/);
   assert.equal(withAgenda.replace('**Tu agenda de hoy**\n- 9:00 a. m. · Comité de cuentas\n\n', ''), plain);
+});
+
+test('a weekly meeting whose occurrence of today was cancelled in Google does not come back into the agenda', async () => {
+  const { expandOperationalEventOccurrences } = await import('../src/services/operationalEventService.js');
+  const master = { id: 'serie', title: 'Comité semanal', type: 'MEETING', startAt: new Date('2026-11-16T14:00:00Z'), endAt: new Date('2026-11-16T15:00:00Z'), recurrence: 'WEEKLY', recurrenceEnd: null, memberIds: ['m-rod'], attendeeEmails: [], googleCancelled: false, googleEventId: 'g-serie', googleSyncStatus: 'SYNCED' };
+  const cancelled = { ...master, id: 'excepcion', recurrence: null, startAt: new Date('2026-11-23T14:00:00Z'), endAt: new Date('2026-11-23T15:00:00Z'), googleEventId: 'g-serie_20261123', googleRecurringEventId: 'g-serie', googleOriginalStartAt: new Date('2026-11-23T14:00:00Z'), googleCancelled: true };
+  const db = (rows) => ({ user: { findUnique: async () => ({ email: 'rodny@agencia.co', teamMember: { id: 'm-rod', email: null } }) }, operationalEvent: { findMany: async () => rows } });
+  const build = (rows) => createMorningAgendaService({ db: db(rows), mailbox: { morningDigest: async () => ({ recent: [], unanswered: [] }) }, expand: expandOperationalEventOccurrences, now: () => new Date('2026-11-23T12:30:00Z'), logger: { error() {} } });
+  const user = { id: 'u-rodny', role: 'ADMIN', teamMember: { id: 'm-rod' } };
+  assert.deepEqual((await build([master]).meetings(user)).map((item) => item.title), ['Comité semanal'], 'the series alone shows today’s occurrence');
+  assert.deepEqual(await build([master, cancelled]).meetings(user), []);
 });

@@ -6,7 +6,6 @@
 import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { agendaSince } from '../lib/morningAgenda.js';
-import { getVisibleOperationalEventWhere } from './operationalEventVisibility.js';
 
 const H = 3600000;
 const lower = (value) => String(value || '').trim().toLowerCase();
@@ -23,11 +22,12 @@ export const createMorningAgendaService = ({ db = prisma, mailbox, expand, meeti
       const emails = [...new Set([account?.email, account?.teamMember?.email].filter(Boolean).flatMap((email) => [email, lower(email)]))];
       const dayStart = new Date(`${bogotaDate(at)}T05:00:00.000Z`), dayEnd = new Date(dayStart.getTime() + 24 * H);
       const events = await db.operationalEvent.findMany({
+        // Sin filtrar por visibilidad aquí: la excepción cancelada o movida de una reunión que se repite tiene que
+        // llegar a la expansión para que quite la ocurrencia de hoy. Lo que no se ve lo descarta `buildDashboardMeetings`.
         where: { AND: [
-          getVisibleOperationalEventWhere(),
           { OR: [{ memberIds: { has: memberId } }, ...(emails.length ? [{ attendeeEmails: { hasSome: emails } }, { organizerEmail: { in: emails } }] : [])] },
-          { startAt: { lt: dayEnd } },
-          { OR: [{ endAt: { gte: dayStart } }, { AND: [{ recurrence: { in: ['WEEKLY', 'GOOGLE'] } }, { OR: [{ recurrenceEnd: null }, { recurrenceEnd: { gte: dayStart } }] }] }] }
+          { OR: [{ startAt: { lt: dayEnd } }, { googleOriginalStartAt: { gte: dayStart, lt: dayEnd } }] },
+          { OR: [{ endAt: { gte: dayStart } }, { googleOriginalStartAt: { gte: dayStart, lt: dayEnd } }, { AND: [{ recurrence: { in: ['WEEKLY', 'GOOGLE'] } }, { OR: [{ recurrenceEnd: null }, { recurrenceEnd: { gte: dayStart } }] }] }] }
         ] },
         orderBy: { startAt: 'asc' }
       });

@@ -258,3 +258,17 @@ test('the card shows the draft in place, with a copy button, and never a way to 
   assert.match(nudge, /console\.error\('\[BriaNudge\] No se pudo copiar el borrador:'/);
   assert.doesNotMatch(nudge, /Enviar correo|mailto:/);
 });
+
+test('a mail already reported unanswered on a previous day is still checked against the sent folders, noted when the reply appears, and never reported again', async () => {
+  const answered = [];
+  const repository = {
+    async unansweredCandidates() { return []; },
+    async notifiedUnanswered({ notifiedBefore }) { assert.ok(notifiedBefore instanceof Date); return [{ accountId: 'a1', messageId: '<viejo@cliente.co>' }, { accountId: 'a1', messageId: '<otro@cliente.co>' }]; },
+    async listActiveWithSecret() { return [{ id: 'a1', email: 'contacto@agencia.co', secret: 'x' }]; },
+    async markAnswered(accountId, messageId) { answered.push(messageId); }
+  };
+  const reader = { async repliedTo(account, ids) { assert.deepEqual(ids, ['<viejo@cliente.co>', '<otro@cliente.co>']); return new Set(['viejo@cliente.co']); } };
+  const service = createMailboxService({ db: {}, repository, reader, now: () => new Date('2026-11-24T15:00:00Z'), logger: { error() {} } });
+  assert.deepEqual(await service.readUnanswered(), []);
+  assert.deepEqual(answered, ['<viejo@cliente.co>']);
+});

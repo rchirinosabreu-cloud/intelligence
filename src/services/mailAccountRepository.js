@@ -93,8 +93,18 @@ export const createMailAccountRepository = ({ pool, key }) => ({
    */
   async stillUnanswered({ from, limit = 6 }) {
     const { rows } = await pool.query(`SELECT DISTINCT ON (s.message_id) s.message_id, s.from_address, s.from_name, s.subject, s.received_at, s.client_name FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
-      WHERE s.important AND a.is_active AND s.answered_at IS NULL AND s.unanswered_notified_at IS NOT NULL AND s.received_at >= $1 ORDER BY s.message_id, s.received_at LIMIT $2`, [from, limit]);
+      WHERE s.important AND a.is_active AND s.answered_at IS NULL AND s.unanswered_notified_at IS NOT NULL AND s.received_at >= $1
+        AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=s.message_id AND r.answered_at IS NOT NULL) ORDER BY s.message_id, s.received_at LIMIT $2`, [from, limit]);
     return rows.map((row) => ({ messageId: row.message_id, from: row.from_address, fromName: row.from_name, subject: row.subject, date: row.received_at, clientName: row.client_name || null }));
+  },
+  /**
+   * Los que ya se avisaron como «sin respuesta» en una jornada anterior y siguen sin respuesta vista: no vuelven al
+   * pulso, pero se siguen cotejando con los enviados para anotar la respuesta que llegó después.
+   */
+  async notifiedUnanswered({ from, notifiedBefore, limit = 20 }) {
+    const { rows } = await pool.query(`SELECT s.account_id, s.message_id FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
+      WHERE s.important AND a.is_active AND s.answered_at IS NULL AND s.unanswered_notified_at < $2 AND s.received_at >= $1 ORDER BY s.received_at DESC LIMIT $3`, [from, notifiedBefore, limit]);
+    return rows.map((row) => ({ accountId: row.account_id, messageId: row.message_id }));
   },
   async markAnswered(accountId, messageId, at) {
     await pool.query('UPDATE bria_memory.mail_seen SET answered_at=$3 WHERE account_id=$1 AND message_id=$2 AND answered_at IS NULL', [accountId, messageId, at]);
