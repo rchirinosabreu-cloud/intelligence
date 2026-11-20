@@ -338,6 +338,10 @@ router.post('/payroll-transactions/:id/reverse-period', requireFinancialApproval
 router.get('/payroll-transactions/:id/loan-deductions', requireFinancialAccess, payrollPeriodHandler('deductions'));
 router.post('/payroll-transactions/:id/loan-deductions', requireFinancialApproval, payrollPeriodHandler('deduct'));
 router.post('/payroll-adjustments/:id/reverse', requireFinancialApproval, payrollPeriodHandler('undoDeduction'));
+// Bonos, comisiones y otros adicionales: los registra quien escribe en Financiero (Rodny, 19 de noviembre de 2026).
+router.get('/payroll-transactions/:id/additions', requireFinancialAccess, payrollPeriodHandler('additions'));
+router.post('/payroll-transactions/:id/additions', requireFinancialWrite, payrollPeriodHandler('add'));
+router.post('/payroll-adjustments/:id/reverse-addition', requireFinancialWrite, payrollPeriodHandler('undoAddition'));
 router.post('/payroll-contracts', requireFinancialWrite, createFinancialPayrollContract);
 router.patch('/payroll-contracts/:id', requireFinancialWrite, updateFinancialPayrollContract);
 router.post('/payroll/periods', requireFinancialWrite, generatePayrollPeriodHandler);

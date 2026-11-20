@@ -11,6 +11,7 @@ import { isCashPayment, isReceivableClosed, isRetentionPayment } from '../lib/re
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 import { receivableCollectionMode, isFormalizationInstallment } from '../lib/receivableCollectionMode.js';
 import { isCollectionArchived } from '../lib/receivableArchive.js';
+import { isPayrollAddition } from '../lib/payrollAdditions.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -490,6 +491,7 @@ const serializePayrollTransaction = (transaction) => ({
     voidedAt: transaction.voidedAt || null,
     voidReason: transaction.voidReason || null,
     loanDeductions: (transaction.adjustments || []).filter(item => item.receivablePaymentId).map(item => ({ id: item.id, amount: toNum(item.amount), reversedAt: item.reversedAt || null })),
+    additions: (transaction.adjustments || []).filter(isPayrollAddition).map(item => ({ id: item.id, type: item.type, amount: toNum(item.amount), description: item.description || '', reversedAt: item.reversedAt || null })),
     baseSalary: toNum(transaction.baseSalary),
     socialSecurity: toNum(transaction.socialSecurity),
     grossAmount: toNum(transaction.grossAmount),
