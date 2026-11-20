@@ -255,6 +255,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /content/plans': { que: 'Crea una parrilla (mejor con crear_parrilla, que pide responsable y objetivo).', campos: 'clientId, month, year, strategicObjectives' },
   'PATCH /content/plans/:id': { que: 'Edita una parrilla: estado, responsable, objetivo estratégico, notas internas.', campos: 'status (PLANIFICACION|EN_APROBACION|ACTIVO|FINALIZADO), ownerId, strategicObjectives, internalNotes' },
   'POST /content/plans/:id/share-token': { que: 'El enlace público de la parrilla (siempre el mismo).' },
+  'POST /content/plans/:id/realign': { que: 'Lleva a su parrilla las piezas de esta parrilla cuya fecha pertenece a otra según el día de corte del contrato. Conserva la fecha de cada pieza; devuelve las movidas y las que no se pudieron mover, con su motivo.' },
   'POST /content/plans/:id/request-revision': { que: 'Pide al cliente volver a revisar las piezas aprobadas con material nuevo.' },
   'POST /content/items/:id/request-revision': { que: 'Pide al cliente volver a revisar una pieza.' },
   'GET /content/items': { que: 'Las piezas de contenido.', campos: 'planId (consulta)' },
