@@ -314,12 +314,14 @@ export const createWhatsAppBridgeService = ({
    * de la ventana de 24 horas sale entero y con botones, fuera de ella como la plantilla `bria_aviso`. Nunca lanza:
    * un aviso que no sale queda anotado y la campana sigue siendo la que avisa.
    */
-  const deliverAlert = async ({ userId, kind, sourceRef, conversationId = null, topic, text, buttons = [] }) => {
+  const deliverAlert = async ({ userId, kind, sourceRef, conversationId = null, topic, text, buttons = [], urgency = null }) => {
     if (!configured()) return { outcome: 'not-configured' };
     if (!ALERT_KINDS.includes(kind) || !sourceRef || !String(text || '').trim()) return { outcome: 'invalid' };
     const link = await repository.linkByUser(userId);
     if (!link) return { outcome: 'not-linked' };
     if (!alertsEnabled(link.alertsOff, kind)) return { outcome: 'off' };
+    // «Por WhatsApp solo lo urgente» (20 de noviembre de 2026): el aviso sigue encima de Bria; aquí solo sale lo de urgencia alta.
+    if (kind === 'PULSE' && link.pulseUrgentOnly && urgency !== 'alta') return { outcome: 'not-urgent' };
     const at = now();
     if (!withinAlertHours(kind, at)) return { outcome: 'quiet-hours' };
     const row = await loadUser(userId);
@@ -350,6 +352,15 @@ export const createWhatsAppBridgeService = ({
     const list = ALERT_KINDS.filter((item) => off.has(item));
     await repository.setAlertsOff(userId, list);
     return { kind, on: !list.includes(kind) };
+  };
+
+  /** La regla de una persona para un tipo de aviso. Hoy solo «solo lo urgente» en los avisos del día. */
+  const setAlertRule = async (userId, kind, { urgentOnly }) => {
+    if (kind !== 'PULSE' || typeof urgentOnly !== 'boolean') throw httpError(400, 'Esa regla solo existe para los avisos del día.', 'WHATSAPP_ALERT_RULE_UNKNOWN');
+    const link = await repository.linkByUser(userId);
+    if (!link) throw httpError(409, 'Primero vincula tu WhatsApp.', 'WHATSAPP_NOT_LINKED');
+    await repository.setPulseUrgentOnly(userId, urgentOnly);
+    return { kind, on: alertsEnabled(link.alertsOff, kind), urgentOnly };
   };
 
   const handleWebhook = async ({ rawBody, signature, body }) => {
@@ -420,7 +431,7 @@ export const createWhatsAppBridgeService = ({
     const kinds = ALERT_KINDS.filter((kind) => kind !== 'ACCESS' || role === 'ADMIN');
     return {
       configured: configured(), number: c.number, numberDisplay: displayPhone(c.number), linked: Boolean(link), phone: link ? (displayPhone(link.phone || link.waId) || null) : null, linkedAt: link?.linkedAt || null, lastMessageAt: link?.lastMessageAt || null,
-      alerts: link ? kinds.map((kind) => ({ kind, on: alertsEnabled(link.alertsOff, kind) })) : []
+      alerts: link ? kinds.map((kind) => ({ kind, on: alertsEnabled(link.alertsOff, kind), ...(kind === 'PULSE' ? { urgentOnly: Boolean(link.pulseUrgentOnly) } : {}) })) : []
     };
   };
 
@@ -440,7 +451,7 @@ export const createWhatsAppBridgeService = ({
 
   const unlink = async (userId) => { await repository.unlink(userId); return { linked: false }; };
 
-  return { handleWebhook, verificationChallenge: (query) => webhookChallenge(query, config().verifyToken), processMessage, status, createLinkCode, unlink, configured, deliverAlert, setAlert };
+  return { handleWebhook, verificationChallenge: (query) => webhookChallenge(query, config().verifyToken), processMessage, status, createLinkCode, unlink, configured, deliverAlert, setAlert, setAlertRule };
 };
 
 let instance;

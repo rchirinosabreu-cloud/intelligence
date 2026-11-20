@@ -54,7 +54,9 @@ export const createBriaWhatsAppRouter = ({ service } = {}) => {
   router.delete('/', handle((req, instance) => instance.unlink(userId(req))));
   // Qué avisos le llegan por WhatsApp (22 de octubre de 2026): vienen encendidos y cada quien apaga los suyos.
   router.patch('/alerts', handle((req, instance) => {
-    const { kind, on } = req.body || {};
+    const { kind, on, urgentOnly } = req.body || {};
+    // «Por WhatsApp solo lo urgente» (20 de noviembre de 2026): la regla viaja sola, sin tocar el interruptor.
+    if (typeof urgentOnly === 'boolean' && on === undefined) return instance.setAlertRule(userId(req), String(kind || ''), { urgentOnly });
     if (typeof on !== 'boolean') throw Object.assign(new Error('Indica si el aviso queda encendido o apagado.'), { status: 400 });
     return instance.setAlert(userId(req), String(kind || ''), on);
   }));
