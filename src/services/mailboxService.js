@@ -167,7 +167,7 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
 
     /**
      * Los correos importantes que siguen sin respuesta (20 de noviembre de 2026): pasó al menos un día hábil y 24
-     * horas, y en los enviados de ningún buzón de la agencia hay algo que los cite. Lo respondido se anota y no
+     * horas, y en los enviados de ningún buzón de la agencia (vistos todos) hay algo que los cite. Lo respondido se anota y no
      * vuelve; lo demás entra al pulso durante una jornada. Responder por otro canal no se ve: por eso el aviso dice
      * «sin una respuesta enviada desde los buzones», y se oculta como cualquier otro.
      */
@@ -178,8 +178,9 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
       if (!candidates.length) return [];
       const ids = candidates.map((mail) => mail.messageId);
       const answered = new Set();
+      const accounts = await repo.listActiveWithSecret();
       let checked = 0;
-      for (const account of await repo.listActiveWithSecret()) {
+      for (const account of accounts) {
         try {
           const found = await imap.repliedTo(account, ids);
           if (!found) continue;
@@ -187,12 +188,14 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
           for (const id of found) answered.add(id);
         } catch (error) { logger.error('[Mailbox] No se pudieron revisar los enviados de un buzón:', account.email, error?.message || error); }
       }
-      // Sin ninguna carpeta de enviados a la vista no se afirma nada: mejor callar que avisar en falso.
-      if (!checked) return [];
+      // Solo se afirma «sin respuesta» si se vieron los enviados de todos los buzones conectados: la respuesta pudo
+      // salir del que no se dejó revisar. Lo que sí se encontró respondido se anota igual.
+      const complete = accounts.length > 0 && checked === accounts.length;
       const out = [];
       for (const mail of candidates) {
         const id = String(mail.messageId).replace(/^<|>$/g, '');
         if (answered.has(id)) { await repo.markAnswered(mail.accountId, mail.messageId, at); continue; }
+        if (!complete) continue;
         if (!mail.notifiedAt) await repo.markUnansweredNotified(mail.accountId, mail.messageId, at);
         if (out.some((row) => row.messageId === mail.messageId)) continue;
         const accountLabel = mail.accountLabel || mail.accountEmail?.split('@')[0] || null;
@@ -200,6 +203,11 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
           text: describeUnanswered({ ...mail, accountLabel }, { dayLabel: dayLabel(bogotaDate(mail.date)), businessDays: mail.businessDays }) });
       }
       return out;
+    },
+
+    /** Los borradores vigentes de esos correos (id → { summary, reply }), para la tarjeta. */
+    async draftsFor(messageIds = []) {
+      return typeof repo.draftsFor === 'function' ? repo.draftsFor([...new Set(messageIds.filter(Boolean))]) : new Map();
     },
 
     /** Los correos marcados importantes en las últimas horas, para que Bria los liste. */

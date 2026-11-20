@@ -71,6 +71,12 @@ export const createMailAccountRepository = ({ pool, key }) => ({
   async saveDraft(accountId, messageId, { summary, reply }) {
     await pool.query('UPDATE bria_memory.mail_seen SET draft_summary=$3, draft_reply=$4 WHERE account_id=$1 AND message_id=$2', [accountId, messageId, String(summary || '').slice(0, 400), String(reply || '').slice(0, 1500)]);
   },
+  /** Los borradores vigentes de esos correos, por id de correo: lo que la tarjeta muestra al abrirse. */
+  async draftsFor(messageIds = []) {
+    if (!messageIds.length) return new Map();
+    const { rows } = await pool.query('SELECT DISTINCT ON (message_id) message_id, draft_summary, draft_reply FROM bria_memory.mail_seen WHERE message_id = ANY($1::text[]) AND draft_reply IS NOT NULL ORDER BY message_id, created_at', [messageIds]);
+    return new Map(rows.map((row) => [row.message_id, { summary: row.draft_summary || '', reply: row.draft_reply }]));
+  },
   /**
    * Los correos importantes que siguen sin respuesta vista: recibidos entre `from` y `until`, de importancia 2 o más,
    * que todavía no entraron al pulso como «sin respuesta» o que entraron en esta misma jornada (`notifiedSince`).

@@ -10,7 +10,8 @@ import { createMailboxReader } from '../src/services/mailboxReader.js';
 import { createMailAccountRepository } from '../src/services/mailAccountRepository.js';
 import { buildMailDraftRequest, parseMailDraft, validateMailDraft, MAIL_DRAFT_USE_CASE, MAIL_DRAFTS_PER_RUN } from '../src/lib/mailDraft.js';
 import { collectFacts, FACT_KINDS } from '../src/lib/briaPulse.js';
-import { nudgeActions } from '../src/lib/briaNudges.js';
+import { nudgeActions, withMailDrafts } from '../src/lib/briaNudges.js';
+import { createBriaNudgeService } from '../src/services/briaNudgeService.js';
 import { pulseAlert } from '../src/lib/whatsappAlerts.js';
 import { createBriaPulseService } from '../src/services/briaPulseService.js';
 
@@ -114,6 +115,39 @@ test('an important mail with no reply in any of the agency’s sent folders beco
   assert.equal(facts[0].text, 'El correo de Aristea de María Pérez (maria@aristea.co) «Contrato 2» llegó el 19 de noviembre a Social y lleva un día hábil sin una respuesta enviada desde los buzones de la agencia.');
 });
 
+test('one mailbox whose sent folder could not be read is enough to stay quiet: the reply may be there; what was found answered is still noted', async () => {
+  const social = account('acc-1', 'social.brainstudio@gmail.com', 'Social'), contacto = account('acc-2', 'contacto@brainstudioagencia.com', 'Contacto');
+  const row = (n) => ({ accountId: 'acc-1', accountEmail: social.email, accountLabel: 'Social', messageId: `<m${n}@aristea>`, from: 'maria@aristea.co', fromName: 'María', subject: `Contrato ${n}`, date: new Date('2026-11-19T15:00:00Z'), clientName: 'Aristea', severity: 3, notifiedAt: null, draft: null });
+  for (const failure of [async () => { throw new Error('ETIMEDOUT'); }, async () => null]) {
+    const repository = memoryRepo([social, contacto]);
+    repository.candidates = [row(1), row(2)];
+    const reader = { repliedTo: async (acc, ids) => (acc.id === 'acc-1' ? new Set(['m1@aristea']) : failure(acc, ids)) };
+    const service = createMailboxService({ db, repository, reader, now: () => at, logger: { error: () => {} } });
+    assert.deepEqual(await service.readUnanswered({ at }), []);
+    assert.deepEqual(repository.answered, [['acc-1', '<m1@aristea>']]);
+    assert.deepEqual(repository.notified, []);
+  }
+});
+
+test('the card gets the draft from the mail row when it is shown, and goes on without it if the mailboxes do not answer', async () => {
+  const draft = { summary: 'Pide el contrato.', reply: 'Hola, María: te enviamos el contrato hoy.' };
+  const actions = nudgeActions({ kind: 'CORREO_IMPORTANTE', clientName: 'Aristea', title: 'Contrato', messageId: '<m1@aristea>', personName: 'María Pérez', draft });
+  const asked = [];
+  const build = (mailDrafts) => createBriaNudgeService({
+    repository: { dismissedKeys: async () => new Set(), focusDelivery: async () => null, hasRecentRun: async () => true,
+      activeMessages: async () => [{ id: 'p1', kinds: ['CORREO_IMPORTANTE'], fingerprints: ['x'], title: 'Aristea escribió', body: '', url: null, taskIds: [], urgency: 'media', actions, createdAt: at }] },
+    mailDrafts, now: () => at, logger: { error: () => {} }
+  });
+  const viewer = { userId: 'u-rodny', role: 'ADMIN', isActive: true, modulePermissions: { bria: true } };
+  const shown = await build(async (ids) => { asked.push(ids); return new Map([['<m1@aristea>', draft]]); }).list(viewer);
+  const card = shown.nudges.find((n) => n.key === 'PULSO:p1');
+  assert.ok(card, `the pulse card is listed (source ${shown.source})`);
+  assert.deepEqual(asked, [['<m1@aristea>']]);
+  assert.deepEqual(card.actions.map((a) => [a.label, a.draft?.reply || null]), [['Ver borrador', draft.reply], ['Ajustar con Bria', null]]);
+  const down = (await build(async () => { throw new Error('base caída'); }).list(viewer)).nudges.find((n) => n.key === 'PULSO:p1');
+  assert.deepEqual(down.actions.map((a) => a.label), ['Ajustar con Bria']);
+});
+
 test('with no sent folder to look at, or a mailbox that fails, Bria says nothing rather than warn in vain', async () => {
   const social = account('acc-1', 'social.brainstudio@gmail.com', 'Social');
   const repository = memoryRepo([social]);
@@ -177,8 +211,10 @@ test('the pulse: a draft becomes the first button of the card and WhatsApp keeps
   const about = { clientName: 'Aristea', title: 'Contrato', messageId: '<m1@aristea>', personName: 'María Pérez' };
   assert.deepEqual(nudgeActions({ kind: 'CORREO_IMPORTANTE', ...about }).map((a) => a.label), ['Resumir y responder'], 'without a draft the card is the one from 11 October');
   const actions = nudgeActions({ kind: 'CORREO_IMPORTANTE', ...about, draft });
-  assert.deepEqual(actions.map((a) => [a.label, Boolean(a.draft), Boolean(a.ask)]), [['Ver borrador', true, false], ['Ajustar con Bria', false, true]]);
-  assert.deepEqual(actions[0].draft, draft);
+  assert.deepEqual(actions.map((a) => [a.label, a.draftOf || null, Boolean(a.ask)]), [['Ver borrador', '<m1@aristea>', false], ['Ajustar con Bria', null, true]]);
+  assert.equal(JSON.stringify(actions).includes('te enviamos el contrato'), false, 'the saved notice only says which mail the draft belongs to: the text stays in mail_seen and leaves with it after 30 days');
+  assert.deepEqual(withMailDrafts(actions, new Map([['<m1@aristea>', draft]]))[0], { label: 'Ver borrador', draft });
+  assert.deepEqual(withMailDrafts(actions, new Map()).map((a) => a.label), ['Ajustar con Bria'], 'a draft that is gone takes its button with it');
   assert.ok(actions.every((a) => a.label.length <= 24), 'what fits in a WhatsApp option');
   const late = nudgeActions({ kind: 'CORREO_SIN_RESPUESTA', ...about });
   assert.deepEqual(late.map((a) => a.label), ['Preparar respuesta']);

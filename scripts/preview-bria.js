@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
 import { requestNudge, answerNudge, decisionMessage } from '../src/lib/vaultAccessRequests.js';
-import { nudgeActions } from '../src/lib/briaNudges.js';
+import { nudgeActions, withMailDrafts } from '../src/lib/briaNudges.js';
 import { permissionRequestNudge, permissionAnswerNudge, permissionDecisionMessage } from '../src/lib/modulePermissionRequests.js';
 import { readSignals } from '../src/lib/agencySnapshot.js';
 import { validateDailyReading, composeReading, buildMorningBrief } from '../src/lib/dailyReading.js';
@@ -154,10 +154,11 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   const mailNudges = (referer) => {
     if (!/[?&]correo/.test(referer)) return null;
     const unanswered = /correo=sinrespuesta/.test(referer);
+    const drafts = new Map([['<demo@aristea>', mailDraft]]);
     const about = { clientName: 'Aristea', title: 'Contrato y primera cuota', messageId: '<demo@aristea>', personName: 'María Pérez', draft: mailDraft };
     return [unanswered
-      ? { key: 'PULSO:demo-correo-2', kind: 'CORREO_SIN_RESPUESTA', title: 'Aristea · el correo de María Pérez sobre el contrato lleva un día hábil sin respuesta.', body: 'Conviene contestarle hoy; dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: nudgeActions({ kind: 'CORREO_SIN_RESPUESTA', ...about }) }
-      : { key: 'PULSO:demo-correo-1', kind: 'CORREO_IMPORTANTE', title: 'Aristea escribió sobre el contrato y la primera cuota.', body: 'María Pérez envió el soporte de pago y pide el contrato firmado. Dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: nudgeActions({ kind: 'CORREO_IMPORTANTE', ...about }) }];
+      ? { key: 'PULSO:demo-correo-2', kind: 'CORREO_SIN_RESPUESTA', title: 'Aristea · el correo de María Pérez sobre el contrato lleva un día hábil sin respuesta.', body: 'Conviene contestarle hoy; dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: withMailDrafts(nudgeActions({ kind: 'CORREO_SIN_RESPUESTA', ...about }), drafts) }
+      : { key: 'PULSO:demo-correo-1', kind: 'CORREO_IMPORTANTE', title: 'Aristea escribió sobre el contrato y la primera cuota.', body: 'María Pérez envió el soporte de pago y pide el contrato firmado. Dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: withMailDrafts(nudgeActions({ kind: 'CORREO_IMPORTANTE', ...about }), drafts) }];
   };
   let nudges = [
     { key: 'CIERRE_DIA:2026-10-13', kind: 'CIERRE_DIA', title: 'Bria dejó tu cierre del día.', body: 'Lo que cerraste, lo que queda en proceso, lo que vence mañana y cómo terminaron los avisos de hoy.', url: null, conversationId: closeChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: closeChat.id }] },
