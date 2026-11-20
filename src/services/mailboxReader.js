@@ -29,11 +29,26 @@ const asMessage = (fetched, parsed, { snippetChars }) => {
 
 /** Un cliente IMAP por llamada: conecta, hace lo suyo y cierra. `ImapClient` se inyecta en las pruebas. */
 export const createMailboxReader = ({ ImapClient = ImapFlow, parse = simpleParser, logger = console } = {}) => {
-  const withInbox = async (account, work) => {
+  const connect = async (account) => {
     const client = new ImapClient({ host: account.host, port: account.port || 993, secure: true, auth: { user: account.username, pass: account.secret }, logger: false, emitLogs: false });
     await client.connect();
+    return client;
+  };
+  const withInbox = async (account, work) => {
+    const client = await connect(account);
     try {
       const lock = await client.getMailboxLock('INBOX');
+      try { return await work(client); } finally { lock.release(); }
+    } finally { await client.logout().catch(() => {}); }
+  };
+  // La carpeta de enviados se busca por su marca (`\Sent`), no por su nombre: en Gmail se llama distinto según el idioma
+  // de la cuenta. Solo lectura (`readOnly`): mirar si algo se respondió nunca marca ni mueve un correo.
+  const withSent = async (account, work) => {
+    const client = await connect(account);
+    try {
+      const sent = ((await client.list()) || []).find((box) => box.specialUse === '\\Sent');
+      if (!sent) return null;
+      const lock = await client.getMailboxLock(sent.path, { readOnly: true });
       try { return await work(client); } finally { lock.release(); }
     } finally { await client.logout().catch(() => {}); }
   };
@@ -58,6 +73,24 @@ export const createMailboxReader = ({ ImapClient = ImapFlow, parse = simpleParse
           rows.push(asMessage(fetched, parsed, { snippetChars: MAIL_SNIPPET_CHARS }));
         }
         return rows.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
+      });
+    },
+
+    /**
+     * Cuáles de esos correos ya tienen una respuesta en los enviados de esta cuenta (20 de noviembre de 2026). Solo
+     * encabezados: busca un enviado que cite el identificador en `In-Reply-To` o en `References`; nunca abre un cuerpo.
+     * Devuelve un Set con los respondidos, o null si la cuenta no deja ver su carpeta de enviados.
+     */
+    async repliedTo(account, messageIds = []) {
+      const ids = [...new Set(messageIds.map((id) => String(id || '').replace(/^<|>$/g, '').trim()).filter(Boolean))];
+      if (!ids.length) return new Set();
+      return withSent(account, async (client) => {
+        const answered = new Set();
+        for (const id of ids) {
+          const uids = (await client.search({ or: [{ header: { 'in-reply-to': id } }, { header: { references: id } }] }, { uid: true })) || [];
+          if (uids.length) answered.add(id);
+        }
+        return answered;
       });
     },
 

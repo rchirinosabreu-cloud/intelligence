@@ -69,3 +69,16 @@ export const describeMail = (message, assessment, { mailboxLabel } = {}) => {
 
 /** Enlace al mensaje en Gmail por su identificador RFC 822; sirve para Gmail y para Workspace. */
 export const gmailLink = (messageId) => { const id = String(messageId || '').replace(/^<|>$/g, ''); return id ? `https://mail.google.com/mail/u/0/#search/rfc822msgid%3A${encodeURIComponent(id)}` : null; };
+
+// Un correo importante que sigue sin respuesta (20 de noviembre de 2026). Se avisa cuando ya pasó al menos un día
+// hábil completo y 24 horas desde que llegó, y solo de lo recibido en la última semana: más viejo ya no es un aviso.
+export const UNANSWERED_AFTER_MS = 24 * 3_600_000;
+export const UNANSWERED_WINDOW_MS = 7 * 24 * 3_600_000;
+
+/** El hecho para el pulso: quién escribió, cuándo y que no se ve respuesta desde los buzones de la agencia. */
+export const describeUnanswered = (mail, { dayLabel, businessDays }) => {
+  const who = mail.fromName ? `${mail.fromName} (${addressOf(mail.from)})` : addressOf(mail.from);
+  const client = mail.clientName ? ` de ${mail.clientName}` : '';
+  const days = businessDays === 1 ? 'un día hábil' : `${businessDays} días hábiles`;
+  return `El correo${client} de ${who} «${shorten(mail.subject || '(sin asunto)', 90)}» llegó el ${dayLabel}${mail.accountLabel ? ` a ${mail.accountLabel}` : ''} y lleva ${days} sin una respuesta enviada desde los buzones de la agencia.`;
+};

@@ -151,7 +151,8 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, createdAt: file.createdAt || null, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, createdAt: file.createdAt || null, current: false }))];
           // La lectura pertenece a una fecha concreta, aunque su nota ya no quepa en los últimos diez turnos.
           // `read` saneó antes los turnos: una nota que perdió acceso no puede aportar este contexto.
-          const readingDay = chat.turns.find(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
+          // Las lecturas viven en un solo chat (20 de noviembre de 2026): se conversa sobre la más reciente.
+          const readingDay = chat.turns.findLast(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
           // Solo contexto de turnos ya saneados por permisos. Una operación terminada no vuelve a ser
           // confirmable; sigue siendo visible aunque después haya respuestas sin ninguna acción.
           const latest = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(Boolean);

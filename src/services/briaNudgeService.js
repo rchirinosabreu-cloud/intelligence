@@ -7,7 +7,8 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { isManagerRole } from '../config/security.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
-import { buildNudges, dismissUntil, isValidNudgeKey, workdayStart } from '../lib/briaNudges.js';
+import { buildNudges, dismissUntil, isValidNudgeKey, workdayStart, withMailDrafts } from '../lib/briaNudges.js';
+import { getMailboxService } from './mailboxService.js';
 import { weekKeyOf } from '../lib/weeklyReading.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
@@ -19,12 +20,22 @@ const OPEN = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 export const PULSE_LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const canSeeNudges = (user) => canUseBria(user) && isManagerRole(user?.role);
 
-export const createBriaNudgeService = ({ db = prisma, repository, now = () => new Date(), vault = null, permissions = null, logger = console } = {}) => {
+export const createBriaNudgeService = ({ db = prisma, repository, now = () => new Date(), vault = null, permissions = null, mailDrafts = null, logger = console } = {}) => {
   const repo = repository || createBriaProactiveRepository({ pool: getSidecarPool() });
   const userIdOf = (user) => user?.userId || user?.id;
   // Con un repositorio inyectado (pruebas y muestras) la bóveda y los permisos reales nunca se tocan: solo los que se inyecten.
   const vaultOf = () => vault || (repository ? null : getVaultService());
   const permissionsOf = () => permissions || (repository ? null : getPermissionRequestService());
+  // El borrador de un correo (20 de noviembre de 2026) no viaja guardado en el aviso: se trae de `mail_seen` al
+  // mostrarlo. Si los buzones no responden, la tarjeta sale sin «Ver borrador» y con lo demás.
+  const draftsOf = async (rows) => {
+    const ids = [...new Set(rows.flatMap((row) => (row.actions || []).map((action) => action?.draftOf).filter(Boolean)))];
+    if (!ids.length) return new Map();
+    const read = mailDrafts || (repository ? null : (list) => getMailboxService().draftsFor(list));
+    if (!read) return new Map();
+    try { return await read(ids) || new Map(); }
+    catch (failure) { logger.error('[BriaNudges] No se pudieron leer los borradores de correo:', failure?.message || failure); return new Map(); }
+  };
   // Pedidos de acceso (15 de octubre de 2026), de la bóveda y de un módulo: esperan una decisión, así que van primero.
   // Si una fuente no responde, los demás avisos siguen saliendo; y quien no usa la bóveda no tiene nada que ver ahí.
   const fromSource = async (source, read, dismissed) => {
@@ -90,8 +101,9 @@ export const createBriaNudgeService = ({ db = prisma, repository, now = () => ne
       if (pulseLive) {
         const messages = (await repo.activeMessages(userRef, at)).filter(isCurrentPredictionMessage);
         const fixed = buildNudges({ people: [], now: at, dismissedKeys: dismissed, weeklyFocus, dailyClose, morningBrief });
+        const drafts = await draftsOf(messages);
         // `resolution` y `followUp` son el seguimiento: el desenlace del aviso o «sigue igual», escritos por el pulso.
-        return { nudges: [...access, ...fixed, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, actions: row.actions || [], createdAt: row.createdAt, resolution: row.resolution || null, followUp: row.followUp || null }))], source: 'pulso' };
+        return { nudges: [...access, ...fixed, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, actions: withMailDrafts(row.actions || [], drafts), createdAt: row.createdAt, resolution: row.resolution || null, followUp: row.followUp || null }))], source: 'pulso' };
       }
       const people = await this.readPeople(at);
       const viewer = people.find((person) => person.userId === userRef) || (await db.teamMember.findFirst({ where: { userId: userRef }, select: { id: true } }).then((row) => row ? { personId: row.id } : null));
