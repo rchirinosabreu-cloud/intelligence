@@ -1,121 +1,60 @@
-// La voz de Bria con ElevenLabs (Rodny, 20 de noviembre de 2026).
+// La voz de Bria según con quién y por dónde habla (1 de noviembre de 2026). En el piloto de WhatsApp del 31 de
+// octubre Bria le escribió a Rodny «Rodny confirmó que…» como si le contara a otra persona, respondió largo para
+// leerse en un celular y cerró con una advertencia genérica («atender un asunto no demuestra por sí solo…»).
+// Tres principios, nada de plantillas: segunda persona siempre, el canal se le dice, y sin cierres de cautela.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import express from 'express';
-import { speakableText, voiceConfig, hearTurn, VOICE_MAX_CHARS, VOICE_TAIL, VOICE_SILENCE_MS } from '../src/lib/briaVoice.js';
-import { createElevenLabsClient } from '../src/services/elevenLabsClient.js';
-import { createBriaVoiceService } from '../src/services/briaVoiceService.js';
-import { createBriaVoiceRouter } from '../src/routes/api/briaVoice.js';
-import { createGovernedFetch } from '../src/services/aiEgress.js';
+import { buildInstructions } from '../src/lib/briaAssistant.js';
+import { createBriaAssistantService as createService } from '../src/services/briaAssistantService.js';
 
-const env = { ELEVENLABS_API_KEY: 'clave-de-prueba', ELEVENLABS_VOICE_ID: 'JBFqnCBsd6RMkjVDRZzb' };
-const pm = { id: 'u1', role: 'PROJECT_MANAGER', modulePermissions: { bria: true } };
-const quietLog = { record: async () => {} };
+const tools = [{ name: 'mis_tareas', description: 'Tus tareas' }];
+const person = { name: 'Rodny', jobTitle: 'Director' };
 
-test('lo que Bria dice en voz no lleva formato, enlaces, tablas ni código, y se corta en una frase', () => {
-  const said = speakableText('## Hoy\n\n- **Aristea** lleva 11 días en rojo.\n- Mira [la parrilla](https://x.co/p) y `ContentItem`.\n\n| a | b |\n|---|---|\n\n```js\nconst x = 1;\n```\nhttps://labs.x.co/ruta');
-  assert.equal(said, 'Hoy. Aristea lleva 11 días en rojo. Mira la parrilla y ContentItem.');
-  const long = speakableText(Array.from({ length: 80 }, (_, i) => `Esta es la frase número ${i} de una respuesta muy larga.`).join(' '));
-  assert.ok(long.length <= VOICE_MAX_CHARS); assert.ok(long.endsWith(VOICE_TAIL)); assert.match(long.slice(0, -VOICE_TAIL.length).trim(), /[.!?]$/);
-  assert.equal(speakableText('  '), ''); assert.equal(speakableText(null), '');
+test('Bria speaks to the person in the second person, even when a memory or a receipt names them', () => {
+  const text = buildInstructions({ person, today: '2026-11-01', tools });
+  assert.match(text, /segunda persona/);
+  assert.match(text, /nunca (?:en|por) tercera persona/);
+  assert.match(text, /«me confirmaste»|me confirmaste/);
 });
 
-test('sin clave o sin voz, Bria no habla; el modelo y el tope se pueden ajustar', () => {
-  assert.equal(voiceConfig({}).enabled, false);
-  assert.equal(voiceConfig({ ELEVENLABS_API_KEY: 'x' }).enabled, false);
-  assert.equal(voiceConfig({ ...env, ELEVENLABS_VOICE_ID: '../otra/ruta' }).enabled, false, 'el id de voz no puede traer rutas');
-  const config = voiceConfig({ ...env, ELEVENLABS_MODEL_ID: 'eleven_v4_turbo', BRIA_VOICE_DAILY_CHARS: '500' });
-  assert.deepEqual([config.enabled, config.model, config.dailyChars], [true, 'eleven_v4_turbo', 500]);
-  assert.equal(voiceConfig({ ...env, ELEVENLABS_MODEL_ID: 'x y', BRIA_VOICE_DAILY_CHARS: '-1' }).model, 'eleven_flash_v2_5');
+test('the channel reaches the instructions at the end, so the shared prefix stays cached', () => {
+  const platform = buildInstructions({ person, today: '2026-11-01', tools });
+  const whatsapp = buildInstructions({ person, today: '2026-11-01', tools, channel: 'whatsapp' });
+  assert.doesNotMatch(platform, /WhatsApp/, 'in the platform nothing says WhatsApp');
+  const lastLine = whatsapp.split('\n').at(-1);
+  assert.match(lastLine, /WhatsApp/);
+  assert.match(lastLine, /celular/);
+  assert.equal(whatsapp.split('\n').slice(0, -1).join('\n'), platform.split('\n').slice(0, -1).join('\n'), 'only the last line changes with the channel');
 });
 
-test('el turno se cierra cuando la persona ya habló y calla un rato', () => {
-  let state = {}, at = 0; const feed = (level, ms) => { for (let t = 0; t < ms; t += 100) { at += 100; state = hearTurn(state, { level, at }); } return state; };
-  assert.equal(feed(0.02, 3000).done, false, 'silencio antes de hablar no cierra nada');
-  assert.equal(feed(0.5, 800).spoke, true);
-  assert.equal(feed(0.02, VOICE_SILENCE_MS - 200).done, false);
-  assert.equal(feed(0.4, 300).done, false, 'si retoma, el silencio vuelve a contar');
-  assert.equal(feed(0.02, VOICE_SILENCE_MS + 100).done, true);
-  let blip = {}; blip = hearTurn(blip, { level: 0.9, at: 100 }); blip = hearTurn(blip, { level: 0.9, at: 200 });
-  for (let t = 300; t < 4000; t += 100) blip = hearTurn(blip, { level: 0, at: t });
-  assert.equal(blip.done, false, 'un golpe corto no es hablar');
+test('closing with a generic caution is not Bria\'s voice', () => {
+  const text = buildInstructions({ person, today: '2026-11-01', tools });
+  assert.match(text, /advertencia/);
+  assert.match(text, /no cierres|sin cierres/i);
 });
 
-test('la salida a ElevenLabs pasa por la puerta de egreso: destino inventariado, modelo identificado y sin metadatos internos', async () => {
-  let decision, sent;
-  const client = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async (context) => { decision = context; } }, fetchImpl: async (url, options) => { sent = { url, options }; return new Response('audio', { status: 200, headers: { 'content-type': 'audio/mpeg' } }); } });
-  const response = await client.speak({ text: 'Hola' });
-  assert.equal(await response.text(), 'audio');
-  assert.deepEqual([decision.provider, decision.model, decision.useCase], ['elevenlabs', 'eleven_flash_v2_5', 'bria.voice']);
-  assert.equal(sent.url, 'https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream?output_format=mp3_44100_128');
-  assert.equal(sent.options.headers['xi-api-key'], 'clave-de-prueba'); assert.equal(sent.options.governanceContext, undefined);
-  assert.deepEqual(JSON.parse(sent.options.body), { text: 'Hola', model_id: 'eleven_flash_v2_5', language_code: 'es' });
-  const blocked = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async () => { throw Object.assign(new Error('no'), { code: 'AI_SCOPE_REQUIRED', status: 403 }); } }, fetchImpl: async () => { throw new Error('no debe salir'); } });
-  await assert.rejects(blocked.speak({ text: 'Hola' }), { code: 'AI_SCOPE_REQUIRED' });
-  await assert.rejects(createElevenLabsClient({ config: () => voiceConfig({}) }).speak({ text: 'Hola' }), { code: 'VOICE_NOT_CONFIGURED' });
-  const out = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async () => {} }, fetchImpl: async () => new Response('{}', { status: 401 }) });
-  await assert.rejects(out.speak({ text: 'Hola' }), (failure) => failure.code === 'VOICE_KEY_REJECTED' && !failure.message.includes('clave-de-prueba'));
-  // Otros destinos de ElevenLabs no están inventariados.
-  const send = createGovernedFetch({ usageLog: quietLog, governance: { assertEgress: async () => {} }, fetchImpl: async () => new Response('x') });
-  await assert.rejects(send('https://api.elevenlabs.io/v1/voices', { body: '{}' }), { code: 'AI_DESTINATION_INVALID' });
-  await assert.rejects(send('https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream', { body: '{}' }), { code: 'AI_SCOPE_REQUIRED' }, 'sin modelo no sale');
+// Rodny, 13 de noviembre de 2026: «si yo no sigo un pendiente y retomo después la conversación, me gustaría que Bria
+// me preguntara si queremos seguir con ello … es un asunto de razonar, NO SON PLANTILLAS». Es un principio: el
+// borrador le llega como dato y ella decide si lo recuerda; no hay frase fija ni detector.
+test('an unfinished draft is a judgment call for the model, never a template or an automatic execution', () => {
+  const text = buildInstructions({ person, today: '2026-11-13', tools });
+  assert.match(text, /borrador que la persona dejó a medias no se pierde/);
+  assert.match(text, /decide tú si vale la pena recordárselo/);
+  assert.match(text, /nunca lo ejecutes por tu cuenta ni lo repitas en cada mensaje/);
 });
 
-test('el servicio: solo quien dirige con Bria, texto limpio, tope diario apartado antes de llamar', async () => {
-  const said = [];
-  const client = { speak: async ({ text }) => { said.push(text); return new Response('audio'); } };
-  let day = new Date('2026-11-20T15:00:00Z');
-  const service = createBriaVoiceService({ client, config: () => ({ ...voiceConfig(env), dailyChars: 30 }), now: () => day });
-  assert.deepEqual(service.status(pm), { enabled: true, remaining: 30 });
-  assert.deepEqual(service.status({ ...pm, role: 'EDITOR' }), { enabled: false });
-  assert.deepEqual(service.status({ ...pm, modulePermissions: {} }), { enabled: false });
-  await assert.rejects(service.speak({ ...pm, role: 'EDITOR' }, { text: 'Hola' }), { status: 403 });
-  await service.speak(pm, { text: '**Hola**, [mira](https://x.co)' });
-  assert.deepEqual(said, ['Hola, mira']); assert.equal(service.status(pm).remaining, 20);
-  await assert.rejects(service.speak(pm, { text: 'x'.repeat(21) }), { code: 'VOICE_DAILY_LIMIT' });
-  await assert.rejects(service.speak(pm, { text: '   ' }), { code: 'VOICE_EMPTY' });
-  day = new Date('2026-11-21T15:00:00Z');
-  assert.equal(service.status(pm).remaining, 30, 'al día siguiente vuelve la voz');
-  const failing = createBriaVoiceService({ client: { speak: async () => { throw Object.assign(new Error('x'), { status: 502 }); } }, config: () => voiceConfig(env), now: () => day });
-  await assert.rejects(failing.speak(pm, { text: 'Hola' }));
-  assert.equal(failing.status(pm).remaining, voiceConfig(env).dailyChars, 'lo que no se dijo no se cobra al tope');
-  assert.deepEqual(createBriaVoiceService({ client, config: () => voiceConfig({}) }).status(pm), { enabled: false });
-});
-
-test('la ruta entrega el audio y nunca un texto vacío', async () => {
-  const app = express(); app.use(express.json()); let user = pm;
-  app.use((req, _res, next) => { req.user = user; next(); });
-  app.use('/voice', createBriaVoiceRouter({ service: { status: () => ({ enabled: true, remaining: 5 }), speak: async (_user, { text }) => { if (text === 'tope') throw Object.assign(new Error('Bria ya habló lo de hoy.'), { status: 429, code: 'VOICE_DAILY_LIMIT' }); return new Response(`audio:${text}`, { headers: { 'content-type': 'audio/mpeg' } }); } } }));
-  const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}/voice`;
-  const post = (text) => fetch(`${base}/speak`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-  try {
-    assert.deepEqual(await (await fetch(base)).json(), { enabled: true, remaining: 5 });
-    const ok = await post('Hola'); assert.equal(ok.headers.get('content-type'), 'audio/mpeg'); assert.equal(await ok.text(), 'audio:Hola'); assert.equal(ok.headers.get('cache-control'), 'no-store');
-    assert.equal((await post('  ')).status, 400); assert.equal((await post(undefined)).status, 400);
-    const limit = await post('tope'); assert.equal(limit.status, 429); assert.equal((await limit.json()).code, 'VOICE_DAILY_LIMIT');
-    user = { ...pm, modulePermissions: {} }; assert.equal((await fetch(base)).status, 403);
-  } finally { server.close(); }
-});
-
-test('la pantalla de voz: fases, qué se dice y cómo se abre', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { transformWithEsbuild } = await import('vite');
-  const mode = readFileSync('src/components/bria/BriaVoiceMode.jsx', 'utf8'), composer = readFileSync('src/components/bria/BriaComposer.jsx', 'utf8'), conversation = readFileSync('src/components/bria/BriaConversation.jsx', 'utf8'), dictation = readFileSync('src/components/bria/useBriaDictation.js', 'utf8');
-  await transformWithEsbuild(mode, 'BriaVoiceMode.jsx', { loader: 'jsx', jsx: 'automatic' });
-  assert.match(mode, /handsFree: true/); assert.match(mode, /send\(said\)/, 'lo dicho entra al chat por el mismo envío de siempre');
-  assert.match(mode, /replyToSpeak\(chat, spoken\.current\)/); assert.match(mode, /VOICE_DAILY_LIMIT/);
-  assert.match(mode, /aria-label="Cerrar la voz"/); assert.match(mode, /Pausar el micrófono/); assert.match(mode, /Interrumpir a Bria/);
-  assert.match(mode, /env\(safe-area-inset-bottom\)/); assert.match(mode, /clamp\([^)]*vh/, 'Bria mide según el alto de la pantalla');
-  assert.match(dictation, /hearTurn\(session\.turn/); assert.match(dictation, /callbacks\.current\.onIdle/);
-  assert.match(composer, /onVoice && !sendable/, 'el botón de voz solo ocupa el lugar de enviar con el cuadro vacío');
-  assert.match(conversation, /voiceReady && view === 'chat' \? openVoice : undefined/, 'sin voz configurada no hay botón');
-  assert.match(conversation, /new Audio\('data:audio\/wav;base64,/, 'el audio se estrena dentro del toque');
-  // `replyToSpeak` y `voiceMood`, copiadas del módulo para probarlas sin el empaquetador.
-  const pure = mode.match(/export const voiceMood = [^\n]+\n[^\n]*\nexport const replyToSpeak = [^\n]+/)[0].replace(/^\/\*\*[^\n]*\n/m, '');
-  const { voiceMood, replyToSpeak } = await import(`data:text/javascript,${encodeURIComponent(pure)}`);
-  assert.deepEqual(['listening', 'thinking', 'speaking', 'paused'].map(voiceMood), ['reposo', 'pensando', 'feliz', 'reposo']);
-  const chat = { turns: [{ id: 'u1', role: 'user', text: 'Hola' }, { id: 'a1', role: 'assistant', text: 'Hola, Rodny.' }] };
-  assert.equal(replyToSpeak(chat, null).id, 'a1'); assert.equal(replyToSpeak(chat, 'a1'), null, 'no repite lo ya dicho');
-  assert.equal(replyToSpeak({ turns: [chat.turns[0]] }, null), null); assert.equal(replyToSpeak(null, null), null);
-  assert.equal(replyToSpeak({ turns: [{ id: 'a2', role: 'assistant', text: '  ' }] }, null), null);
+// Que la sesión de WhatsApp lleve su canal se comprueba en tests/whatsappBridgeService.test.js.
+test('the assistant tells the model the channel it is answering on', async () => {
+  const seen = [];
+  const row = { id: 'u', name: 'Persona', role: 'PROJECT_MANAGER', isActive: true, sessionVersion: 1, modulePermissions: { bria: true }, teamMember: { id: 'm', isActive: true } };
+  const service = createService({
+    agencyFacts: { recall: async () => ({ hechos: [] }) }, notebook: null, mail: null, vault: null, tools: [],
+    db: { user: { findUnique: async () => row } },
+    ai: { generate: async (request) => { seen.push(request.instructions); return { text: 'Listo.' }; } }
+  });
+  const user = () => ({ userId: 'u', role: 'PROJECT_MANAGER', sessionVersion: 1, modulePermissions: { bria: true } });
+  await service.ask({ user: user(), question: 'hola', session: { token: 'navegador' } });
+  await service.ask({ user: user(), question: 'hola', session: { channel: 'whatsapp' } });
+  assert.doesNotMatch(seen[0].split('\n').find((line) => line.startsWith('Hoy es')), /WhatsApp/);
+  assert.match(seen[1].split('\n').find((line) => line.startsWith('Hoy es')), /WhatsApp/);
 });
