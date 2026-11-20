@@ -576,9 +576,9 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
 .zw-layer[data-l="1"], .zw-layer[data-l="2"] { padding-top: calc(128px + env(safe-area-inset-top, 0px)); }
 
 /* Breadcrumb + depth bars */
-.zw-crumbs { position: absolute; z-index: 3; padding: 0 0 12px; background: linear-gradient(var(--paper) 75%, rgba(241,242,247,0)); top: calc(76px + env(safe-area-inset-top, 0px)); left: var(--gut); right: var(--gut); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; transition: opacity .35s, transform .35s; }
+.zw-crumbs { position: absolute; z-index: 3; top: calc(76px + env(safe-area-inset-top, 0px)); left: var(--gut); right: var(--gut); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; transition: opacity .35s, transform .35s; }
 .zw-crumbs.off { opacity: 0; transform: translateY(-8px); pointer-events: none; }
-.zw-crumbs button, .zw-crumbs span.cur { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 7px 13px; font-weight: 800; font-size: 13px; }
+.zw-crumbs button, .zw-crumbs span.cur { box-shadow: 0 4px 14px rgba(15,17,48,.08); border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 7px 13px; font-weight: 800; font-size: 13px; }
 .zw-crumbs button:hover { border-color: var(--ink); }
 .zw-crumbs span.cur { background: var(--ink); color: #fff; border-color: var(--ink); }
 .zw-crumbs .sep { color: var(--muted-ink); font-weight: 800; }
@@ -624,7 +624,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
 .zw-detail { display: grid; gap: 18px; max-width: 960px; margin: 0 auto; }
 .zw-detail .lane-tag { font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--lc); }
 .zw-detail h3 { font-family: var(--display); font-weight: 900; font-size: clamp(32px, 4.2vw, 60px); line-height: 1.02; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
-.zw-detail h3 small { display: block; font-size: .3em; letter-spacing: .14em; color: var(--lc); margin-bottom: 8px; }
+.zw-detail h3 small { display: block; text-transform: uppercase; font-size: .3em; letter-spacing: .14em; color: var(--lc); margin-bottom: 8px; }
 .zw-detail .grid4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .zw-detail .blk { background: #fff; border: 1px solid var(--line); border-top: 5px solid var(--lc); border-radius: 18px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
 .zw-detail .blk small { font-size: 11.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--lc); }
@@ -639,6 +639,8 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   .zw-lane .lt { font-size: 44px; }
   .zw-detail .grid4 { grid-template-columns: 1fr; }
   .zw-crumbs .bars { display: none; }
+  .zw-crumbs { flex-wrap: nowrap; }
+  .zw-crumbs.deep .lg { display: none; }
   .zw-crumbs { left: 0; right: 0; padding-left: var(--gut); padding-right: var(--gut); }
   .zw-layer[data-l="1"], .zw-layer[data-l="2"] { padding-top: calc(140px + env(safe-area-inset-top, 0px)); }
 }
@@ -1954,8 +1956,8 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     function paint2() {
       const d = W_IDEAS[idea - 1], l = laneOf(d.lane), picked = store.get('pilot', -1) === d.n - 1;
       L[2].style.setProperty('--lc', l.c);
-      L[2].innerHTML = `<div class="in"><div class="zw-detail"><span class="lane-tag">Way ${l.id} · ${l.name}</span>
-        <h3><small>IDEA ${pad(d.n)}</small>${d.t}</h3>
+      L[2].innerHTML = `<div class="in"><div class="zw-detail">
+        <h3><small>Way ${l.id} · ${l.how}</small>${d.t}</h3>
         <div class="grid4"><div class="blk"><small>The problem</small><p>${d.prob}</p></div><div class="blk"><small>What we’d do</small><p>${d.doo}</p></div><div class="blk"><small>A first pilot</small><p>${d.pilot}</p></div><div class="blk"><small>How we’d know it works</small><p>${d.meas}</p></div></div>
         <div class="acts"><button class="btn ${picked ? 'on' : ''}" type="button" data-pick>${picked ? 'Chosen as our pilot ✓' : 'Choose this as our pilot'}</button>${d.demo ? '<button class="btn line" type="button" data-demo-go>See an example →</button>' : ''}<button class="btn line" type="button" data-next-step>Go to the next step →</button></div></div></div>`;
       $('[data-pick]', L[2]).addEventListener('click', (e) => { if (window.__pickPilot) window.__pickPilot(d.n - 1); e.currentTarget.textContent = 'Chosen as our pilot ✓'; e.currentTarget.classList.add('on'); window.sfx('reveal'); });
@@ -1963,11 +1965,11 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
       $('[data-next-step]', L[2]).addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Choose one priority to pilot')));
     }
     function paintCrumbs() {
-      crumbs.classList.toggle('off', level === 0);
+      crumbs.classList.toggle('off', level === 0); crumbs.classList.toggle('deep', level === 2);
       if (level === 0) { crumbs.innerHTML = ''; return; }
       const l = laneOf(lane);
       let h = `<button type="button" data-up="0">← All three ways</button>`;
-      h += level === 1 ? `<span class="sep">›</span><span class="cur">${l.id} · ${l.name}</span>` : `<span class="sep">›</span><button type="button" data-up="1">${l.id} · ${l.name}</button><span class="sep">›</span><span class="cur">Idea ${pad(idea)}</span>`;
+      h += level === 1 ? `<span class="sep">›</span><span class="cur">${l.id} · ${l.name}</span>` : `<span class="sep">›</span><button type="button" data-up="1">${l.id}<span class="lg"> · ${l.name}</span></button><span class="sep">›</span><span class="cur">Idea ${pad(idea)}</span>`;
       h += `<span class="bars" aria-hidden="true">Depth <i class="on"></i><i class="${level >= 1 ? 'on' : ''}"></i><i class="${level >= 2 ? 'on' : ''}"></i></span>`;
       crumbs.innerHTML = h;
       $$('[data-up]', crumbs).forEach((b) => b.addEventListener('click', () => { const t = +b.dataset.up; if (level === 2 && t === 0) { out(true); } else out(); }));
