@@ -49,6 +49,9 @@ function NudgeProgress({ progress }) {
 
 export default function BriaNudge({ userId, hidden = false, request = requestBriaNudges, decide = decideAccess, refreshMs = NUDGE_REFRESH_MS, className }) {
   const [nudges, setNudges] = useState([]), [busy, setBusy] = useState(false), mounted = useRef(true);
+  // El borrador listo de un correo (20 de noviembre de 2026) se despliega en la misma tarjeta; guarda de qué aviso es,
+  // así el aviso siguiente nunca aparece con el borrador del anterior abierto.
+  const [draftFor, setDraftFor] = useState(null);
   // Ir a un sitio desde el aviso lleva de dónde se salió: allá se ofrece volver (30 de octubre de 2026).
   const navigateFrom = useNavigateFrom();
   const load = async () => {
@@ -87,6 +90,13 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
   const primary = 'inline-flex min-h-11 items-center gap-1 rounded-xl bg-bria-night px-3.5 text-sm font-semibold text-white hover:bg-bria-night/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:bg-white dark:text-bria-night dark:hover:bg-white/90';
   const secondary = 'inline-flex min-h-11 items-center gap-1 rounded-xl border border-bria-line bg-white px-3 text-sm font-medium text-bria-night hover:bg-bria-mist/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:border-white/20 dark:bg-transparent dark:text-white dark:hover:bg-white/10';
   const kind = (index) => (index === 0 ? primary : secondary);
+  const draft = (nudge.actions || []).find((item) => item.draft?.reply)?.draft || null;
+  const draftOpen = Boolean(draft) && draftFor === nudge.key;
+  // Bria nunca envía correos: la persona copia la respuesta, la pega en su correo y la revisa antes de mandarla.
+  const copyDraft = async () => {
+    try { await navigator.clipboard.writeText(draft.reply); toast.success('Respuesta copiada. Revísala en tu correo antes de enviarla.'); }
+    catch (failure) { console.error('[BriaNudge] No se pudo copiar el borrador:', failure.message); toast.error('No se pudo copiar. Selecciona el texto y cópialo a mano.'); }
+  };
   return (
     <section role="status" aria-label="Aviso de Bria" data-bria-nudge={nudge.kind} className={cn('fixed right-4 z-[49] w-[min(340px,calc(100vw-2rem))] rounded-[20px] border border-bria-night/5 bg-white pb-4 text-bria-night shadow-[0_18px_36px_-20px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:text-white dark:shadow-[0_18px_36px_-18px_rgba(0,0,0,0.7)] bottom-[calc(1rem+env(safe-area-inset-bottom)+5.75rem)] sm:bottom-[calc(1rem+env(safe-area-inset-bottom)+6.75rem)]', className)}>
       <div className="flex items-center gap-2.5 pl-4 pr-1.5 pt-2">
@@ -109,7 +119,9 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
         {nudge.progress && <NudgeProgress progress={nudge.progress} />}
         {/* Los botones los decide la plataforma según el hecho: a dónde ir y qué pedirle a Bria (queda escrito, la persona lo envía). */}
         <div className="mt-3 flex flex-wrap items-center gap-2" data-bria-nudge-actions>
-          {(nudge.actions || []).map((item, index) => item.decide
+          {(nudge.actions || []).map((item, index) => item.draft
+            ? <button key={item.label} type="button" aria-expanded={draftOpen} data-bria-nudge-draft-toggle className={kind(index)} onClick={() => setDraftFor(draftOpen ? null : nudge.key)}>{draftOpen ? 'Ocultar borrador' : item.label}</button>
+            : item.decide
             ? <button key={item.label} type="button" disabled={busy} data-bria-nudge-decision={item.decide.decision} className={cn(item.decide.decision === 'APPROVE' ? primary : secondary, 'disabled:opacity-50')} onClick={() => answer(item.decide)}>{item.label}</button>
             : item.href
             // Abrir un módulo recién concedido recarga la página: el menú y las rutas leen el permiso nuevo.
@@ -122,6 +134,14 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
                 ? <a key={item.label} href={item.to} target="_blank" rel="noopener noreferrer" className={kind(index)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
                 : item.to ? <Link key={item.label} to={item.to} onClick={(event) => { event.preventDefault(); navigateFrom(item.to); }} className={kind(index)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></Link> : null)}
         </div>
+        {/* El borrador que Bria dejó listo: qué dice el correo y la respuesta propuesta, para copiar. Misma superficie que el bloque de la liga. */}
+        {draftOpen && (
+          <div data-bria-nudge-draft className="mt-3 rounded-2xl border border-bria-line bg-bria-mist/40 px-3 py-2.5 dark:border-white/10 dark:bg-white/5">
+            {draft.summary && <p className="text-sm leading-5 text-bria-muted dark:text-zinc-300">{draft.summary}</p>}
+            <p data-bria-nudge-draft-reply className="mt-2 max-h-52 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-bria-ink dark:text-zinc-200">{draft.reply}</p>
+            <button type="button" onClick={copyDraft} className={cn(secondary, 'mt-2.5')}>Copiar respuesta</button>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -43,6 +43,8 @@ import { dailyAlert } from '../lib/whatsappAlerts.js';
 import { isTrustedSession } from '../lib/taskWorkCorrection.js';
 
 export const MORNING_BRIEF_NOTIFICATION = 'BRIA_LECTURA_MANANA';
+// El chat de las lecturas se llama igual todos los días: la fecha la dice cada lectura.
+export const MORNING_BRIEF_THREAD_TITLE = 'Lectura de la mañana';
 export const SNAPSHOT_FROM = 6 * 60;
 export const READING_FROM = 6 * 60 + 30;
 export const BRIEF_FROM = 7 * 60 + 30;
@@ -393,7 +395,11 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       return { reading, decisions, entries, scorecard: scorecard(entries, { proposed }) };
     },
 
-    /** Deja la lectura de la mañana en un chat nuevo de la persona y la avisa. Una vez por día y persona. */
+    /**
+     * Deja la lectura de la mañana en el chat de lecturas de la persona y la avisa. Una vez por día y persona. Es un
+     * solo chat para siempre (Rodny, 20 de noviembre de 2026): cada mañana entra como un mensaje más, con su fecha en
+     * la primera frase, y lo que se converse sobre la lectura queda debajo de ella.
+     */
     async deliver(user, reading) {
       const existing = await deliveries.morningBriefDelivery(reading.day, user.id);
       if (existing) return { ...existing, already: true };
@@ -404,7 +410,8 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions });
       const scope = scopeFor(user, reading);
       const sources = [...new Map([...dailyContextSources({ ...reading.context, accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }), ...(decisions?.sources || [])].map(source => [`${source.kind}:${source.id}`, source])).values()];
-      const chat = await chats().postAssistantNote(actorOf(user), { title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day, sources } });
+      const store = chats();
+      const chat = await (store.postThreadNote || store.postAssistantNote).call(store, actorOf(user), { title: store.postThreadNote ? MORNING_BRIEF_THREAD_TITLE : title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day, sources } });
       const delivery = await deliveries.recordMorningBriefDelivery(reading.day, user.id, chat.id);
       try { await notify({ userId: user.id, type: MORNING_BRIEF_NOTIFICATION, message: 'Bria dejó tu lectura de la mañana en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyReading] No se pudo avisar a una persona:', error?.message || error); }

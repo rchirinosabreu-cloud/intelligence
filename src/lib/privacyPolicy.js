@@ -48,4 +48,7 @@
 // archivos sigue fuera del chat.
 // 2.20 (22 de octubre de 2026): la rentabilidad por cliente, solo para administradores, con un costo hora de la
 // agencia; la nómina entra sumada con los demás gastos, nunca por persona.
-export const PRIVACY_POLICY_VERSION = '2.20 · 2026-10-22';
+// 2.21 (20 de noviembre de 2026): de un correo importante de los buzones compartidos Bria deja listos un resumen
+// corto y un borrador de respuesta (se guardan 30 días con la fila del correo; el cuerpo sigue sin guardarse) y avisa
+// si sigue sin respuesta, mirando solo los encabezados de la carpeta de enviados. Sigue sin enviar correos.
+export const PRIVACY_POLICY_VERSION = '2.21 · 2026-11-20';

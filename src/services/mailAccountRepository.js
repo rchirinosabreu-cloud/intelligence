@@ -57,8 +57,8 @@ export const createMailAccountRepository = ({ pool, key }) => ({
   async recordSeen(accountId, rows) {
     for (const row of rows) {
       await pool.query(
-        'INSERT INTO bria_memory.mail_seen(account_id,message_id,from_address,from_name,subject,received_at,important,reasons,client_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (account_id,message_id) DO NOTHING',
-        [accountId, row.messageId, row.from || null, row.fromName || null, String(row.subject || '').slice(0, 300), row.date || null, Boolean(row.important), row.reasons || [], row.clientName || null]
+        'INSERT INTO bria_memory.mail_seen(account_id,message_id,from_address,from_name,subject,received_at,important,reasons,client_name,severity) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (account_id,message_id) DO NOTHING',
+        [accountId, row.messageId, row.from || null, row.fromName || null, String(row.subject || '').slice(0, 300), row.date || null, Boolean(row.important), row.reasons || [], row.clientName || null, row.severity || null]
       );
     }
   },
@@ -66,6 +66,26 @@ export const createMailAccountRepository = ({ pool, key }) => ({
   async recentImportant(since, { limit = 30 } = {}) {
     const { rows } = await pool.query('SELECT s.*, a.email AS account_email, a.label AS account_label FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id WHERE s.important AND s.created_at >= $1 ORDER BY s.received_at DESC NULLS LAST LIMIT $2', [since, limit]);
     return rows.map((row) => ({ accountId: row.account_id, accountEmail: row.account_email, accountLabel: row.account_label || null, messageId: row.message_id, from: row.from_address, fromName: row.from_name, subject: row.subject, date: row.received_at, reasons: row.reasons || [], clientName: row.client_name || null }));
+  },
+  /** El resumen y el borrador que Bria dejó listos para un correo importante (20 de noviembre de 2026). Nunca el cuerpo. */
+  async saveDraft(accountId, messageId, { summary, reply }) {
+    await pool.query('UPDATE bria_memory.mail_seen SET draft_summary=$3, draft_reply=$4 WHERE account_id=$1 AND message_id=$2', [accountId, messageId, String(summary || '').slice(0, 400), String(reply || '').slice(0, 1500)]);
+  },
+  /**
+   * Los correos importantes que siguen sin respuesta vista: recibidos entre `from` y `until`, de importancia 2 o más,
+   * que todavía no entraron al pulso como «sin respuesta» o que entraron en esta misma jornada (`notifiedSince`).
+   */
+  async unansweredCandidates({ from, until, notifiedSince, limit = 8 }) {
+    const { rows } = await pool.query(`SELECT s.*, a.email AS account_email, a.label AS account_label FROM bria_memory.mail_seen s JOIN bria_memory.mail_accounts a ON a.id=s.account_id
+      WHERE s.important AND a.is_active AND s.answered_at IS NULL AND COALESCE(s.severity, 2) >= 2 AND s.received_at >= $1 AND s.received_at <= $2
+        AND (s.unanswered_notified_at IS NULL OR s.unanswered_notified_at >= $3) ORDER BY s.received_at LIMIT $4`, [from, until, notifiedSince, limit]);
+    return rows.map((row) => ({ accountId: row.account_id, accountEmail: row.account_email, accountLabel: row.account_label || null, messageId: row.message_id, from: row.from_address, fromName: row.from_name, subject: row.subject, date: row.received_at, reasons: row.reasons || [], clientName: row.client_name || null, severity: row.severity || 2, notifiedAt: row.unanswered_notified_at || null, draft: row.draft_reply ? { summary: row.draft_summary || '', reply: row.draft_reply } : null }));
+  },
+  async markAnswered(accountId, messageId, at) {
+    await pool.query('UPDATE bria_memory.mail_seen SET answered_at=$3 WHERE account_id=$1 AND message_id=$2 AND answered_at IS NULL', [accountId, messageId, at]);
+  },
+  async markUnansweredNotified(accountId, messageId, at) {
+    await pool.query('UPDATE bria_memory.mail_seen SET unanswered_notified_at=$3 WHERE account_id=$1 AND message_id=$2 AND unanswered_notified_at IS NULL', [accountId, messageId, at]);
   },
   async purgeSeen(before) {
     const { rowCount } = await pool.query('DELETE FROM bria_memory.mail_seen WHERE created_at < $1', [before]);

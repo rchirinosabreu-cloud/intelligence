@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
 import { requestNudge, answerNudge, decisionMessage } from '../src/lib/vaultAccessRequests.js';
+import { nudgeActions } from '../src/lib/briaNudges.js';
 import { permissionRequestNudge, permissionAnswerNudge, permissionDecisionMessage } from '../src/lib/modulePermissionRequests.js';
 import { readSignals } from '../src/lib/agencySnapshot.js';
 import { validateDailyReading, composeReading, buildMorningBrief } from '../src/lib/dailyReading.js';
@@ -147,6 +148,17 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // La liga del buen uso (27 de octubre de 2026): a las 3 de la tarde, una vez al día, el puntaje del mes encima de la mascota. `?liga`.
   const leagueNudge = { key: 'LIGA_DIA:2026-11-02', kind: 'LIGA_DIA', title: 'Llevas 3 de 5 hoy en la liga de noviembre.', body: 'Te falta documentar la tarea que cerraste y pausar el reloj antes de salir. Vas 60 puntos en el mes.', url: '/dashboard?carrera', taskIds: [], progress: { score: 60, position: 'Vas 6.º de 13', detail: 'Hoy 3 de 5 hábitos', delta: 15 }, actions: [{ label: 'Ver la carrera', to: '/dashboard?carrera' }, { label: 'Que Bria me diga qué mejorar', ask: '¿Qué me falta para subir en la liga de noviembre?' }] };
   const morningNudge = { key: 'LECTURA_DIA:2026-10-20', kind: 'LECTURA_DIA', title: 'Bria dejó tu lectura de la mañana.', body: 'Cómo amanecieron las cuentas y el equipo, lo que haría hoy y lo que no haría.', url: null, conversationId: morningChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: morningChat.id }] };
+  // El borrador listo de un correo (20 de noviembre de 2026), con los botones que arma el mismo código de producción
+  // y datos ficticios. `?correo` muestra el aviso; `?correo=sinrespuesta`, el de un correo que sigue sin contestar.
+  const mailDraft = { summary: 'María confirma el pago de la primera cuota y pide el contrato firmado y la fecha de inicio de la campaña.', reply: 'Hola, María:\n\nGracias por compartir el soporte de pago; ya lo registramos. Adjuntamos el contrato firmado por nuestra parte para tu archivo.\n\nLa campaña inicia el [fecha de inicio]. Te confirmamos el cronograma completo en cuanto lo validemos con el equipo.\n\nQuedamos atentos.\n\nUn saludo,\nBrain Studio' };
+  const mailNudges = (referer) => {
+    if (!/[?&]correo/.test(referer)) return null;
+    const unanswered = /correo=sinrespuesta/.test(referer);
+    const about = { clientName: 'Aristea', title: 'Contrato y primera cuota', messageId: '<demo@aristea>', personName: 'María Pérez', draft: mailDraft };
+    return [unanswered
+      ? { key: 'PULSO:demo-correo-2', kind: 'CORREO_SIN_RESPUESTA', title: 'Aristea · el correo de María Pérez sobre el contrato lleva un día hábil sin respuesta.', body: 'Conviene contestarle hoy; dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: nudgeActions({ kind: 'CORREO_SIN_RESPUESTA', ...about }) }
+      : { key: 'PULSO:demo-correo-1', kind: 'CORREO_IMPORTANTE', title: 'Aristea escribió sobre el contrato y la primera cuota.', body: 'María Pérez envió el soporte de pago y pide el contrato firmado. Dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: nudgeActions({ kind: 'CORREO_IMPORTANTE', ...about }) }];
+  };
   let nudges = [
     { key: 'CIERRE_DIA:2026-10-13', kind: 'CIERRE_DIA', title: 'Bria dejó tu cierre del día.', body: 'Lo que cerraste, lo que queda en proceso, lo que vence mañana y cómo terminaron los avisos de hoy.', url: null, conversationId: closeChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: closeChat.id }] },
     { key: 'FOCO_SEMANAL:2026-W42', kind: 'FOCO_SEMANAL', title: 'Bria dejó tu foco de la semana.', body: 'Lo que vence, lo que está en proceso y cómo viene el equipo, en un solo lugar.', url: null, conversationId: focusChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: focusChat.id }] },
@@ -187,7 +199,7 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
-    res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
+    res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (mailNudges(referer) ?? accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
   });
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.

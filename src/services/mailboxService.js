@@ -8,7 +8,14 @@ import prisma from '../lib/prisma.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { vaultKey } from '../lib/vaultCrypto.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
-import { assessMail, describeMail, gmailLink, addressOf, domainOf } from '../lib/mailImportance.js';
+import { assessMail, describeMail, describeUnanswered, gmailLink, addressOf, domainOf, UNANSWERED_AFTER_MS, UNANSWERED_WINDOW_MS } from '../lib/mailImportance.js';
+import { buildMailDraftRequest, parseMailDraft, validateMailDraft, MAIL_DRAFTS_PER_RUN, MAIL_DRAFT_MIN_SEVERITY } from '../lib/mailDraft.js';
+import { AI_MODELS } from '../config/aiConfig.js';
+import { runWithAiContext } from '../lib/aiRequestContext.js';
+import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
+import { dayLabel } from '../lib/teamLoad.js';
+import { workdayStart } from '../lib/briaNudges.js';
+import { createOpenAIClient } from './openAIClient.js';
 import { createMailAccountRepository } from './mailAccountRepository.js';
 import { createMailboxReader, imapHostFor } from './mailboxReader.js';
 
@@ -25,10 +32,46 @@ export const humanizeMailError = (error) => {
   return `No se pudo leer el buzón: ${text.slice(0, 160)}`;
 };
 
-export const createMailboxService = ({ db = prisma, repository, reader, now = () => new Date(), logger = console } = {}) => {
+const defaultGenerate = async (request) => {
+  const result = await createOpenAIClient({ models: AI_MODELS }).generate(request);
+  return { text: result.text };
+};
+
+/** Días hábiles de Colombia después del día en que llegó y hasta hoy, los dos en reloj de Bogotá. */
+export const businessDaysSince = (received, at) => {
+  const today = bogotaDate(at);
+  let day = bogotaDate(received), count = 0;
+  while (day < today) {
+    day = new Date(new Date(`${day}T00:00:00Z`).getTime() + 24 * H).toISOString().slice(0, 10);
+    if (isBusinessDay(day)) count += 1;
+  }
+  return count;
+};
+
+export const createMailboxService = ({ db = prisma, repository, reader, generate, now = () => new Date(), logger = console } = {}) => {
   const repo = repository || createMailAccountRepository({ pool: getSidecarPool(), key: vaultKey() });
   const imap = reader || createMailboxReader({ logger });
   const label = (account) => account.label || account.email.split('@')[0];
+  // Con un repositorio inyectado (pruebas y muestras) el modelo real nunca se llama: solo el que se inyecte.
+  const draftWith = generate || (repository ? null : defaultGenerate);
+
+  /**
+   * El borrador listo (20 de noviembre de 2026): Bria abre ese correo, lo resume y propone la respuesta. El cuerpo
+   * pasa por el modelo y no se guarda; quedan el resumen y el borrador. Un fallo deja el aviso sin borrador, nada más.
+   */
+  const prepareDraft = async (account, message, assessment) => {
+    if (!draftWith || typeof imap.readMessage !== 'function') return null;
+    try {
+      const full = await imap.readMessage(account, String(message.messageId).replace(/^<|>$/g, ''));
+      if (!full?.body) return null;
+      const request = buildMailDraftRequest({ message: full, mailboxLabel: label(account), clientName: assessment.client?.name || null });
+      const answer = await runWithAiContext({ actorId: null, module: 'bria', route: 'SCHEDULER mail-draft' }, () => draftWith(request));
+      const draft = validateMailDraft(parseMailDraft(answer?.text));
+      if (!draft) return null;
+      if (typeof repo.saveDraft === 'function') await repo.saveDraft(account.id, message.messageId, draft);
+      return draft;
+    } catch (error) { logger.error('[Mailbox] No se pudo preparar el borrador de un correo:', error?.message || error); return null; }
+  };
 
   /** Los clientes como los ve la regla: nombre, correos conocidos y dominios propios (nunca gmail y parecidos). */
   const readClients = async () => {
@@ -89,6 +132,7 @@ export const createMailboxService = ({ db = prisma, repository, reader, now = ()
       const clients = await readClients();
       const ourAddresses = accounts.map((account) => account.email);
       const out = [];
+      let drafted = 0;
       for (const account of accounts) {
         const since = new Date(Math.max(account.lastReadAt ? new Date(account.lastReadAt).getTime() - 10 * 60_000 : 0, at.getTime() - MAIL_LOOKBACK_MS));
         let messages;
@@ -103,16 +147,58 @@ export const createMailboxService = ({ db = prisma, repository, reader, now = ()
         const fresh = withId.filter((m) => !seen.has(m.messageId));
         const rows = fresh.map((message) => {
           const assessment = assessMail(message, { clients, ourAddresses });
-          return { message, assessment, record: { messageId: message.messageId, from: message.from, fromName: message.fromName, subject: message.subject, date: message.date, important: Boolean(assessment), reasons: assessment?.reasons || [], clientName: assessment?.client?.name || null } };
+          return { message, assessment, record: { messageId: message.messageId, from: message.from, fromName: message.fromName, subject: message.subject, date: message.date, important: Boolean(assessment), reasons: assessment?.reasons || [], clientName: assessment?.client?.name || null, severity: assessment?.severity || null } };
         });
         await repo.recordSeen(account.id, rows.map((row) => row.record));
         await repo.markRead(account.id, at);
         for (const { message, assessment } of rows) {
           if (!assessment) continue;
-          out.push({ accountId: account.id, accountEmail: account.email, accountLabel: label(account), messageId: message.messageId, from: message.from, fromName: message.fromName, subject: message.subject, date: message.date, clientName: assessment.client?.name || null, reasons: assessment.reasons, severity: assessment.severity, text: describeMail(message, assessment, { mailboxLabel: label(account) }), url: gmailLink(message.messageId) });
+          // El mismo correo en dos buzones (social reenvía a contacto) es un solo hecho: queda el primero que se leyó.
+          if (out.some((row) => row.messageId === message.messageId)) continue;
+          // Como mucho dos borradores por lectura, de lo más importante primero: el resto se pide en el chat.
+          let draft = null;
+          if (assessment.severity >= MAIL_DRAFT_MIN_SEVERITY && drafted < MAIL_DRAFTS_PER_RUN) { drafted += 1; draft = await prepareDraft(account, message, assessment); }
+          out.push({ ...(draft ? { draft } : {}), accountId: account.id, accountEmail: account.email, accountLabel: label(account), messageId: message.messageId, from: message.from, fromName: message.fromName, subject: message.subject, date: message.date, clientName: assessment.client?.name || null, reasons: assessment.reasons, severity: assessment.severity, text: describeMail(message, assessment, { mailboxLabel: label(account) }), url: gmailLink(message.messageId) });
         }
       }
       try { await repo.purgeSeen(new Date(at.getTime() - MAIL_SEEN_RETENTION_MS)); } catch { /* la limpieza nunca frena una lectura */ }
+      return out;
+    },
+
+    /**
+     * Los correos importantes que siguen sin respuesta (20 de noviembre de 2026): pasó al menos un día hábil y 24
+     * horas, y en los enviados de ningún buzón de la agencia hay algo que los cite. Lo respondido se anota y no
+     * vuelve; lo demás entra al pulso durante una jornada. Responder por otro canal no se ve: por eso el aviso dice
+     * «sin una respuesta enviada desde los buzones», y se oculta como cualquier otro.
+     */
+    async readUnanswered({ at = now() } = {}) {
+      if (typeof repo.unansweredCandidates !== 'function' || typeof imap.repliedTo !== 'function') return [];
+      const candidates = (await repo.unansweredCandidates({ from: new Date(at.getTime() - UNANSWERED_WINDOW_MS), until: new Date(at.getTime() - UNANSWERED_AFTER_MS), notifiedSince: workdayStart(at) }))
+        .map((mail) => ({ ...mail, businessDays: businessDaysSince(mail.date, at) })).filter((mail) => mail.businessDays >= 1);
+      if (!candidates.length) return [];
+      const ids = candidates.map((mail) => mail.messageId);
+      const answered = new Set();
+      let checked = 0;
+      for (const account of await repo.listActiveWithSecret()) {
+        try {
+          const found = await imap.repliedTo(account, ids);
+          if (!found) continue;
+          checked += 1;
+          for (const id of found) answered.add(id);
+        } catch (error) { logger.error('[Mailbox] No se pudieron revisar los enviados de un buzón:', account.email, error?.message || error); }
+      }
+      // Sin ninguna carpeta de enviados a la vista no se afirma nada: mejor callar que avisar en falso.
+      if (!checked) return [];
+      const out = [];
+      for (const mail of candidates) {
+        const id = String(mail.messageId).replace(/^<|>$/g, '');
+        if (answered.has(id)) { await repo.markAnswered(mail.accountId, mail.messageId, at); continue; }
+        if (!mail.notifiedAt) await repo.markUnansweredNotified(mail.accountId, mail.messageId, at);
+        if (out.some((row) => row.messageId === mail.messageId)) continue;
+        const accountLabel = mail.accountLabel || mail.accountEmail?.split('@')[0] || null;
+        out.push({ accountId: mail.accountId, accountEmail: mail.accountEmail, accountLabel, messageId: mail.messageId, from: mail.from, fromName: mail.fromName, subject: mail.subject, date: mail.date, clientName: mail.clientName, severity: mail.severity, businessDays: mail.businessDays, draft: mail.draft,
+          text: describeUnanswered({ ...mail, accountLabel }, { dayLabel: dayLabel(bogotaDate(mail.date)), businessDays: mail.businessDays }) });
+      }
       return out;
     },
 

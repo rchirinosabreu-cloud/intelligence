@@ -9,8 +9,8 @@ import prisma from '../lib/prisma.js';
 import { AI_MODELS } from '../config/aiConfig.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { needsClientReview } from '../lib/contentApproval.js';
-import { buildNudges, bogotaDayEnd } from '../lib/briaNudges.js';
-import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS, APPROVAL_LOOKAHEAD_DAYS } from '../lib/briaPulse.js';
+import { buildNudges, bogotaDayEnd, bogotaClock } from '../lib/briaNudges.js';
+import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS, APPROVAL_LOOKAHEAD_DAYS, PULSE_SLOT_MINUTES } from '../lib/briaPulse.js';
 import { evaluateFollowUp, followUpTargets, isFollowable, FOLLOW_UP_AFTER_MS } from '../lib/briaFollowUp.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
@@ -47,7 +47,7 @@ export const createBriaPulseService = ({
     async collect(at = now()) {
       const today = bogotaDate(at);
       const safe = async (label, work, fallback) => { try { return await work(); } catch (error) { logger.error(`[BriaPulse] Sin ${label} esta vez:`, error?.message || error); return fallback; } };
-      const [team, loadMap, ops, pieces, returned, mails] = await Promise.all([
+      const [team, loadMap, ops, pieces, returned, mails, unanswered] = await Promise.all([
         safe('personas', () => people().readPeople(at), []),
         safe('mapa de carga', () => load.get(), null),
         safe('operación de clientes', () => operations.listOperations(), []),
@@ -62,9 +62,11 @@ export const createBriaPulseService = ({
           const rows = await db.task.findMany({ where: { status: 'DEVUELTA', returnedAt: { lte: before }, updatedAt: { lte: before }, AND: [activeTaskSourceWhere] }, select: { id: true, title: true, returnedAt: true, assignee: { select: { id: true, name: true } }, client: { select: { name: true } } }, take: 100 });
           return rows.map((row) => ({ id: row.id, title: row.title, returnedDay: bogotaDate(row.returnedAt), personId: row.assignee?.id || null, assigneeName: row.assignee?.name || null, clientName: row.client?.name || null }));
         }, []),
-        safe('correo', async () => { const service = mailbox(); return service ? service.readImportant({ at }) : []; }, [])
+        safe('correo', async () => { const service = mailbox(); return service ? service.readImportant({ at }) : []; }, []),
+        // Lo importante que sigue sin respuesta (20 de noviembre de 2026): se revisa una vez por hora, no cada tramo.
+        safe('correo sin respuesta', async () => { const service = mailbox(); return service?.readUnanswered && bogotaClock(at).minutes % 60 < PULSE_SLOT_MINUTES ? service.readUnanswered({ at }) : []; }, [])
       ]);
-      const facts = collectFacts({ nudges: buildNudges({ people: team, now: at }), load: loadMap, operations: ops, pieces, returned, mails, today });
+      const facts = collectFacts({ nudges: buildNudges({ people: team, now: at }), load: loadMap, operations: ops, pieces, returned, mails, unanswered, today });
       return { facts, people: team };
     },
 

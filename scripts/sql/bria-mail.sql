@@ -34,3 +34,13 @@ CREATE TABLE IF NOT EXISTS bria_memory.mail_seen (
   PRIMARY KEY (account_id, message_id)
 );
 CREATE INDEX IF NOT EXISTS mail_seen_recent ON bria_memory.mail_seen(account_id, created_at DESC);
+-- El borrador listo y los correos sin respuesta (20 de noviembre de 2026). Aditivo e idempotente. Del correo se
+-- guarda, además, su importancia (1 a 3), un resumen corto y el borrador que Bria propone (se van con la fila a los
+-- 30 días); el cuerpo sigue sin guardarse. `answered_at`: cuándo se vio una respuesta en los enviados de un buzón
+-- de la agencia. `unanswered_notified_at`: cuándo entró al pulso como «sin respuesta», para avisarlo una sola jornada.
+ALTER TABLE bria_memory.mail_seen ADD COLUMN IF NOT EXISTS severity SMALLINT;
+ALTER TABLE bria_memory.mail_seen ADD COLUMN IF NOT EXISTS draft_summary TEXT;
+ALTER TABLE bria_memory.mail_seen ADD COLUMN IF NOT EXISTS draft_reply TEXT;
+ALTER TABLE bria_memory.mail_seen ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ;
+ALTER TABLE bria_memory.mail_seen ADD COLUMN IF NOT EXISTS unanswered_notified_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS mail_seen_unanswered ON bria_memory.mail_seen(received_at) WHERE important AND answered_at IS NULL;

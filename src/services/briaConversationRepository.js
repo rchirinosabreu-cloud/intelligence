@@ -80,6 +80,36 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
     return this.get(actor, id);
   },
   /**
+   * Una nota que Bria deja siempre en el mismo chat de la persona (Rodny, 20 de noviembre de 2026: «la lectura de la
+   * mañana siempre es un chat nuevo, y no, yo quiero que sea un solo chat siempre»). El chat es el más reciente de la
+   * persona que ya tenga una nota de ese tipo; si no existe, se abre como `postAssistantNote`. La nota entra en la
+   * posición impar que sigue a la revisión, como cualquier respuesta de Bria, y deja libre la par (no hubo pregunta):
+   * lo que la persona escriba después cae en las dos siguientes. Sube la revisión y trae el chat al principio de la lista.
+   */
+  async postThreadNote(actor, { title, text, metadata = {} }) {
+    const note = String(metadata.note || '');
+    if (!note) return this.postAssistantNote(actor, { title, text, metadata });
+    const label = String(title || 'Nota de Bria').slice(0, 90);
+    const turn = { sources: [], failures: [], toolsUsed: [], ...metadata, accessFingerprint: fingerprint(actor) };
+    let id;
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      const row = (await db.query("SELECT c.id,c.revision FROM bria_memory.conversations c WHERE c.workspace=$1 AND c.actor_ref=$2 AND EXISTS (SELECT 1 FROM bria_memory.conversation_turns t WHERE t.conversation_id=c.id AND t.role='assistant' AND t.metadata->>'note'=$3) ORDER BY c.updated_at DESC LIMIT 1 FOR UPDATE OF c", [workspace, actor.ref, note])).rows[0];
+      if (row) {
+        id = row.id;
+        await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,$2,\'assistant\',$3,$4)', [id, row.revision * 2 + 1, String(text || ''), turn]);
+        await db.query('UPDATE bria_memory.conversations SET revision=revision+1,title=$4,updated_at=now() WHERE workspace=$1 AND actor_ref=$2 AND id=$3', [workspace, actor.ref, id, label]);
+      } else {
+        id = randomUUID();
+        await db.query('INSERT INTO bria_memory.conversations(id,workspace,actor_ref,title,revision) VALUES($1,$2,$3,$4,1)', [id, workspace, actor.ref, label]);
+        await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,1,\'assistant\',$2,$3)', [id, String(text || ''), turn]);
+      }
+      await db.query('COMMIT');
+    } catch (failure) { await db.query('ROLLBACK'); throw failure; } finally { db.release(); }
+    return this.get(actor, id);
+  },
+  /**
    * Pulgar arriba o abajo sobre una respuesta de Bria (14 de octubre de 2026). Se escribe en el turno, solo si es de
    * Bria y el chat es de quien valora; volver a pulsar reemplaza la valoración anterior. No toca la revisión del chat,
    * porque no cambia lo que Bria dijo.
