@@ -80,6 +80,12 @@ test('el servicio: solo quien dirige con Bria, texto limpio, tope diario apartad
   await assert.rejects(failing.speak(pm, { text: 'Hola' }));
   assert.equal(failing.status(pm).remaining, voiceConfig(env).dailyChars, 'lo que no se dijo no se cobra al tope');
   assert.deepEqual(createBriaVoiceService({ client, config: () => voiceConfig({}) }).status(pm), { enabled: false });
+  // La sesión real trae userId y no id: el tope es de cada persona, no uno compartido por todos.
+  const perPerson = createBriaVoiceService({ client, config: () => ({ ...voiceConfig(env), dailyChars: 10 }), now: () => day });
+  const ana = { userId: 'ana', role: 'ADMIN', modulePermissions: { bria: true } }, luis = { ...ana, userId: 'luis' };
+  await perPerson.speak(ana, { text: 'x'.repeat(10) });
+  assert.equal(perPerson.status(ana).remaining, 0); assert.equal(perPerson.status(luis).remaining, 10);
+  await perPerson.speak(luis, { text: 'Hola' });
 });
 
 test('la ruta entrega el audio y nunca un texto vacío', async () => {

@@ -12,7 +12,7 @@ const allowed = (user) => canUseBria(user) && isManagerRole(user?.role);
 
 export const createBriaVoiceService = ({ client, config = voiceConfig, now = () => new Date() } = {}) => {
   const spent = new Map(); // `${día}:${persona}` → caracteres dichos
-  const keyOf = (user) => `${bogotaDate(now())}:${user.id}`;
+  const keyOf = (user) => `${bogotaDate(now())}:${user.userId || user.id}`; // la sesión real trae userId, no id
   const voice = () => client || getElevenLabsClient();
   return {
     status(user) {
