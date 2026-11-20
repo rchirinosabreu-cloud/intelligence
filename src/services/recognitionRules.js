@@ -37,6 +37,12 @@ export const CAUGHT_UP_POLICY = 'cierre-del-dia-v3';
 export { CAUGHT_UP_MIN_CLOSED };
 export const CAUGHT_UP_AWARD_WINDOW_MS = 30 * 60 * 1000;
 export const dayCloseCutoff = (day) => new Date(`${day}T23:00:00.000Z`);
+// «Buen comienzo» cuenta desde las 8:00 de Bogotá (Rodny, 20 de noviembre de 2026: «pon buen comienzo con regla desde
+// las 8am»): Sara cerró una tarea a la 1:07 a. m. y se lo llevó, porque el día empezaba a medianoche. Lo que se cierra
+// en la madrugada sigue contando para todo lo demás (esfuerzo, ocho del día, cincuenta de la semana); solo no compite
+// por ser la primera del equipo.
+export const FIRST_TASK_FROM = '08:00';
+export const dayStartCutoff = (day) => new Date(`${day}T13:00:00.000Z`);
 const OPEN_STATUSES = new Set(['PENDIENTE', 'EN_CURSO']);
 export function caughtUpAtClose({ day, views = [] }) {
   const dayStart = new Date(`${day}T05:00:00.000Z`), cutoff = dayCloseCutoff(day);

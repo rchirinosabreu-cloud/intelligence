@@ -23,6 +23,7 @@ import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/ta
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 import { taskWorkCorrectionService } from '../services/taskWorkCorrectionService.js';
 import { checkTaskUpdate } from '../services/taskUpdateGate.js';
+import { getTaskChangeHistory } from '../services/taskChangeHistoryService.js';
 import { reorderTaskSelection } from '../services/taskOrderService.js';
 import { reorderTaskCards } from '../services/taskCardOrderService.js';
 import { needsDeclaredTime, declareTaskTime } from '../services/declaredTimeService.js';
@@ -100,6 +101,16 @@ export const getTaskWorkHistory = async (req, res) => {
     } catch (error) {
         console.error('[TaskController] Work history failed:', error?.message || error);
         res.status(500).json({ error: 'Failed to fetch task work history', details: error.message });
+    }
+};
+
+// El historial de la tarea (19 de noviembre de 2026): quién cambió qué y cuándo. `guardTask` ya comprobó el acceso.
+export const getTaskHistory = async (req, res) => {
+    try {
+        res.json(await getTaskChangeHistory(req.params.taskId));
+    } catch (error) {
+        console.error('[TaskController] Task history failed:', error?.message || error);
+        res.status(500).json({ error: 'No se pudo consultar el historial de la tarea.' });
     }
 };
 

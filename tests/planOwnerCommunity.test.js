@@ -1,22 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { communityOf, syncClientPlanOwners, syncAllPlanOwners } from '../src/services/planOwnerService.js';
+import { publicationAssigneeProblem } from '../src/lib/contentTaskReciprocity.js';
 
-// Base en memoria con lo justo: clientes con su community y parrillas con su responsable.
-const fakeDb = ({ clients, plans }) => ({
-  plans,
+const link = (db) => { db.taskChangeEvent.parent = db; return db; };
+// Base en memoria con lo justo: clientes con su community, parrillas con su responsable y pendientes.
+const fakeDb = ({ clients, plans, tasks = [] }) => link({
+  plans, tasks,
   client: {
     findUnique: async ({ where }) => clients.find(c => c.id === where.id) || null,
     findMany: async () => clients.filter(c => c.responsibleId).map(c => ({ id: c.id }))
   },
   contentPlan: {
+    findMany: async ({ where }) => plans.filter(p => p.clientId === where.clientId && p.deletedAt === null && p.status !== 'FINALIZADO'
+      && where.OR.some(cond => ('ownerId' in cond && cond.ownerId === null ? p.ownerId === null : p.ownerId !== null && p.ownerId !== cond.ownerId?.not)))
+      .map(p => ({ id: p.id, ownerId: p.ownerId })),
+    update: async ({ where, data }) => Object.assign(plans.find(p => p.id === where.id), data)
+  },
+  task: {
+    findMany: async ({ where }) => {
+      const owners = where.OR.map(cond => cond.assigneeId);
+      return tasks.filter(t => t.planId === where.contentItem.planId && t.title.startsWith(where.title.startsWith)
+        && t.status !== 'REALIZADA' && owners.includes(t.assigneeId)).map(t => ({ id: t.id, assigneeId: t.assigneeId }));
+    },
     updateMany: async ({ where, data }) => {
-      const hits = plans.filter(p => p.clientId === where.clientId && p.deletedAt === null && p.status !== 'FINALIZADO'
-        && (p.ownerId === null || p.ownerId !== data.ownerId));
-      for (const plan of hits) plan.ownerId = data.ownerId;
+      const hits = tasks.filter(t => where.id.in.includes(t.id));
+      for (const task of hits) task.assigneeId = data.assigneeId;
       return { count: hits.length };
     }
-  }
+  },
+  events: [],
+  taskChangeEvent: { createMany: async function ({ data }) { this.parent.events.push(...data); return { count: data.length }; } }
 });
 
 const kamila = { responsibleId: 'kamila', responsible: { isActive: true } };
@@ -59,4 +73,32 @@ test('la pasada de arranque recorre todos los clientes con community', async () 
   });
   assert.deepEqual(await syncAllPlanOwners(db), { plans: 1, clients: 1 });
   assert.deepEqual(db.plans.map(p => p.ownerId), ['kamila', 'brian', null]);
+});
+
+test('los «Publicar» abiertos pasan del responsable anterior al nuevo; uno que dio un admin a otra persona se respeta', async () => {
+  const db = fakeDb({
+    clients: [{ id: 'promo', ...kamila }],
+    plans: [{ id: 'nov', clientId: 'promo', status: 'ACTIVO', deletedAt: null, ownerId: 'rodny' }],
+    tasks: [
+      { id: 't1', planId: 'nov', title: '[Publicar] Reel: Experiencia', status: 'PENDIENTE', assigneeId: 'rodny' },
+      { id: 't2', planId: 'nov', title: '[Publicar] Reel: Colonoscopia', status: 'PENDIENTE', assigneeId: 'mariceth' },
+      { id: 't3', planId: 'nov', title: '[Publicar] Post: Ya salió', status: 'REALIZADA', assigneeId: 'rodny' },
+      { id: 't4', planId: 'nov', title: '[Producción] Reel: Experiencia', status: 'PENDIENTE', assigneeId: 'rodny' }
+    ]
+  });
+  await syncClientPlanOwners(db, 'promo');
+  assert.deepEqual(db.tasks.map(t => t.assigneeId), ['kamila', 'mariceth', 'rodny', 'rodny']);
+  // Queda en el historial del pendiente, a nombre de la plataforma.
+  assert.deepEqual(db.events.map(e => [e.taskId, e.kind, e.fromValue, e.toValue, e.actorId]), [['t1', 'ASSIGNEE', 'rodny', 'kamila', null]]);
+});
+
+test('solo un administrador cambia el responsable de un «Publicar» automático', () => {
+  const task = { contentItemId: 'pieza', title: '[Publicar] Reel: Experiencia', assigneeId: 'kamila' };
+  assert.match(publicationAssigneeProblem({ task, payload: { assigneeId: 'rodny' }, role: 'COMMUNITY' }), /Solo un administrador/);
+  assert.match(publicationAssigneeProblem({ task, payload: { assigneeId: 'rodny' }, role: 'PROJECT_MANAGER' }), /Solo un administrador/);
+  assert.equal(publicationAssigneeProblem({ task, payload: { assigneeId: 'rodny' }, role: 'ADMIN' }), null);
+  assert.equal(publicationAssigneeProblem({ task, payload: { assigneeId: 'kamila', status: 'EN_CURSO' }, role: 'COMMUNITY' }), null, 'guardar sin cambiarlo');
+  assert.equal(publicationAssigneeProblem({ task, payload: { status: 'EN_CURSO' }, role: 'COMMUNITY' }), null);
+  assert.equal(publicationAssigneeProblem({ task: { ...task, contentItemId: null }, payload: { assigneeId: 'rodny' }, role: 'COMMUNITY' }), null, 'uno suelto no');
+  assert.equal(publicationAssigneeProblem({ task: { ...task, title: '[Producción] Reel' }, payload: { assigneeId: 'rodny' }, role: 'COMMUNITY' }), null);
 });

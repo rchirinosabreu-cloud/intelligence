@@ -215,6 +215,7 @@ model DataSubjectRequest {
 }
 
 model User {
+  taskChangeEvents  TaskChangeEvent[] @relation("TaskChangeActor")
   aiGovernanceSystems         AiGovernanceSystem[]
   aiGovernanceRisks           AiGovernanceRisk[]
   aiGovernanceAuthorizations  AiGovernanceAuthorization[]
@@ -3653,4 +3654,18 @@ model MetricReportSource {
   updatedAt      DateTime             @updatedAt
 
   @@index([reportId])
+}
+
+// El historial de cada tarea (19 de noviembre de 2026): quién cambió qué y cuándo. Inmutable.
+model TaskChangeEvent {
+  id         String   @id @default(uuid())
+  taskId     String
+  actorId    String?
+  kind       String
+  fromValue  String?
+  toValue    String?
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  actor      User?    @relation("TaskChangeActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, occurredAt])
 }

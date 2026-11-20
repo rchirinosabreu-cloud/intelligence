@@ -22,7 +22,7 @@ import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from 
 import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { planCycle as cycleOfPlan, periodMovePreview } from '../lib/publicationPeriod.js';
-import { communityOf } from './planOwnerService.js';
+import { communityOf, movePublicationTasks } from './planOwnerService.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
 import { retireContentTasks } from './contentTaskRetirementService.js';
@@ -430,16 +430,23 @@ export const updateContentPlan = async (id, data) => {
   const safeData = await filterContentPlanData(data);
   // Una parrilla que se reabre vuelve a quedar a cargo del community vigente.
   const reopensWithCommunity = data?.status && data.status !== 'FINALIZADO' && communityOf(current?.client);
-  return await recognitionTransaction(prisma, async tx => tx.contentPlan.update({
-    where: { id },
-    data: {
-      ...safeData,
-      ...(reopensWithCommunity ? { ownerId: communityOf(current.client) } : {}),
-      autoCreatedForTransfer: false,
-      ...buildContentPlanReviewPendingData()
-    },
-    select: await getContentPlanSelect()
-  }));
+  return await recognitionTransaction(prisma, async tx => {
+    const plan = await tx.contentPlan.update({
+      where: { id },
+      data: {
+        ...safeData,
+        ...(reopensWithCommunity ? { ownerId: communityOf(current.client) } : {}),
+        autoCreatedForTransfer: false,
+        ...buildContentPlanReviewPendingData()
+      },
+      select: await getContentPlanSelect()
+    });
+    // Los «Publicar» abiertos siguen al responsable de la parrilla.
+    if (plan.ownerId && plan.ownerId !== current?.ownerId) {
+      await movePublicationTasks(tx, { planId: id, from: current?.ownerId || null, to: plan.ownerId });
+    }
+    return plan;
+  });
 };
 
 /**

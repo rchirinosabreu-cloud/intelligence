@@ -1,6 +1,8 @@
 import prisma from '../lib/prisma.js';
 import { serializeCatalogService } from '../services/quotationDomainService.js';
 import { resolveCatalogDescriptionInput } from '../services/serviceCatalogDescription.js';
+import { bogotaToday } from '../lib/debtAging.js';
+import { buildCatalogWorkbook, readCatalogWorkbook, planCatalogImport, catalogChangeData } from '../services/serviceCatalogSpreadsheet.js';
 
 const parseMoneyField = (value, label, { required = true } = {}) => {
     if (!required && (value === undefined || value === null || value === '')) return undefined;
@@ -128,5 +130,60 @@ export const deleteService = async (req, res) => {
     } catch (error) {
         console.error("[ServiceController] Delete failed:", error);
         res.status(500).json({ error: "Error al eliminar el servicio" });
+    }
+};
+
+// El catálogo en Excel (Elisa y Rodny, 20 de noviembre de 2026): descargar, corregir y volver a subir.
+// Subir primero muestra lo que cambiaría (`preview`) y solo guarda al confirmar con la misma huella del catálogo.
+
+
+export const exportCatalog = async (req, res) => {
+    try {
+        const services = await prisma.serviceCatalog.findMany({ where: { activo: true } });
+        const buffer = buildCatalogWorkbook(services);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="catalogo-de-servicios-${bogotaToday()}.xlsx"`);
+        res.send(buffer);
+    } catch (error) {
+        console.error('[ServiceController] Export failed:', error);
+        res.status(500).json({ error: 'No se pudo preparar el Excel del catálogo' });
+    }
+};
+
+const planFromUpload = async (client, file) => {
+    if (!file?.buffer?.length) throw Object.assign(new Error('Adjunta el archivo de Excel del catálogo.'), { statusCode: 400 });
+    const rows = readCatalogWorkbook(file.buffer);
+    const services = await client.serviceCatalog.findMany();
+    return planCatalogImport(services, rows);
+};
+
+export const previewCatalogImport = async (req, res) => {
+    try {
+        res.json(await planFromUpload(prisma, req.file));
+    } catch (error) {
+        if (!error.statusCode) console.error('[ServiceController] Import preview failed:', error);
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo revisar el archivo' });
+    }
+};
+
+export const applyCatalogImport = async (req, res) => {
+    try {
+        const result = await prisma.$transaction(async tx => {
+            const plan = await planFromUpload(tx, req.file);
+            if (plan.revision !== req.body?.expectedRevision) throw Object.assign(new Error('El catálogo cambió mientras revisabas el archivo. Súbelo otra vez para ver los cambios actuales.'), { statusCode: 409 });
+            if (plan.errors.length) throw Object.assign(new Error('El archivo tiene filas por corregir. Corrígelas y súbelo otra vez.'), { statusCode: 400 });
+            for (const change of plan.changes) {
+                const data = catalogChangeData(change);
+                if (change.kind === 'UPDATE') await tx.serviceCatalog.update({ where: { id: change.id }, data });
+                else await tx.serviceCatalog.create({ data });
+            }
+            return plan.counts;
+        }, { isolationLevel: 'Serializable', timeout: 60_000 });
+        res.json({ updated: result.updates, created: result.creates });
+    } catch (error) {
+        if (error.code === 'P2002') return res.status(400).json({ error: 'Dos servicios quedarían con el mismo nombre. Revisa los nombres del archivo.' });
+        if (error.code === 'P2034') return res.status(409).json({ error: 'El catálogo cambió mientras se guardaba. Súbelo otra vez.' });
+        if (!error.statusCode) console.error('[ServiceController] Import failed:', error);
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo guardar el catálogo' });
     }
 };

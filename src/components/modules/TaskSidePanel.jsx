@@ -15,6 +15,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { commentFileUrls, commentFilesValidationMessage, commentDownloadFilename } from '@/lib/taskCommentAttachments';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { isAutomaticPublicationTask } from '@/lib/contentTaskReciprocity';
 import { triggerConfetti } from '@/utils/confetti';
 import { askDeclaredTimeIfNeeded } from '@/lib/declaredTime';
 import BrainDatePicker, { BrainTimePicker } from '@/components/ui/BrainDatePicker';
@@ -59,6 +60,7 @@ import { useLocation } from 'react-router-dom';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
+import TaskChangeHistory from './TaskChangeHistory';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 
@@ -930,6 +932,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const canSetFocusDeadline = ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role);
+    // Un «Publicar» automático es del responsable de la parrilla; solo un administrador lo reasigna (19 de noviembre de 2026).
+    const publicationOwnerLocked = isEdition && isAutomaticPublicationTask(taskData) && String(currentUser?.role || '').toUpperCase() !== 'ADMIN';
     const canEditTask = !isEdition || canUpdateTask(currentUser, {
         creatorId: taskData?.creatorId || taskData?.creator?.id,
         assignee: { userId: taskData?.assignee?.userId || taskData?.assigneeUserId }
@@ -2298,7 +2302,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 >
                                     <Select
                                         aria-label="Responsable"
-                                        disabled={!canEditTask || rosterStale}
+                                        title={publicationOwnerLocked ? 'Es el responsable de la parrilla. Solo un administrador lo cambia.' : undefined}
+                                        disabled={!canEditTask || rosterStale || publicationOwnerLocked}
                                         value={formData.assigneeId || ''}
                                         onChange={e => setFormData({
                                             ...formData,
@@ -2311,6 +2316,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </Select>
                                 </TaskCollaboratorsPicker>
+                                {publicationOwnerLocked && <p className="text-xs text-zinc-500 dark:text-zinc-400">Es el responsable de la parrilla. Solo un administrador lo cambia.</p>}
                                 {rosterStale && <p role="alert" className="text-xs text-destructive">El equipo cambió. Cierra y vuelve a abrir la tarea para revisar los participantes actuales.</p>}
                             </div>
 
@@ -2841,6 +2847,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+
+                            {/* Quién cambió qué y cuándo (19 de noviembre de 2026); lo ve quien puede abrir la tarea. */}
+                            {isEdition && <TaskChangeHistory taskId={formData.id} refreshKey={taskData?.updatedAt || null} />}
 
                             {isEdition && ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role) && (
                                 <TaskWorkHistory

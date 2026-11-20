@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { recognitionCalendar, recognitionDueDay, taskAwardKinds, planIsApproved } from './recognitionRules.js';
+import { recognitionPointsById } from '../lib/platformLeague.js';
+import { dayStartCutoff, recognitionCalendar, recognitionDueDay, taskAwardKinds, planIsApproved } from './recognitionRules.js';
 import { recognitionMessages } from '../lib/recognitionPresentation.js';
 import { hasModulePermission } from '../config/security.js';
 
@@ -67,8 +68,10 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   }
   if (!eligible) return;
   const { day, week } = recognitionCalendar(at);
+  // El equipo empieza a contar a las 8:00: antes de esa hora nadie compite por «Buen comienzo» (`dayStartCutoff`).
+  const morning = dayStartCutoff(day);
   const [teamDayCount, userDayCount, userWeekCount] = await Promise.all([
-    tx.recognitionTaskState.count({ where: { dayKey: day } }),
+    new Date(at) < morning ? 0 : tx.recognitionTaskState.count({ where: { dayKey: day, firstCompletedAt: { gte: morning } } }),
     tx.recognitionTaskState.count({ where: { recipientId: userId, dayKey: day } }),
     tx.recognitionTaskState.count({ where: { recipientId: userId, weekKey: week } }),
   ]);
@@ -100,7 +103,7 @@ const serialize = award => ({ id: award.id, kind: award.kind, taskId: award.task
   description: recognitionMessages[award.kind], personalMessage: recognitionMessages[award.kind] });
 export async function attachTaskRecognitions(db, tasks) {
   if (!tasks.length) return tasks;
-  const awards = await db.recognitionAward.findMany({ where: { taskId: { in: tasks.map(task => task.id) }, recipient: { isActive: true } }, include: { recipient: { select: { id: true, name: true } } }, orderBy: { occurredAt: 'asc' } });
+  const awards = await db.recognitionAward.findMany({ where: { taskId: { in: tasks.map(task => task.id) }, recipient: { isActive: true }, NOT: { kind: { endsWith: '_RETIRADO' } } }, include: { recipient: { select: { id: true, name: true } } }, orderBy: { occurredAt: 'asc' } });
   const byTask = new Map();
   for (const award of awards) { if (!byTask.has(award.taskId)) byTask.set(award.taskId, []); byTask.get(award.taskId).push(award); }
   return tasks.map(task => ({ ...task, recognitions: (byTask.get(task.id) || []).filter(award => award.recipientId === task.assignee?.userId).map(serialize) }));
@@ -134,7 +137,11 @@ export async function claimRecognition(db, userId, at = new Date()) {
       if (!valid) { await tx.recognitionAward.update({ where: { id: award.id }, data: { seenAt: at } }); continue; }
       const leaseToken = randomUUID();
       await tx.recognitionAward.update({ where: { id: award.id }, data: { leaseToken, leaseUntil: new Date(at.getTime() + 60000) } });
-      return { ...serialize(award), leaseToken };
+      // La segunda entrega anticipada del día vale menos (`recognitionPointsById`): el aviso dice los puntos de verdad.
+      const sameDay = award.kind === 'EARLY_DELIVERY'
+        ? await tx.recognitionAward.findMany({ where: { recipientId: userId, kind: 'EARLY_DELIVERY', dayKey: award.dayKey }, select: { id: true, kind: true, recipientId: true, occurredAt: true } })
+        : [award];
+      return { ...serialize(award), points: recognitionPointsById(sameDay).get(award.id), leaseToken };
     }
     return null;
   });

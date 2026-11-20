@@ -91,7 +91,7 @@ test('recognition collection reads only the current recipient and Bogotá month,
     assert.equal(call.where.recipientId, 'u-rodny');
     assert.equal(call.where.occurredAt.gte.toISOString(), '2026-11-01T05:00:00.000Z');
     assert.equal(call.where.occurredAt.lt.toISOString(), '2026-12-01T05:00:00.000Z');
-    assert.ok(call.where.kind.in.includes('FIRST_TASK'));
+    assert.ok(call.where.kind === 'EARLY_DELIVERY' || call.where.kind.in.includes('FIRST_TASK'));
   }
   assert.deepEqual(calls[1].select, { id: true, kind: true, occurredAt: true }, 'no private task/client/title data');
 });
@@ -436,7 +436,7 @@ test('only an admin records the two traffic winners of a week (same meeting, nev
  assert.equal((await service.awardMeeting({userId:'u-rodny',memberId:'m-helen',day:DAY})).name,'Helen');
  await assert.rejects(service.awardMeeting({userId:'u-rodny',memberId:'m-jesu',day:DAY}),e=>e.statusCode===409&&e.code==='LEAGUE_MEETING_FULL');
  assert.equal(repo.meetings.length,2);
- db.recognitionAward.findMany=async({where,select})=>{ assert.ok(where.occurredAt.gte<=at('2026-11-01T05:00:00.000Z'), 'the awards read covers the month (and the previous week)');assert.deepEqual(select,{id:true,recipientId:true,occurredAt:true});return [{id:'a',recipientId:'u-rodny',occurredAt:at(DAY+'T15:00:00Z')}];};
+ db.recognitionAward.findMany=async({where,select})=>{ assert.ok(where.occurredAt.gte<=at('2026-11-01T05:00:00.000Z'), 'the awards read covers the month (and the previous week)');assert.deepEqual(select,{id:true,kind:true,recipientId:true,occurredAt:true});return [{id:'a',kind:'FIRST_TASK',recipientId:'u-rodny',occurredAt:at(DAY+'T15:00:00Z')}];};
  for(let i=0;i<2;i++){const league=await service.leagueFor({userId:'u-rodny'});assert.equal(league.score,46);assert.equal(league.today.points,46);assert.equal(league.recognitionPoints,5);assert.equal(league.meetings.canManage,true);
   assert.equal(league.today.extras.PRIMERO_EN_REUNION,true);assert.match(league.today.evidence.PRIMERO_EN_REUNION,/Rodny y Helen/);assert.equal(league.meetings.entries.length,2);}
  const helen=await service.leagueFor({userId:'u-helen'});
