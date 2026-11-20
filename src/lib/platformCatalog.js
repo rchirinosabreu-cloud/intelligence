@@ -35,6 +35,7 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/talent-radar(\/|$)/, reason: 'datos de personas: el Radar de Mérito se mira en su pantalla' },
   { match: /^\w+ \/financials\/payroll(-|\/)/, reason: 'nómina: datos de salario de personas, nunca pasan por el modelo' },
   { match: /^\w+ \/(drive\/upload|tasks\/upload-temp|drive\/managed-files)/, reason: 'subir o descargar archivos' },
+  { match: /^\w+ \/services\/(export|import(\/preview)?)$/, reason: 'carga masiva del catálogo en Excel: se descarga, se revisa y se sube en su pantalla' },
   { match: /^\w+ \/tasks\/:taskId\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/, reason: 'señales de la pantalla' },
   { match: /^POST \/important-notices\/:id\/shown$/, reason: 'señales de la pantalla' },
   { match: /^POST \/important-notices\/:id\/acknowledge$/, reason: 'acuse personal de recepción del aviso operativo: la persona lo confirma en la banda, no acredita cumplimiento ni lo confirma Bria por ella' },
