@@ -660,6 +660,10 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
 .pilot-out .pv small { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; opacity: .85; }
 .pilot-out .pv p { margin: 0; font-size: 15px; }
 @media (max-width: 899px) { .pilot-out .pv { grid-template-columns: 1fr; } }
+.move.wide { grid-column: 1 / -1; }
+.move.wide h3 { font-size: clamp(24px, 2.4vw, 32px); }
+.move.wide p { max-width: 70ch; }
+.zw-lane .lt { font-size: 52px; }
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -749,9 +753,10 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     <div class="scroll"><div class="in">
       <p class="eyebrow rv">03 · What we do</p>
       <h2 class="h-l rv" style="--i:1">One agency.<br><span style="color:var(--accent)">A complete ecosystem.</span></h2>
-      <p class="lede rv" style="--i:2; color:var(--muted-ink)">We don’t treat communication as separate services. We connect strategy, creativity, content, technology and experiences around what each organisation needs to achieve.</p>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">We don’t treat communication as separate services. We connect ideas, strategy, creativity, content, technology and experiences around what each organisation needs to achieve.</p>
       <div class="moves">
-        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--accent)">1</span><h3>Strategy and communication</h3><p>Planning, campaigns, positioning, consulting, workshops, research and copywriting.</p></article>
+        <article class="move rv feature wide" style="--i:3"><span class="tagk">Before the brief</span><h3>Ideas and creative thinking</h3><p>Bring us in before there’s a brief. We think with your team: creative concepts, campaign ideas, new angles for a story and fresh ways to explain what 2X does. Then we can make it happen too.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--accent)">1</span><h3>Strategy and communication</h3><p>Planning, campaigns, positioning, consulting, workshops, research and copywriting.</p></article>
         <article class="move rv" style="--i:4"><span class="ix" style="background:var(--coral)">2</span><h3>Marketing and performance</h3><p>Social media, Meta Ads, Google Ads, content planning, analytics, optimisation and reporting.</p></article>
         <article class="move rv" style="--i:5"><span class="ix" style="background:var(--leaf)">3</span><h3>Branding and creative</h3><p>Naming, visual identity, graphic systems, brand guidelines, editorial design and presentations.</p></article>
         <article class="move rv" style="--i:6"><span class="ix" style="background:var(--accent)">4</span><h3>Content and video</h3><p>Scripts, photography, video, drone, editing and live streaming.</p></article>
@@ -1444,7 +1449,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   <section class="screen light" data-zoom data-chapter="6" aria-label="Explore the Business Case">
     <div class="scroll"><div class="in demo-grid">
       <div>
-        <p class="eyebrow rv">06 · One example from lane C</p>
+        <p class="eyebrow rv">06 · One example: build</p>
         <h2 class="h-l rv" style="--i:1">Let readers explore<br><span style="color:var(--accent)">the Business Case.</span></h2>
         <p class="lede rv" style="--i:2; color:var(--muted-ink)">A published report that people enter by role. Two paths, three approved insights and one clear next step: the full report.</p>
         <p class="hand rv measure" style="--i:3; color:var(--muted-ink)">what we’d measure: path chosen, clicks to the report, journeys completed</p>
@@ -1495,25 +1500,22 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     <div class="scroll"><div class="in">
       <p class="eyebrow rv">07 · Next step</p>
       <h2 class="h-l rv" style="--i:1">Choose one priority<br><span style="color:var(--accent)">to pilot.</span></h2>
-      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Twelve ideas, grouped by the three ways of working together. We don’t need all of them. Pick the one that matters most for 2X right now.</p>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Nine ideas: think, make, build. We don’t need all of them. Pick the one that matters most for 2X right now.</p>
       <div class="pilot rv" style="--i:3" data-pilot>
-        <div class="pilot-col"><h3><i style="background:var(--accent)">A</i>Strategy and ideas</h3>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>01</small>Message architecture for an initiative</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>02</small>Campaign concept lab</button>
+        <div class="pilot-col"><h3><i style="background:var(--accent)">T</i>Think</h3>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>01</small>Campaign concept lab</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>02</small>Message architecture for an initiative</button>
           <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>03</small>Editorial system for a content series</button>
         </div>
-        <div class="pilot-col"><h3><i style="background:var(--coral)">B</i>Campaigns and production</h3>
+        <div class="pilot-col"><h3><i style="background:var(--coral)">M</i>Make</h3>
           <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>04</small>Launch campaign for a report</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>05</small>Video series of cases and voices</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>06</small>Kit for events and partners</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>07</small>Explaining certification journeys</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>05</small>Kit for events and partners</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>06</small>Video series of cases and voices</button>
         </div>
-        <div class="pilot-col"><h3><i style="background:var(--leaf)">C</i>Digital experiences</h3>
+        <div class="pilot-col"><h3><i style="background:var(--leaf)">B</i>Build</h3>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>07</small>Interactive report and data explorer</button>
           <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>08</small>Searchable resource hub</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>09</small>Interactive learning journey</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>10</small>Explorer of cases and lessons</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>11</small>Digital experience for a 2X event</button>
-          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>12</small>Interactive report and data explorer</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>09</small>Digital experience for a 2X event</button>
         </div>
       </div>
       <div class="pilot-out" id="pilotOut" aria-live="polite">
@@ -1574,9 +1576,9 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     { n: '00', t: 'Start', s: 'Brain Studio × 2X Global' },
     { n: '01', t: 'Brain × 2X', s: 'How it started' },
     { n: '02', t: 'Who we are', s: 'Brain Studio in numbers' },
-    { n: '03', t: 'What we do', s: 'One agency, a complete ecosystem' },
+    { n: '03', t: 'What we do', s: 'From the first idea to the finished piece' },
     { n: '04', t: 'Case studies', s: 'Five stories, one at a time' },
-    { n: '05', t: 'What could come next', s: 'Three ways to work together' },
+    { n: '05', t: 'What could come next', s: 'Think, make, build' },
     { n: '06', t: 'The Business Case', s: 'An illustrative example' },
     { n: '07', t: 'Pick a pilot', s: 'Choose one priority' },
     { n: '08', t: 'Let’s talk', s: 'Who trusts us, and contact' },
@@ -1904,30 +1906,27 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   }
 
   const W_LANES = [
-      { id: 'A', c: '#009bbf', name: 'Strategy and ideas', how: 'By agreed hours',
-        text: 'For questions that don’t have a production scope yet. We agree on the question, the people, an hour cap and a concrete output. No extra hours without your OK.',
-        found: ['Annual Report 2025 editorial concepts', 'Summit Montréal identity routes'] },
-      { id: 'B', c: '#ff6a68', name: 'Campaigns and production', how: 'By scope',
-        text: 'For needs with an audience, a goal and a calendar. Concept, original pieces, adaptations, languages, formats and review rounds, scoped and quoted per project.',
-        found: ['Certification for FIs campaign', 'Summit Montréal system and signage', 'RFF Cape Town edit', 'GLI Forum booth'] },
-      { id: 'C', c: '#31aa8a', name: 'Digital experiences 2X owns', how: 'Discovery, build, support',
-        text: 'Tools for your audiences, with your identity and your approved content. Discovery, build and support are separate steps, each quoted on its own.',
-        found: ['This proposal, built the same way'] },
-    ];
+    { id: 'A', v: 'Think', c: '#009bbf', name: 'Ideas and strategy', how: 'Before the brief',
+      text: 'Bring us in before there’s a brief. We help shape the idea, the message and the creative route, in a set number of hours you approve. No extra hours without your OK.',
+      found: ['Annual Report 2025 editorial concepts', 'Summit Montréal identity routes'] },
+    { id: 'B', v: 'Make', c: '#ff6a68', name: 'Campaigns and production', how: 'From brief to launch',
+      text: 'When there’s an audience, a goal and a date. Concept, pieces, adaptations, languages and review rounds, quoted per project, the way we work today.',
+      found: ['Certification for FIs campaign', 'Summit Montréal system and signage', 'RFF Cape Town edit', 'GLI Forum booth'] },
+    { id: 'C', v: 'Build', c: '#31aa8a', name: 'Digital tools 2X owns', how: 'Your own platform',
+      text: 'Digital tools for your audiences, with your brand and your approved content. A short discovery first, then the build, each step quoted on its own.',
+      found: ['This proposal, built the same way'] },
+  ];
   const W_IDEAS = [
-      ['A', 'Message architecture for an initiative', 'One piece of content tries to explain too much to too many audiences. It can be correct and still leave readers unsure why it matters or what to do next.', 'Review a defined sample of approved content, interview the owners, separate goals by audience, and build the core message, arguments, allowed evidence, FAQs and calls to action in one editable matrix.', 'One initiative and one priority channel, with agreed hours. The output is a message architecture ready to approve, not a full campaign.', 'Comprehension tests with readers from the intended audience: can they name the goal and the next step?'],
       ['A', 'Campaign concept lab', 'Pieces get approved one by one without a shared idea, or visual preferences are debated before agreeing what the campaign must achieve.', 'Write the brief, develop distinct creative routes with their argument and limits, and show the chosen one as a storyboard or a few sample pieces.', 'One campaign, one decision moment and a prototype of the chosen route. You approve the concept before any extended production.', 'Agreement on direction, message comprehension in a small test, and fit with the channels and resources you have.'],
+      ['A', 'Message architecture for an initiative', 'One piece of content tries to explain too much to too many audiences. It can be correct and still leave readers unsure why it matters or what to do next.', 'Review a defined sample of approved content, interview the owners, separate goals by audience, and build the core message, arguments, allowed evidence, FAQs and calls to action in one editable matrix.', 'One initiative and one priority channel, with agreed hours. The output is a message architecture ready to approve, not a full campaign.', 'Comprehension tests with readers from the intended audience: can they name the goal and the next step?'],
       ['A', 'Editorial system for a content series', 'Every post starts from zero and series lose continuity. A finding, an opinion, a case and a call for applications can blur together.', 'Define editorial territories, goals per series, piece structure, tone, evidence rules and a model calendar, so the team decides with less ambiguity.', 'One editorial cycle using existing approved content, producing only the agreed examples.', 'Message consistency, share of pieces with a clear source and call to action, and fewer correction rounds.'],
       ['B', 'Launch campaign for a report', 'A launch often ends at announcing the PDF. Readers never find out which questions it answers or which chapters are for them.', 'Pick findings with the technical team and build a sequence of build-up, launch and deep dives: pieces, short videos and partner material, every claim linked to its source.', 'One report, one main audience and a small sequence of pieces, before adding formats or languages.', 'Qualified visits to the report page, clicks to chapters and questions received. A download alone doesn’t prove reading.', true],
-      ['B', 'Video series of cases and voices', 'Stories end up as generic testimonials or pieces that are too long, with results shown without the starting point or the decisions behind them.', 'Choose stories with 2X, secure permissions, prepare interviews and edit one main story plus cut-downs, reviewed by the people in it.', 'One approved story, one main piece and a defined set of versions. Filming on site, archive or a remote interview are priced differently.', 'Completion by channel, clicks to the full case, and feedback from the people featured.'],
       ['B', 'Kit for events and partners', 'Every speaker and partner announces the event differently, ready-to-use pieces are missing and the follow-up gets lost.', 'Map before, during and after; produce messages, speaker cards, screens and signage, channel content and a post-event recap.', 'One virtual session or one block of an event, with one approver and a wrap-up.', 'Kit use by partners, clicks to registration, valid registrations and recap views.'],
-      ['B', 'Explaining certification journeys', 'Introductory information, requirements, stages and decisions get mixed together, and promotional pieces can create expectations the official process doesn’t support.', 'Work only with current content approved by 2X, separating overview, documentation and official contact, with consistent terms and technical review.', 'One audience and one informational sequence validated by the responsible team, tested for comprehension before wide distribution.', 'Clarity of purpose, finding the right channel, relevant enquiries and clicks to official resources.'],
-      ['C', 'Searchable resource hub', 'A library sorted by date or file type makes people know a resource’s name in advance. They find documents, but not which one to open first.', 'Inventory an approved set, define tags, design search, filters, resource cards and topic paths, and agree who publishes and updates.', 'One small collection for one audience, checking first what the current website already does well.', 'Search success and time in test tasks, searches with no results, resources opened.'],
-      ['C', 'Interactive learning journey', 'The material exists, but its length or technical level makes it hard to start. Readers can’t tell what to understand first.', 'Turn approved content into short modules with examples and comprehension questions, with sources and links to go deeper, tested with users.', 'One focused topic and one defined group of participants, before any larger course platform.', 'Understanding before and after, completion, open questions and perceived usefulness.'],
-      ['C', 'Explorer of cases and lessons', 'Stories are read in isolation, so it’s hard to find related lessons or compare contexts.', 'Set inclusion rules, write consistent case cards, tag verifiable variables and offer search and topic paths, with dates and limits on each case.', 'A short collection approved by 2X, to test the filters and the upkeep before growing.', 'Success finding a relevant case, variety of resources read, and feedback on usefulness.'],
-      ['C', 'Digital experience for a 2X event', 'Information is scattered across emails, documents and links, and after the event the recordings and materials are hard to find.', 'A microsite or event section with agenda, approved profiles, logistics and resources, mobile-first, with an archive for afterwards.', 'One small event or one day of programme, keeping registration in the tools 2X already uses.', 'Finding a session, mobile use, clicks to resources and post-event views.'],
+      ['B', 'Video series of cases and voices', 'Stories end up as generic testimonials or pieces that are too long, with results shown without the starting point or the decisions behind them.', 'Choose stories with 2X, secure permissions, prepare interviews and edit one main story plus cut-downs, reviewed by the people in it.', 'One approved story, one main piece and a defined set of versions. Filming on site, archive or a remote interview are priced differently.', 'Completion by channel, clicks to the full case, and feedback from the people featured.'],
       ['C', 'Interactive report and data explorer', 'Static charts and long tables make a report hard to read. A reader finds a number without its universe, period or limits.', 'Take an authorised, documented dataset, design narrative views and filters, and keep references and methodology one tap away.', 'One chapter or one set of charts with concrete reading questions.', 'Correct understanding of results, reading questions answered, methodology views.', true],
-    ].map((r, i) => ({ n: i + 1, lane: r[0], t: r[1], prob: r[2], doo: r[3], pilot: r[4], meas: r[5], demo: !!r[6] }));
+      ['C', 'Searchable resource hub', 'A library sorted by date or file type makes people know a resource’s name in advance. They find documents, but not which one to open first.', 'Inventory an approved set, define tags, design search, filters, resource cards and topic paths, and agree who publishes and updates.', 'One small collection for one audience, checking first what the current website already does well.', 'Search success and time in test tasks, searches with no results, resources opened.'],
+      ['C', 'Digital experience for a 2X event', 'Information is scattered across emails, documents and links, and after the event the recordings and materials are hard to find.', 'A microsite or event section with agenda, approved profiles, logistics and resources, mobile-first, with an archive for afterwards.', 'One small event or one day of programme, keeping registration in the tools 2X already uses.', 'Finding a session, mobile use, clicks to resources and post-event views.'],
+  ].map((r, i) => ({ n: i + 1, lane: r[0], t: r[1], prob: r[2], doo: r[3], pilot: r[4], meas: r[5], demo: !!r[6] }));
 
   // ——— 05 What could come next: overview → way of working → idea. Each tap zooms into the card you chose ———
   (() => {
@@ -1941,24 +1940,24 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
 
     function paint0() {
       L[0].innerHTML = `<div class="in"><p class="eyebrow rv">05 · What could come next</p>
-        <h2 class="h-l rv" style="--i:1">Three ways to work together.<br><span style="color:var(--accent)">Twelve ideas inside them.</span></h2>
-        <p class="lede rv" style="--i:2; color:var(--muted-ink)">Open a way of working to see the ideas inside. Open an idea to see what a first pilot would look like.</p>
-        <div class="zw-lanes">${W_LANES.map((l, k) => { const mine = W_IDEAS.filter((d) => d.lane === l.id); return `<button class="zw-lane rv" style="--i:${k + 3}; --lc:${l.c}" type="button" data-lane="${l.id}"><span class="face"><span class="lt">${l.id}</span><span class="how">${l.how}</span><h3>${l.name}</h3><p>${shortOf(l.text)}</p><span class="peek">${mine.map((d) => `<i>${pad(d.n)}</i>`).join('')}</span><span class="go">${mine.length} ideas inside →</span></span></button>`; }).join('')}</div></div>`;
+        <h2 class="h-l rv" style="--i:1">Think. Make. Build.<br><span style="color:var(--accent)">Nine ideas for 2027.</span></h2>
+        <p class="lede rv" style="--i:2; color:var(--muted-ink)">Three simple ways to work together. Open one to see its ideas, then open an idea to see what a first pilot would look like.</p>
+        <div class="zw-lanes">${W_LANES.map((l, k) => { const mine = W_IDEAS.filter((d) => d.lane === l.id); return `<button class="zw-lane rv" style="--i:${k + 3}; --lc:${l.c}" type="button" data-lane="${l.id}"><span class="face"><span class="lt">${l.v}.</span><span class="how">${l.how}</span><h3>${l.name}</h3><p>${shortOf(l.text)}</p><span class="peek">${mine.map((d) => `<i>${pad(d.n)}</i>`).join('')}</span><span class="go">${mine.length} ideas inside →</span></span></button>`; }).join('')}</div></div>`;
       $$('[data-lane]', L[0]).forEach((b) => b.addEventListener('click', () => toLane(b.dataset.lane, b)));
     }
     function paint1() {
       const l = laneOf(lane), mine = W_IDEAS.filter((d) => d.lane === lane), p = store.get('pilot', -1);
       L[1].style.setProperty('--lc', l.c);
-      L[1].innerHTML = `<div class="in"><div class="zw-head"><span class="kick">Way ${l.id} · ${l.how}</span><h2 class="h-l">${l.name}</h2><p class="lede" style="color:var(--muted-ink)">${l.text}</p></div>
+      L[1].innerHTML = `<div class="in"><div class="zw-head"><span class="kick">${l.v} · ${l.how}</span><h2 class="h-l">${l.name}</h2><p class="lede" style="color:var(--muted-ink)">${l.text}</p></div>
         <div class="zw-ideas">${mine.map((d) => `<button class="zw-idea" type="button" data-idea="${d.n}">${p === d.n - 1 ? '<span class="tagp">Our pilot</span>' : ''}<span class="nn">${pad(d.n)}</span><b>${d.t}</b><p>${shortOf(d.prob)}</p><span class="go">Open the idea →</span></button>`).join('')}</div>
-        <div class="zw-found"><small>Work we already did together in this way</small><div class="chips">${l.found.map((f) => `<span class="chip">${f}</span>`).join('')}</div></div></div>`;
+        <div class="zw-found"><small>Work we already did together like this</small><div class="chips">${l.found.map((f) => `<span class="chip">${f}</span>`).join('')}</div></div></div>`;
       $$('[data-idea]', L[1]).forEach((b) => b.addEventListener('click', () => toIdea(+b.dataset.idea, b)));
     }
     function paint2() {
       const d = W_IDEAS[idea - 1], l = laneOf(d.lane), picked = store.get('pilot', -1) === d.n - 1;
       L[2].style.setProperty('--lc', l.c);
       L[2].innerHTML = `<div class="in"><div class="zw-detail">
-        <h3><small>Way ${l.id} · ${l.how}</small>${d.t}</h3>
+        <h3><small>${l.v} · ${l.how}</small>${d.t}</h3>
         <div class="grid4"><div class="blk"><small>The problem</small><p>${d.prob}</p></div><div class="blk"><small>What we’d do</small><p>${d.doo}</p></div><div class="blk"><small>A first pilot</small><p>${d.pilot}</p></div><div class="blk"><small>How we’d know it works</small><p>${d.meas}</p></div></div>
         <div class="acts"><button class="btn ${picked ? 'on' : ''}" type="button" data-pick>${picked ? 'Chosen as our pilot ✓' : 'Choose this as our pilot'}</button>${d.demo ? '<button class="btn line" type="button" data-demo-go>See an example →</button>' : ''}<button class="btn line" type="button" data-next-step>Go to the next step →</button></div></div></div>`;
       $('[data-pick]', L[2]).addEventListener('click', (e) => { if (window.__pickPilot) window.__pickPilot(d.n - 1); e.currentTarget.textContent = 'Chosen as our pilot ✓'; e.currentTarget.classList.add('on'); window.sfx('reveal'); });
@@ -1969,8 +1968,8 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
       crumbs.classList.toggle('off', level === 0); crumbs.classList.toggle('deep', level === 2);
       if (level === 0) { crumbs.innerHTML = ''; return; }
       const l = laneOf(lane);
-      let h = `<button type="button" data-up="0">← All three ways</button>`;
-      h += level === 1 ? `<span class="sep">›</span><span class="cur">${l.id} · ${l.name}</span>` : `<span class="sep">›</span><button type="button" data-up="1">${l.id}<span class="lg"> · ${l.name}</span></button><span class="sep">›</span><span class="cur">Idea ${pad(idea)}</span>`;
+      let h = `<button type="button" data-up="0">← Think, make, build</button>`;
+      h += level === 1 ? `<span class="sep">›</span><span class="cur">${l.v} · ${l.name}</span>` : `<span class="sep">›</span><button type="button" data-up="1">${l.v}<span class="lg"> · ${l.name}</span></button><span class="sep">›</span><span class="cur">Idea ${pad(idea)}</span>`;
       h += `<span class="bars" aria-hidden="true">Depth <i class="on"></i><i class="${level >= 1 ? 'on' : ''}"></i><i class="${level >= 2 ? 'on' : ''}"></i></span>`;
       crumbs.innerHTML = h;
       $$('[data-up]', crumbs).forEach((b) => b.addEventListener('click', () => { const t = +b.dataset.up; if (level === 2 && t === 0) { out(true); } else out(); }));
@@ -2059,7 +2058,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   });
 
   // ——— Pick a pilot: the card below updates with that idea's own pilot and measure ———
-  const LANES = { A: 'Way A · Strategy and ideas, by agreed hours.', B: 'Way B · Campaigns and production, by scope.', C: 'Way C · A digital experience 2X owns, starting with discovery.' };
+  const LANES = { A: 'Think · Ideas and strategy, before the brief, in hours you approve.', B: 'Make · A campaign or production, quoted per project.', C: 'Build · A digital tool 2X owns, starting with a short discovery.' };
   $$('[data-pilot]').forEach((box) => {
     const bs = $$('.pilot-opt', box);
     const pick = (b, quiet) => {
