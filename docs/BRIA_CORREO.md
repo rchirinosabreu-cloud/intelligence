@@ -24,6 +24,17 @@ Rodny, al comparar a Bria con los asistentes que escriben primero (ChatGPT Dots,
 - **Lo que no puede saber:** una respuesta dada por WhatsApp, por teléfono o desde un correo personal no se ve. Por eso el aviso dice «sin una respuesta enviada desde los buzones de la agencia» y se oculta como cualquier otro.
 - **El mismo correo en dos buzones** (social reenvía a contacto) es un solo hecho: queda el del primer buzón leído.
 
+## Enviar con aprobación (20 de noviembre de 2026)
+
+Rodny: «enviar correos con tu aprobación». En el aviso de un correo con borrador la respuesta es editable y «Enviar respuesta» pide confirmar a quién va, desde qué buzón y con qué asunto.
+
+- **Envía una persona, nunca el modelo.** No hay herramienta de Bria para enviar ni botón por WhatsApp; solo `POST /api/bria/mail/reply` (administradores y project managers con Bria).
+- **El servidor decide a quién.** Del pedido solo se usan el id del correo y el texto. El destinatario es quien escribió el correo y el asunto es el suyo con «Re:» (`src/lib/mailReply.js`).
+- **Lo que no sale:** una respuesta con `[corchetes]` por completar, con contraseñas o códigos, a una dirección `no-reply` o a un buzón de la agencia, de más de 4.000 caracteres, una segunda respuesta al mismo correo, o más de 20 por persona al día.
+- **Cómo sale:** SMTP de Gmail (`mailboxSender.js`) con la contraseña de aplicación del buzón que recibió el correo, en texto, con `In-Reply-To` y `References`. Gmail deja la copia en Enviados.
+- **Lo que queda:** quién la envió y cuándo, y el correo anotado como respondido. El texto enviado no se guarda en la plataforma.
+- **Sin probar contra Gmail real:** el envío está probado con un transporte simulado. La primera respuesta real conviene hacerla a un correo propio.
+
 ## Dónde vive
 
 `scripts/sql/bria-mail.sql` (`mail_accounts`, `mail_seen`; aplicado al arrancar por `ensure-bria-knowledge-schema.js`), `src/services/mailAccountRepository.js`, `src/services/mailboxReader.js` (imapflow + mailparser; un cliente por llamada, origen acotado a 24 KB para el extracto y 400 KB para el cuerpo), `src/services/mailboxService.js`, `src/routes/api/briaMail.js`, `src/services/briaMailTools.js`, `src/components/modules/Activity/MailboxConnections.jsx`. Semáforo: luz «Buzones de Bria» (`mailboxes`), que lee el estado que deja el pulso sin entrar al buzón. Política de privacidad 2.13.

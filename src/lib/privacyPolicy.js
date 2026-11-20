@@ -53,4 +53,7 @@
 // si sigue sin respuesta, mirando solo los encabezados de la carpeta de enviados. Sigue sin enviar correos.
 // 2.22 (20 de noviembre de 2026): la lectura de la mañana nombra las reuniones de hoy de la persona y el remitente
 // y el asunto de los correos importantes de los buzones compartidos; esa mención queda en su chat con Bria.
-export const PRIVACY_POLICY_VERSION = '2.22 · 2026-11-20';
+// 2.23 (20 de noviembre de 2026): un administrador o project manager puede enviar, desde el aviso y con una
+// confirmación, la respuesta que revisó; sale del buzón compartido que recibió el correo y solo a quien lo escribió.
+// Se guarda quién la envió y cuándo; el texto queda en los enviados del buzón, no en la plataforma.
+export const PRIVACY_POLICY_VERSION = '2.23 · 2026-11-20';

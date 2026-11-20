@@ -73,7 +73,10 @@ const clientChoice = (verb, clientName) => (clientName && `${verb} ${clientName}
 export const withMailDrafts = (actions = [], drafts = new Map()) => actions.flatMap((action) => {
   if (!action?.draftOf) return [action];
   const draft = drafts.get(action.draftOf);
-  return draft?.reply ? [{ label: action.label, draft: { summary: String(draft.summary || ''), reply: String(draft.reply) } }] : [];
+  if (!draft?.reply) return [];
+  // A quién y desde dónde iría la respuesta (20 de noviembre de 2026): solo cuando el servidor lo resolvió.
+  const route = draft.to && draft.from ? { messageId: action.draftOf, to: draft.to, from: draft.from, subject: String(draft.subject || ''), canSend: Boolean(draft.canSend) } : {};
+  return [{ label: action.label, draft: { summary: String(draft.summary || ''), reply: String(draft.reply), ...route } }];
 });
 
 export const nudgeActions = ({ kind, personName = null, clientName = null, title = null, day = null, url = null, taskIds = [], conversationId = null, messageId = null, draft = null } = {}) => {

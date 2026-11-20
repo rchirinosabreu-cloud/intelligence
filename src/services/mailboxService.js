@@ -18,6 +18,8 @@ import { workdayStart } from '../lib/briaNudges.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { createMailAccountRepository } from './mailAccountRepository.js';
 import { createMailboxReader, imapHostFor } from './mailboxReader.js';
+import { createMailboxSender } from './mailboxSender.js';
+import { replyProblem, recipientProblem, replySubject, replyRecipient } from '../lib/mailReply.js';
 
 const H = 3_600_000;
 export const MAIL_LOOKBACK_MS = 24 * H;
@@ -48,9 +50,13 @@ export const businessDaysSince = (received, at) => {
   return count;
 };
 
-export const createMailboxService = ({ db = prisma, repository, reader, generate, now = () => new Date(), logger = console } = {}) => {
+/** Ninguna persona envía más respuestas que estas en un día desde los avisos. */
+export const MAIL_REPLIES_PER_DAY = 20;
+
+export const createMailboxService = ({ db = prisma, repository, reader, sender, generate, now = () => new Date(), logger = console } = {}) => {
   const repo = repository || createMailAccountRepository({ pool: getSidecarPool(), key: vaultKey() });
   const imap = reader || createMailboxReader({ logger });
+  const smtp = sender || createMailboxSender();
   const label = (account) => account.label || account.email.split('@')[0];
   // Con un repositorio inyectado (pruebas y muestras) el modelo real nunca se llama: solo el que se inyecte.
   const draftWith = generate || (repository ? null : defaultGenerate);
@@ -212,7 +218,44 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
 
     /** Los borradores vigentes de esos correos (id → { summary, reply }), para la tarjeta. */
     async draftsFor(messageIds = []) {
-      return typeof repo.draftsFor === 'function' ? repo.draftsFor([...new Set(messageIds.filter(Boolean))]) : new Map();
+      if (typeof repo.draftsFor !== 'function') return new Map();
+      const drafts = await repo.draftsFor([...new Set(messageIds.filter(Boolean))]);
+      const ours = [...drafts.values()].map((draft) => draft.accountEmail).filter(Boolean);
+      // A quién iría la respuesta y desde qué buzón, para que la tarjeta lo diga antes de enviar. Lo decide el servidor.
+      return new Map([...drafts].map(([id, draft]) => {
+        const to = replyRecipient(draft.from);
+        return [id, { summary: draft.summary, reply: draft.reply, to, from: draft.accountEmail || null, subject: replySubject(draft.subject), canSend: Boolean(draft.accountEmail) && !draft.replied && !recipientProblem(to, ours), replied: Boolean(draft.replied) }];
+      }));
+    },
+
+    /**
+     * Enviar con aprobación (20 de noviembre de 2026): una persona envía la respuesta que revisó, desde el buzón que
+     * recibió el correo y solo a quien lo escribió. El destinatario y el asunto salen de lo guardado, nunca del
+     * pedido. Se aparta antes de enviar (dos clics no son dos correos) y, si el envío falla, se suelta.
+     */
+    async sendReply({ messageId, text, actor, at = now() } = {}) {
+      const target = messageId && typeof repo.replyTarget === 'function' ? await repo.replyTarget(String(messageId)) : null;
+      if (!target || !target.important) throw knowledgeError('No encontré ese correo entre los que Bria marcó importantes.', 404, 'MAIL_REPLY_NOT_FOUND');
+      if (target.repliedAt) throw knowledgeError('Ese correo ya se respondió desde aquí.', 409, 'MAIL_REPLY_DONE');
+      const accounts = await repo.listActiveWithSecret();
+      const account = accounts.find((row) => row.id === target.accountId);
+      if (!account) throw knowledgeError('El buzón que recibió ese correo ya no está conectado.', 409, 'MAIL_REPLY_NO_ACCOUNT');
+      const to = replyRecipient(target.from);
+      const issue = replyProblem({ text, to, ours: accounts.map((row) => row.email) });
+      if (issue) throw knowledgeError(issue.message, issue.status, 'MAIL_REPLY_INVALID');
+      if (await repo.repliesSince(actor.ref, new Date(`${bogotaDate(at)}T05:00:00.000Z`)) >= MAIL_REPLIES_PER_DAY) throw knowledgeError('Ya enviaste muchas respuestas desde aquí por hoy. Las demás envíalas desde tu correo.', 429, 'MAIL_REPLY_LIMIT');
+      if (!await repo.claimReply(account.id, target.messageId, actor, at)) throw knowledgeError('Ese correo ya se respondió desde aquí.', 409, 'MAIL_REPLY_DONE');
+      const subject = replySubject(target.subject);
+      const reference = `<${String(target.messageId).replace(/^<|>$/g, '')}>`;
+      try { await smtp.send(account, { to, subject, text: String(text).trim(), inReplyTo: reference, references: reference }); }
+      catch (error) {
+        logger.error('[Mailbox] No se pudo enviar una respuesta:', account.email, error?.responseCode || error?.code || 'error');
+        await repo.releaseReply(account.id, target.messageId);
+        throw knowledgeError(isAuthFailure(error) || error?.responseCode === 535 ? 'Gmail rechazó la contraseña de aplicación de ese buzón. Un administrador debe volver a conectarlo.' : 'No se pudo enviar la respuesta. Inténtalo en un momento o envíala desde tu correo.', 502, 'MAIL_REPLY_FAILED');
+      }
+      try { await repo.markAnswered(account.id, target.messageId, at); } catch (error) { logger.error('[Mailbox] La respuesta salió pero no se pudo anotar:', error?.message || error); }
+      logger.info?.(`[Mailbox] Respuesta enviada desde ${account.email} por ${actor.ref}.`);
+      return { sent: true, to, from: account.email, subject };
     },
 
     /** Los correos marcados importantes en las últimas horas, para que Bria los liste. */
