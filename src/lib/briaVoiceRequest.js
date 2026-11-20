@@ -9,8 +9,15 @@ export const requestVoiceStatus = async () => {
   return response.ok ? response.json() : { enabled: false };
 };
 
-export const requestVoiceAudio = async (text, { signal } = {}) => {
-  const response = await fetch(`${base()}/api/bria/voice/speak`, { method: 'POST', credentials: 'same-origin', signal, headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ text }) });
+export const requestVoices = async () => {
+  const response = await fetch(`${base()}/api/bria/voice/voices`, { credentials: 'same-origin', headers: headers() });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(data.message || 'No se pudieron traer las voces.'), { code: data.code });
+  return data;
+};
+
+export const requestVoiceAudio = async (text, { signal, voiceId } = {}) => {
+  const response = await fetch(`${base()}/api/bria/voice/speak`, { method: 'POST', credentials: 'same-origin', signal, headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ text, ...(voiceId ? { voiceId } : {}) }) });
   if (!response.ok) { const data = await response.json().catch(() => ({})); throw Object.assign(new Error(data.message || 'No se pudo generar la voz.'), { code: data.code, status: response.status }); }
   return response.blob();
 };

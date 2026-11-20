@@ -80,6 +80,20 @@ test('el servicio: solo quien dirige con Bria, texto limpio, tope diario apartad
   await assert.rejects(failing.speak(pm, { text: 'Hola' }));
   assert.equal(failing.status(pm).remaining, voiceConfig(env).dailyChars, 'lo que no se dijo no se cobra al tope');
   assert.deepEqual(createBriaVoiceService({ client, config: () => voiceConfig({}) }).status(pm), { enabled: false });
+  // Elegir voz: con cuenta pero sin voz, solo quien administra entra, oye las voces y prueba la que marque.
+  const options = [{ id: 'vozFemenina01', name: 'Ana', gender: 'female' }, { id: 'vozMasculina1', name: 'Luis', gender: 'male' }], asked = [];
+  const picker = createBriaVoiceService({ client: { speak: async ({ voiceId }) => { asked.push(voiceId); return new Response('a'); }, voices: async () => options }, config: () => voiceConfig({ ELEVENLABS_API_KEY: 'k' }), now: () => day });
+  const admin = { userId: 'jefe', role: 'ADMIN', modulePermissions: { bria: true } };
+  assert.deepEqual(picker.status(pm), { enabled: false }, 'sin voz elegida, el equipo todavía no la ve');
+  assert.deepEqual(picker.status(admin), { enabled: true, remaining: 20000, canChoose: true, voiceId: null });
+  assert.deepEqual(await picker.voices(admin), { voices: [options[0]], current: null }, 'primero las voces femeninas');
+  await assert.rejects(picker.voices(pm), { code: 'VOICE_FORBIDDEN' });
+  await assert.rejects(picker.speak(admin, { text: 'Hola' }), { code: 'VOICE_NOT_CONFIGURED' });
+  await picker.speak(admin, { text: 'Hola', voiceId: 'vozFemenina01' }); assert.deepEqual(asked, ['vozFemenina01']);
+  await assert.rejects(picker.speak(pm, { text: 'Hola', voiceId: 'vozFemenina01' }), { code: 'VOICE_NOT_CONFIGURED' }, 'probar otra voz es solo de quien administra');
+  const { voiceOption } = await import('../src/lib/briaVoice.js');
+  assert.deepEqual(voiceOption({ voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', labels: { gender: 'Female', accent: 'latin_american', description: 'warm', age: 'young' }, description: 'Cálida.' }), { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', gender: 'female', accent: 'latin american', age: 'young', style: 'warm', about: 'Cálida.' });
+  assert.equal(voiceOption({ voice_id: '../x', name: 'Mala' }), null);
   // La sesión real trae userId y no id: el tope es de cada persona, no uno compartido por todos.
   const perPerson = createBriaVoiceService({ client, config: () => ({ ...voiceConfig(env), dailyChars: 10 }), now: () => day });
   const ana = { userId: 'ana', role: 'ADMIN', modulePermissions: { bria: true } }, luis = { ...ana, userId: 'luis' };
@@ -116,10 +130,15 @@ test('la pantalla de voz: fases, qué se dice y cómo se abre', async () => {
   assert.match(composer, /onVoice && !sendable/, 'el botón de voz solo ocupa el lugar de enviar con el cuadro vacío');
   assert.match(conversation, /voiceReady && view === 'chat' \? openVoice : undefined/, 'sin voz configurada no hay botón');
   assert.match(conversation, /new Audio\('data:audio\/wav;base64,/, 'el audio se estrena dentro del toque');
-  // `replyToSpeak` y `voiceMood`, copiadas del módulo para probarlas sin el empaquetador.
-  const pure = mode.match(/export const voiceMood = [^\n]+\n[^\n]*\nexport const replyToSpeak = [^\n]+/)[0].replace(/^\/\*\*[^\n]*\n/m, '');
-  const { voiceMood, replyToSpeak } = await import(`data:text/javascript,${encodeURIComponent(pure)}`);
-  assert.deepEqual(['listening', 'thinking', 'speaking', 'paused'].map(voiceMood), ['reposo', 'pensando', 'feliz', 'reposo']);
+  // La esfera con degradado y la lista para elegir voz, que solo ve quien administra.
+  assert.match(mode, /data-bria-orb/); assert.match(mode, /animate-bria-orb-drift/); assert.doesNotMatch(mode, /Bria3D/, 'en la voz va la esfera, no la mascota');
+  assert.match(mode, /canChoose && <button type="button" data-bria-voice-pick/); assert.match(mode, /play\(VOICE_SAMPLE, option\.id/);
+  assert.match(mode, /!paused && !picking && voice === 'idle'/, 'mientras se eligen voces no se graba');
+  assert.match(readFileSync('tailwind.config.js', 'utf8'), /"bria-orb-breathe"/);
+  // `replyToSpeak` y `orbScale`, copiadas del módulo para probarlas sin el empaquetador.
+  const pure = [mode.match(/export const replyToSpeak = [^\n]+/)[0], mode.match(/export const orbScale = [^\n]+/)[0]].join('\n');
+  const { orbScale, replyToSpeak } = await import(`data:text/javascript,${encodeURIComponent(pure)}`);
+  assert.equal(orbScale([]), 1); assert.equal(orbScale([0, 0.5]), 1.07); assert.equal(orbScale([9]).toFixed(2), '1.14', 'la esfera nunca crece más de un 14 %');
   const chat = { turns: [{ id: 'u1', role: 'user', text: 'Hola' }, { id: 'a1', role: 'assistant', text: 'Hola, Rodny.' }] };
   assert.equal(replyToSpeak(chat, null).id, 'a1'); assert.equal(replyToSpeak(chat, 'a1'), null, 'no repite lo ya dicho');
   assert.equal(replyToSpeak({ turns: [chat.turns[0]] }, null), null); assert.equal(replyToSpeak(null, null), null);

@@ -204,7 +204,12 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // Enviar con aprobación, de muestra: nada sale de aquí; responde como el servidor cuando el correo se envía.
   api.post('/api/bria/mail/reply', (req, res) => (/\[[^\]]+\]/.test(String(req.body?.text || '')) ? res.status(400).json({ message: 'Completa lo que quedó entre corchetes antes de enviarla.' }) : res.json({ sent: true, to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota' })));
   // La voz de Bria, de muestra (`?voz`): nada sale a ElevenLabs; el «audio» es un segundo y medio de tono suave.
-  api.get('/api/bria/voice', (req, res) => res.json(/[?&]voz/.test(String(req.headers.referer || '')) ? { enabled: true, remaining: 20000 } : { enabled: false }));
+  api.get('/api/bria/voice', (req, res) => res.json(/[?&]voz/.test(String(req.headers.referer || '')) ? { enabled: true, remaining: 20000, canChoose: true, voiceId: /[?&]voz=elegir/.test(String(req.headers.referer || '')) ? null : 'EXAVITQu4vr4xnSDxMaL' } : { enabled: false }));
+  api.get('/api/bria/voice/voices', (_req, res) => res.json({ current: 'EXAVITQu4vr4xnSDxMaL', voices: [
+    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Voz de muestra uno', accent: 'latinoamericano', style: 'cálida', age: 'joven' },
+    { id: 'cgSgspJ2msm6clMCkdW9', name: 'Voz de muestra dos', accent: 'colombiano', style: 'cercana', age: 'adulta' },
+    { id: 'XrExE9yKIg1WufnPWSzc', name: 'Voz de muestra tres', accent: 'neutro', style: 'tranquila', age: 'adulta' },
+    { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Voz de muestra cuatro', accent: 'mexicano', style: 'alegre', age: 'joven' }] }));
   api.post('/api/bria/voice/speak', (_req, res) => {
     const rate = 8000, samples = rate * 1.5, data = Buffer.alloc(samples * 2), header = Buffer.alloc(44);
     for (let i = 0; i < samples; i += 1) data.writeInt16LE(Math.round(Math.sin(i / rate * 2 * Math.PI * 330) * 2500 * Math.min(1, (samples - i) / 2000)), i * 2);
