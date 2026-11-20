@@ -69,3 +69,14 @@ test('el editor ofrece el calendario como otra forma de mirar el mismo mes', asy
   assert.match(editor, /if \(view === 'editor'\) params\.delete\('view'\)/);
   assert.match(editor, /Sin fecha todavía/, 'lo que no tiene fecha se ve, no se esconde');
 });
+
+test('una parrilla con día de corte pinta su período completo, no el mes del calendario', async () => {
+  const { buildCycleGrid } = await import('../src/lib/contentPlanCalendar.js');
+  const cells = buildCycleGrid('2026-11-15', '2026-12-14').flat();
+  assert.equal(cells.length % 7, 0);
+  assert.equal(cells[0].key, '2026-11-09');
+  assert.equal(cells.at(-1).key, '2026-12-20');
+  assert.deepEqual(cells.filter(cell => cell.inMonth).map(cell => cell.key).filter((_, i, all) => i === 0 || i === all.length - 1), ['2026-11-15', '2026-12-14']);
+  assert.equal(cells.filter(cell => cell.inMonth).length, 30);
+  assert.deepEqual(buildCycleGrid('2026-12-14', '2026-11-15'), []);
+});

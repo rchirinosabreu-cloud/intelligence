@@ -52,6 +52,30 @@ export const buildMonthGrid = (year, month) => {
   return weeks;
 };
 
+/**
+ * Las semanas de una parrilla con día de corte: del lunes de la semana en que empieza al domingo de la semana en que
+ * termina (Rodny, 20 de noviembre de 2026). `inMonth` marca los días que son de la parrilla, del 15 de noviembre al 14
+ * de diciembre por ejemplo; con el mes calendario, los primeros días de diciembre no se veían.
+ */
+export const buildCycleGrid = (startKey, endKey) => {
+  const start = new Date(`${startKey}T00:00:00.000Z`);
+  const end = new Date(`${endKey}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
+  const cursor = new Date(start);
+  cursor.setUTCDate(cursor.getUTCDate() - ((cursor.getUTCDay() + 6) % 7));
+  const weeks = [];
+  while (cursor <= end && weeks.length < 8) {
+    const week = [];
+    for (let index = 0; index < 7; index += 1) {
+      const key = cursor.toISOString().slice(0, 10);
+      week.push({ key, day: cursor.getUTCDate(), month: cursor.getUTCMonth() + 1, inMonth: key >= startKey && key <= endKey });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    weeks.push(week);
+  }
+  return weeks;
+};
+
 /** Las piezas de cada día, por `YYYY-MM-DD`, y aparte las que todavía no tienen fecha. */
 export const groupItemsByDay = (items = []) => {
   const byDay = new Map();

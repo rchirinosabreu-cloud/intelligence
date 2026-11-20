@@ -13,6 +13,7 @@ import {
   updateContentItem,
   getContentItemLocation,
   previewPeriodMove,
+  realignContentPlan,
   deleteContentItem,
   sendItemToKanban,
   generateShareToken,
@@ -237,6 +238,12 @@ router.post('/plans/:id/share-token', async (req, res) => {
 
 // «Pedir nueva revisión»: la pieza sigue aprobada en nuestro lado, pero el cliente vuelve a tener la
 // palabra porque lo que aprobó ya no es lo que hay (Rodny, 5 de octubre de 2026).
+// Lleva a su parrilla las piezas cuya fecha es de otra, según el día de corte del contrato (20 de noviembre de 2026).
+router.post('/plans/:id/realign', async (req, res) => {
+  try { return res.json(await realignContentPlan(req.params.id, { actorId: req.user?.userId || req.user?.id })); }
+  catch (error) { return res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudieron mover las piezas.' }); }
+});
+
 router.post('/plans/:id/request-revision', async (req, res) => {
   try {
     const result = await requestContentPlanRevision(req.params.id);
