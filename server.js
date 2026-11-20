@@ -307,6 +307,23 @@ async function bootstrap() {
         }, 15_000);
     }
 
+    // 6b. Reconocimientos (20 de noviembre de 2026): retira lo que Rodny pidió retirar (`RECOGNITION_CORRECTIONS`).
+    // Idempotente: lo ya retirado cambió de tipo y no vuelve a aparecer.
+    if (process.env.DEMO_MODE !== 'true') {
+        setTimeout(async () => {
+            try {
+                const [{ applyRecognitionCorrections }, { default: prismaClient }] = await Promise.all([
+                    import('./src/services/recognitionCorrections.js'),
+                    import('./src/lib/prisma.js')
+                ]);
+                const retired = await applyRecognitionCorrections(prismaClient);
+                if (retired.length) console.log('[Reconocimientos] Retirados:', JSON.stringify(retired));
+            } catch (correctionError) {
+                console.error('[Reconocimientos] No se pudo aplicar la corrección:', correctionError.message);
+            }
+        }, 10_000);
+    }
+
     // 7. Parrillas (19 de noviembre de 2026): el responsable de cada parrilla abierta es el community del cliente.
     // Idempotente; corrige lo que haya quedado distinto, sin bloquear el arranque.
     setTimeout(async () => {
