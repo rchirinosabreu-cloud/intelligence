@@ -31,12 +31,16 @@ export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = (
     provider = 'openai';
   } else if (target.origin === 'https://api.fireflies.ai' && target.pathname === '/graphql') {
     provider = 'fireflies'; model = 'graphql';
+  } else if (target.origin === 'https://api.elevenlabs.io' && /^\/v1\/text-to-speech\/[A-Za-z0-9]{10,40}\/stream$/.test(target.pathname) && !multipart) {
+    // La voz de Bria (20 de noviembre de 2026): solo texto a voz, con el modelo que viaja en `model_id`.
+    provider = 'elevenlabs';
   } else {
     reject('Destino de IA no inventariado.', 'AI_DESTINATION_INVALID', `${target.host}${target.pathname}`);
   }
   let body = {};
   try { body = multipart ? { model: options.body.get('model') } : JSON.parse(options.body || '{}') || {}; } catch { body = {}; }
   if (provider === 'openai') model = body.model;
+  if (provider === 'elevenlabs') model = body.model_id;
   if (typeof model !== 'string' || !model.trim()) { model = undefined; reject('Modelo de IA no identificado.', 'AI_SCOPE_REQUIRED'); }
 
   try {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BRIA_AUDIO_MAX_BYTES } from '@/lib/briaAttachments';
 import { levelOf, pushLevel, previewDue } from '@/lib/briaComposer';
+import { hearTurn } from '@/lib/briaVoice';
 
 // Un solo dictado para toda Bria (11 de octubre de 2026): el chat y la consulta rápida desde la mascota graban,
 // acotan y transcriben igual. El audio va al servidor (`POST /dictation`) y el texto vuelve por `onText`; quien
@@ -25,9 +26,11 @@ const meter = (stream, onLevel) => {
     return () => { clearInterval(interval); try { source.disconnect(); } catch { /* ya suelto */ } context.close?.().catch?.(() => {}); };
   } catch { return () => {}; }
 };
-export function useBriaDictation({ request, active = true, disabled = false, onText, onError, onBusy }) {
+// Manos libres (la voz de Bria, mismo día): con `handsFree`, el dictado se cierra solo cuando la persona ya habló y
+// calla un rato (`hearTurn`), y si pasan `idleMs` sin que diga nada, se cancela y avisa por `onIdle`.
+export function useBriaDictation({ request, active = true, disabled = false, handsFree = false, idleMs = 45000, onText, onError, onBusy, onIdle }) {
   const recording = useRef(null), mounted = useRef(true), isActive = useRef(active), generation = useRef(0), timer = useRef(null);
-  const callbacks = useRef({}); callbacks.current = { onText, onError, onBusy };
+  const callbacks = useRef({}); callbacks.current = { onText, onError, onBusy, onIdle };
   const [voice, setVoice] = useState('idle'), [seconds, setSeconds] = useState(0), [retryAudio, setRetryAudio] = useState(null), [levels, setLevels] = useState([]), [preview, setPreview] = useState('');
   const changeVoice = status => { setVoice(status); callbacks.current.onBusy?.(status !== 'idle'); };
   const fail = message => callbacks.current.onError?.(message);
@@ -83,8 +86,16 @@ export function useBriaDictation({ request, active = true, disabled = false, onT
         if (session.cancelled || !mounted.current || !isActive.current) { if (mounted.current) changeVoice('idle'); return; }
         transcribe(new Blob(session.chunks, { type: recorder.mimeType || 'audio/webm' }));
       };
-      recorder.start(1000); setSeconds(0); setLevels([]); setPreview(''); changeVoice('recording');
-      session.unmeter = meter(stream, value => { if (mounted.current && recording.current === session) setLevels(current => pushLevel(current, value)); });
+      recorder.start(1000); session.startedAt = Date.now(); setSeconds(0); setLevels([]); setPreview(''); changeVoice('recording');
+      session.unmeter = meter(stream, value => {
+        if (!mounted.current || recording.current !== session) return;
+        setLevels(current => pushLevel(current, value));
+        if (!handsFree) return;
+        const at = Date.now() - session.startedAt;
+        session.turn = hearTurn(session.turn, { level: value, at });
+        if (session.turn.done) stop();
+        else if (!session.turn.spoke && at >= idleMs) { cancel(); callbacks.current.onIdle?.(); }
+      });
       const started = Date.now(); session.timer = timer.current = setInterval(() => { const elapsed = Math.floor((Date.now() - started) / 1000); setSeconds(elapsed); if (elapsed >= 300) stop(); }, 1000);
       const peek = async () => {
         const elapsedMs = Date.now() - started;

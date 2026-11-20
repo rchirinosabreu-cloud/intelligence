@@ -58,4 +58,6 @@
 // Se guarda quién la envió y cuándo; el texto queda en los enviados del buzón, no en la plataforma.
 // 2.24 (20 de noviembre de 2026): mientras se dicta, lo grabado hasta ese momento se envía por tramos al mismo
 // servicio de transcripción para mostrar el texto a medida que la persona habla, también si luego cancela.
-export const PRIVACY_POLICY_VERSION = '2.24 · 2026-11-20';
+// 2.25 (20 de noviembre de 2026): la voz de Bria. ElevenLabs entra como encargado: recibe el texto de la respuesta
+// que Bria va a decir en voz alta, no la voz de la persona ni el historial; el audio no se guarda.
+export const PRIVACY_POLICY_VERSION = '2.25 · 2026-11-20';
