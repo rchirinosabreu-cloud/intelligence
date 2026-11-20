@@ -59,3 +59,27 @@ export function periodMovePreview(plan, dayKey, contracts) {
   return { date: dayKey, moves, from: describe(plan), to: moves ? describe({ year, month }) : null,
     contractEnd: contractEndNotice(dayKey, contracts) };
 }
+
+// Las piezas de `plan` cuya fecha es de otra parrilla (Rodny, 20 de noviembre de 2026: «la parrilla de Promogroup es
+// noviembre y diciembre, debería poder admitir piezas desde el 15 de nov hasta el 14 de dic»). Son las que el traslado
+// sacó por mes calendario antes de que respetara el corte: nadie las devolvía, porque volver a guardar la misma fecha
+// no es un cambio. Cada una dice a qué parrilla pertenece.
+export function outOfPeriodItems(plan, items, contracts) {
+  const out = [];
+  for (const item of items || []) {
+    if (!item?.publishDate) continue;
+    const date = new Date(item.publishDate);
+    if (Number.isNaN(date.getTime())) continue;
+    const period = publicationPeriod(date, contracts);
+    if (period.year === plan.year && period.month === plan.month) continue;
+    out.push({ id: item.id, date: dayKeyOf(date), to: { ...period, ...planCycle(period, contracts) } });
+  }
+  return out;
+}
+
+// El día con que nace una pieza nueva: hoy si cae dentro de la parrilla, y si no el primer día de la parrilla. Antes
+// nacía siempre con la fecha de hoy y el traslado se la llevaba a la parrilla de hoy, no a la que estaba abierta.
+export function defaultPieceDay(cycle, todayKey) {
+  if (!cycle?.start || !cycle?.end) return todayKey;
+  return todayKey >= cycle.start && todayKey <= cycle.end ? todayKey : cycle.start;
+}

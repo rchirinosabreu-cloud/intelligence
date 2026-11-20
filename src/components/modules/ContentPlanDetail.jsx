@@ -10,7 +10,9 @@ import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { uploadFinalPiece } from '@/lib/contentFinalDelivery';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { MultiLinkInput, CoverField, FinalAssetGrid } from '@/components/modules/ContentPlan/PieceMedia';
-import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
+import { WEEKDAY_LABELS, buildMonthGrid, buildCycleGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
+import { defaultPieceDay, cycleRangeLabel } from '@/lib/publicationPeriod';
+import { bogotaDayKey } from '@/lib/dashboardTips';
 import { APPROVAL_STATES, approvalState, canRequestRevision, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
 import { describeMetaMedia, publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
 import { kindAcceptsCover } from '@/lib/videoCover';
@@ -252,8 +254,11 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
  * enseñar: los días vacíos y los días con tres piezas encima. Tocar una pieza la abre en el editor —son
  * dos formas de mirar el mismo mes, no dos sitios distintos.
  */
-const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] }) => {
-  const weeks = buildMonthGrid(year, month);
+const CALENDAR_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const PlanCalendar = ({ items, year, month, cycle = null, onOpenPiece, onAdd, accounts = [] }) => {
+  // Una parrilla con día de corte pinta su período, del 15 de noviembre al 14 de diciembre, no el mes del calendario.
+  const cycleWeeks = cycle?.mixed ? buildCycleGrid(cycle.start, cycle.end) : [];
+  const weeks = cycleWeeks.length ? cycleWeeks : buildMonthGrid(year, month);
   const { byDay, undated } = groupItemsByDay(items);
 
   return (
@@ -278,7 +283,7 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] })
                 }`}
               >
                 <span className={`text-xs font-bold tabular-nums ${cell.inMonth ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>
-                  {cell.day}
+                  {cell.day}{cell.month && (cell.day === 1 || cell.key === cycle?.start) ? ` ${CALENDAR_MONTHS[cell.month - 1]}` : ''}
                 </span>
 
                 {pieces.slice(0, 2).map(piece => (
@@ -1148,6 +1153,22 @@ const ContentPlanDetail = () => {
     }
   });
 
+  // Piezas cuya fecha es de otra parrilla según el día de corte (20 de noviembre de 2026): se llevan todas de una vez.
+  const realignMutation = useMutation({
+    mutationFn: async () => (await axios.post(`${getApiBaseUrl()}/api/content/plans/${currentPlanId}/realign`, {}, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: (data) => {
+      for (const key of ['content-plan', 'content-plans', 'nativeTasks', 'task', 'dashboardMetrics', 'client-operations']) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      const moved = data?.moved?.length || 0, failed = data?.failed || [];
+      if (moved) toast.success(moved === 1 ? 'Una pieza pasó a su parrilla' : `${moved} piezas pasaron a su parrilla`);
+      if (failed.length) toast.error(`${failed.length === 1 ? 'Una pieza no se pudo mover' : `${failed.length} piezas no se pudieron mover`}: ${failed[0].error}`, { duration: 8000 });
+    },
+    onError: (error) => toast.error(error.response?.data?.error || 'No se pudieron mover las piezas')
+  });
+
   const requestItemRevisionMutation = useMutation({
     mutationFn: async (itemId) => {
       const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/request-revision`, {}, {
@@ -1188,7 +1209,6 @@ const ContentPlanDetail = () => {
 
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
-      if (data?.publishDate && !(await confirmPublishDate(data.publishDate))) throw PUBLISH_DATE_KEPT;
       const response = await axios.post(`${getApiBaseUrl()}/api/content/items`, { ...data, planId: currentPlanId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
@@ -1451,7 +1471,8 @@ const ContentPlanDetail = () => {
       format: 'Reel',
       copyText: '',
       captionText: '',
-      publishDate: new Date(),
+      // Hoy si cae dentro de esta parrilla; si no, su primer día. Así la pieza nace en la parrilla que está abierta.
+      publishDate: defaultPieceDay(plan?.cycle, bogotaDayKey() || new Date().toISOString().slice(0, 10)),
       status: 'BORRADOR'
     });
   };
@@ -1592,6 +1613,10 @@ const ContentPlanDetail = () => {
   // Las que el cliente ya aprobó y todavía no le hemos devuelto para que mire el material.
   const piecesToReview = itemsNeedingRevisionRequest(plan.items || []);
 
+  const misplaced = plan.misplacedItems || [];
+  const misplacedTargets = [...new Map(misplaced.map(row => [`${row.to.year}-${row.to.month}`, row.to])).values()]
+    .map(to => `${String(to.label || '').toLowerCase()} ${to.year}${to.mixed ? ` (${cycleRangeLabel(to)})` : ''}`).join(' y ');
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
       <PageHeader
@@ -1683,6 +1708,26 @@ const ContentPlanDetail = () => {
           className="rounded-3xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-zinc-800 dark:text-zinc-100">
           <p className="font-semibold">Esta parrilla está congelada</p>
           <p className="mt-1">{plan.suspendedReason}</p>
+        </div>
+      )}
+
+      {misplaced.length > 0 && !plan.suspendedReason && (
+        <div role="status" data-plan-misplaced
+          className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-brand-cyan/40 bg-brand-cyan/10 p-4 text-sm text-zinc-800 dark:text-zinc-100">
+          <div className="min-w-0">
+            <p className="font-semibold">
+              {misplaced.length === 1 ? 'Una pieza tiene fecha de otra parrilla' : `${misplaced.length} piezas tienen fecha de otra parrilla`}
+            </p>
+            <p className="mt-1">
+              {plan.cycle?.mixed ? `Esta parrilla va del ${cycleRangeLabel(plan.cycle)}. ` : ''}
+              Por el día de corte del contrato {misplaced.length === 1 ? 'pertenece' : 'pertenecen'} a {misplacedTargets}.
+            </p>
+          </div>
+          <button type="button" onClick={() => realignMutation.mutate()} disabled={realignMutation.isPending}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-cyan px-4 text-sm font-semibold text-zinc-900 transition-opacity hover:opacity-90 disabled:opacity-50">
+            {realignMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {misplaced.length === 1 ? 'Llevarla a su parrilla' : 'Llevarlas a su parrilla'}
+          </button>
         </div>
       )}
 
@@ -1810,6 +1855,7 @@ const ContentPlanDetail = () => {
             items={orderedPlanItems}
             year={Number(plan.year)}
             month={Number(plan.month)}
+            cycle={plan.cycle}
             onOpenPiece={(id) => selectPiece(id, { view: 'editor' })}
             onAdd={handleAddItem}
             accounts={plan?.client?.socialAccounts || []}
