@@ -567,101 +567,97 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
 }
 </style>
 <style>
-/* ——— 05 The 2X world: a camera that flies through three levels ——— */
-.world-screen { background: radial-gradient(ellipse at 50% 40%, #1b1e4b 0%, #0b0d2a 70%); color: #fff; }
-.stage { position: absolute; inset: 0; overflow: hidden; z-index: 1; }
-.world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; transition: transform 1.3s cubic-bezier(.65,0,.15,1); --lf: 30px; }
-.world.portrait { --lf: 46px; }
-.world > * { position: absolute; transform: translate(-50%, -50%); }
-.dust { position: absolute; inset: -60%; pointer-events: none; transition: transform 1.3s cubic-bezier(.65,0,.15,1); }
-.dust i { position: absolute; width: var(--z); height: var(--z); border-radius: 50%; background: #fff; opacity: var(--o); animation: twinkle var(--t) ease-in-out infinite alternate; }
-.dust.near i { filter: blur(3px); background: var(--c, #5cc8e0); }
-@keyframes twinkle { to { opacity: calc(var(--o) * .25); } }
-.w-links { overflow: visible; pointer-events: none; }
-.w-links path { fill: none; stroke: rgba(255,255,255,.22); stroke-width: 3; stroke-dasharray: 10 14; animation: flow 3s linear infinite; }
-@keyframes flow { to { stroke-dashoffset: -48; } }
-.w-core { width: 360px; height: 360px; border-radius: 50%; display: grid; place-items: center; align-content: center; text-align: center; gap: 6px;
-  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #d9f3f9 40%, #5cc8e0 100%); color: var(--ink); box-shadow: 0 0 0 18px rgba(92,200,224,.12), 0 0 140px rgba(92,200,224,.45); }
-.w-core b { font-family: var(--display); font-weight: 900; font-size: 54px; letter-spacing: -.03em; line-height: 1; }
-.w-core span { font-size: 20px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--muted-ink); }
-.w-core::after { content: ""; position: absolute; inset: -46px; border-radius: 50%; border: 2px dashed rgba(255,255,255,.25); animation: spin 80s linear infinite; }
-.w-planet { width: 560px; height: 560px; border-radius: 50%; border: 0; padding: 0; color: #fff; cursor: pointer;
-  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--lc) 55%, #fff) 0%, var(--lc) 38%, color-mix(in srgb, var(--lc) 40%, #0b0d2a) 100%);
-  box-shadow: 0 0 160px color-mix(in srgb, var(--lc) 55%, transparent), inset -40px -50px 90px rgba(0,0,0,.35); transition: box-shadow .4s, filter .4s; }
-.w-planet:hover { filter: brightness(1.08); box-shadow: 0 0 220px color-mix(in srgb, var(--lc) 75%, transparent), inset -40px -50px 90px rgba(0,0,0,.35); }
-.w-planet .pl { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; gap: 10px; justify-items: center; text-align: center; width: 220px; transition: opacity .5s; }
-.w-planet .pl .lt { font-family: var(--display); font-weight: 900; font-size: calc(var(--lf) * 2.4); line-height: .9; }
-.w-planet .pl .nm { font-family: var(--display); font-weight: 900; font-size: var(--lf); line-height: 1.05; letter-spacing: -.01em; }
-.w-planet .pl .go { font-size: calc(var(--lf) * .6); font-weight: 700; opacity: .85; }
-.world.in-lane .w-planet .pl { opacity: 0; }
-.w-orbit { width: 380px; height: 380px; border-radius: 50%; border: 2px dashed rgba(255,255,255,.35); pointer-events: none; animation: spin 90s linear infinite; }
-@keyframes spin { to { rotate: 360deg; } }
-.w-node { width: 132px; height: 132px; border-radius: 50%; border: 0; background: #fff; color: var(--ink); display: grid; place-items: center; align-content: center; gap: 4px; padding: 14px; text-align: center; cursor: pointer;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--lc) 35%, transparent), 0 10px 30px rgba(0,0,0,.35); transition: box-shadow .3s, opacity .5s; }
-.w-node:hover, .w-node:focus-visible { box-shadow: 0 0 0 10px color-mix(in srgb, var(--lc) 60%, transparent), 0 0 60px color-mix(in srgb, var(--lc) 70%, transparent); }
-.w-node small { font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--lc); }
-.w-node b { font-family: var(--display); font-size: 13.5px; line-height: 1.12; font-weight: 800; }
-.w-node .in { display: grid; gap: 4px; transition: opacity .4s; }
-.w-node.deep .in { opacity: 0; }
-.w-node.picked { box-shadow: 0 0 0 8px var(--sun), 0 0 60px rgba(252,210,0,.6); }
-.world.lv0 .w-node { pointer-events: none; }
-.world.lv2 .w-node:not(.deep) { opacity: .15; }
-
-/* Depth gauge */
+/* ——— 05 What could come next: three layers, each tap zooms into the card you chose ——— */
 .top .brand .bx { margin-left: -10px; }
-.depth { position: absolute; z-index: 3; right: var(--gut); top: 50%; transform: translateY(-50%); display: grid; justify-items: center; gap: 10px; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-.depth i { width: 4px; height: 46px; border-radius: 2px; background: rgba(255,255,255,.18); transition: background .5s, box-shadow .5s; }
-.depth i.on { background: var(--accent-soft); box-shadow: 0 0 16px var(--accent-soft); }
-.depth .lvl { writing-mode: vertical-rl; transform: rotate(180deg); color: #fff; }
+.zw-screen { overflow: hidden; }
+.zw-layer { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: calc(84px + env(safe-area-inset-top, 0px)) var(--gut) calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; z-index: 1; will-change: transform, opacity; }
+.zw-layer[hidden] { display: none !important; }
+.zw-layer > .in { width: 100%; max-width: 1240px; margin: auto; }
+.zw-layer[data-l="1"], .zw-layer[data-l="2"] { padding-top: calc(128px + env(safe-area-inset-top, 0px)); }
 
-/* HUD: the readable layer over the world */
-.hud { position: absolute; z-index: 3; left: var(--gut); top: calc(96px + env(safe-area-inset-top, 0px)); width: min(380px, calc(100% - 2 * var(--gut))); max-height: calc(100% - 200px); overflow-y: auto;
-  background: rgba(15,17,48,.74); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.14); border-radius: 24px; padding: 22px; display: grid; gap: 12px; transition: opacity .4s, transform .4s; }
-.hud.hide { opacity: 0; transform: translateY(10px); pointer-events: none; }
-.hud .kick { font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--accent-soft); }
-.hud h3 { font-family: var(--display); font-weight: 900; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.05; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
-.hud p { margin: 0; color: #cfd3e6; font-size: 15px; }
-.hud .list { display: grid; gap: 8px; }
-.hud .list button { text-align: left; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; border-radius: 14px; padding: 11px 14px; font-weight: 700; font-size: 15px; display: flex; gap: 10px; align-items: baseline; transition: background .2s, transform .2s; }
-.hud .list button:hover { background: rgba(255,255,255,.14); transform: translateX(4px); }
-.hud .list small { color: var(--lc, var(--accent-soft)); font-weight: 800; font-variant-numeric: tabular-nums; }
-.hud .back { justify-self: start; border: 0; background: none; color: var(--accent-soft); font-weight: 800; font-size: 14px; padding: 0; }
-.hud .found { border-top: 1px dashed rgba(255,255,255,.25); padding-top: 12px; display: grid; gap: 8px; }
-.hud .found small { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--sun); }
-.hud .found .chips .chip { opacity: 1; font-size: 11px; }
-.hud .tip { font-family: var(--hand); font-size: 22px; color: var(--muted); }
-.hud.fresh > * { animation: arrive .55s cubic-bezier(.2,.8,.1,1) both; }
-.hud.fresh > *:nth-child(2) { animation-delay: .05s; } .hud.fresh > *:nth-child(3) { animation-delay: .1s; } .hud.fresh > *:nth-child(4) { animation-delay: .15s; } .hud.fresh > *:nth-child(5) { animation-delay: .2s; }
+/* Breadcrumb + depth bars */
+.zw-crumbs { position: absolute; z-index: 3; padding: 0 0 12px; background: linear-gradient(var(--paper) 75%, rgba(241,242,247,0)); top: calc(76px + env(safe-area-inset-top, 0px)); left: var(--gut); right: var(--gut); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; transition: opacity .35s, transform .35s; }
+.zw-crumbs.off { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.zw-crumbs button, .zw-crumbs span.cur { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 7px 13px; font-weight: 800; font-size: 13px; }
+.zw-crumbs button:hover { border-color: var(--ink); }
+.zw-crumbs span.cur { background: var(--ink); color: #fff; border-color: var(--ink); }
+.zw-crumbs .sep { color: var(--muted-ink); font-weight: 800; }
+.zw-crumbs .bars { margin-left: auto; display: flex; gap: 4px; align-items: center; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-ink); }
+.zw-crumbs .bars i { width: 18px; height: 6px; border-radius: 3px; background: var(--line); }
+.zw-crumbs .bars i.on { background: var(--stripe); background-size: 120px 6px; }
 
-/* Inside an idea */
-.detail { position: absolute; inset: 0; z-index: 4; display: flex; overflow-y: auto; padding: calc(88px + env(safe-area-inset-top, 0px)) var(--gut) calc(96px + env(safe-area-inset-bottom, 0px)); color: var(--ink); }
-.detail[hidden] { display: none !important; }
-.detail .card { margin: auto; width: min(920px, 100%); display: grid; gap: 18px; animation: arrive .7s cubic-bezier(.2,.8,.1,1) both; }
-.detail .top-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.detail .back { border: 0; background: var(--ink); color: #fff; border-radius: 999px; padding: 9px 16px; font-weight: 800; font-size: 14px; }
-.detail .lane-tag { font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--lc); }
-.detail h3 { font-family: var(--display); font-weight: 900; font-size: clamp(34px, 4.4vw, 64px); line-height: 1.02; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
-.detail h3 small { display: block; font-size: .32em; letter-spacing: .14em; color: var(--lc); margin-bottom: 8px; }
-.detail .grid4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.detail .blk { background: var(--paper); border-radius: 18px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; animation: arrive .6s cubic-bezier(.2,.8,.1,1) both; animation-delay: calc(var(--i) * 90ms + 200ms); }
-.detail .blk small { font-size: 11.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--lc); }
-.detail .blk p { margin: 0; font-size: 15.5px; color: var(--muted-ink); }
-.detail .acts { display: flex; flex-wrap: wrap; gap: 10px; }
-.detail .acts .btn.line { background: transparent; color: var(--ink); border: 2px solid var(--line); }
-.detail .acts .btn.on { background: var(--leaf); }
+/* Level 0: three ways of working, drawn as stacks of cards (there is more inside) */
+.zw-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 34px; }
+.zw-lane { position: relative; text-align: left; border: 0; padding: 0; background: none; color: var(--ink); cursor: pointer; isolation: isolate; }
+.zw-lane::before, .zw-lane::after { content: ""; position: absolute; inset: 0; border-radius: 22px; z-index: -1; border: 1px solid var(--line); background: #fff; transition: transform .35s cubic-bezier(.2,.8,.1,1); }
+.zw-lane::before { transform: translate(8px, 8px) rotate(1.2deg); background: color-mix(in srgb, var(--lc) 14%, #fff); }
+.zw-lane::after { transform: translate(15px, 15px) rotate(2.4deg); background: color-mix(in srgb, var(--lc) 26%, #fff); z-index: -2; }
+.zw-lane:hover::before { transform: translate(12px, 12px) rotate(2deg); }
+.zw-lane:hover::after { transform: translate(22px, 22px) rotate(4deg); }
+.zw-lane .face { position: relative; height: 100%; background: #fff; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; display: grid; gap: 10px; align-content: start; padding: 26px 24px 22px; transition: transform .3s cubic-bezier(.2,.8,.1,1), box-shadow .3s; }
+.zw-lane:hover .face { transform: translateY(-4px); box-shadow: 0 22px 44px rgba(15,17,48,.14); }
+.zw-lane .face::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: var(--lc); }
+.zw-lane .lt { font-family: var(--display); font-weight: 900; font-size: 64px; line-height: .9; color: var(--lc); letter-spacing: -.03em; }
+.zw-lane .how { justify-self: start; font-size: 11.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--lc); border: 1.5px solid currentColor; border-radius: 999px; padding: 4px 10px; }
+.zw-lane h3 { font-family: var(--display); font-weight: 900; font-size: clamp(22px, 2vw, 28px); line-height: 1.08; letter-spacing: -.015em; margin: 0; }
+.zw-lane p { margin: 0; font-size: 15.5px; color: var(--muted-ink); }
+.zw-lane .peek { display: flex; gap: 6px; margin-top: 6px; }
+.zw-lane .peek i { font-style: normal; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--lc) 12%, #fff); color: var(--lc); }
+.zw-lane .go { font-weight: 800; font-size: 15px; color: var(--lc); margin-top: 4px; }
+
+/* Level 1: inside one way of working */
+.zw-head { display: grid; gap: 4px; }
+.zw-head .kick { font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--lc); }
+.zw-ideas { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; margin-top: 28px; }
+.zw-idea { position: relative; text-align: left; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 20px; padding: 20px; display: grid; gap: 8px; align-content: start; cursor: pointer; box-shadow: 6px 6px 0 color-mix(in srgb, var(--lc) 18%, #fff); transition: transform .25s, box-shadow .25s, border-color .25s; }
+.zw-idea:hover { transform: translate(-3px, -3px); box-shadow: 10px 10px 0 color-mix(in srgb, var(--lc) 30%, #fff); border-color: var(--lc); }
+.zw-idea .nn { font-family: var(--display); font-weight: 900; font-size: 34px; line-height: 1; color: var(--lc); font-variant-numeric: tabular-nums; }
+.zw-idea b { font-family: var(--display); font-weight: 900; font-size: 19px; line-height: 1.15; }
+.zw-idea p { margin: 0; font-size: 14.5px; color: var(--muted-ink); }
+.zw-idea .go { font-weight: 800; font-size: 14px; color: var(--lc); }
+.zw-idea .tagp { position: absolute; top: 14px; right: 14px; background: var(--leaf); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border-radius: 7px; }
+.zw-found { margin-top: 26px; border-top: 2px dashed var(--line); padding-top: 16px; display: grid; gap: 10px; }
+.zw-found small { font-size: 11.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-ink); }
+.zw-found .chips .chip { opacity: 1; transform: none; color: var(--ink); border-color: var(--line); background: #fff; }
+
+/* Level 2: one idea */
+.zw-detail { display: grid; gap: 18px; max-width: 960px; margin: 0 auto; }
+.zw-detail .lane-tag { font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--lc); }
+.zw-detail h3 { font-family: var(--display); font-weight: 900; font-size: clamp(32px, 4.2vw, 60px); line-height: 1.02; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
+.zw-detail h3 small { display: block; font-size: .3em; letter-spacing: .14em; color: var(--lc); margin-bottom: 8px; }
+.zw-detail .grid4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.zw-detail .blk { background: #fff; border: 1px solid var(--line); border-top: 5px solid var(--lc); border-radius: 18px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.zw-detail .blk small { font-size: 11.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--lc); }
+.zw-detail .blk p { margin: 0; font-size: 15.5px; color: var(--muted-ink); }
+.zw-detail .acts { display: flex; flex-wrap: wrap; gap: 10px; }
+.zw-detail .acts .btn { font-size: 15px; padding: 13px 20px; }
+.zw-detail .acts .btn.line { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+.zw-detail .acts .btn.on { background: var(--leaf); }
 
 @media (max-width: 899px) {
-  .hud { top: auto; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; width: auto; max-height: 44%; padding: 16px; gap: 10px; }
-  .hud h3 { font-size: 22px; }
-  .hud p { font-size: 14px; }
-  .depth { display: none; }
-  .detail .grid4 { grid-template-columns: 1fr; }
+  .zw-lanes { grid-template-columns: 1fr; gap: 22px; margin-top: 24px; margin-right: 14px; }
+  .zw-lane .lt { font-size: 44px; }
+  .zw-detail .grid4 { grid-template-columns: 1fr; }
+  .zw-crumbs .bars { display: none; }
+  .zw-crumbs { left: 0; right: 0; padding-left: var(--gut); padding-right: var(--gut); }
+  .zw-layer[data-l="1"], .zw-layer[data-l="2"] { padding-top: calc(140px + env(safe-area-inset-top, 0px)); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .world, .dust { transition: none; }
-  .dust i, .w-orbit, .w-core::after, .w-links path { animation: none; }
-  .hud.fresh > *, .detail .card, .detail .blk { animation: none; }
-}
+
+/* Skip the cases */
+.case-skip { position: fixed; z-index: 19; left: var(--gut); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; flex-wrap: wrap; transition: opacity .35s, transform .35s; }
+.case-skip[hidden] { display: none; }
+.case-skip button { border: 1px solid rgba(15,17,48,.15); background: rgba(255,255,255,.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: var(--ink); border-radius: 999px; padding: 10px 15px; font-weight: 800; font-size: 14px; box-shadow: 0 8px 22px rgba(0,0,0,.14); }
+.case-skip button:hover { background: #fff; }
+.hub-skip { margin-top: 14px; }
+@media (max-width: 599px) { .case-skip { right: calc(var(--gut) + 124px); } .case-skip button { padding: 9px 12px; font-size: 13px; } .case-skip .all, .case-skip .lg { display: none; } .case-skip { flex-wrap: nowrap; } }
+
+/* Pilot card: no flashing, the text just updates */
+.pilot-out.pop { animation: none; }
+.pilot-out .pv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.pilot-out .pv div { background: rgba(255,255,255,.14); border-radius: 14px; padding: 12px 14px; display: grid; gap: 4px; }
+.pilot-out .pv small { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; opacity: .85; }
+.pilot-out .pv p { margin: 0; font-size: 15px; }
+@media (max-width: 899px) { .pilot-out .pv { grid-template-columns: 1fr; } }
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -681,6 +677,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   <button type="button" id="prev" aria-label="Previous screen"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   <button type="button" id="next" aria-label="Next screen"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 </nav>
+<div class="case-skip" id="caseSkip" hidden><button type="button" class="all" data-goto-hub>All cases</button><button type="button" id="skipCase">Skip<span class="lg"> this</span> case →</button><button type="button" data-skip-cases>Skip all<span class="lg"> cases</span> ⇥</button></div>
 <div class="hint" id="hint" role="status">Move with the arrow keys, the mouse wheel or a swipe</div>
 <div class="flash" id="flash" aria-hidden="true"></div>
 
@@ -691,7 +688,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     <div class="scroll"><div class="in intro-in">
       <img class="brain-mark" style="--depth:16" data-depth src="assets/brain.png" alt="Brain Studio">
       <div class="intro-kicker">Brain Studio × 2X Global · Looking at 2027</div>
-      <h1 class="intro-title" style="--depth:6" data-depth>More than an annual report.<br>A <em>partner.</em></h1>
+      <h1 class="intro-title" style="--depth:6" data-depth>Two years in.<br>What <em>comes next.</em></h1>
       <button class="hold" id="hold" style="--depth:-12" data-depth type="button" aria-label="Press and hold to begin">
         <svg viewBox="0 0 220 220" aria-hidden="true"><circle class="track" cx="110" cy="110" r="104"/><circle class="ring" id="ring" cx="110" cy="110" r="104"/></svg>
         <span class="disc"><b class="start">START<br>HERE</b></span>
@@ -720,17 +717,6 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
       <div class="duo">
         <article class="disc-card a rv" style="--i:2; --depth:-10" data-depth><small>What we learned about 2X</small><h3>2X is much more than an annual report.</h3><p>A global network moving capital toward women: the Challenge, Certification, Ignite, the Summit, and stories in every region. Every one of them needs to be explained, launched and remembered.</p></article>
         <article class="disc-card b rv" style="--i:3; --depth:10" data-depth><small>What you learned about Brain</small><h3>Brain is more than a design vendor.</h3><p>Strategy, campaigns, video, events and digital products, from one team that already knows your voice, your brand and your review process.</p></article>
-      </div>
-    </div></div>
-  </section>
-
-  <section class="screen light" data-chapter="1" data-sub="What we want" aria-label="What we want">
-    <div class="scroll"><div class="in quote">
-      <div class="mk" aria-hidden="true">“</div>
-      <div>
-        <blockquote>We’re your vendor, yes. But what we really want is to be your partner.</blockquote>
-        <cite class="rv" style="--i:6">Brain Studio, for 2X Global</cite>
-        <p class="hand rv after" style="--i:7; color:var(--muted-ink)">whatever you need, there’s a space at Brain that can help</p>
       </div>
     </div></div>
   </section>
@@ -773,22 +759,6 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     </div></div>
   </section>
 
-  <section class="screen light" data-chapter="3" data-sub="Digital" aria-label="Digital work">
-    <div class="scroll"><div class="in">
-      <p class="eyebrow rv">Digital</p>
-      <h2 class="h-l rv" style="--i:1">We design for the screen.<br><span style="color:var(--accent)">We think beyond it.</span></h2>
-      <p class="lede rv" style="--i:2; color:var(--muted-ink)">More than 30 digital builds for brands and organisations. A few you can visit right now:</p>
-      <div class="moves sites">
-        <a class="move rv" style="--i:3" href="https://museomampujan.org/" target="_blank" rel="noopener"><span class="tagk">Memory and community</span><h3>Mampuján Museum of Art and Memory</h3><p>WordPress site with an online textile shop for a community museum in Bolívar, Colombia.</p><span class="go">museomampujan.org ↗</span></a>
-        <a class="move rv" style="--i:4" href="https://mioagency.com/rebranding" target="_blank" rel="noopener"><span class="tagk">Agency · Puerto Rico</span><h3>MIO Agency</h3><p>WordPress redesign with 165 migrated articles, a 33-case portfolio and SEO safeguards.</p><span class="go">mioagency.com ↗</span></a>
-        <a class="move rv" style="--i:5" href="https://aristeaconsultoria.com/" target="_blank" rel="noopener"><span class="tagk">Sustainability · Colombia</span><h3>Aristea Consultoría</h3><p>Site for a consultancy that turns sustainability into a profitable business decision.</p><span class="go">aristeaconsultoria.com ↗</span></a>
-        <a class="move rv" style="--i:6" href="https://colegiopablohoff.edu.co/" target="_blank" rel="noopener"><span class="tagk">Education · Cartagena</span><h3>Colegio Pablo Hoff</h3><p>Institutional site for a school in Manga, Cartagena.</p><span class="go">colegiopablohoff.edu.co ↗</span></a>
-        <a class="move rv" style="--i:7" href="https://www.unaluz.org/" target="_blank" rel="noopener"><span class="tagk">Foundation · Cartagena</span><h3>Fundación Resplandece Una Luz</h3><p>Site with online donations for its programmes with children and families.</p><span class="go">unaluz.org ↗</span></a>
-        <a class="move rv feature" style="--i:8" href="https://www.brainstudioagencia.com" target="_blank" rel="noopener"><span class="tagk">This page</span><h3>A proposal you can walk through</h3><p>Built the same way we would build an experience for 2X: interactive, light, and made from approved content.</p><span class="go">brainstudioagencia.com ↗</span></a>
-      </div>
-    </div></div>
-  </section>
-
   <!-- 04 Case studies: hub -->
   <section class="screen light" data-zoom data-chapter="4" aria-label="Case studies">
     <div class="scroll"><div class="in">
@@ -796,6 +766,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
         <div>
           <p class="eyebrow rv">04 · Case studies</p>
           <h2 class="h-l rv" style="--i:1">Five stories. One at a time.</h2>
+          <button class="btn ghost hub-skip rv" style="--i:2" type="button" data-skip-cases>Skip the cases →</button>
         </div>
         <div class="seen-meter rv" style="--i:2"><span id="seenTxt">0 of 5 seen</span><span class="dots" id="seenDots"><i></i><i></i><i></i><i></i><i></i></span></div>
       </div>
@@ -1460,20 +1431,14 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     </div></div>
   </section>
 
-  <!-- 05 What's next: a zoomable world. Overview → lane → idea, the camera flies in at each level -->
-  <section class="screen world-screen" data-zoom data-world data-chapter="5" aria-label="What could come next">
-    <div class="stage" id="stage">
-      <div class="dust" data-k=".2"></div>
-      <div class="dust" data-k=".5"></div>
-      <div class="world" id="world"></div>
-      <div class="dust near" data-k="1.3"></div>
-    </div>
-    <div class="depth" id="depth" aria-hidden="true"><span class="lbl">Depth</span><i data-l="0"></i><i data-l="1"></i><i data-l="2"></i><span class="lvl" id="depthTxt">Overview</span></div>
-    <aside class="hud" id="hud" aria-live="polite"></aside>
-    <div class="detail" id="detail" hidden></div>
+  <!-- 05 What's next: three layers. Overview → way of working → idea; each tap zooms into the card you chose -->
+  <section class="screen light zw-screen" data-zoom data-world data-chapter="5" aria-label="What could come next">
+    <div class="zw-crumbs" id="zwCrumbs" aria-label="Where you are"></div>
+    <div class="zw-layer scroll" data-l="0" id="zwL0"></div>
+    <div class="zw-layer" data-l="1" id="zwL1" hidden></div>
+    <div class="zw-layer" data-l="2" id="zwL2" hidden></div>
   </section>
 
-  <!-- 06 Business Case demo -->
   <section class="screen light" data-zoom data-chapter="6" aria-label="Explore the Business Case">
     <div class="scroll"><div class="in demo-grid">
       <div>
@@ -1528,7 +1493,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     <div class="scroll"><div class="in">
       <p class="eyebrow rv">07 · Next step</p>
       <h2 class="h-l rv" style="--i:1">Choose one priority<br><span style="color:var(--accent)">to pilot.</span></h2>
-      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Twelve ideas, grouped by the three ways of working. We don’t need all of them. Pick the one that matters most for 2X right now.</p>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Twelve ideas, grouped by the three ways of working together. We don’t need all of them. Pick the one that matters most for 2X right now.</p>
       <div class="pilot rv" style="--i:3" data-pilot>
         <div class="pilot-col"><h3><i style="background:var(--accent)">A</i>Strategy and ideas</h3>
           <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>01</small>Message architecture for an initiative</button>
@@ -1551,8 +1516,8 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
       </div>
       <div class="pilot-out" id="pilotOut" aria-live="polite">
         <b id="pilotName">Pick one idea above to see how a pilot would start.</b>
-        <span id="pilotLane">To confirm the scope together we’d agree on five things:</span>
-        <div class="chips"><span class="chip">Audience</span><span class="chip">Goal</span><span class="chip">Owner at 2X</span><span class="chip">Starting material</span><span class="chip">A date</span></div>
+        <span id="pilotLane">Every pilot starts small: one audience, one goal, one owner at 2X and a date.</span>
+        <div class="pv" id="pilotPv" hidden><div><small>A first pilot</small><p id="pvPilot"></p></div><div><small>How we’d know it works</small><p id="pvMeas"></p></div></div>
       </div>
     </div></div>
   </section>
@@ -1605,11 +1570,11 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   };
   const CHAPTERS = [
     { n: '00', t: 'Start', s: 'Brain Studio × 2X Global' },
-    { n: '01', t: 'Brain × 2X', s: 'How it started, and what we want' },
+    { n: '01', t: 'Brain × 2X', s: 'How it started' },
     { n: '02', t: 'Who we are', s: 'Brain Studio in numbers' },
-    { n: '03', t: 'What we do', s: 'Six fronts, one ecosystem' },
+    { n: '03', t: 'What we do', s: 'One agency, a complete ecosystem' },
     { n: '04', t: 'Case studies', s: 'Five stories, one at a time' },
-    { n: '05', t: 'What could come next', s: 'Three worlds, twelve ideas' },
+    { n: '05', t: 'What could come next', s: 'Three ways to work together' },
     { n: '06', t: 'The Business Case', s: 'An illustrative example' },
     { n: '07', t: 'Pick a pilot', s: 'Choose one priority' },
     { n: '08', t: 'Let’s talk', s: 'Who trusts us, and contact' },
@@ -1650,6 +1615,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     $('#bar').style.width = (idx / (screens.length - 1) * 100) + '%';
     $('#prev').disabled = idx <= 1; $('#next').disabled = idx >= screens.length - 1;
     document.body.classList.toggle('intro', idx === 0);
+    if (window.__afterLayout) window.__afterLayout(s);
     renderMap();
   }
   function go(n) {
@@ -1689,7 +1655,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     if (overlayOpen()) return;
     const d = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
     const sc = screens[idx].querySelector('.scroll');
-    if (window.__world && window.__world.active()) { e.preventDefault(); if (d < 0) window.__world.back(); return; }
+    if (window.__world && window.__world.active()) { if (!edge(window.__world.sc(), d)) return; e.preventDefault(); if (d < 0) window.__world.back(); return; }
     if (!edge(sc, d)) return;
     e.preventDefault();
     if (busy) { acc = 0; return; }
@@ -1704,7 +1670,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     const vertical = Math.abs(dy) > Math.abs(dx);
     const d = vertical ? -dy : -dx;
     if (Math.abs(d) < 50) return;
-    if (window.__world && window.__world.active()) { if (d < 0) window.__world.back(); return; }
+    if (window.__world && window.__world.active()) { if (vertical && !edge(window.__world.sc(), d)) return; if (d < 0) window.__world.back(); return; }
     const sc = screens[idx].querySelector('.scroll');
     if (vertical && !edge(sc, d)) return;
     go(idx + (d > 0 ? 1 : -1));
@@ -1713,7 +1679,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     if (e.target.matches('input, textarea')) return;
     if (overlayOpen()) { if (e.key === 'Escape') closeOverlays(); return; }
     if (idx === 0) return;
-    if (window.__world && window.__world.active()) { if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Escape', 'Backspace'].includes(e.key)) { e.preventDefault(); window.__world.back(); } else if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(e.key)) e.preventDefault(); return; }
+    if (window.__world && window.__world.active()) { if (['ArrowLeft', 'Escape', 'Backspace'].includes(e.key)) { e.preventDefault(); window.__world.back(); } else if (e.key === 'ArrowRight') e.preventDefault(); return; }
     if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(e.key) || (e.key === ' ' && !e.target.matches('button'))) { e.preventDefault(); go(idx + 1); }
     if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
     if (e.key === 'Home') go(1);
@@ -1934,6 +1900,136 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     requestAnimationFrame(follow);
   }
 
+  const W_LANES = [
+      { id: 'A', c: '#009bbf', name: 'Strategy and ideas', how: 'By agreed hours',
+        text: 'For questions that don’t have a production scope yet. We agree on the question, the people, an hour cap and a concrete output. No extra hours without your OK.',
+        found: ['Annual Report 2025 editorial concepts', 'Summit Montréal identity routes'] },
+      { id: 'B', c: '#ff6a68', name: 'Campaigns and production', how: 'By scope',
+        text: 'For needs with an audience, a goal and a calendar. Concept, original pieces, adaptations, languages, formats and review rounds, scoped and quoted per project.',
+        found: ['Certification for FIs campaign', 'Summit Montréal system and signage', 'RFF Cape Town edit', 'GLI Forum booth'] },
+      { id: 'C', c: '#31aa8a', name: 'Digital experiences 2X owns', how: 'Discovery, build, support',
+        text: 'Tools for your audiences, with your identity and your approved content. Discovery, build and support are separate steps, each quoted on its own.',
+        found: ['This proposal, built the same way'] },
+    ];
+  const W_IDEAS = [
+      ['A', 'Message architecture for an initiative', 'One piece of content tries to explain too much to too many audiences. It can be correct and still leave readers unsure why it matters or what to do next.', 'Review a defined sample of approved content, interview the owners, separate goals by audience, and build the core message, arguments, allowed evidence, FAQs and calls to action in one editable matrix.', 'One initiative and one priority channel, with agreed hours. The output is a message architecture ready to approve, not a full campaign.', 'Comprehension tests with readers from the intended audience: can they name the goal and the next step?'],
+      ['A', 'Campaign concept lab', 'Pieces get approved one by one without a shared idea, or visual preferences are debated before agreeing what the campaign must achieve.', 'Write the brief, develop distinct creative routes with their argument and limits, and show the chosen one as a storyboard or a few sample pieces.', 'One campaign, one decision moment and a prototype of the chosen route. You approve the concept before any extended production.', 'Agreement on direction, message comprehension in a small test, and fit with the channels and resources you have.'],
+      ['A', 'Editorial system for a content series', 'Every post starts from zero and series lose continuity. A finding, an opinion, a case and a call for applications can blur together.', 'Define editorial territories, goals per series, piece structure, tone, evidence rules and a model calendar, so the team decides with less ambiguity.', 'One editorial cycle using existing approved content, producing only the agreed examples.', 'Message consistency, share of pieces with a clear source and call to action, and fewer correction rounds.'],
+      ['B', 'Launch campaign for a report', 'A launch often ends at announcing the PDF. Readers never find out which questions it answers or which chapters are for them.', 'Pick findings with the technical team and build a sequence of build-up, launch and deep dives: pieces, short videos and partner material, every claim linked to its source.', 'One report, one main audience and a small sequence of pieces, before adding formats or languages.', 'Qualified visits to the report page, clicks to chapters and questions received. A download alone doesn’t prove reading.', true],
+      ['B', 'Video series of cases and voices', 'Stories end up as generic testimonials or pieces that are too long, with results shown without the starting point or the decisions behind them.', 'Choose stories with 2X, secure permissions, prepare interviews and edit one main story plus cut-downs, reviewed by the people in it.', 'One approved story, one main piece and a defined set of versions. Filming on site, archive or a remote interview are priced differently.', 'Completion by channel, clicks to the full case, and feedback from the people featured.'],
+      ['B', 'Kit for events and partners', 'Every speaker and partner announces the event differently, ready-to-use pieces are missing and the follow-up gets lost.', 'Map before, during and after; produce messages, speaker cards, screens and signage, channel content and a post-event recap.', 'One virtual session or one block of an event, with one approver and a wrap-up.', 'Kit use by partners, clicks to registration, valid registrations and recap views.'],
+      ['B', 'Explaining certification journeys', 'Introductory information, requirements, stages and decisions get mixed together, and promotional pieces can create expectations the official process doesn’t support.', 'Work only with current content approved by 2X, separating overview, documentation and official contact, with consistent terms and technical review.', 'One audience and one informational sequence validated by the responsible team, tested for comprehension before wide distribution.', 'Clarity of purpose, finding the right channel, relevant enquiries and clicks to official resources.'],
+      ['C', 'Searchable resource hub', 'A library sorted by date or file type makes people know a resource’s name in advance. They find documents, but not which one to open first.', 'Inventory an approved set, define tags, design search, filters, resource cards and topic paths, and agree who publishes and updates.', 'One small collection for one audience, checking first what the current website already does well.', 'Search success and time in test tasks, searches with no results, resources opened.'],
+      ['C', 'Interactive learning journey', 'The material exists, but its length or technical level makes it hard to start. Readers can’t tell what to understand first.', 'Turn approved content into short modules with examples and comprehension questions, with sources and links to go deeper, tested with users.', 'One focused topic and one defined group of participants, before any larger course platform.', 'Understanding before and after, completion, open questions and perceived usefulness.'],
+      ['C', 'Explorer of cases and lessons', 'Stories are read in isolation, so it’s hard to find related lessons or compare contexts.', 'Set inclusion rules, write consistent case cards, tag verifiable variables and offer search and topic paths, with dates and limits on each case.', 'A short collection approved by 2X, to test the filters and the upkeep before growing.', 'Success finding a relevant case, variety of resources read, and feedback on usefulness.'],
+      ['C', 'Digital experience for a 2X event', 'Information is scattered across emails, documents and links, and after the event the recordings and materials are hard to find.', 'A microsite or event section with agenda, approved profiles, logistics and resources, mobile-first, with an archive for afterwards.', 'One small event or one day of programme, keeping registration in the tools 2X already uses.', 'Finding a session, mobile use, clicks to resources and post-event views.'],
+      ['C', 'Interactive report and data explorer', 'Static charts and long tables make a report hard to read. A reader finds a number without its universe, period or limits.', 'Take an authorised, documented dataset, design narrative views and filters, and keep references and methodology one tap away.', 'One chapter or one set of charts with concrete reading questions.', 'Correct understanding of results, reading questions answered, methodology views.', true],
+    ].map((r, i) => ({ n: i + 1, lane: r[0], t: r[1], prob: r[2], doo: r[3], pilot: r[4], meas: r[5], demo: !!r[6] }));
+
+  // ——— 05 What could come next: overview → way of working → idea. Each tap zooms into the card you chose ———
+  (() => {
+    const scr = $('[data-world]'); if (!scr) return;
+    const L = [$('#zwL0'), $('#zwL1'), $('#zwL2')], crumbs = $('#zwCrumbs');
+    const laneOf = (id) => W_LANES.find((l) => l.id === id);
+    const pad = (n) => String(n).padStart(2, '0');
+    const shortOf = (t) => { const m = t.match(/^.*?[.?!](\s|$)/); return m ? m[0].trim() : t; };
+    let level = 0, lane = null, idea = null, busy = false;
+    const origins = [null, null];
+
+    function paint0() {
+      L[0].innerHTML = `<div class="in"><p class="eyebrow rv">05 · What could come next</p>
+        <h2 class="h-l rv" style="--i:1">Three ways to work together.<br><span style="color:var(--accent)">Twelve ideas inside them.</span></h2>
+        <p class="lede rv" style="--i:2; color:var(--muted-ink)">Open a way of working to see the ideas inside. Open an idea to see what a first pilot would look like.</p>
+        <div class="zw-lanes">${W_LANES.map((l, k) => { const mine = W_IDEAS.filter((d) => d.lane === l.id); return `<button class="zw-lane rv" style="--i:${k + 3}; --lc:${l.c}" type="button" data-lane="${l.id}"><span class="face"><span class="lt">${l.id}</span><span class="how">${l.how}</span><h3>${l.name}</h3><p>${shortOf(l.text)}</p><span class="peek">${mine.map((d) => `<i>${pad(d.n)}</i>`).join('')}</span><span class="go">${mine.length} ideas inside →</span></span></button>`; }).join('')}</div></div>`;
+      $$('[data-lane]', L[0]).forEach((b) => b.addEventListener('click', () => toLane(b.dataset.lane, b)));
+    }
+    function paint1() {
+      const l = laneOf(lane), mine = W_IDEAS.filter((d) => d.lane === lane), p = store.get('pilot', -1);
+      L[1].style.setProperty('--lc', l.c);
+      L[1].innerHTML = `<div class="in"><div class="zw-head"><span class="kick">Way ${l.id} · ${l.how}</span><h2 class="h-l">${l.name}</h2><p class="lede" style="color:var(--muted-ink)">${l.text}</p></div>
+        <div class="zw-ideas">${mine.map((d) => `<button class="zw-idea" type="button" data-idea="${d.n}">${p === d.n - 1 ? '<span class="tagp">Our pilot</span>' : ''}<span class="nn">${pad(d.n)}</span><b>${d.t}</b><p>${shortOf(d.prob)}</p><span class="go">Open the idea →</span></button>`).join('')}</div>
+        <div class="zw-found"><small>Work we already did together in this way</small><div class="chips">${l.found.map((f) => `<span class="chip">${f}</span>`).join('')}</div></div></div>`;
+      $$('[data-idea]', L[1]).forEach((b) => b.addEventListener('click', () => toIdea(+b.dataset.idea, b)));
+    }
+    function paint2() {
+      const d = W_IDEAS[idea - 1], l = laneOf(d.lane), picked = store.get('pilot', -1) === d.n - 1;
+      L[2].style.setProperty('--lc', l.c);
+      L[2].innerHTML = `<div class="in"><div class="zw-detail"><span class="lane-tag">Way ${l.id} · ${l.name}</span>
+        <h3><small>IDEA ${pad(d.n)}</small>${d.t}</h3>
+        <div class="grid4"><div class="blk"><small>The problem</small><p>${d.prob}</p></div><div class="blk"><small>What we’d do</small><p>${d.doo}</p></div><div class="blk"><small>A first pilot</small><p>${d.pilot}</p></div><div class="blk"><small>How we’d know it works</small><p>${d.meas}</p></div></div>
+        <div class="acts"><button class="btn ${picked ? 'on' : ''}" type="button" data-pick>${picked ? 'Chosen as our pilot ✓' : 'Choose this as our pilot'}</button>${d.demo ? '<button class="btn line" type="button" data-demo-go>See an example →</button>' : ''}<button class="btn line" type="button" data-next-step>Go to the next step →</button></div></div></div>`;
+      $('[data-pick]', L[2]).addEventListener('click', (e) => { if (window.__pickPilot) window.__pickPilot(d.n - 1); e.currentTarget.textContent = 'Chosen as our pilot ✓'; e.currentTarget.classList.add('on'); window.sfx('reveal'); });
+      const dg = $('[data-demo-go]', L[2]); if (dg) dg.addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Explore the Business Case')));
+      $('[data-next-step]', L[2]).addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Choose one priority to pilot')));
+    }
+    function paintCrumbs() {
+      crumbs.classList.toggle('off', level === 0);
+      if (level === 0) { crumbs.innerHTML = ''; return; }
+      const l = laneOf(lane);
+      let h = `<button type="button" data-up="0">← All three ways</button>`;
+      h += level === 1 ? `<span class="sep">›</span><span class="cur">${l.id} · ${l.name}</span>` : `<span class="sep">›</span><button type="button" data-up="1">${l.id} · ${l.name}</button><span class="sep">›</span><span class="cur">Idea ${pad(idea)}</span>`;
+      h += `<span class="bars" aria-hidden="true">Depth <i class="on"></i><i class="${level >= 1 ? 'on' : ''}"></i><i class="${level >= 2 ? 'on' : ''}"></i></span>`;
+      crumbs.innerHTML = h;
+      $$('[data-up]', crumbs).forEach((b) => b.addEventListener('click', () => { const t = +b.dataset.up; if (level === 2 && t === 0) { out(true); } else out(); }));
+    }
+    // Where the tapped card sits, as a transform-origin inside a layer
+    function originIn(layer, el) {
+      const r = el.getBoundingClientRect(), lr = layer.getBoundingClientRect();
+      return `${r.left + r.width / 2 - lr.left}px ${r.top + r.height / 2 - lr.top + layer.scrollTop}px`;
+    }
+    const EASE_IN = 'cubic-bezier(.6,0,.9,.4)', EASE_OUT = 'cubic-bezier(.15,.75,.2,1)';
+    function dive(from, to, el, store_i) {
+      const o = originIn(from, el), r = el.getBoundingClientRect();
+      origins[store_i] = { o, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+      to.scrollTop = 0;
+      if (reduce) { from.hidden = true; to.hidden = false; return Promise.resolve(); }
+      busy = true; window.sfx('flip');
+      from.style.transformOrigin = o;
+      const a = from.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(2.3)', opacity: 0 }], { duration: 480, easing: EASE_IN, fill: 'forwards' });
+      return new Promise((res) => {
+        setTimeout(() => {
+          to.hidden = false;
+          const lr = to.getBoundingClientRect();
+          to.style.transformOrigin = `${origins[store_i].cx - lr.left}px ${origins[store_i].cy - lr.top}px`;
+          to.animate([{ transform: 'scale(.35)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 650, easing: EASE_OUT });
+          setTimeout(() => { from.hidden = true; a.cancel(); from.style.transformOrigin = ''; busy = false; res(); }, 300);
+        }, 380);
+      });
+    }
+    function rise(from, to, store_i) {
+      const og = origins[store_i];
+      if (reduce || !og) { from.hidden = true; to.hidden = false; return; }
+      busy = true; window.sfx('flip');
+      const fr = from.getBoundingClientRect();
+      from.style.transformOrigin = `${og.cx - fr.left}px ${og.cy - fr.top}px`;
+      const a = from.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.35)', opacity: 0 }], { duration: 420, easing: EASE_IN, fill: 'forwards' });
+      setTimeout(() => {
+        to.hidden = false; to.style.transformOrigin = og.o;
+        to.animate([{ transform: 'scale(2.3)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 620, easing: EASE_OUT });
+        setTimeout(() => { from.hidden = true; a.cancel(); from.style.transformOrigin = ''; busy = false; }, 260);
+      }, 300);
+    }
+    function toLane(id, el) { if (busy) return; lane = id; idea = null; level = 1; paint1(); paintCrumbs(); dive(L[0], L[1], el, 0); }
+    function toIdea(n, el) { if (busy) return; idea = n; level = 2; paint2(); paintCrumbs(); dive(L[1], L[2], el, 1); }
+    function out(all) {
+      if (busy || level === 0) return;
+      if (level === 2 && all) { level = 0; idea = null; lane = null; paintCrumbs(); L[1].hidden = true; rise(L[2], L[0], 0); return; }
+      if (level === 2) { level = 1; idea = null; paint1(); paintCrumbs(); rise(L[2], L[1], 1); return; }
+      level = 0; lane = null; paintCrumbs(); rise(L[1], L[0], 0);
+    }
+    function reset() { level = 0; lane = null; idea = null; L[1].hidden = true; L[2].hidden = true; L[0].hidden = false; L.forEach((x) => { x.style.transformOrigin = ''; x.scrollTop = 0; }); paintCrumbs(); }
+    paint0(); paintCrumbs();
+    new MutationObserver(() => { if (scr.dataset.state !== 'current' && level > 0) reset(); }).observe(scr, { attributes: true, attributeFilter: ['data-state'] });
+
+    // Deck gestures: inside a way or an idea, "back" means zoom out and "forward" stays put
+    let wT = 0;
+    window.__world = {
+      active: () => scr.dataset.state === 'current' && level > 0,
+      sc: () => L[level],
+      back() { const t = performance.now(); if (t - wT > 900) { wT = t; out(); } },
+    };
+  })();
+
   // ——— Camera: the Business Case demo dives into the card you tap ———
   $$('[data-demo]').forEach((d) => {
     const steps = $$('.demo-step', d); let cur = steps[0];
@@ -1959,162 +2055,32 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     $('[data-demo-restart]', d).addEventListener('click', (e) => show(1, e.currentTarget));
   });
 
-  // ——— Pick a pilot ———
-  const LANES = { A: 'Lane A: strategy and ideas, by agreed hours.', B: 'Lane B: campaigns and production, by scope.', C: 'Lane C: a digital experience 2X owns, starting with discovery.' };
+  // ——— Pick a pilot: the card below updates with that idea's own pilot and measure ———
+  const LANES = { A: 'Way A · Strategy and ideas, by agreed hours.', B: 'Way B · Campaigns and production, by scope.', C: 'Way C · A digital experience 2X owns, starting with discovery.' };
   $$('[data-pilot]').forEach((box) => {
-    const bs = $$('.pilot-opt', box), out = $('#pilotOut');
+    const bs = $$('.pilot-opt', box);
     const pick = (b, quiet) => {
+      const i = bs.indexOf(b), d = W_IDEAS[i];
       bs.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      $('#pilotName').textContent = 'Pilot: ' + b.lastChild.textContent.trim();
-      $('#pilotLane').textContent = LANES[b.dataset.lane] + ' To confirm the scope together we’d agree on:';
-      if (!quiet) { out.classList.toggle('pop', false); void out.offsetWidth; out.classList.add('pop'); window.sfx('reveal'); }
-      store.set('pilot', bs.indexOf(b));
+      $('#pilotName').textContent = 'Pilot: ' + d.t;
+      $('#pilotLane').textContent = LANES[b.dataset.lane];
+      $('#pvPilot').textContent = d.pilot; $('#pvMeas').textContent = d.meas; $('#pilotPv').hidden = false;
+      if (!quiet) window.sfx('reveal');
+      store.set('pilot', i);
     };
     bs.forEach((b) => b.addEventListener('click', () => pick(b)));
     window.__pickPilot = (i) => { if (bs[i]) pick(bs[i], true); };
     const sv = store.get('pilot', -1); if (bs[sv]) pick(bs[sv], true);
   });
 
-  // ——— 05 The 2X world: overview → lane → idea, with a flying camera ———
-  (() => {
-    const scr = $('[data-world]'); if (!scr) return;
-    const world = $('#world'), stage = $('#stage'), hud = $('#hud'), detail = $('#detail');
-    const dusts = $$('.dust', scr);
-    const LANES = [
-      { id: 'A', c: '#009bbf', name: 'Strategy and ideas', how: 'By agreed hours',
-        text: 'For questions that don’t have a production scope yet. We agree on the question, the people, an hour cap and a concrete output. No extra hours without your OK.',
-        found: ['Annual Report 2025 editorial concepts', 'Summit Montréal identity routes'] },
-      { id: 'B', c: '#ff6a68', name: 'Campaigns and production', how: 'By scope',
-        text: 'For needs with an audience, a goal and a calendar. Concept, original pieces, adaptations, languages, formats and review rounds, scoped and quoted per project.',
-        found: ['Certification for FIs campaign', 'Summit Montréal system and signage', 'RFF Cape Town edit', 'GLI Forum booth'] },
-      { id: 'C', c: '#31aa8a', name: 'Digital experiences 2X owns', how: 'Discovery, build, support',
-        text: 'Tools for your audiences, with your identity and your approved content. Discovery, build and support are separate steps, each quoted on its own.',
-        found: ['This proposal, built the same way'] },
-    ];
-    const IDEAS = [
-      ['A', 'Message architecture for an initiative', 'One piece of content tries to explain too much to too many audiences. It can be correct and still leave readers unsure why it matters or what to do next.', 'Review a defined sample of approved content, interview the owners, separate goals by audience, and build the core message, arguments, allowed evidence, FAQs and calls to action in one editable matrix.', 'One initiative and one priority channel, with agreed hours. The output is a message architecture ready to approve, not a full campaign.', 'Comprehension tests with readers from the intended audience: can they name the goal and the next step?'],
-      ['A', 'Campaign concept lab', 'Pieces get approved one by one without a shared idea, or visual preferences are debated before agreeing what the campaign must achieve.', 'Write the brief, develop distinct creative routes with their argument and limits, and show the chosen one as a storyboard or a few sample pieces.', 'One campaign, one decision moment and a prototype of the chosen route. You approve the concept before any extended production.', 'Agreement on direction, message comprehension in a small test, and fit with the channels and resources you have.'],
-      ['A', 'Editorial system for a content series', 'Every post starts from zero and series lose continuity. A finding, an opinion, a case and a call for applications can blur together.', 'Define editorial territories, goals per series, piece structure, tone, evidence rules and a model calendar, so the team decides with less ambiguity.', 'One editorial cycle using existing approved content, producing only the agreed examples.', 'Message consistency, share of pieces with a clear source and call to action, and fewer correction rounds.'],
-      ['B', 'Launch campaign for a report', 'A launch often ends at announcing the PDF. Readers never find out which questions it answers or which chapters are for them.', 'Pick findings with the technical team and build a sequence of build-up, launch and deep dives: pieces, short videos and partner material, every claim linked to its source.', 'One report, one main audience and a small sequence of pieces, before adding formats or languages.', 'Qualified visits to the report page, clicks to chapters and questions received. A download alone doesn’t prove reading.', true],
-      ['B', 'Video series of cases and voices', 'Stories end up as generic testimonials or pieces that are too long, with results shown without the starting point or the decisions behind them.', 'Choose stories with 2X, secure permissions, prepare interviews and edit one main story plus cut-downs, reviewed by the people in it.', 'One approved story, one main piece and a defined set of versions. Filming on site, archive or a remote interview are priced differently.', 'Completion by channel, clicks to the full case, and feedback from the people featured.'],
-      ['B', 'Kit for events and partners', 'Every speaker and partner announces the event differently, ready-to-use pieces are missing and the follow-up gets lost.', 'Map before, during and after; produce messages, speaker cards, screens and signage, channel content and a post-event recap.', 'One virtual session or one block of an event, with one approver and a wrap-up.', 'Kit use by partners, clicks to registration, valid registrations and recap views.'],
-      ['B', 'Explaining certification journeys', 'Introductory information, requirements, stages and decisions get mixed together, and promotional pieces can create expectations the official process doesn’t support.', 'Work only with current content approved by 2X, separating overview, documentation and official contact, with consistent terms and technical review.', 'One audience and one informational sequence validated by the responsible team, tested for comprehension before wide distribution.', 'Clarity of purpose, finding the right channel, relevant enquiries and clicks to official resources.'],
-      ['C', 'Searchable resource hub', 'A library sorted by date or file type makes people know a resource’s name in advance. They find documents, but not which one to open first.', 'Inventory an approved set, define tags, design search, filters, resource cards and topic paths, and agree who publishes and updates.', 'One small collection for one audience, checking first what the current website already does well.', 'Search success and time in test tasks, searches with no results, resources opened.'],
-      ['C', 'Interactive learning journey', 'The material exists, but its length or technical level makes it hard to start. Readers can’t tell what to understand first.', 'Turn approved content into short modules with examples and comprehension questions, with sources and links to go deeper, tested with users.', 'One focused topic and one defined group of participants, before any larger course platform.', 'Understanding before and after, completion, open questions and perceived usefulness.'],
-      ['C', 'Explorer of cases and lessons', 'Stories are read in isolation, so it’s hard to find related lessons or compare contexts.', 'Set inclusion rules, write consistent case cards, tag verifiable variables and offer search and topic paths, with dates and limits on each case.', 'A short collection approved by 2X, to test the filters and the upkeep before growing.', 'Success finding a relevant case, variety of resources read, and feedback on usefulness.'],
-      ['C', 'Digital experience for a 2X event', 'Information is scattered across emails, documents and links, and after the event the recordings and materials are hard to find.', 'A microsite or event section with agenda, approved profiles, logistics and resources, mobile-first, with an archive for afterwards.', 'One small event or one day of programme, keeping registration in the tools 2X already uses.', 'Finding a session, mobile use, clicks to resources and post-event views.'],
-      ['C', 'Interactive report and data explorer', 'Static charts and long tables make a report hard to read. A reader finds a number without its universe, period or limits.', 'Take an authorised, documented dataset, design narrative views and filters, and keep references and methodology one tap away.', 'One chapter or one set of charts with concrete reading questions.', 'Correct understanding of results, reading questions answered, methodology views.', true],
-    ].map((r, i) => ({ n: i + 1, lane: r[0], t: r[1], prob: r[2], doo: r[3], pilot: r[4], meas: r[5], demo: !!r[6] }));
-    const laneOf = (id) => LANES.find((l) => l.id === id);
-    const pad = (n) => String(n).padStart(2, '0');
-
-    // ——— Build the world ———
-    let POS = {};
-    const portrait = () => innerWidth < 900 && innerHeight > innerWidth;
-    function positions() {
-      return portrait()
-        ? { core: [0, -20], A: [-330, -650], B: [330, -650], C: [0, 610], box: [1300, 1900] }
-        : { core: [0, -10], A: [-640, -420], B: [640, -420], C: [0, 560], box: [2000, 1720] };
-    }
-    function build() {
-      POS = positions();
-      world.classList.toggle('portrait', portrait());
-      const [cx, cy] = POS.core;
-      let h = `<svg class="w-links" width="3000" height="3000" viewBox="-1500 -1500 3000 3000" style="left:0;top:0">${LANES.map((l) => { const [x, y] = POS[l.id]; return `<path d="M${cx} ${cy} Q ${(cx + x) / 2 + (y - cy) * .15} ${(cy + y) / 2 - (x - cx) * .15} ${x} ${y}"/>`; }).join('')}</svg>`;
-      h += `<div class="w-core" style="left:${cx}px;top:${cy}px"><span>2027</span><b>2X × Brain</b><span>What’s next</span></div>`;
-      LANES.forEach((l) => {
-        const [x, y] = POS[l.id];
-        h += `<div class="w-orbit" style="left:${x}px;top:${y}px"></div>`;
-        h += `<button class="w-planet" type="button" data-lane="${l.id}" style="left:${x}px;top:${y}px;--lc:${l.c}" aria-label="Enter lane ${l.id}: ${l.name}"><span class="pl"><span class="lt">${l.id}</span><span class="nm">${l.name}</span><span class="go">Tap to go in</span></span></button>`;
-        const mine = IDEAS.filter((d) => d.lane === l.id);
-        mine.forEach((d, k) => {
-          const a = -Math.PI / 2 + k * 2 * Math.PI / mine.length;
-          d.x = x + Math.cos(a) * 190; d.y = y + Math.sin(a) * 190;
-          h += `<button class="w-node" type="button" data-idea="${d.n}" style="left:${d.x}px;top:${d.y}px;--lc:${l.c}" tabindex="-1"><span class="in"><small>${pad(d.n)}</small><b>${d.t}</b></span></button>`;
-        });
-      });
-      world.innerHTML = h;
-      $$('.w-planet', world).forEach((p) => p.addEventListener('click', (e) => { e.stopPropagation(); if (level === 0) toLane(p.dataset.lane); else if (level === 1 && lane !== p.dataset.lane) toLane(p.dataset.lane); }));
-      $$('.w-node', world).forEach((n) => n.addEventListener('click', (e) => { e.stopPropagation(); if (level >= 1) toIdea(+n.dataset.idea); }));
-      paintPicked();
-    }
-    // Stars in three depths
-    dusts.forEach((d, j) => {
-      const k = +d.dataset.k, n = j === 2 ? 14 : 70;
-      d.innerHTML = Array.from({ length: n }, () => `<i style="left:${(Math.random() * 100).toFixed(2)}%;top:${(Math.random() * 100).toFixed(2)}%;--z:${(j === 2 ? 6 + Math.random() * 10 : 1 + Math.random() * 2.4 * k + k).toFixed(1)}px;--o:${(j === 2 ? .25 : .3 + Math.random() * .6).toFixed(2)};--t:${(3 + Math.random() * 5).toFixed(1)}s;--c:${['#5cc8e0', '#ff6a68', '#31aa8a', '#fcd200'][Math.floor(Math.random() * 4)]}"></i>`).join('');
-    });
-
-    // ——— Camera ———
-    let level = 0, lane = null, idea = null, cam = { x: 0, y: 0, s: 1 };
-    function focus() {
-      const W = innerWidth, H = innerHeight, top = 66;
-      if (level === 2) return { fx: W / 2, fy: H / 2, aw: W, ah: H };
-      if (W >= 900) { const left = 380 + 48; return { fx: left + (W - left) / 2, fy: top + (H - top) / 2, aw: W - left - 60, ah: H - top - 60 }; }
-      const hh = hud.offsetHeight + 96; return { fx: W / 2, fy: top + (H - top - hh) / 2, aw: W - 24, ah: H - top - hh - 10 };
-    }
-    function shoot() {
-      const f = focus();
-      let x, y, s;
-      if (level === 0) { [x, y] = [0, (POS.box[1] === 1900 ? -20 : 70)]; s = Math.min(f.aw / POS.box[0], f.ah / POS.box[1]); }
-      else if (level === 1) { [x, y] = POS[lane]; s = Math.min(f.aw / 620, f.ah / 620); }
-      else { const d = IDEAS[idea - 1]; x = d.x; y = d.y; s = Math.max(f.aw, f.ah) / 132 * 1.45; }
-      cam = { x, y, s };
-      world.style.transform = `translate(${f.fx - x * s}px, ${f.fy - y * s}px) scale(${s})`;
-      dusts.forEach((d) => { const k = +d.dataset.k; d.style.transform = `translate(${-x * k * .12}px, ${-y * k * .12}px) scale(${1 + level * k * .35})`; });
-      world.classList.toggle('lv0', level === 0); world.classList.toggle('lv2', level === 2); world.classList.toggle('in-lane', level >= 1);
-      $$('.depth i', scr).forEach((i) => i.classList.toggle('on', +i.dataset.l <= level));
-      $('#depthTxt').textContent = ['Overview', 'Lane ' + (lane || ''), 'Idea ' + (idea ? pad(idea) : '')][level];
-      $$('.w-node', world).forEach((n) => { n.tabIndex = level >= 1 && IDEAS[+n.dataset.idea - 1].lane === lane ? 0 : -1; n.classList.toggle('deep', level === 2 && +n.dataset.idea === idea); });
-    }
-    function fresh(html) { hud.innerHTML = html; hud.classList.remove('fresh'); void hud.offsetWidth; hud.classList.add('fresh'); }
-    function hudOverview() {
-      fresh(`<span class="kick">05 · What could come next</span><h3>Three worlds. Twelve ideas.</h3><p>Each world is a way to work with Brain in 2027. Go in to find the ideas inside, and go in again to see how a first pilot would look.</p><div class="list">${LANES.map((l) => `<button type="button" data-go-lane="${l.id}" style="--lc:${l.c}"><small>${l.id}</small>${l.name}</button>`).join('')}</div><span class="tip">tap a planet to dive in</span>`);
-      $$('[data-go-lane]', hud).forEach((b) => b.addEventListener('click', () => toLane(b.dataset.goLane)));
-    }
-    function hudLane() {
-      const l = laneOf(lane), mine = IDEAS.filter((d) => d.lane === lane);
-      fresh(`<button class="back" type="button" data-out>← Zoom out</button><span class="kick" style="color:${l.c}">Lane ${l.id} · ${l.how}</span><h3>${l.name}</h3><p>${l.text}</p><div class="list">${mine.map((d) => `<button type="button" data-go-idea="${d.n}" style="--lc:${l.c}"><small>${pad(d.n)}</small>${d.t}</button>`).join('')}</div><div class="found"><small>Found at this depth: work we already did together</small><div class="chips">${l.found.map((f) => `<span class="chip">${f}</span>`).join('')}</div></div>`);
-      $('[data-out]', hud).addEventListener('click', out);
-      $$('[data-go-idea]', hud).forEach((b) => b.addEventListener('click', () => toIdea(+b.dataset.goIdea)));
-    }
-    function showDetail() {
-      const d = IDEAS[idea - 1], l = laneOf(d.lane), picked = store.get('pilot', -1) === d.n - 1;
-      detail.style.setProperty('--lc', l.c);
-      detail.innerHTML = `<div class="card"><div class="top-row"><button class="back" type="button" data-out>← Back to lane ${l.id}</button><span class="lane-tag">Lane ${l.id} · ${l.name}</span></div>
-        <h3><small>IDEA ${pad(d.n)}</small>${d.t}</h3>
-        <div class="grid4"><div class="blk" style="--i:0"><small>The problem</small><p>${d.prob}</p></div><div class="blk" style="--i:1"><small>What we’d do</small><p>${d.doo}</p></div><div class="blk" style="--i:2"><small>A first pilot</small><p>${d.pilot}</p></div><div class="blk" style="--i:3"><small>How we’d know it works</small><p>${d.meas}</p></div></div>
-        <div class="acts"><button class="btn ${picked ? 'on' : ''}" type="button" data-pick>${picked ? 'Chosen as our pilot ✓' : 'Choose this as our pilot'}</button>${d.demo ? '<button class="btn line" type="button" data-demo-go>See an example →</button>' : ''}<button class="btn line" type="button" data-next-step>Go to the next step →</button></div></div>`;
-      detail.hidden = false;
-      $('[data-out]', detail).addEventListener('click', out);
-      $('[data-pick]', detail).addEventListener('click', (e) => { if (window.__pickPilot) window.__pickPilot(d.n - 1); e.currentTarget.textContent = 'Chosen as our pilot ✓'; e.currentTarget.classList.add('on'); paintPicked(); window.sfx('reveal'); });
-      const dg = $('[data-demo-go]', detail); if (dg) dg.addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Explore the Business Case')));
-      $('[data-next-step]', detail).addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Choose one priority to pilot')));
-    }
-    function paintPicked() { const p = store.get('pilot', -1); $$('.w-node', world).forEach((n) => n.classList.toggle('picked', +n.dataset.idea - 1 === p)); }
-    function toLane(id) { lane = id; idea = null; level = 1; detail.hidden = true; hud.classList.remove('hide'); hudLane(); shoot(); window.sfx('flip'); }
-    function toIdea(n) {
-      idea = n; lane = IDEAS[n - 1].lane; level = 2; hud.classList.add('hide'); detail.hidden = true; shoot(); window.sfx('reveal');
-      setTimeout(() => { if (level === 2 && idea === n) showDetail(); }, reduce ? 0 : 900);
-    }
-    function out() {
-      if (level === 2) { detail.hidden = true; hud.classList.remove('hide'); level = 1; idea = null; hudLane(); shoot(); }
-      else if (level === 1) { level = 0; lane = null; hudOverview(); shoot(); }
-      window.sfx('flip');
-    }
-    function reset() { level = 0; lane = null; idea = null; detail.hidden = true; hud.classList.remove('hide'); hudOverview(); shoot(); }
-    stage.addEventListener('click', (e) => { if (level > 0 && !e.target.closest('.w-node, .w-planet')) out(); });
-    let rT; addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => { build(); shoot(); }, 150); });
-    build(); hudOverview(); requestAnimationFrame(shoot);
-    new MutationObserver(() => { if (scr.classList.contains('on')) { paintPicked(); if (level === 0) shoot(); } else if (scr.dataset.state !== 'current' && level > 0) reset(); }).observe(scr, { attributes: true, attributeFilter: ['class'] });
-
-    // Deck gestures: while inside the world, "back" means zoom out and "forward" stays put
-    let wT = 0;
-    window.__world = {
-      active: () => scr.dataset.state === 'current' && level > 0,
-      back() { const t = performance.now(); if (t - wT > 900) { wT = t; out(); } },
-    };
-  })();
-
+  // ——— Skip the cases: from the hub, or from inside any case ———
+  const afterCases = () => screens.findIndex((s) => +s.dataset.chapter === 5);
+  $$('[data-skip-cases]').forEach((b) => b.addEventListener('click', () => go(afterCases())));
+  $('#skipCase').addEventListener('click', () => {
+    const n = screens.findIndex((s, i) => i > idx && s.dataset.caseStart);
+    go(n > 0 ? n : afterCases());
+  });
+  window.__afterLayout = (s) => { $('#caseSkip').hidden = !(+s.dataset.chapter === 4 && idx !== hubIndex); };
   layout();
   enter(screens[0]);
 })();
