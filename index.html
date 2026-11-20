@@ -1680,7 +1680,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
   addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
     if (overlayOpen()) { if (e.key === 'Escape') closeOverlays(); return; }
-    if (idx === 0) return;
+    if (idx === 0) { if (started && ['ArrowRight', 'ArrowDown', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); go(1); } return; }
     if (window.__world && window.__world.active()) { if (['ArrowLeft', 'Escape', 'Backspace'].includes(e.key)) { e.preventDefault(); window.__world.back(); } else if (e.key === 'ArrowRight') e.preventDefault(); return; }
     if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(e.key) || (e.key === ' ' && !e.target.matches('button'))) { e.preventDefault(); go(idx + 1); }
     if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
@@ -1731,12 +1731,13 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
     if (prog >= 1) return begin();
     if (holding || prog > 0) raf = requestAnimationFrame(loop); else last = null;
   }
-  function press() { if (started) return; holding = true; hold.classList.add('holding'); SFX.holdStart(); cancelAnimationFrame(raf); last = null; raf = requestAnimationFrame(loop); }
+  function press() { if (started) { go(1); return; } holding = true; hold.classList.add('holding'); SFX.holdStart(); cancelAnimationFrame(raf); last = null; raf = requestAnimationFrame(loop); }
   function release() { if (!holding) return; holding = false; hold.classList.remove('holding'); SFX.holdStop(); }
   function begin(target = 1) {
     if (holding) SFX.done(); else SFX.holdStop();
     holding = false; started = true;
     hold.classList.remove('holding'); hold.classList.add('done');
+    hold.querySelector('.start').innerHTML = 'TAP TO<br>CONTINUE'; hold.setAttribute('aria-label', 'Continue'); $('.hold-hint').textContent = 'Tap to continue';
     if (!reduce) { const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
     setTimeout(() => { go(target); showHint(); }, reduce ? 0 : 450);
   }
