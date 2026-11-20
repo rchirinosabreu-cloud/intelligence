@@ -56,4 +56,6 @@
 // 2.23 (20 de noviembre de 2026): un administrador o project manager puede enviar, desde el aviso y con una
 // confirmación, la respuesta que revisó; sale del buzón compartido que recibió el correo y solo a quien lo escribió.
 // Se guarda quién la envió y cuándo; el texto queda en los enviados del buzón, no en la plataforma.
-export const PRIVACY_POLICY_VERSION = '2.23 · 2026-11-20';
+// 2.24 (20 de noviembre de 2026): mientras se dicta, lo grabado hasta ese momento se envía por tramos al mismo
+// servicio de transcripción para mostrar el texto a medida que la persona habla, también si luego cancela.
+export const PRIVACY_POLICY_VERSION = '2.24 · 2026-11-20';

@@ -120,7 +120,7 @@ test('the route: managers list, only admins connect, test and remove; the passwo
   const asEditor = await serve({ ...pm, role: 'EDITOR' });
   try { assert.equal((await fetch(`${asEditor.url}/accounts`)).status, 403); } finally { await asEditor.close(); }
   const tools = createBriaMailTools(service);
-  assert.deepEqual(tools.map((t) => t.name), ['correos_importantes', 'leer_correo']);
+  assert.deepEqual(tools.map((t) => t.name), ['correos_importantes', 'leer_correo', 'correos_sin_respuesta']);
   assert.equal(tools[0].allowed(pm), true); assert.equal(tools[0].allowed({ ...pm, role: 'EDITOR' }), false); assert.equal(tools[0].allowed({ ...pm, modulePermissions: {} }), false);
   await service.readImportant({ at });
   const list = await tools[0].run({ horas: 24 }, { user: pm });

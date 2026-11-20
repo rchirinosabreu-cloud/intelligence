@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { BRIA_FILE_MAX_BYTES, BRIA_FILES_MAX_COUNT, BRIA_AUDIO_MAX_BYTES } from '../../lib/briaAttachments.js';
+import { PREVIEW_MAX_BYTES } from '../../lib/briaComposer.js';
 import { canUseBria } from '../../lib/briaLivingMemory.js';
 import { createRateLimiter } from '../../config/security.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
@@ -44,6 +45,7 @@ export const createBriaConversationRouter = ({ service } = {}) => {
     next();
   });
   const audio = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRIA_AUDIO_MAX_BYTES, files: 1, fields: 0, parts: 2 } });
+  const audioPreview = multer({ storage: uploadMemoryStorage(), limits: { fileSize: PREVIEW_MAX_BYTES, files: 1, fields: 0, parts: 2 } });
   const files = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRIA_FILE_MAX_BYTES, files: BRIA_FILES_MAX_COUNT, fields: 4, fieldSize: 48000, parts: BRIA_FILES_MAX_COUNT + 5 } });
   const authorizeInput = async (req, res, next) => { try { const instance = await resolve(); await instance.authorizeInput?.(req.user); next(); } catch (failure) { res.status(failure.status || 500).json({ message: failure.status ? failure.message : 'No se pudo verificar tu acceso.' }); } };
   const requireRevision = (req, res, next) => {
@@ -55,6 +57,8 @@ export const createBriaConversationRouter = ({ service } = {}) => {
     next();
   };
   const message = req => ({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], expectedRevision: req.briaExpectedRevision, session: sessionOf(req) });
+  // El adelanto del dictado: lo grabado hasta ahora, para mostrarlo en gris. Tope propio de tamaño; nunca devuelve error de transcripción.
+  router.post('/dictation/preview', authorizeInput, receive(audioPreview.single('audio')), handle((req, instance) => instance.previewTranscription(req.user, req.file)));
   router.post('/dictation', authorizeInput, receive(audio.single('audio')), handle((req, instance) => instance.transcribe(req.user, req.file)));
   router.use('/:id', (req, res, next) => uuid(req.params.id) ? next() : res.status(400).json({ message: 'Conversación no válida.' }));
   // Check ownership/fresh session before buffering a multipart request.
