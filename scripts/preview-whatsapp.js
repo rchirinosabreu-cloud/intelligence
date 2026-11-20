@@ -32,6 +32,7 @@ const memoryRepository = () => {
     async touch(userId, at) { links.get(userId).lastMessageAt = at; },
     async markInbound(userId, at) { links.get(userId).lastInboundAt = at; },
     async setAlertsOff(userId, kinds) { links.get(userId).alertsOff = kinds; },
+    async setPulseUrgentOnly(userId, value) { links.get(userId).pulseUrgentOnly = value; },
     async unlink(userId) { links.delete(userId); for (const [k, v] of codes) if (v.userId === userId) codes.delete(k); },
     async rememberInbound(messageId) { if (seen.has(messageId)) return false; seen.add(messageId); return true; },
     async unknownRepliesSince(waId, since) { return unknown.filter((row) => row.waId === waId && row.at >= since).length; },

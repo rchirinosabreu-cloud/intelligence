@@ -39,6 +39,7 @@ import { taskParticipations } from '../lib/taskParticipation.js';
 import { completedTaskParticipationViews, completedTaskParticipationWhere, projectTaskParticipation, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { getMorningAgendaService } from './morningAgendaService.js';
 import { dailyAlert } from '../lib/whatsappAlerts.js';
 import { isTrustedSession } from '../lib/taskWorkCorrection.js';
 
@@ -170,8 +171,10 @@ export const readDailyMemoryContext = async ({ clients, user, db, operations, so
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
   criteria = readDailyCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
-  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext
+  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext, agenda
 } = {}) => {
+  // El día de la persona (correo y reuniones). Con almacenes inyectados (pruebas y muestras) solo corre el que se inyecte.
+  const agendaOf = agenda || (repository || proactive || conversations ? null : (user, at) => getMorningAgendaService().forUser(user, at));
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const deliveries = proactive || createBriaProactiveRepository({ pool: getSidecarPool() });
   const chats = () => conversations || createBriaConversationRepository({ pool: getSidecarPool(), workspace: 'application' });
@@ -407,7 +410,12 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       let decisions = null;
       try { decisions = await this.decisionsFor(user, reading); }
       catch (error) { logger.error('[DailyReading] Sin el libro de decisiones esta vez:', error?.message || error); }
-      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions });
+      let day = null;
+      if (agendaOf) {
+        try { day = await agendaOf(user, now()); }
+        catch (error) { logger.error('[DailyReading] Sin la agenda ni el correo esta vez:', error?.message || error); }
+      }
+      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions, agenda: day });
       const scope = scopeFor(user, reading);
       const sources = [...new Map([...dailyContextSources({ ...reading.context, accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }), ...(decisions?.sources || [])].map(source => [`${source.kind}:${source.id}`, source])).values()];
       const store = chats();

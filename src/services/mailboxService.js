@@ -175,8 +175,12 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
       if (typeof repo.unansweredCandidates !== 'function' || typeof imap.repliedTo !== 'function') return [];
       const candidates = (await repo.unansweredCandidates({ from: new Date(at.getTime() - UNANSWERED_WINDOW_MS), until: new Date(at.getTime() - UNANSWERED_AFTER_MS), notifiedSince: workdayStart(at) }))
         .map((mail) => ({ ...mail, businessDays: businessDaysSince(mail.date, at) })).filter((mail) => mail.businessDays >= 1);
-      if (!candidates.length) return [];
+      // Lo avisado en jornadas anteriores no vuelve al pulso, pero se sigue cotejando: si la respuesta salió después,
+      // se anota, y la lectura de la mañana deja de contarlo como pendiente.
+      const followed = typeof repo.notifiedUnanswered === 'function' ? await repo.notifiedUnanswered({ from: new Date(at.getTime() - UNANSWERED_WINDOW_MS), notifiedBefore: workdayStart(at) }) : [];
+      if (!candidates.length && !followed.length) return [];
       const ids = candidates.map((mail) => mail.messageId);
+      for (const mail of followed) if (!ids.includes(mail.messageId)) ids.push(mail.messageId);
       const answered = new Set();
       const accounts = await repo.listActiveWithSecret();
       let checked = 0;
@@ -191,6 +195,7 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
       // Solo se afirma «sin respuesta» si se vieron los enviados de todos los buzones conectados: la respuesta pudo
       // salir del que no se dejó revisar. Lo que sí se encontró respondido se anota igual.
       const complete = accounts.length > 0 && checked === accounts.length;
+      for (const mail of followed) if (answered.has(String(mail.messageId).replace(/^<|>$/g, ''))) await repo.markAnswered(mail.accountId, mail.messageId, at);
       const out = [];
       for (const mail of candidates) {
         const id = String(mail.messageId).replace(/^<|>$/g, '');
@@ -213,6 +218,17 @@ export const createMailboxService = ({ db = prisma, repository, reader, generate
     /** Los correos marcados importantes en las últimas horas, para que Bria los liste. */
     async recentImportant({ hours = 24 } = {}) {
       return repo.recentImportant(new Date(now().getTime() - hours * H));
+    },
+
+    /**
+     * Lo que la lectura de la mañana dice del correo (20 de noviembre de 2026): lo importante que Bria leyó desde
+     * `since` y lo que ya avisó como «sin respuesta» en la última semana y sigue así. Solo lee lo guardado.
+     */
+    async morningDigest({ since, at = now() } = {}) {
+      const seen = new Set();
+      const once = (rows) => rows.filter((row) => row.messageId && !seen.has(row.messageId) && seen.add(row.messageId));
+      const unanswered = typeof repo.stillUnanswered === 'function' ? once(await repo.stillUnanswered({ from: new Date(at.getTime() - UNANSWERED_WINDOW_MS) })) : [];
+      return { unanswered, recent: once(await repo.recentImportant(since)) };
     },
 
     /** Un correo concreto, con cuerpo acotado, buscado en todos los buzones activos; para resumirlo a pedido. */
