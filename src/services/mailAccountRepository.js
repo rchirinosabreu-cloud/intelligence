@@ -124,9 +124,18 @@ export const createMailAccountRepository = ({ pool, key }) => ({
     return Number((await pool.query('SELECT count(DISTINCT message_id)::int AS n FROM bria_memory.mail_seen WHERE replied_by_ref=$1 AND replied_at >= $2', [actorRef, since])).rows[0]?.n || 0);
   },
   async claimReply(accountId, messageId, actor, at) {
-    const { rowCount } = await pool.query(`UPDATE bria_memory.mail_seen SET replied_at=$2, replied_by_ref=$3, replied_by_name=$4 WHERE message_id=$1
-      AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=$1 AND r.replied_at IS NOT NULL)`, [messageId, at, actor.ref, actor.name || null]);
-    return rowCount > 0;
+    // Dos pedidos a la vez: sin candado, cada uno ve «nadie ha respondido» en su propia foto y los dos apartan. El
+    // candado por correo los pone en fila dentro de la transacción; el segundo ya ve lo que anotó el primero.
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`bria-mail-reply:${messageId}`]);
+      const { rowCount } = await db.query(`UPDATE bria_memory.mail_seen SET replied_at=$2, replied_by_ref=$3, replied_by_name=$4 WHERE message_id=$1
+        AND NOT EXISTS (SELECT 1 FROM bria_memory.mail_seen r WHERE r.message_id=$1 AND r.replied_at IS NOT NULL)`, [messageId, at, actor.ref, actor.name || null]);
+      await db.query('COMMIT');
+      return rowCount > 0;
+    } catch (error) { await db.query('ROLLBACK').catch(() => {}); throw error; }
+    finally { db.release(); }
   },
   async releaseReply(accountId, messageId) {
     await pool.query('UPDATE bria_memory.mail_seen SET replied_at=NULL, replied_by_ref=NULL, replied_by_name=NULL WHERE message_id=$1', [messageId]);

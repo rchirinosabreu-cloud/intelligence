@@ -92,3 +92,26 @@ test('the card gets who the reply goes to and from; the route is for managers wi
   assert.match(card, /data-bria-nudge-send-confirm/);
   assert.match(card, /Sí, enviar/);
 });
+
+test('el destinatario es la dirección completa de quien escribió, o ninguna: nunca una recortada', async () => {
+  const { replyRecipient } = await import('../src/lib/mailReply.js');
+  assert.equal(replyRecipient('Ana@Cliente.co'), 'ana@cliente.co');
+  assert.equal(replyRecipient('Ana Pérez <ana.perez+obra@cliente.com.co>'), 'ana.perez+obra@cliente.com.co');
+  assert.equal(replyRecipient("o'connor@client.co"), "o'connor@client.co", 'no se convierte en connor@client.co');
+  for (const bad of ['', null, 'sin arroba', 'a@b', 'ana@cliente.co, otro@x.co', 'ana @cliente.co', 'ana@cliente.co\r\nBcc: x@y.co', '<a@b.co> <c@d.co>', 'ñandú@cliente.co']) assert.equal(replyRecipient(bad), null, String(bad));
+});
+
+test('apartar la respuesta va en una transacción con candado por correo: dos pedidos a la vez no envían dos', async () => {
+  const { createMailAccountRepository } = await import('../src/services/mailAccountRepository.js');
+  const seen = []; let released = 0;
+  const client = { async query(sql, params) { seen.push([String(sql).replace(/\s+/g, ' ').trim(), params]); return { rowCount: 1, rows: [] }; }, release() { released += 1; } };
+  const pool = { async connect() { return client; }, async query() { throw new Error('apartar no puede ir fuera de la transacción'); } };
+  const repo = createMailAccountRepository({ pool });
+  assert.equal(await repo.claimReply('acc', '<m1@x>', { ref: 'user:1', name: 'Ana' }, new Date('2026-11-20T15:00:00Z')), true);
+  assert.deepEqual(seen.map(([sql]) => sql.split(' ').slice(0, 2).join(' ')), ['BEGIN', 'SELECT pg_advisory_xact_lock(hashtextextended($1,', 'UPDATE bria_memory.mail_seen', 'COMMIT']);
+  assert.match(seen[1][1][0], /<m1@x>/, 'el candado es por correo, así vale para el mismo correo en dos buzones');
+  assert.equal(released, 1);
+  const failing = { async query(sql) { if (/^UPDATE/.test(String(sql).trim())) throw new Error('caída'); return { rowCount: 0, rows: [] }; }, release() { released += 1; } };
+  await assert.rejects(createMailAccountRepository({ pool: { async connect() { return failing; } } }).claimReply('acc', 'm', { ref: 'u' }, new Date()), /caída/);
+  assert.equal(released, 2, 'la conexión se devuelve aunque falle');
+});

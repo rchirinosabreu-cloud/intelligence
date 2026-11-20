@@ -19,7 +19,7 @@ import { createOpenAIClient } from './openAIClient.js';
 import { createMailAccountRepository } from './mailAccountRepository.js';
 import { createMailboxReader, imapHostFor } from './mailboxReader.js';
 import { createMailboxSender } from './mailboxSender.js';
-import { replyProblem, recipientProblem, replySubject } from '../lib/mailReply.js';
+import { replyProblem, recipientProblem, replySubject, replyRecipient } from '../lib/mailReply.js';
 
 const H = 3_600_000;
 export const MAIL_LOOKBACK_MS = 24 * H;
@@ -223,7 +223,7 @@ export const createMailboxService = ({ db = prisma, repository, reader, sender, 
       const ours = [...drafts.values()].map((draft) => draft.accountEmail).filter(Boolean);
       // A quién iría la respuesta y desde qué buzón, para que la tarjeta lo diga antes de enviar. Lo decide el servidor.
       return new Map([...drafts].map(([id, draft]) => {
-        const to = addressOf(draft.from);
+        const to = replyRecipient(draft.from);
         return [id, { summary: draft.summary, reply: draft.reply, to, from: draft.accountEmail || null, subject: replySubject(draft.subject), canSend: Boolean(draft.accountEmail) && !draft.replied && !recipientProblem(to, ours), replied: Boolean(draft.replied) }];
       }));
     },
@@ -240,7 +240,7 @@ export const createMailboxService = ({ db = prisma, repository, reader, sender, 
       const accounts = await repo.listActiveWithSecret();
       const account = accounts.find((row) => row.id === target.accountId);
       if (!account) throw knowledgeError('El buzón que recibió ese correo ya no está conectado.', 409, 'MAIL_REPLY_NO_ACCOUNT');
-      const to = addressOf(target.from);
+      const to = replyRecipient(target.from);
       const issue = replyProblem({ text, to, ours: accounts.map((row) => row.email) });
       if (issue) throw knowledgeError(issue.message, issue.status, 'MAIL_REPLY_INVALID');
       if (await repo.repliesSince(actor.ref, new Date(`${bogotaDate(at)}T05:00:00.000Z`)) >= MAIL_REPLIES_PER_DAY) throw knowledgeError('Ya enviaste muchas respuestas desde aquí por hoy. Las demás envíalas desde tu correo.', 429, 'MAIL_REPLY_LIMIT');

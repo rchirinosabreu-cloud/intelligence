@@ -15,6 +15,19 @@ export const replySubject = (subject) => {
   return /^re\s*:/i.test(clean) ? clean : `Re: ${clean}`;
 };
 
+/**
+ * A quién se responde: la dirección completa de quien escribió, tal como la guardó la lectura. No se recorta ni se
+ * «arregla»: si trae algo que no se reconoce entera (dos direcciones, espacios, caracteres raros), no hay destinatario
+ * y la persona responde desde su correo. Así una dirección como o'connor@cliente.co nunca termina en connor@cliente.co.
+ */
+const STRICT_ADDRESS = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+export const replyRecipient = (from) => {
+  const raw = String(from || '').trim().toLowerCase();
+  const angled = raw.match(/^[^<>]*<([^<>]+)>$/);
+  const address = (angled ? angled[1] : raw).trim();
+  return address.length <= 254 && STRICT_ADDRESS.test(address) ? address : null;
+};
+
 /** Por qué no se puede enviar a esa dirección, o null. `ours`: las direcciones de los buzones de la agencia. */
 export const recipientProblem = (to, ours = []) => {
   if (!to) return problem(400, 'Ese correo no trae una dirección a la que responder.');
