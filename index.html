@@ -1,0 +1,2124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="assets/brain.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}.hold .disc b.start { font-size: clamp(22px, 2.2vw, 28px); letter-spacing: .1em; line-height: 1.1; text-align: center; }
+.moves.sites { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+a.move { text-decoration: none; }
+.move .tagk { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.move .go { font-weight: 800; color: var(--ink); margin-top: 4px; }
+.move.feature { background: var(--ink); color: #fff; border-color: var(--ink); }
+.move.feature p { color: #cfd3e6; } .move.feature .go { color: var(--accent-soft); } .move.feature .tagk { color: var(--accent-soft); }
+.logo-wall { margin-top: 28px; background: #fff; border-radius: 26px; border: 1px solid var(--line); padding: clamp(18px, 3vw, 36px); display: grid; place-items: center; }
+.logo-wall img { width: min(100%, 880px); height: auto; }
+.contact { margin-top: 28px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 860px; }
+.contact a { text-decoration: none; color: #fff; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); border-radius: 18px; padding: 16px 18px; display: grid; gap: 4px; transition: transform .2s, background .2s; }
+.contact a:hover { transform: translateY(-2px); background: rgba(255,255,255,.12); }
+.contact small { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-soft); }
+.contact b { font-size: clamp(16px, 1.6vw, 20px); overflow-wrap: anywhere; }
+@media (max-width: 900px) { .moves.sites { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .moves.sites, .contact { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<title>Brain Studio × 2X Global</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Caveat:wght@500;700&display=swap">
+<style>
+/* Layout: una propuesta en pantallas completas que avanzan como diapositivas (horizontal en escritorio,
+   vertical en celular), con barra de avance, mapa de capítulos y un caso contado paso a paso.
+   Aspecto único (oscuro con pantallas claras), no cambia con el tema del visor. */
+@property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+:root {
+  --ink: #0f1130;
+  --night: #121436;
+  --night-2: #1b1e4b;
+  --paper: #f1f2f7;
+  --line: #d6d8e6;
+  --muted: #9aa0cf;
+  --muted-ink: #50557f;
+  --sun: #fcd200;
+  --accent: #009bbf;
+  --accent-soft: #5cc8e0;
+  --coral: #ff6a68;
+  --leaf: #31aa8a;
+  --cyan: #009bbf;
+  --ande: #0e2f57;
+  --ande-2: #0a2142;
+  --teal: #62d2c1;
+  --stripe: linear-gradient(90deg, #e8472b 0%, #f39200 22%, #fcd200 42%, #31aa8a 64%, #009bbf 84%, #3b4bb5 100%);
+  --display: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  --body: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  --hand: "Caveat", "Segoe Print", cursive;
+  --gut: clamp(18px, 5vw, 80px);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--night); color: #fff; font-family: var(--body); font-size: 17px; line-height: 1.5; overflow: hidden; -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; display: block; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.grain::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .18; mix-blend-mode: soft-light; z-index: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+/* ——— Pantallas ——— */
+.deck { position: fixed; inset: 0; overflow: hidden; overflow: clip; }
+.screen { position: absolute; inset: 0; overflow: hidden; overflow: clip; transition: transform .8s cubic-bezier(.7,0,.2,1), opacity .8s; will-change: transform; }
+.screen[data-state="past"] { transform: translate3d(-100%, 0, 0); }
+.screen[data-state="future"] { transform: translate3d(100%, 0, 0); }
+.screen[data-state="current"] { transform: none; }
+.screen > .scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: calc(84px + env(safe-area-inset-top, 0px)) var(--gut) calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; z-index: 1; }
+.screen > .scroll > .in { width: 100%; max-width: 1240px; margin: auto; }
+.light { background: var(--paper); color: var(--ink); }
+.dark { background: var(--night); color: #fff; }
+.ande { background: var(--ande); color: #fff; }
+.ande-deep { background: var(--ande-2); color: #fff; }
+.warm-card { background: linear-gradient(150deg, #f39200 0%, #e0566f 42%, #a8118c 100%); color: #fff; border-radius: 28px; padding: clamp(22px, 2.6vw, 34px); position: relative; overflow: hidden; isolation: isolate; box-shadow: 0 30px 60px rgba(168,17,140,.18); }
+.warm-card::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .45; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"); }
+@media (max-width: 760px) {
+  .screen[data-state="past"] { transform: translate3d(0, -100%, 0); }
+  .screen[data-state="future"] { transform: translate3d(0, 100%, 0); }
+  .screen > .scroll { justify-content: flex-start; }
+}
+
+/* Fondo con parallax: manchas de color que siguen el puntero con retraso y flotan despacio */
+.orbs { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.orb { position: absolute; width: var(--s); aspect-ratio: 1; border-radius: 50%; left: var(--x); top: var(--y); opacity: var(--o, 1);
+  transform: translate3d(calc(var(--mx, 0) * var(--d) * 1px), calc(var(--my, 0) * var(--d) * 1px), 0);
+  animation: drift var(--t, 22s) ease-in-out infinite alternate; }
+/* Degradado con grano, como la portada del portafolio */
+.orb.blob { background: radial-gradient(circle at 40% 40%, var(--c1) 0%, var(--c2) 38%, transparent 68%); filter: blur(28px); }
+/* Anillo difuminado que se sale del borde, como las páginas interiores del portafolio */
+.orb.ring { background: radial-gradient(circle, transparent 33%, var(--c1) 45%, var(--c2) 57%, transparent 70%); filter: blur(22px); }
+.orbs::after { content: ""; position: absolute; inset: 0; opacity: var(--grain, .3); mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"); }
+@keyframes drift { from { translate: 0 0; } to { translate: var(--dx, 40px) var(--dy, -30px); } }
+
+[data-depth] { translate: calc(var(--mx, 0) * var(--depth, 0) * 1px) calc(var(--my, 0) * var(--depth, 0) * 1px); }
+
+
+/* ——— Parallax en capas durante la transición: el fondo va más lento, el contenido más rápido ——— */
+.screen > .orbs { transition: transform 1.1s cubic-bezier(.7,0,.2,1); }
+.screen > .scroll { transition: transform .9s cubic-bezier(.7,0,.2,1), opacity .7s ease; }
+.screen[data-state="future"] > .orbs { transform: translate3d(-45%, 0, 0); }
+.screen[data-state="past"] > .orbs { transform: translate3d(45%, 0, 0); }
+.screen[data-state="future"] > .scroll { transform: translate3d(18%, 0, 0); opacity: 0; }
+.screen[data-state="past"] > .scroll { transform: translate3d(-18%, 0, 0); opacity: 0; }
+@media (max-width: 760px) {
+  .screen[data-state="future"] > .orbs { transform: translate3d(0, -45%, 0); }
+  .screen[data-state="past"] > .orbs { transform: translate3d(0, 45%, 0); }
+  .screen[data-state="future"] > .scroll { transform: translate3d(0, 18%, 0); }
+  .screen[data-state="past"] > .scroll { transform: translate3d(0, -18%, 0); }
+}
+
+/* ——— Entradas por tipo ——— */
+/* Títulos: palabra por palabra detrás de una máscara */
+.wd { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .08em; margin-bottom: -.08em; }
+.wd > span { display: inline-block; transform: translateY(108%); transition: transform .9s cubic-bezier(.2,.8,.1,1); transition-delay: calc(var(--w) * 55ms + 350ms); }
+.screen.on .wd > span { transform: none; }
+.h-xl.rv, .h-l.rv { opacity: 1; transform: none; }
+/* Tarjetas y paneles: fundido con zoom desde desenfocado */
+.kpi.rv, .move.rv, .case.rv, .stats-panel.rv, .warm-card.rv, .stat.rv, .locked-list .rv, .facts.rv {
+  transform: scale(.94) translateY(14px); filter: blur(8px);
+  transition: opacity .9s ease, transform 1.1s cubic-bezier(.2,.8,.1,1), filter .9s ease; transition-delay: calc(var(--i, 0) * 140ms + 300ms); }
+.screen.on .kpi.rv, .screen.on .move.rv, .screen.on .case.rv, .screen.on .stats-panel.rv, .screen.on .warm-card.rv, .screen.on .stat.rv, .screen.on .locked-list .rv, .screen.on .facts.rv { transform: none; filter: none; }
+/* Imágenes: se descubren de abajo hacia arriba */
+img.rv, .piece.rv { opacity: 1; clip-path: inset(100% 0 0 0 round 18px); transform: scale(1.06);
+  transition: clip-path 1.2s cubic-bezier(.7,0,.2,1), transform 1.6s cubic-bezier(.2,.8,.1,1); transition-delay: calc(var(--i, 0) * 140ms + 300ms); }
+.screen.on img.rv, .screen.on .piece.rv { clip-path: inset(0 0 0 0 round 18px); transform: none; }
+.screen.on img.tilt.rv { transform: perspective(900px) rotateY(-8deg) rotateX(3deg); }
+.screen.on img.tilt.rv:hover { transform: perspective(900px) rotateY(0) rotateX(0) scale(1.02); }
+/* La línea de color del rótulo se dibuja */
+.eyebrow::before { transform: scaleX(0); transform-origin: left; transition: transform .9s cubic-bezier(.7,0,.2,1) .25s; }
+.screen.on .eyebrow::before { transform: none; }
+/* Chips y medios: aparecen uno a uno */
+.media .pill, .chips .chip, .audiences span { opacity: 0; transform: translateY(8px) scale(.96); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.1,1); }
+.screen.on .media .pill, .screen.on .chips .chip, .screen.on .audiences span { opacity: .85; transform: none; }
+.screen.on .media .pill { opacity: 1; }
+
+/* Aparición escalonada */
+.rv { opacity: 0; transform: translateY(8px); transition: opacity 1s ease, transform 1.2s cubic-bezier(.2,.7,.1,1); transition-delay: calc(var(--i, 0) * 140ms + 300ms); }
+.screen.on .rv { opacity: 1; transform: none; }
+
+/* ——— Tipografía común ——— */
+.eyebrow { font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: .22em; text-transform: uppercase; display: flex; align-items: center; gap: 12px; margin: 0 0 18px; }
+.eyebrow::before { content: ""; width: 34px; height: 4px; border-radius: 2px; background: var(--stripe); background-size: 200px 4px; }
+.h-xl { font-family: var(--display); font-weight: 900; font-size: clamp(42px, 5.6vw, 88px); line-height: 1.02; margin: 0; letter-spacing: -.025em; text-wrap: balance; }
+.h-l { font-family: var(--display); font-weight: 900; font-size: clamp(34px, 4.2vw, 64px); line-height: 1.04; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.hand { font-family: var(--hand); font-size: clamp(22px, 2.2vw, 30px); line-height: 1.05; }
+.lede { font-size: clamp(18px, 1.7vw, 22px); max-width: 52ch; margin: 18px 0 0; }
+.muted { color: var(--muted); }
+.light .muted { color: var(--muted-ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; padding: 7px 12px; border-radius: 999px; border: 1px solid currentColor; opacity: .85; }
+.pill { font-size: 15px; font-weight: 600; padding: 9px 15px; border-radius: 999px; background: rgba(255,255,255,.1); }
+.light .pill { background: #fff; border: 1px solid var(--line); }
+
+/* ——— Barra superior ——— */
+.top { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: calc(14px + env(safe-area-inset-top, 0px)) var(--gut) 14px; display: flex; align-items: center; gap: 16px; color: #fff; transition: opacity .5s, transform .5s; }
+.top::before { content: ""; position: absolute; inset: 0; background: rgba(15,17,48,.88); backdrop-filter: blur(10px); z-index: -1; }
+body.intro .top, body.intro .nav { opacity: 0; pointer-events: none; transform: translateY(-10px); }
+.top .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; background: none; border: 0; padding: 0; }
+.top .brand img { width: 30px; height: 30px; border-radius: 50%; background: #fff; padding: 2px; }
+.top .where { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.top .where b { color: #fff; font-weight: 700; }
+.top .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.count { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.map-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.3); background: rgba(15,17,48,.5); border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 14px; backdrop-filter: blur(8px); }
+.map-btn.snd { padding: 8px 10px; }
+.map-btn.snd .mute { display: none; }
+.map-btn.snd[aria-pressed="false"] .wave { display: none; }
+.map-btn.snd[aria-pressed="false"] .mute { display: block; }
+.map-btn.snd[aria-pressed="false"] { opacity: .6; }
+.progress { position: fixed; left: 0; right: 0; bottom: 0; height: 5px; z-index: 20; background: rgba(255,255,255,.12); }
+.progress i { display: block; height: 100%; width: 0; background: var(--stripe); background-size: 100vw 5px; transition: width .8s cubic-bezier(.7,0,.2,1); }
+.nav { position: fixed; right: var(--gut); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); z-index: 20; display: flex; gap: 10px; transition: opacity .5s; }
+.nav button { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; display: grid; place-items: center; box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: transform .2s; }
+.nav button:hover { transform: scale(1.06); }
+.nav button:disabled { opacity: .35; cursor: default; transform: none; }
+.hint { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); z-index: 21; background: #fff; color: var(--ink); font-weight: 600; font-size: 14px; padding: 12px 18px; border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.3); opacity: 0; transition: opacity .5s, transform .5s; pointer-events: none; white-space: nowrap; }
+.hint.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ——— Mapa ——— */
+.map { position: fixed; inset: 0; z-index: 40; background: rgba(8,9,30,.72); backdrop-filter: blur(10px); display: flex; justify-content: flex-end; opacity: 0; pointer-events: none; transition: opacity .35s; }
+.map.open { opacity: 1; pointer-events: auto; }
+.map .panel { width: min(460px, 100%); height: 100%; background: var(--night-2); padding: calc(28px + env(safe-area-inset-top, 0px)) 28px 28px; overflow-y: auto; transform: translateX(40px); transition: transform .35s; }
+.map.open .panel { transform: none; }
+.map h2 { font-family: var(--display); font-weight: 900; font-size: 36px; letter-spacing: -.02em; margin: 0 0 6px; }
+.map .close { position: absolute; top: calc(18px + env(safe-area-inset-top, 0px)); right: 18px; border: 0; background: rgba(255,255,255,.1); width: 44px; height: 44px; border-radius: 50%; }
+.chapters { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 8px; }
+.chapters button { width: 100%; text-align: left; display: grid; grid-template-columns: 52px minmax(0,1fr) auto; align-items: center; gap: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: 14px 16px; }
+.chapters .n { font-family: var(--display); font-weight: 900; font-size: 22px; color: var(--muted); }
+.chapters .t { font-weight: 700; }
+.chapters .s { font-size: 13px; color: var(--muted); display: block; font-weight: 500; }
+.chapters .here { border-color: var(--accent-soft); background: rgba(0,155,191,.12); }
+.chapters .here .n { color: var(--accent-soft); }
+.chapters button[disabled] { opacity: .5; cursor: not-allowed; }
+.chapters .tag { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.1); }
+
+/* ——— 00 Inicio ——— */
+.intro-in { display: grid; place-items: center; text-align: center; gap: 26px; }
+.brain-mark { width: clamp(96px, 10vw, 140px); height: auto; border-radius: 50%; background: #fff; padding: 8px; mask: conic-gradient(#000 var(--a), transparent 0); -webkit-mask: conic-gradient(#000 var(--a), transparent 0); animation: draw 2.4s cubic-bezier(.6,0,.2,1) .2s forwards; }
+@keyframes draw { to { --a: 360deg; } }
+.intro-kicker { font-size: 12px; font-weight: 700; letter-spacing: .26em; text-transform: uppercase; color: var(--muted-ink); animation: fade .8s ease 1.4s both; }
+.intro-title { font-family: var(--display); font-weight: 900; font-size: clamp(38px, 5.4vw, 80px); line-height: 1.02; letter-spacing: -.025em; margin: 0; animation: rise .9s cubic-bezier(.2,.7,.1,1) 1.7s both; }
+.intro-title em { font-style: normal; color: var(--accent); }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(30px); } }
+.hold { position: relative; width: clamp(170px, 20vw, 220px); aspect-ratio: 1; border: 0; background: none; padding: 0; animation: fade .8s ease 2.3s both; touch-action: none; user-select: none; -webkit-user-select: none; }
+.hold .disc { position: absolute; inset: 14px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; align-content: center; gap: 2px; box-shadow: 0 0 0 0 rgba(252,210,0,.5); animation: pulse 4s ease-in-out 3s infinite; transition: transform .25s; }
+.hold.holding .disc { transform: scale(.94); animation: none; }
+.hold .disc b { font-family: var(--display); font-weight: 900; font-size: clamp(28px, 3vw, 38px); letter-spacing: .08em; line-height: 1; }
+.hold .disc small { font-size: 12px; font-weight: 500; color: var(--muted); }
+.hold svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.hold .track { fill: none; stroke: rgba(15,17,48,.1); stroke-width: 6; }
+.hold .ring { fill: none; stroke: url(#stripeGrad); stroke-width: 6; stroke-linecap: round; }
+.hold.done .disc { transform: scale(1.12); background: var(--accent); transition: transform .5s cubic-bezier(.2,.7,.1,1), background .3s; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,155,191,.16); } 50% { box-shadow: 0 0 0 8px rgba(0,155,191,0); } }
+.hold-hint { font-weight: 500; font-size: 15px; color: var(--muted-ink); animation: fade .8s ease 2.6s both; }
+.hold-hint kbd { font: inherit; font-size: 13px; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 1px 7px; }
+.intro-meta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; animation: fade .8s ease 2.9s both; }
+.resume { border: 0; background: none; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.flash { position: fixed; inset: 0; z-index: 30; background: linear-gradient(135deg, #31aa8a, #009bbf); clip-path: circle(0% at 50% 60%); pointer-events: none; }
+.flash.go { animation: flash 1.1s cubic-bezier(.7,0,.2,1) forwards; }
+@keyframes flash { 55% { clip-path: circle(150% at 50% 60%); opacity: 1; } 100% { clip-path: circle(150% at 50% 60%); opacity: 0; } }
+
+/* ——— 01 Quiénes somos ——— */
+.about { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: clamp(28px, 5vw, 80px); align-items: center; }
+.stats { display: grid; gap: 14px; }
+.stat { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; padding: 18px 22px; border-radius: 20px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); }
+.stat b { font-family: var(--display); font-weight: 900; font-size: clamp(44px, 4.6vw, 66px); letter-spacing: -.03em; line-height: .85; color: #fff; font-variant-numeric: tabular-nums; min-width: 2ch; }
+.countries { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 6px; }
+.countries span { font-size: 13px; font-weight: 600; padding: 6px 11px; border-radius: 999px; background: rgba(255,255,255,.08); opacity: 0; transform: scale(.8); transition: opacity .4s, transform .4s; transition-delay: calc(var(--i) * 70ms + 900ms); }
+.screen.on .countries span { opacity: 1; transform: none; }
+
+/* ——— 04 Colección de casos ——— */
+.hub-head { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; margin-bottom: 28px; }
+.seen-meter { display: flex; align-items: center; gap: 14px; font-weight: 700; }
+.seen-meter .dots { display: flex; gap: 6px; }
+.seen-meter .dots i { width: 26px; height: 8px; border-radius: 4px; background: var(--line); }
+.seen-meter .dots i.on { background: var(--stripe); background-size: 180px 8px; }
+.cases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.case { position: relative; border-radius: 22px; overflow: hidden; background: #fff; border: 1px solid var(--line); text-align: left; padding: 0; display: flex; flex-direction: column; color: var(--ink); transition: transform .25s, box-shadow .25s; }
+.case:not([disabled]):hover { transform: translateY(-5px) rotate(-.4deg); box-shadow: 0 22px 44px rgba(15,17,48,.18); }
+.case .ph { aspect-ratio: 5 / 2; overflow: hidden; background: var(--night-2); }
+.case .ph img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s; }
+.case:not([disabled]):hover .ph img { transform: scale(1.06); }
+.case .bd { padding: 14px 18px 18px; display: grid; gap: 4px; }
+.case .num { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: .18em; color: var(--muted-ink); }
+.case .nm { font-family: var(--display); font-weight: 900; font-size: 22px; line-height: 1.1; letter-spacing: -.01em; }
+.case .go { font-size: 14px; font-weight: 700; color: var(--cyan); }
+.case[disabled] { cursor: default; }
+.case[disabled] .ph img { filter: grayscale(1) brightness(.75); }
+.case[disabled] .go { color: var(--muted-ink); }
+.case .stamp { position: absolute; top: 12px; right: 12px; background: var(--leaf); color: #fff; font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; padding: 6px 10px; border-radius: 8px; transform: rotate(4deg); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+
+/* ——— Caso ANDE ——— */
+.cover { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(24px, 4vw, 64px); align-items: center; }
+.cover .h-xl { font-size: clamp(44px, 5.6vw, 88px); }
+.cover .h-xl .t { color: var(--teal); }
+.tilt { border-radius: 18px; box-shadow: 0 30px 60px rgba(0,0,0,.45); transform: perspective(900px) rotateY(-8deg) rotateX(3deg); transition: transform .5s; }
+.tilt:hover { transform: perspective(900px) rotateY(0) rotateX(0) scale(1.02); }
+.facts { margin-top: 28px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; border-top: 1px solid rgba(255,255,255,.18); padding-top: 18px; }
+.facts dt { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
+.facts dd { margin: 0; font-weight: 600; font-size: 15px; line-height: 1.35; }
+.ande-logo { background: #fff; border-radius: 8px; padding: 6px 10px; height: 54px; width: auto; }
+
+.statement { font-size: clamp(26px, 3.3vw, 48px); line-height: 1.16; font-weight: 500; margin: 0; max-width: 26ch; }
+.circled { position: relative; white-space: nowrap; font-weight: 700; }
+.circled svg { position: absolute; left: -8%; top: -30%; width: 116%; height: 160%; overflow: visible; }
+.circled path { fill: none; stroke: var(--coral); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 700; stroke-dashoffset: 700; transition: stroke-dashoffset 1.3s ease .9s; }
+.screen.on .circled path { stroke-dashoffset: 0; }
+.reto-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .6fr); gap: 40px; align-items: end; }
+
+/* Juego */
+.guess { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 5vw, 72px); align-items: center; }
+.guess-q { font-size: clamp(28px, 3.4vw, 50px); line-height: 1.12; font-weight: 600; margin: 0; }
+.dial { display: grid; gap: 18px; justify-items: start; }
+.dial-val { font-family: var(--display); font-weight: 900; font-size: clamp(110px, 14vw, 200px); line-height: .8; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dial-val small { font-size: .22em; letter-spacing: .08em; margin-left: 10px; color: var(--muted-ink); }
+input[type=range] { -webkit-appearance: none; appearance: none; width: min(460px, 100%); height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--ink) var(--p, 12%), rgba(15,17,48,.18) var(--p, 12%)); outline-offset: 6px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 34px; height: 34px; border-radius: 50%; background: var(--ink); border: 5px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); border: 5px solid #fff; }
+.btn { border: 0; border-radius: 999px; padding: 15px 24px; font-weight: 800; font-size: 16px; background: var(--ink); color: #fff; display: inline-flex; align-items: center; gap: 10px; transition: transform .2s; }
+.btn:hover { transform: translateY(-2px); }
+.btn.alt { background: #fff; color: var(--ink); }
+.btn.ghost { background: transparent; border: 2px solid currentColor; color: inherit; }
+.result { display: grid; gap: 14px; width: min(520px, 100%); }
+.result[hidden] { display: none !important; }
+.bar-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 54px; gap: 12px; align-items: center; font-weight: 700; font-size: 15px; }
+.bar { position: relative; height: 26px; border-radius: 8px; background: rgba(15,17,48,.12); overflow: visible; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 8px; background: var(--ink); transition: width 1.1s cubic-bezier(.2,.7,.1,1); }
+.bar.real i { background: var(--coral); }
+.bar .goal { position: absolute; top: -8px; bottom: -8px; width: 3px; background: var(--ink); border-radius: 2px; }
+.bar .goal::after { content: "meta 20"; position: absolute; top: -20px; left: -18px; font-size: 12px; white-space: nowrap; }
+.verdict { font-family: var(--hand); font-size: clamp(26px, 2.6vw, 36px); line-height: 1.05; }
+.options { display: grid; gap: 10px; width: min(480px, 100%); }
+.opt { text-align: left; border: 2px solid rgba(255,255,255,.85); background: rgba(255,255,255,.06); color: #fff; border-radius: 16px; padding: 16px 20px; font-weight: 700; font-size: 18px; display: flex; justify-content: space-between; align-items: center; transition: background .25s, color .25s, opacity .4s, transform .2s; }
+.opt:hover:not([disabled]) { background: #fff; color: var(--ink); transform: translateX(4px); }
+.opt[disabled] { cursor: default; opacity: .4; }
+.opt.picked { opacity: 1; background: #fff; color: var(--ink); }
+.options.decided .opt:not(.picked) { display: none; }
+.dark .orbs, .ande .orbs, .ande-deep .orbs { --grain: .12; }
+.opt.picked::after { content: "Tu apuesta"; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #a8118c; }
+.warm-card .btn { background: #fff; color: var(--ink); }
+.warm-card .goal-bar .track { background: rgba(255,255,255,.25); }
+.warm-card .goal-bar .track i { background: #fff; }
+.warm-card .goal-bar .track .mark { background: var(--ink); }
+.stats-panel { color: #fff; box-shadow: 0 30px 60px rgba(168,17,140,.16); border-radius: 28px; padding: clamp(18px, 2.4vw, 30px); background: linear-gradient(160deg, #f39200 0%, #e0566f 40%, #a8118c 100%); position: relative; overflow: hidden; isolation: isolate; }
+.stats-panel::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .45; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"); }
+.stats-panel .stat { background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,.35); border-radius: 0; padding: 14px 4px; }
+.stats-panel .stat:last-child { border-bottom: 0; }
+.stats-panel .stat b { color: #fff; }
+.stats-panel .countries span { background: rgba(255,255,255,.18); }
+.reveal { display: grid; gap: 16px; width: min(480px, 100%); opacity: 0; transform: translateY(8px); transition: opacity .9s ease .2s, transform 1s ease .2s; }
+.reveal.show { opacity: 1; transform: none; }
+.reveal[hidden] { display: none !important; }
+.score { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.score b { font-family: var(--display); font-weight: 900; font-size: clamp(64px, 7vw, 104px); letter-spacing: -.04em; line-height: .8; font-variant-numeric: tabular-nums; }
+.score span { font-family: var(--display); font-weight: 700; font-size: clamp(22px, 2.2vw, 30px); }
+.badge { display: inline-block; background: var(--leaf); color: #fff; font-weight: 800; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; padding: 8px 12px; border-radius: 8px; transform: rotate(-3deg); }
+.goal-bar { display: grid; gap: 6px; }
+.goal-bar .lbl { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+.goal-bar .track { position: relative; height: 16px; border-radius: 8px; background: rgba(15,17,48,.14); }
+.goal-bar .track i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 8px; background: var(--ink); transition: width 1.3s cubic-bezier(.2,.7,.1,1) .5s; }
+.goal-bar .track .mark { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--coral); border-radius: 2px; }
+
+/* Resultados */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+.kpi { border-radius: 22px; padding: 22px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); display: grid; gap: 8px; align-content: start; min-width: 0; }
+.kpi .w { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); }
+.kpi .v { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 3vw, 46px); letter-spacing: -.03em; line-height: .9; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpi .d { font-size: 14.5px; color: #cfe3f0; }
+.kpi:first-child { background: var(--teal); color: var(--ink); border-color: var(--teal); }
+.kpi:first-child .w, .kpi:first-child .d { color: rgba(15,17,48,.75); }
+.meter { position: relative; height: 12px; border-radius: 6px; background: rgba(255,255,255,.15); margin-top: 6px; }
+.meter i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 6px; background: var(--teal); transition: width 1.4s cubic-bezier(.2,.7,.1,1) .6s; }
+.meter .goal { position: absolute; top: -6px; bottom: -6px; width: 3px; left: 50%; background: #fff; }
+.mix { margin-top: 26px; display: grid; gap: 10px; }
+.mix-bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; background: rgba(255,255,255,.1); }
+.mix-bar i { display: block; width: 0; transition: width 1.2s cubic-bezier(.2,.7,.1,1) 1s; }
+.mix-legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; }
+.mix-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; background: var(--c); }
+.media { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Lo que hicimos */
+.moves { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+.move { border-radius: 22px; padding: 24px; background: #fff; border: 1px solid var(--line); color: var(--ink); display: grid; gap: 10px; align-content: start; transition: transform .3s, background .3s; }
+.move:hover { transform: translateY(-4px); box-shadow: 0 18px 36px rgba(15,17,48,.1); }
+.move .ix { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: #fff; font-family: var(--display); font-weight: 900; font-size: 22px; }
+.move h3 { font-family: var(--display); font-weight: 900; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; margin: 4px 0 0; }
+.move p { margin: 0; color: var(--muted-ink); font-size: 15.5px; }
+
+/* Piezas */
+.pieces { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
+.piece { grid-column: span var(--c); border: 0; padding: 0; border-radius: 18px; overflow: hidden; background: var(--bg); position: relative; height: clamp(160px, 26vh, 260px); }
+.piece img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s; }
+.piece:hover img { transform: scale(1.05); }
+.piece span { position: absolute; left: 10px; bottom: 10px; right: 10px; text-align: left; font-family: var(--hand); font-size: 22px; line-height: 1; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+.lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(6,7,24,.9); display: grid; place-items: center; padding: 24px; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.lightbox.open { opacity: 1; pointer-events: auto; }
+.lightbox img { max-height: 84vh; width: auto; border-radius: 12px; background: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.lightbox p { margin: 14px 0 0; font-family: var(--hand); font-size: 26px; text-align: center; }
+
+/* Testimonio */
+.quote { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(16px, 3vw, 40px); align-items: start; }
+.quote .mk { font-family: Georgia, serif; font-weight: 700; font-size: clamp(120px, 16vw, 220px); line-height: .7; color: var(--accent); }
+.quote blockquote { margin: 0; font-size: clamp(28px, 3.6vw, 54px); line-height: 1.12; font-weight: 700; }
+.quote blockquote .w { opacity: .12; transition: opacity .35s; transition-delay: calc(var(--i) * 45ms + 300ms); }
+.screen.on .quote blockquote .w { opacity: 1; }
+.quote cite { display: block; margin-top: 22px; font-style: normal; font-weight: 600; }
+
+/* Cierre del caso */
+.done-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 40px; align-items: center; }
+.seal { width: clamp(180px, 20vw, 240px); aspect-ratio: 1; border-radius: 50%; border: 6px solid var(--leaf); color: var(--leaf); display: grid; place-items: center; text-align: center; font-family: var(--display); font-weight: 900; text-transform: uppercase; font-size: clamp(22px, 2.2vw, 30px); line-height: 1; letter-spacing: .04em; transform: scale(2) rotate(-25deg); opacity: 0; transition: transform .5s cubic-bezier(.3,1.6,.5,1) .5s, opacity .3s .5s; }
+.screen.on .seal { transform: rotate(-12deg); opacity: 1; }
+.seal small { display: block; font-family: var(--body); font-size: 13px; letter-spacing: .12em; margin-top: 6px; font-weight: 700; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+
+/* Final */
+.locked-list { margin-top: 28px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.locked-list div { border-radius: 18px; padding: 18px; border: 1px dashed rgba(15,17,48,.35); display: grid; gap: 4px; }
+.locked-list b { font-family: var(--display); font-weight: 900; font-size: 22px; letter-spacing: -.01em; }
+
+/* ——— Temas por cliente: el fondo y el acento de cada marca, sobre la base corporativa ——— */
+.cs { background: var(--cbg); color: #fff; }
+.cs-deep { background: var(--cbg2); color: #fff; }
+.th-ande { --cink: #0b6b61; }
+.th-gob { --cbg: #1f2560; --cbg2: #161a47; --teal: #fcd200; --cink: #1f2560; }
+.th-2x { --cbg: #1d2350; --cbg2: #141939; --teal: #f3b61f; --cink: #b0360f; }
+.th-camara { --cbg: #2b2d8f; --cbg2: #1f2070; --teal: #ff9f1c; --cink: #2b2d8f; }
+.th-pnud { --cbg: #0b5aa6; --cbg2: #084580; --teal: #ffc83d; --cink: #0b5aa6; }
+.th-lat { --cbg: #5b1f8f; --cbg2: #451670; --teal: #f7a072; --cink: #5b1f8f; }
+.cs .orbs, .cs-deep .orbs { --grain: .12; }
+.band { margin: 24px 0 0; padding: 16px 20px; border-radius: 16px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); max-width: 76ch; }
+.band b { color: var(--teal); }
+.reveal-note { margin: 0; font-weight: 700; font-size: 15px; line-height: 1.45; }
+.piece.flat img { object-fit: contain; }
+.pieces.many .piece { height: clamp(120px, 17vh, 180px); }
+.piece .play { position: absolute; inset: 0; margin: auto; width: 76px; height: 76px; border-radius: 50%; background: rgba(255,255,255,.94); color: var(--ink); display: grid; place-items: center; font-style: normal; font-size: 26px; padding-left: 5px; box-shadow: 0 12px 30px rgba(0,0,0,.35); transition: transform .3s; }
+.piece.video:hover .play { transform: scale(1.1); }
+/* Tarjetas que se voltean: del caso a su marca */
+.bridges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+.flip { border: 0; padding: 0; background: none; perspective: 1100px; text-align: left; color: inherit; min-height: 210px; display: grid; }
+.flip .fi { position: relative; display: grid; transition: transform .8s cubic-bezier(.2,.8,.1,1); transform-style: preserve-3d; }
+.flip .fa, .flip .fb { grid-area: 1 / 1; -webkit-backface-visibility: hidden; backface-visibility: hidden; border-radius: 22px; padding: 24px; display: grid; align-content: space-between; gap: 16px; }
+.flip .fa { background: #fff; border: 1px solid var(--line); color: var(--ink); transition: box-shadow .3s, transform .3s; }
+.flip:hover .fa { box-shadow: 0 18px 36px rgba(15,17,48,.12); }
+.flip .fb { background: linear-gradient(135deg, #31aa8a 0%, #009bbf 100%); color: #fff; transform: rotateY(180deg); position: relative; overflow: hidden; }
+.flip.on .fi { transform: rotateY(180deg); }
+.flip small { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; opacity: .7; }
+.flip b { font-family: var(--display); font-weight: 900; font-size: clamp(22px, 2vw, 28px); line-height: 1.12; letter-spacing: -.01em; }
+.flip .tap { font-size: 14px; font-weight: 700; color: var(--accent); }
+.flip .fb .tap { color: #fff; }
+.bridge-count { margin-top: 18px; }
+/* Enciende el territorio */
+.lightup { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.lightup button { border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; border-radius: 999px; padding: 10px 16px; font-weight: 600; font-size: 15px; transition: background .3s, color .3s, transform .25s, box-shadow .3s; }
+.lightup button:hover { transform: translateY(-2px); }
+.lightup button.lit { background: var(--teal); color: var(--ink); border-color: var(--teal); box-shadow: 0 0 24px color-mix(in srgb, var(--teal) 55%, transparent); }
+.lightup-count { margin: 10px 0 0; }
+@media (max-width: 900px) { .bridges { grid-template-columns: 1fr; } .flip { min-height: 170px; } }
+@media (prefers-reduced-motion: reduce) { .flip .fi { transition: none; } .lightup button { transition: none; } }
+
+@media (max-width: 900px) {
+  .about, .cover, .guess, .reto-grid, .done-grid { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .moves, .cases, .locked-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts { grid-template-columns: 1fr 1fr; }
+  .piece { grid-column: span 6; }
+  .tilt { transform: none; }
+  .top .where { display: none; }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .kpis, .moves, .cases, .locked-list, .facts { grid-template-columns: 1fr; }
+  .piece { grid-column: 1 / -1; }
+  .nav button { width: 46px; height: 46px; }
+  .quote { grid-template-columns: 1fr; }
+  .quote .mk { font-size: 110px; height: 60px; }
+  .bar-row { grid-template-columns: 90px minmax(0, 1fr) 40px; }
+  .map-btn span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen { transition: none; }
+  .rv, .countries span, .seal, .quote blockquote .w { transition: none !important; opacity: 1 !important; transform: none !important; }
+  .brain-mark { animation: none; --a: 360deg; }
+  .intro-kicker, .intro-title, .hold, .hold-hint, .intro-meta { animation: none; }
+  .hold .disc { animation: none; }
+  .orb { animation: none; transform: none; }
+  .screen > .orbs, .screen > .scroll { transition: none !important; transform: none !important; opacity: 1 !important; }
+  .wd > span, img.rv, .piece.rv, .kpi.rv, .move.rv, .case.rv, .stats-panel.rv, .warm-card.rv, .stat.rv, .facts.rv, .media .pill, .chips .chip { transition: none !important; transform: none !important; filter: none !important; clip-path: none !important; opacity: 1 !important; }
+  .eyebrow::before { transform: none; transition: none; }
+  [data-depth] { translate: none !important; }
+}
+</style>
+<style>
+/* ——— 2X edition: camera moves ———
+   Chapter openers marked data-zoom fly in like a camera pushing through the scene,
+   and every step gives the whole deck a short pull-back / push-in. */
+.screen[data-zoom][data-state="future"] { transform: scale(1.32); opacity: 0; }
+.screen[data-zoom][data-state="past"] { transform: scale(.78); opacity: 0; }
+.screen[data-zoom][data-state="future"] > .scroll { transform: scale(1.12); opacity: 0; }
+.screen[data-zoom][data-state="past"] > .scroll { transform: scale(.9); opacity: 0; }
+.screen[data-zoom][data-state="future"] > .orbs { transform: scale(1.6); }
+.screen[data-zoom][data-state="past"] > .orbs { transform: scale(.7); }
+.deck.cam { animation: cam .85s cubic-bezier(.6,0,.25,1); }
+@keyframes cam { 45% { transform: scale(.955); } }
+/* Diving into a card: the camera flies toward what you tapped */
+.screen.dive > .scroll { transform: scale(2.1) !important; opacity: 0 !important; transition: transform .5s cubic-bezier(.6,0,.9,.4), opacity .45s ease !important; }
+.screen.on img.tilt.rv { animation: kb 16s ease-out .8s both; }
+@keyframes kb { from { scale: 1; } to { scale: 1.07; } }
+.opt.picked::after { content: "Your bet"; }
+
+/* ——— Story ——— */
+.story-chips { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; max-width: 980px; }
+.story-chips span { font-size: 15px; font-weight: 600; padding: 9px 15px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); opacity: 0; transform: translateY(10px) scale(.94); transition: opacity .5s, transform .6s cubic-bezier(.2,.8,.1,1); transition-delay: calc(var(--i) * 90ms + 900ms); }
+.screen.on .story-chips span { opacity: 1; transform: none; }
+.story-chips span b { color: var(--accent-soft); font-weight: 800; margin-right: 6px; }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 30px; }
+.disc-card { border-radius: 26px; padding: clamp(22px, 3vw, 36px); display: grid; gap: 14px; align-content: start; min-width: 0; }
+.disc-card.a { background: #fff; border: 1px solid var(--line); color: var(--ink); }
+.disc-card.b { background: var(--ink); color: #fff; }
+.disc-card small { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+.disc-card.b small { color: var(--accent-soft); }
+.disc-card h3 { font-family: var(--display); font-weight: 900; font-size: clamp(26px, 2.8vw, 40px); line-height: 1.06; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.disc-card p { margin: 0; font-size: 16.5px; color: var(--muted-ink); }
+.disc-card.b p { color: #cfd3e6; }
+.disc-card.rv { transform: scale(.94) translateY(14px); filter: blur(8px); transition: opacity .9s ease, transform 1.1s cubic-bezier(.2,.8,.1,1), filter .9s ease; transition-delay: calc(var(--i, 0) * 160ms + 300ms); }
+.screen.on .disc-card.rv { transform: none; filter: none; }
+.quote .after { margin: 16px 0 0; }
+
+/* ——— Three ways ——— */
+.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
+.lane { border-radius: 24px; padding: 26px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); display: grid; gap: 12px; align-content: start; min-width: 0; }
+.lane .k { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; font-family: var(--display); font-weight: 900; font-size: 26px; color: #fff; }
+.lane h3 { font-family: var(--display); font-weight: 900; font-size: clamp(22px, 2vw, 28px); line-height: 1.12; margin: 4px 0 0; letter-spacing: -.01em; }
+.lane .how { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-soft); }
+.lane p { margin: 0; color: #cfd3e6; font-size: 15.5px; }
+.lane ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.lane li { font-size: 14.5px; font-weight: 600; padding-left: 18px; position: relative; }
+.lane li::before { content: ""; position: absolute; left: 0; top: .55em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-soft); }
+.lane.rv { transform: scale(.94) translateY(14px); filter: blur(8px); transition: opacity .9s ease, transform 1.1s cubic-bezier(.2,.8,.1,1), filter .9s ease; transition-delay: calc(var(--i, 0) * 160ms + 300ms); }
+.screen.on .lane.rv { transform: none; filter: none; }
+
+/* ——— Business Case demo ——— */
+.demo-grid { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: clamp(24px, 4vw, 60px); align-items: center; }
+.demo { border-radius: 22px; background: #fff; border: 1px solid var(--line); box-shadow: 0 40px 80px rgba(15,17,48,.18); overflow: hidden; color: var(--ink); min-width: 0; }
+.screen.on .demo { animation: push 1.5s cubic-bezier(.2,.8,.1,1) .35s both; }
+@keyframes push { from { transform: perspective(1200px) translateZ(-260px) rotateX(8deg); opacity: 0; } }
+.demo-bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; background: #eceef5; border-bottom: 1px solid var(--line); }
+.demo-bar i { width: 11px; height: 11px; border-radius: 50%; background: #c9ccdc; }
+.demo-bar span { margin-left: auto; font-size: 11.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-ink); background: #fff; border: 1px dashed #b5b9d1; border-radius: 999px; padding: 4px 10px; }
+.demo-body { position: relative; padding: clamp(20px, 3vw, 36px); min-height: 380px; overflow: hidden; }
+.demo-step { display: grid; gap: 14px; align-content: start; transition: transform .45s cubic-bezier(.6,0,.9,.4), opacity .4s; }
+.demo-step[hidden] { display: none !important; }
+.demo-step.out { transform: scale(1.7); opacity: 0; }
+.demo-step.in { animation: arrive .6s cubic-bezier(.2,.8,.1,1) both; }
+@keyframes arrive { from { transform: scale(.86); opacity: 0; } }
+.demo-step .kick { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-ink); }
+.demo-step h3 { font-family: var(--display); font-weight: 900; font-size: clamp(24px, 2.4vw, 34px); line-height: 1.08; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.demo-step p { margin: 0; color: var(--muted-ink); }
+.paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 6px; }
+.path { text-align: left; border: 2px solid var(--line); background: var(--paper); border-radius: 18px; padding: 18px; display: grid; gap: 8px; color: var(--ink); transition: border-color .2s, transform .2s, box-shadow .2s; }
+.path:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 14px 30px rgba(15,17,48,.12); }
+.path b { font-family: var(--display); font-weight: 900; font-size: 19px; line-height: 1.15; }
+.path span { font-size: 14px; color: var(--accent); font-weight: 700; }
+.insight { border-radius: 18px; padding: 18px 20px; background: var(--ink); color: #fff; display: grid; gap: 8px; }
+.insight small { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-soft); }
+.insight p { color: #d6d9ec; margin: 0; }
+.insight .ph { height: 10px; border-radius: 5px; background: rgba(255,255,255,.16); }
+.insight .ph.s { width: 62%; }
+.demo-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.demo-actions .btn { font-size: 15px; padding: 12px 18px; }
+.demo-actions .btn.line { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+.link-out { font-weight: 700; color: var(--accent); text-underline-offset: 4px; }
+.measure { margin-top: 18px; }
+
+/* ——— Pilot picker ——— */
+.pilot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 26px; }
+.pilot-col { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pilot-col h3 { margin: 0 0 4px; font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-ink); display: flex; gap: 8px; align-items: center; }
+.pilot-col h3 i { font-style: normal; width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-size: 13px; }
+.pilot-opt { text-align: left; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 14px; padding: 12px 14px; font-weight: 700; font-size: 15px; display: flex; gap: 10px; align-items: baseline; transition: transform .2s, border-color .2s, background .2s, color .2s; }
+.pilot-opt small { color: var(--muted-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pilot-opt:hover { transform: translateX(4px); border-color: var(--accent); }
+.pilot-opt[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.pilot-opt[aria-pressed="true"] small { color: var(--accent-soft); }
+.pilot-out { margin-top: 20px; border-radius: 20px; padding: 18px 22px; background: linear-gradient(135deg, #31aa8a 0%, #009bbf 100%); color: #fff; display: grid; gap: 6px; max-width: 900px; }
+.pilot-out b { font-family: var(--display); font-weight: 900; font-size: clamp(20px, 2vw, 26px); line-height: 1.15; }
+.pilot-out.pop { animation: arrive .6s cubic-bezier(.2,.8,.1,1) both; }
+.pilot-out .chips { margin-top: 6px; }
+.pilot-out .chip { opacity: 1; }
+
+@media (max-width: 900px) {
+  .duo, .lanes, .demo-grid, .pilot { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) { .top .brand .bx { display: none; } .count { white-space: nowrap; } .paths { grid-template-columns: 1fr; } .demo-body { min-height: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .deck.cam, .screen.on .demo, .screen.on img.tilt.rv, .demo-step.in, .pilot-out.pop { animation: none !important; }
+  .story-chips span, .disc-card.rv, .lane.rv { transition: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
+  .screen.dive > .scroll, .demo-step.out { transform: none !important; }
+}
+</style>
+<style>
+/* ——— 05 The 2X world: a camera that flies through three levels ——— */
+.world-screen { background: radial-gradient(ellipse at 50% 40%, #1b1e4b 0%, #0b0d2a 70%); color: #fff; }
+.stage { position: absolute; inset: 0; overflow: hidden; z-index: 1; }
+.world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; transition: transform 1.3s cubic-bezier(.65,0,.15,1); --lf: 30px; }
+.world.portrait { --lf: 46px; }
+.world > * { position: absolute; transform: translate(-50%, -50%); }
+.dust { position: absolute; inset: -60%; pointer-events: none; transition: transform 1.3s cubic-bezier(.65,0,.15,1); }
+.dust i { position: absolute; width: var(--z); height: var(--z); border-radius: 50%; background: #fff; opacity: var(--o); animation: twinkle var(--t) ease-in-out infinite alternate; }
+.dust.near i { filter: blur(3px); background: var(--c, #5cc8e0); }
+@keyframes twinkle { to { opacity: calc(var(--o) * .25); } }
+.w-links { overflow: visible; pointer-events: none; }
+.w-links path { fill: none; stroke: rgba(255,255,255,.22); stroke-width: 3; stroke-dasharray: 10 14; animation: flow 3s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -48; } }
+.w-core { width: 360px; height: 360px; border-radius: 50%; display: grid; place-items: center; align-content: center; text-align: center; gap: 6px;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #d9f3f9 40%, #5cc8e0 100%); color: var(--ink); box-shadow: 0 0 0 18px rgba(92,200,224,.12), 0 0 140px rgba(92,200,224,.45); }
+.w-core b { font-family: var(--display); font-weight: 900; font-size: 54px; letter-spacing: -.03em; line-height: 1; }
+.w-core span { font-size: 20px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--muted-ink); }
+.w-core::after { content: ""; position: absolute; inset: -46px; border-radius: 50%; border: 2px dashed rgba(255,255,255,.25); animation: spin 80s linear infinite; }
+.w-planet { width: 560px; height: 560px; border-radius: 50%; border: 0; padding: 0; color: #fff; cursor: pointer;
+  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--lc) 55%, #fff) 0%, var(--lc) 38%, color-mix(in srgb, var(--lc) 40%, #0b0d2a) 100%);
+  box-shadow: 0 0 160px color-mix(in srgb, var(--lc) 55%, transparent), inset -40px -50px 90px rgba(0,0,0,.35); transition: box-shadow .4s, filter .4s; }
+.w-planet:hover { filter: brightness(1.08); box-shadow: 0 0 220px color-mix(in srgb, var(--lc) 75%, transparent), inset -40px -50px 90px rgba(0,0,0,.35); }
+.w-planet .pl { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; gap: 10px; justify-items: center; text-align: center; width: 220px; transition: opacity .5s; }
+.w-planet .pl .lt { font-family: var(--display); font-weight: 900; font-size: calc(var(--lf) * 2.4); line-height: .9; }
+.w-planet .pl .nm { font-family: var(--display); font-weight: 900; font-size: var(--lf); line-height: 1.05; letter-spacing: -.01em; }
+.w-planet .pl .go { font-size: calc(var(--lf) * .6); font-weight: 700; opacity: .85; }
+.world.in-lane .w-planet .pl { opacity: 0; }
+.w-orbit { width: 380px; height: 380px; border-radius: 50%; border: 2px dashed rgba(255,255,255,.35); pointer-events: none; animation: spin 90s linear infinite; }
+@keyframes spin { to { rotate: 360deg; } }
+.w-node { width: 132px; height: 132px; border-radius: 50%; border: 0; background: #fff; color: var(--ink); display: grid; place-items: center; align-content: center; gap: 4px; padding: 14px; text-align: center; cursor: pointer;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--lc) 35%, transparent), 0 10px 30px rgba(0,0,0,.35); transition: box-shadow .3s, opacity .5s; }
+.w-node:hover, .w-node:focus-visible { box-shadow: 0 0 0 10px color-mix(in srgb, var(--lc) 60%, transparent), 0 0 60px color-mix(in srgb, var(--lc) 70%, transparent); }
+.w-node small { font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--lc); }
+.w-node b { font-family: var(--display); font-size: 13.5px; line-height: 1.12; font-weight: 800; }
+.w-node .in { display: grid; gap: 4px; transition: opacity .4s; }
+.w-node.deep .in { opacity: 0; }
+.w-node.picked { box-shadow: 0 0 0 8px var(--sun), 0 0 60px rgba(252,210,0,.6); }
+.world.lv0 .w-node { pointer-events: none; }
+.world.lv2 .w-node:not(.deep) { opacity: .15; }
+
+/* Depth gauge */
+.top .brand .bx { margin-left: -10px; }
+.depth { position: absolute; z-index: 3; right: var(--gut); top: 50%; transform: translateY(-50%); display: grid; justify-items: center; gap: 10px; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.depth i { width: 4px; height: 46px; border-radius: 2px; background: rgba(255,255,255,.18); transition: background .5s, box-shadow .5s; }
+.depth i.on { background: var(--accent-soft); box-shadow: 0 0 16px var(--accent-soft); }
+.depth .lvl { writing-mode: vertical-rl; transform: rotate(180deg); color: #fff; }
+
+/* HUD: the readable layer over the world */
+.hud { position: absolute; z-index: 3; left: var(--gut); top: calc(96px + env(safe-area-inset-top, 0px)); width: min(380px, calc(100% - 2 * var(--gut))); max-height: calc(100% - 200px); overflow-y: auto;
+  background: rgba(15,17,48,.74); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.14); border-radius: 24px; padding: 22px; display: grid; gap: 12px; transition: opacity .4s, transform .4s; }
+.hud.hide { opacity: 0; transform: translateY(10px); pointer-events: none; }
+.hud .kick { font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--accent-soft); }
+.hud h3 { font-family: var(--display); font-weight: 900; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.05; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.hud p { margin: 0; color: #cfd3e6; font-size: 15px; }
+.hud .list { display: grid; gap: 8px; }
+.hud .list button { text-align: left; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; border-radius: 14px; padding: 11px 14px; font-weight: 700; font-size: 15px; display: flex; gap: 10px; align-items: baseline; transition: background .2s, transform .2s; }
+.hud .list button:hover { background: rgba(255,255,255,.14); transform: translateX(4px); }
+.hud .list small { color: var(--lc, var(--accent-soft)); font-weight: 800; font-variant-numeric: tabular-nums; }
+.hud .back { justify-self: start; border: 0; background: none; color: var(--accent-soft); font-weight: 800; font-size: 14px; padding: 0; }
+.hud .found { border-top: 1px dashed rgba(255,255,255,.25); padding-top: 12px; display: grid; gap: 8px; }
+.hud .found small { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--sun); }
+.hud .found .chips .chip { opacity: 1; font-size: 11px; }
+.hud .tip { font-family: var(--hand); font-size: 22px; color: var(--muted); }
+.hud.fresh > * { animation: arrive .55s cubic-bezier(.2,.8,.1,1) both; }
+.hud.fresh > *:nth-child(2) { animation-delay: .05s; } .hud.fresh > *:nth-child(3) { animation-delay: .1s; } .hud.fresh > *:nth-child(4) { animation-delay: .15s; } .hud.fresh > *:nth-child(5) { animation-delay: .2s; }
+
+/* Inside an idea */
+.detail { position: absolute; inset: 0; z-index: 4; display: flex; overflow-y: auto; padding: calc(88px + env(safe-area-inset-top, 0px)) var(--gut) calc(96px + env(safe-area-inset-bottom, 0px)); color: var(--ink); }
+.detail[hidden] { display: none !important; }
+.detail .card { margin: auto; width: min(920px, 100%); display: grid; gap: 18px; animation: arrive .7s cubic-bezier(.2,.8,.1,1) both; }
+.detail .top-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.detail .back { border: 0; background: var(--ink); color: #fff; border-radius: 999px; padding: 9px 16px; font-weight: 800; font-size: 14px; }
+.detail .lane-tag { font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--lc); }
+.detail h3 { font-family: var(--display); font-weight: 900; font-size: clamp(34px, 4.4vw, 64px); line-height: 1.02; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
+.detail h3 small { display: block; font-size: .32em; letter-spacing: .14em; color: var(--lc); margin-bottom: 8px; }
+.detail .grid4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.detail .blk { background: var(--paper); border-radius: 18px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; animation: arrive .6s cubic-bezier(.2,.8,.1,1) both; animation-delay: calc(var(--i) * 90ms + 200ms); }
+.detail .blk small { font-size: 11.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--lc); }
+.detail .blk p { margin: 0; font-size: 15.5px; color: var(--muted-ink); }
+.detail .acts { display: flex; flex-wrap: wrap; gap: 10px; }
+.detail .acts .btn.line { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+.detail .acts .btn.on { background: var(--leaf); }
+
+@media (max-width: 899px) {
+  .hud { top: auto; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; width: auto; max-height: 44%; padding: 16px; gap: 10px; }
+  .hud h3 { font-size: 22px; }
+  .hud p { font-size: 14px; }
+  .depth { display: none; }
+  .detail .grid4 { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world, .dust { transition: none; }
+  .dust i, .w-orbit, .w-core::after, .w-links path { animation: none; }
+  .hud.fresh > *, .detail .card, .detail .blk { animation: none; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs><linearGradient id="stripeGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8472b"/><stop offset=".25" stop-color="#f39200"/><stop offset=".45" stop-color="#fcd200"/><stop offset=".65" stop-color="#31aa8a"/><stop offset=".85" stop-color="#009bbf"/><stop offset="1" stop-color="#3b4bb5"/></linearGradient></defs>
+</svg>
+<header class="top" aria-label="Proposal navigation">
+  <button class="brand" type="button" data-goto="0"><img src="assets/brain.png" alt="">Brain Studio<span class="bx">&nbsp;× 2X Global</span></button>
+  <div class="where" id="where"></div>
+  <div class="right">
+    <span class="count" id="count">00 / 00</span>
+    <button class="map-btn snd" type="button" id="sndBtn" aria-pressed="true" aria-label="Sound on" title="Sound"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="mute" d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    <button class="map-btn" type="button" id="mapBtn" aria-haspopup="dialog"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span>Map</span></button>
+  </div>
+</header>
+<div class="progress" aria-hidden="true"><i id="bar"></i></div>
+<nav class="nav" aria-label="Move forward and back">
+  <button type="button" id="prev" aria-label="Previous screen"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button type="button" id="next" aria-label="Next screen"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+</nav>
+<div class="hint" id="hint" role="status">Move with the arrow keys, the mouse wheel or a swipe</div>
+<div class="flash" id="flash" aria-hidden="true"></div>
+
+<main class="deck" id="deck">
+
+  <!-- 00 Start -->
+  <section class="screen light" data-chapter="0" aria-label="Start">
+    <div class="scroll"><div class="in intro-in">
+      <img class="brain-mark" style="--depth:16" data-depth src="assets/brain.png" alt="Brain Studio">
+      <div class="intro-kicker">Brain Studio × 2X Global · Looking at 2027</div>
+      <h1 class="intro-title" style="--depth:6" data-depth>More than an annual report.<br>A <em>partner.</em></h1>
+      <button class="hold" id="hold" style="--depth:-12" data-depth type="button" aria-label="Press and hold to begin">
+        <svg viewBox="0 0 220 220" aria-hidden="true"><circle class="track" cx="110" cy="110" r="104"/><circle class="ring" id="ring" cx="110" cy="110" r="104"/></svg>
+        <span class="disc"><b class="start">START<br>HERE</b></span>
+      </button>
+      <div class="hold-hint">Press and hold to begin</div>
+      <button class="resume" id="resume" type="button" hidden>Pick up where you left off</button>
+    </div></div>
+  </section>
+
+  <!-- 01 Our story -->
+  <section class="screen dark grain" data-zoom data-chapter="1" data-sub="How it started" aria-label="How it started">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">01 · Brain × 2X Global</p>
+      <h2 class="h-xl rv" style="--i:1">It started with<br><span style="color:var(--accent-soft)">an annual report.</span></h2>
+      <p class="lede muted rv" style="--i:2">Then came two Summits, a certification campaign, a business case, stories from the field and a booth in Latin America. Two years of work together taught both teams something.</p>
+      <div class="story-chips" aria-label="What we have built together">
+        <span style="--i:0"><b>2025</b>Annual Report 2024</span><span style="--i:1"><b>2025</b>Summit Manila, LED animations</span><span style="--i:2"><b>2026</b>Annual Report 2025</span><span style="--i:3"><b>2026</b>Summit Montréal identity and system</span><span style="--i:4"><b>2026</b>Business Case for 2X Challenge Qualification</span><span style="--i:5"><b>2026</b>Certification for FIs</span><span style="--i:6"><b>2026</b>2X Factor</span><span style="--i:7"><b>2026</b>RFF Cape Town</span><span style="--i:8"><b>2026</b>GLI Forum LatAm</span>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="1" data-sub="Two discoveries" aria-label="Two discoveries">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">Along the way</p>
+      <h2 class="h-l rv" style="--i:1">Two discoveries.</h2>
+      <div class="duo">
+        <article class="disc-card a rv" style="--i:2; --depth:-10" data-depth><small>What we learned about 2X</small><h3>2X is much more than an annual report.</h3><p>A global network moving capital toward women: the Challenge, Certification, Ignite, the Summit, and stories in every region. Every one of them needs to be explained, launched and remembered.</p></article>
+        <article class="disc-card b rv" style="--i:3; --depth:10" data-depth><small>What you learned about Brain</small><h3>Brain is more than a design vendor.</h3><p>Strategy, campaigns, video, events and digital products, from one team that already knows your voice, your brand and your review process.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="1" data-sub="What we want" aria-label="What we want">
+    <div class="scroll"><div class="in quote">
+      <div class="mk" aria-hidden="true">“</div>
+      <div>
+        <blockquote>We’re your vendor, yes. But what we really want is to be your partner.</blockquote>
+        <cite class="rv" style="--i:6">Brain Studio, for 2X Global</cite>
+        <p class="hand rv after" style="--i:7; color:var(--muted-ink)">whatever you need, there’s a space at Brain that can help</p>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 02 Who we are -->
+  <section class="screen light" data-zoom data-chapter="2" aria-label="Who we are">
+    <div class="scroll"><div class="in about">
+      <div>
+        <p class="eyebrow rv">02 · Who we are</p>
+        <h2 class="h-xl rv" style="--i:1">Communication that <span style="color:var(--accent)">lasts.</span></h2>
+        <p class="lede rv muted" style="--i:2; color:var(--muted-ink)">We are a Colombian 360° communication, creative and marketing agency. We bring strategy, content, design, technology and execution together around each organisation’s goals: more than 300 branding projects, 100 campaigns and 30 digital builds.</p>
+      </div>
+      <div class="stats-panel rv" style="--i:1; --depth:-26" data-depth>
+        <div class="stats">
+          <div class="stat rv" style="--i:2"><b data-count="400">0</b><span>clients and organisations in more than 30 sectors</span></div>
+          <div class="stat rv" style="--i:3"><b data-count="11">0</b><span>countries where our work has travelled</span></div>
+          <div class="stat rv" style="--i:4"><b data-count="6">0</b><span>years taking ideas from strategy to execution</span></div>
+        </div>
+        <div class="countries" aria-label="Countries">
+          <span style="--i:0">Colombia</span><span style="--i:1">Venezuela</span><span style="--i:2">Chile</span><span style="--i:3">Brazil</span><span style="--i:4">Argentina</span><span style="--i:5">United States</span><span style="--i:6">Puerto Rico</span><span style="--i:7">Ghana</span><span style="--i:8">Kenya</span><span style="--i:9">United Kingdom</span><span style="--i:10">Canada</span>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 03 What we do -->
+  <section class="screen light" data-chapter="3" aria-label="What we do">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">03 · What we do</p>
+      <h2 class="h-l rv" style="--i:1">One agency.<br><span style="color:var(--accent)">A complete ecosystem.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">We don’t treat communication as separate services. We connect strategy, creativity, content, technology and experiences around what each organisation needs to achieve.</p>
+      <div class="moves">
+        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--accent)">1</span><h3>Strategy and communication</h3><p>Planning, campaigns, positioning, consulting, workshops, research and copywriting.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--coral)">2</span><h3>Marketing and performance</h3><p>Social media, Meta Ads, Google Ads, content planning, analytics, optimisation and reporting.</p></article>
+        <article class="move rv" style="--i:5"><span class="ix" style="background:var(--leaf)">3</span><h3>Branding and creative</h3><p>Naming, visual identity, graphic systems, brand guidelines, editorial design and presentations.</p></article>
+        <article class="move rv" style="--i:6"><span class="ix" style="background:var(--accent)">4</span><h3>Content and video</h3><p>Scripts, photography, video, drone, editing and live streaming.</p></article>
+        <article class="move rv" style="--i:7"><span class="ix" style="background:var(--coral)">5</span><h3>Digital and technology</h3><p>Websites, landing pages, e-commerce, UX/UI, interactive experiences, platforms and dashboards.</p></article>
+        <article class="move rv" style="--i:8"><span class="ix" style="background:var(--leaf)">6</span><h3>Experiences and events</h3><p>Events, brand experiences, signage, merchandise, coverage and activation campaigns.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="3" data-sub="Digital" aria-label="Digital work">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">Digital</p>
+      <h2 class="h-l rv" style="--i:1">We design for the screen.<br><span style="color:var(--accent)">We think beyond it.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">More than 30 digital builds for brands and organisations. A few you can visit right now:</p>
+      <div class="moves sites">
+        <a class="move rv" style="--i:3" href="https://museomampujan.org/" target="_blank" rel="noopener"><span class="tagk">Memory and community</span><h3>Mampuján Museum of Art and Memory</h3><p>WordPress site with an online textile shop for a community museum in Bolívar, Colombia.</p><span class="go">museomampujan.org ↗</span></a>
+        <a class="move rv" style="--i:4" href="https://mioagency.com/rebranding" target="_blank" rel="noopener"><span class="tagk">Agency · Puerto Rico</span><h3>MIO Agency</h3><p>WordPress redesign with 165 migrated articles, a 33-case portfolio and SEO safeguards.</p><span class="go">mioagency.com ↗</span></a>
+        <a class="move rv" style="--i:5" href="https://aristeaconsultoria.com/" target="_blank" rel="noopener"><span class="tagk">Sustainability · Colombia</span><h3>Aristea Consultoría</h3><p>Site for a consultancy that turns sustainability into a profitable business decision.</p><span class="go">aristeaconsultoria.com ↗</span></a>
+        <a class="move rv" style="--i:6" href="https://colegiopablohoff.edu.co/" target="_blank" rel="noopener"><span class="tagk">Education · Cartagena</span><h3>Colegio Pablo Hoff</h3><p>Institutional site for a school in Manga, Cartagena.</p><span class="go">colegiopablohoff.edu.co ↗</span></a>
+        <a class="move rv" style="--i:7" href="https://www.unaluz.org/" target="_blank" rel="noopener"><span class="tagk">Foundation · Cartagena</span><h3>Fundación Resplandece Una Luz</h3><p>Site with online donations for its programmes with children and families.</p><span class="go">unaluz.org ↗</span></a>
+        <a class="move rv feature" style="--i:8" href="https://www.brainstudioagencia.com" target="_blank" rel="noopener"><span class="tagk">This page</span><h3>A proposal you can walk through</h3><p>Built the same way we would build an experience for 2X: interactive, light, and made from approved content.</p><span class="go">brainstudioagencia.com ↗</span></a>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 04 Case studies: hub -->
+  <section class="screen light" data-zoom data-chapter="4" aria-label="Case studies">
+    <div class="scroll"><div class="in">
+      <div class="hub-head">
+        <div>
+          <p class="eyebrow rv">04 · Case studies</p>
+          <h2 class="h-l rv" style="--i:1">Five stories. One at a time.</h2>
+        </div>
+        <div class="seen-meter rv" style="--i:2"><span id="seenTxt">0 of 5 seen</span><span class="dots" id="seenDots"><i></i><i></i><i></i><i></i><i></i></span></div>
+      </div>
+      <div class="cases">
+        <button class="case rv" style="--i:2" type="button" data-case="ande"><div class="ph"><img src="assets/ande-metrics.jpg" alt=""></div><div class="bd"><span class="num">CASE 01</span><span class="nm">ANDE</span><span class="go">Open the case →</span></div></button>
+        <button class="case rv" style="--i:3" type="button" data-case="gob"><div class="ph"><img src="assets/c-gob.jpg" alt=""></div><div class="bd"><span class="num">CASE 02</span><span class="nm">Government of Bolívar</span><span class="go">Open the case →</span></div></button>
+        <button class="case rv" style="--i:4" type="button" data-case="camara"><div class="ph"><img src="assets/c-camara.jpg" alt=""></div><div class="bd"><span class="num">CASE 03</span><span class="nm">Cartagena Chamber of Commerce</span><span class="go">Open the case →</span></div></button>
+        <button class="case rv" style="--i:5" type="button" data-case="pnud"><div class="ph"><img src="assets/c-pnud.jpg" alt=""></div><div class="bd"><span class="num">CASE 04</span><span class="nm">UNDP</span><span class="go">Open the case →</span></div></button>
+        <button class="case rv" style="--i:6" type="button" data-case="lat"><div class="ph"><img src="assets/c-lat.jpg" alt=""></div><div class="bd"><span class="num">CASE 05</span><span class="nm">Latimpacto</span><span class="go">Open the case →</span></div></button>
+        <div class="case rv" style="--i:7; background:var(--ink); color:#fff; border-color:var(--ink); padding:22px; justify-content:space-between; gap:14px"><span class="num" style="color:var(--accent-soft)">WHY THESE FIVE</span><span class="nm" style="font-size:20px">Networks, governments, impact investors and the UN: audiences like the ones 2X speaks to.</span><span class="go" style="color:var(--accent-soft)">Each case ends with what it means for 2X.</span></div>
+      </div>
+    </div></div>
+  </section>
+  <!-- ANDE · cover -->
+  <section class="screen ande grain" data-chapter="4" data-sub="ANDE" data-case-start="ande" aria-label="ANDE case">
+    <div class="scroll"><div class="in cover">
+      <div>
+        <div class="chips rv"><span class="chip">Case 01</span><span class="chip">International development</span><span class="chip">Latin America</span></div>
+        <h2 class="h-xl rv" style="--i:1; margin-top:20px">A global network.<br><span class="t">One voice in Latin America.</span></h2>
+        <dl class="facts rv" style="--i:3">
+          <div><dt>Client</dt><dd><img class="ande-logo" src="assets/ande-logo.png" alt="ANDE, Aspen Institute"></dd></div>
+          <div><dt>Duration</dt><dd>2 years<br>2023 – 2024</dd></div>
+          <div><dt>Countries</dt><dd>Mexico, Guatemala, Peru, Brazil and Colombia</dd></div>
+        </dl>
+      </div>
+      <img class="tilt rv" style="--i:2; --depth:-34" data-depth src="assets/ande-metrics.jpg" alt="Metrics from the Ground Up backdrop, Brazil 2023">
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="4" data-sub="ANDE · The challenge" aria-label="ANDE challenge">
+    <div class="scroll"><div class="in reto-grid">
+      <div>
+        <p class="eyebrow rv">The challenge</p>
+        <p class="statement rv" style="--i:1">ANDE needed to <b>show the results</b> of its programmes across the region. In Colombia it also had to start building its
+          <span class="circled">reputation<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M20 44 C 18 14, 150 4, 186 30 C 206 50, 150 76, 88 74 C 30 72, 6 54, 24 30 C 34 18, 60 12, 84 10"/></svg></span> and reach local media.</p>
+      </div>
+      <div class="rv" style="--i:3">
+        <p class="hand" style="color:var(--muted-ink)">sources: 2023 work agreement and ARISE 2024 press report</p>
+        <div class="chips" style="margin-top:14px; color:var(--ink)"><span class="chip">Member organisations</span><span class="chip">Entrepreneurs</span><span class="chip">Donors</span><span class="chip">Media</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="4" data-sub="ANDE · Your guess" aria-label="Guess the ANDE result">
+    <div class="scroll"><div class="in guess">
+      <div>
+        <p class="eyebrow rv">Before you see the result</p>
+        <p class="guess-q rv" style="--i:1">For the ARISE workshop in Bogotá we set a goal: <b>20 media stories.</b> What do you think happened?</p>
+      </div>
+      <div class="dial warm-card rv" style="--i:2; --depth:-24" data-depth data-game="ande">
+        <div class="options" role="group" aria-label="Your bet">
+          <button class="opt" type="button" data-bet="under" data-verdict="Better than you thought: we didn’t just reach it, we beat it. And more than half the stories ran in top-tier outlets.">We almost made it</button>
+          <button class="opt" type="button" data-bet="exact" data-verdict="A little more than that: 21 stories, and 57% in top-tier outlets when the goal was half.">We hit it exactly</button>
+          <button class="opt" type="button" data-bet="over" data-verdict="You got it. We beat the goal in volume and in quality: 57% in top-tier outlets.">We beat it</button>
+        </div>
+        <div class="reveal" hidden aria-live="polite">
+          <div class="score"><b>21</b><span>of 20</span><span class="badge">Goal beaten</span></div>
+          <div class="goal-bar"><div class="lbl"><span>Media stories</span><span>goal 20</span></div><div class="track"><i data-to="84"></i><span class="mark" style="left:80%"></span></div></div>
+          <div class="goal-bar"><div class="lbl"><span>In top-tier outlets: 57.1%</span><span>goal 50%</span></div><div class="track"><i data-to="57.1"></i><span class="mark" style="left:50%"></span></div></div>
+          <div class="verdict"></div>
+          <button class="btn" type="button" data-next style="justify-self:start">See all the results →</button>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen ande-deep grain" data-chapter="4" data-sub="ANDE · Results" aria-label="ANDE results">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we achieved</p>
+      <h2 class="h-l rv" style="--i:1">One event.<br><span style="color:var(--teal)">Twenty-one stories.</span></h2>
+      <div class="kpis">
+        <div class="kpi rv" style="--i:2"><span class="w">Press</span><span class="v"><span data-count="21">0</span></span><span class="d">media stories; the goal was 20</span></div>
+        <div class="kpi rv" style="--i:3"><span class="w">Reach</span><span class="v"><span data-count="7957232">0</span></span><span class="d">people of estimated reach</span></div>
+        <div class="kpi rv" style="--i:4"><span class="w">Top tier</span><span class="v"><span data-count="57.1" data-dec="1">0</span>%</span><span class="meter" aria-hidden="true"><i data-fill="57.1"></i><span class="goal"></span></span><span class="d">of stories in Tier 1 outlets; the goal was 50%</span></div>
+        <div class="kpi rv" style="--i:5"><span class="w">Value</span><span class="v">COP <span data-count="38.8" data-dec="1">0</span>M</span><span class="d">in advertising value equivalent</span></div>
+      </div>
+      <div class="mix rv" style="--i:6">
+        <div class="mix-bar" aria-label="Media type: 81% online, 14.3% radio, 4.8% print"><i data-fill="81" style="background:var(--teal)"></i><i data-fill="14.3" style="background:var(--accent-soft)"></i><i data-fill="4.8" style="background:var(--coral)"></i></div>
+        <div class="mix-legend"><span style="--c:var(--teal)">Online 81%</span><span style="--c:var(--accent-soft)">Radio 14.3%</span><span style="--c:var(--coral)">Print 4.8%</span></div>
+      </div>
+      <div class="media rv" style="--i:7"><span class="pill">Caracol Radio</span><span class="pill">Colmundo Radio</span><span class="pill">El Nuevo Siglo</span><span class="pill">La Nota Económica</span><span class="pill">Revista C-Level</span></div>
+      <p class="hand rv muted" style="--i:8; margin-top:18px">source: ARISE press report, June 2024</p>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="4" data-sub="ANDE · What we did" aria-label="What we did for ANDE">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we did</p>
+      <h2 class="h-l rv" style="--i:1">Three fronts,<br><span style="color:var(--accent)">one network.</span></h2>
+      <div class="moves">
+        <article class="move rv" style="--i:2"><span class="ix" style="background:var(--accent)">1</span><h3>Content for the region</h3><p>Monthly content plans for the network’s LinkedIn, X and Instagram, plus institutional presentations.</p></article>
+        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--coral)">2</span><h3>NotiANDE</h3><p>The network’s video newscast: script, shoot and edit of its 2023 and 2024 editions.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--leaf)">3</span><h3>Events and press</h3><p>Visual identity for Metrics Conference in Brazil and, for ARISE in Bogotá, press release, interviews, three days of coverage and video.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="4" data-sub="ANDE · The work" aria-label="ANDE pieces">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">The work</p>
+      <h2 class="h-l rv" style="--i:1">Tap a piece<br>to see it in full.</h2>
+      <div class="pieces">
+        <button class="piece rv" data-depth style="--i:2; --depth:-6; --c:7; --bg:#e4e2dc" type="button" data-cap="Metrics from the Ground Up, Brazil 2023"><img src="assets/ande-metrics.jpg" alt="Metrics from the Ground Up, Brazil 2023"><span>Metrics, Brazil 2023</span></button>
+        <button class="piece rv" data-depth style="--i:3; --depth:5; --c:5; --bg:#0e2f57" type="button" data-cap="Save the date, 2025 global annual conference"><img src="assets/ande-savedate.jpg" alt="Save the date for the 2025 annual conference"><span>Save the date 2025</span></button>
+        <button class="piece rv" data-depth style="--i:4; --depth:-4; --c:4; --bg:#62d2c1" type="button" data-cap="FLII gathering in Mérida, Mexico"><img src="assets/ande-flii.jpg" alt="FLII gathering piece in Mérida"><span>FLII, Mérida</span></button>
+        <button class="piece rv" data-depth style="--i:5; --depth:6; --c:4; --bg:#dfe7f2" type="button" data-cap="ARISE workshop, Bogotá 2024"><img src="assets/ande-arise.jpg" alt="ARISE workshop piece"><span>ARISE, Bogotá</span></button>
+        <button class="piece rv" data-depth style="--i:6; --depth:-5; --c:4; --bg:#e4e2dc" type="button" data-cap="Video production at the network’s events"><img src="assets/ande-team.jpg" alt="Brain Studio team filming at an event"><span>On set</span></button>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light" data-chapter="4" data-sub="ANDE · Testimonial" aria-label="ANDE testimonial">
+    <div class="scroll"><div class="in quote">
+      <div class="mk" aria-hidden="true">“</div>
+      <div>
+        <blockquote>Brain Studio has been key to our digital identity. A young, creative and committed team that brings our ideas to life.</blockquote>
+        <cite class="rv" style="--i:6">Lina Cano, Communications Coordinator · ANDE Latin America</cite>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-ande" data-chapter="4" data-sub="ANDE · For 2X" aria-label="What ANDE means for 2X">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What it means for 2X</p>
+      <h2 class="h-l rv" style="--i:1">In the media<br><span style="color:var(--cink)">your audience follows.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">An organisation gains weight when it shows up where its audience gets its news. With ANDE, a network just starting out in Colombia earned 21 stories in radio, print and digital media from a single event.</p>
+      <div class="bridges" data-bridges>
+        <button class="flip rv" style="--i:3" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With ANDE</small><b>Press for ARISE</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Press around the Summit and new reports</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:4" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With ANDE</small><b>A member network in five countries</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Content your members can share</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:5" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With ANDE</small><b>Regional events</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Regional convenings and forums</b><span class="tap">How we’d do it ✓</span></span></span></button>
+      </div>
+      <p class="hand rv bridge-count" style="--i:6; color:var(--muted-ink)">0 of 3 connected</p>
+    </div></div>
+  </section>
+
+  <section class="screen dark grain" data-chapter="4" data-sub="ANDE · Case seen" data-case-end="ande" aria-label="ANDE case seen">
+    <div class="scroll"><div class="in done-grid">
+      <div>
+        <p class="eyebrow rv">Case 01 complete</p>
+        <h2 class="h-l rv" style="--i:1">A network just starting out in Colombia, <span style="color:var(--accent-soft)">in 21 outlets from one event.</span></h2>
+        <p class="lede muted rv" style="--i:2">Showing up where your audience gets its news is what we would do for 2X.</p>
+        <div class="actions rv" style="--i:3">
+          <button class="btn alt" type="button" data-goto-hub>Back to the cases</button>
+          <button class="btn ghost" type="button" data-next>Next case: Bolívar →</button>
+        </div>
+      </div>
+      <div class="seal" aria-hidden="true" style="--depth:-30" data-depth><span>Case<br>seen<small class="seal-n">1 of 5</small></span></div>
+    </div></div>
+  </section>
+
+  <!-- Government of Bolívar -->
+  <section class="screen cs th-gob grain" data-chapter="4" data-sub="Bolívar" data-case-start="gob" aria-label="Government of Bolívar case">
+    <div class="scroll"><div class="in cover">
+      <div>
+        <div class="chips rv"><span class="chip">Case 02</span><span class="chip">Public sector</span><span class="chip">Bolívar, Colombia</span></div>
+        <h2 class="h-xl rv" style="--i:1; margin-top:20px">A whole department.<br><span class="t">One voice.</span></h2>
+        <dl class="facts rv" style="--i:3">
+          <div><dt>Client</dt><dd><img class="ande-logo" src="assets/gob-Logo-Gobernacion-Horizontal-Color.png" alt="Government of Bolívar"></dd></div>
+          <div><dt>Duration</dt><dd>2 years, 5 months<br>April 2024 – today</dd></div>
+          <div><dt>Area</dt><dd>Economic Development Secretariat</dd></div>
+        </dl>
+      </div>
+      <img class="tilt rv" style="--i:2; --depth:-34" data-depth src="assets/gob-cuaderno.jpg" alt="Bolívar en Cifras 2025, identity and launch">
+    </div></div>
+  </section>
+
+  <section class="screen light th-gob" data-chapter="4" data-sub="Bolívar · The challenge" aria-label="Bolívar challenge">
+    <div class="scroll"><div class="in reto-grid">
+      <div>
+        <p class="eyebrow rv">The challenge</p>
+        <p class="statement rv" style="--i:1">The Secretariat wanted to be <b>the reference for Bolívar’s economy</b>, but its work <span class="circled">wasn’t visible.<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M20 44 C 18 14, 150 4, 186 30 C 206 50, 150 76, 88 74 C 30 72, 6 54, 24 30 C 34 18, 60 12, 84 10"/></svg></span> Its channels were mostly third-party content. And every programme, from entrepreneurship to circular economy, had to sound like itself and still be the Government.</p>
+      </div>
+      <div class="rv" style="--i:3">
+        <p class="hand" style="color:var(--muted-ink)">sources: communications strategy (Aug 2025) and April 2026 report</p>
+        <div class="chips" style="margin-top:14px; color:var(--ink)"><span class="chip">Entrepreneurs</span><span class="chip">Businesses</span><span class="chip">Trade groups</span><span class="chip">Mayors</span><span class="chip">Cooperation partners</span><span class="chip">Citizens</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-gob" data-chapter="4" data-sub="Bolívar · Your guess" aria-label="Guess the Bolívar result">
+    <div class="scroll"><div class="in guess">
+      <div>
+        <p class="eyebrow rv">Before you see the result</p>
+        <p class="guess-q rv" style="--i:1">In April 2026 the Secretariat’s content had 55,638 views on Instagram. The account had 467 followers. <b>Who do you think watched?</b></p>
+        <p class="hand rv" style="--i:3; color:var(--muted-ink); margin-top:16px">source: Secretariat report, April 2026</p>
+      </div>
+      <div class="dial warm-card rv" style="--i:2; --depth:-24" data-depth data-game="gob">
+        <div class="options" role="group" aria-label="Your bet">
+          <button class="opt" type="button" data-bet="0" data-verdict="The other way round: 85.9% of views came from people who didn’t follow the account. The content reached almost 25 times the community.">Mostly its followers</button>
+          <button class="opt" type="button" data-bet="1" data-verdict="Much more than half: 85.9% came from people who didn’t follow the Secretariat yet.">Half and half</button>
+          <button class="opt" type="button" data-bet="2" data-verdict="You got it. 85.9% of views came from new people: 11,628 accounts reached by a community of 467.">Mostly new people</button>
+        </div>
+        <div class="reveal" hidden aria-live="polite">
+          <div class="score"><b>85.9%</b><span>new people</span><span class="badge">Beyond the community</span></div>
+          <div class="goal-bar"><div class="lbl"><span>Account followers</span><span>467</span></div><div class="track"><i data-to="4"></i></div></div>
+          <div class="goal-bar"><div class="lbl"><span>Accounts reached in the month</span><span>11,628</span></div><div class="track"><i data-to="100"></i></div></div>
+          <div class="verdict"></div>
+          <button class="btn" type="button" data-next style="justify-self:start">See all the results →</button>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen cs-deep th-gob grain" data-chapter="4" data-sub="Bolívar · Results" aria-label="Bolívar results">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we achieved</p>
+      <h2 class="h-l rv" style="--i:1">A community of 467.<br><span style="color:var(--teal)">A reach of 11,628.</span></h2>
+      <div class="kpis">
+        <div class="kpi rv" style="--i:2"><span class="w">Reach</span><span class="v"><span data-count="11628">0</span></span><span class="d">accounts reached in one month, almost 25 times the 467-follower community</span></div>
+        <div class="kpi rv" style="--i:3"><span class="w">Views</span><span class="v"><span data-count="55638">0</span></span><span class="d">content views in the month</span></div>
+        <div class="kpi rv" style="--i:4"><span class="w">Engagement</span><span class="v"><span data-count="1594">0</span></span><span class="d">interactions, 72.3% from people who didn’t follow the account</span></div>
+        <div class="kpi rv" style="--i:5"><span class="w">Community</span><span class="v">+<span data-count="16.2" data-dec="1">0</span>%</span><span class="d">follower growth over the previous period</span></div>
+      </div>
+      <p class="band rv" style="--i:6"><b>Working together since April 2024.</b> 11 consecutive monthly content plans, October 2025 to September 2026.</p>
+      <p class="rv muted" style="--i:7; margin:24px 0 0; font-weight:600">17 fairs, festivals and public days across the department with material in our archive</p>
+      <div class="media rv" style="--i:7; margin-top:10px"><span class="pill">Entrepreneurship Fair 2024</span><span class="pill">Development Plan forums</span><span class="pill">Mompox Summit</span><span class="pill">Bolívar Compra Bolívar</span><span class="pill">Mompox 15K</span><span class="pill">Festimaría 2024</span><span class="pill">Santo Pescao</span><span class="pill">Development policy workshop</span><span class="pill">Circular economy workshops</span><span class="pill">MercaBolívar</span><span class="pill">FICCI</span><span class="pill">Lomita Arena</span><span class="pill">Soplaviento</span><span class="pill">Panaca Viajero</span><span class="pill">Festimaría 2026</span><span class="pill">FestiJazz</span><span class="pill">Turbaco Midnight</span></div>
+      <p class="hand rv muted" style="--i:8; margin-top:18px">source: Secretariat monthly report, April 2026</p>
+    </div></div>
+  </section>
+
+  <section class="screen light th-gob" data-chapter="4" data-sub="Bolívar · What we did" aria-label="What we did for Bolívar">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we did</p>
+      <h2 class="h-l rv" style="--i:1">Three moves,<br><span style="color:var(--cink)">one system.</span></h2>
+      <div class="moves">
+        <article class="move rv" style="--i:2"><span class="ix" style="background:var(--accent)">1</span><h3>One voice</h3><p>A digital strategy for the Secretariat with a monthly plan, and a personal-brand strategy for the Secretary: original content instead of reposts, with measurable goals per channel.</p></article>
+        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--coral)">2</span><h3>A brand per programme</h3><p>A refreshed look and unified graphics. Identities for Bolívar en Cifras, Bolívar Circular and Distrito Circular that live alongside the Government brand.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--leaf)">3</span><h3>Presence on the ground</h3><p>Coverage and content at fairs, festivals and public days, from Mompox to Turbaco, so the work was seen where it happens.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-gob" data-chapter="4" data-sub="Bolívar · The work" aria-label="Bolívar pieces">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">The work</p>
+      <h2 class="h-l rv" style="--i:1">This is how<br>the system looks.</h2>
+      <p class="hand rv" style="--i:2; color:var(--muted-ink); margin:10px 0 0">Each programme with its own face, all recognisable as the Government of Bolívar. Tap one to see it in full.</p>
+      <div class="pieces">
+        <button class="piece rv" data-depth style="--i:2; --depth:-6; --c:4; --bg:#1f2560" type="button" data-cap="Bolívar en Cifras 2025, identity and launch"><img src="assets/gob-cifras.jpg" alt="Bolívar en Cifras 2025, identity and launch"><span>Bolívar en Cifras 2025, identity and launch</span></button>
+        <button class="piece rv flat" data-depth style="--i:3; --depth:5; --c:5; --bg:#ffffff" type="button" data-cap="Bolívar Circular Mompox, programme identity"><img src="assets/gob-gob-bolivar-circular.png" alt="Bolívar Circular Mompox, programme identity"><span>Bolívar Circular Mompox, programme identity</span></button>
+        <button class="piece rv" data-depth style="--i:4; --depth:-4; --c:3; --bg:#31aa8a" type="button" data-cap="Social: Panaca Viajero results"><img src="assets/gob-gob-panaca.jpg" alt="Social: Panaca Viajero results"><span>Social: Panaca Viajero results</span></button>
+        <button class="piece rv" data-depth style="--i:5; --depth:6; --c:5; --bg:#e3e2de" type="button" data-cap="Secretariat notebook, design"><img src="assets/gob-gob-libreta.jpg" alt="Secretariat notebook, design"><span>Secretariat notebook, design</span></button>
+        <button class="piece rv flat" data-depth style="--i:6; --depth:-5; --c:7; --bg:#e3e2de" type="button" data-cap="The notebook, printed"><img src="assets/gob-cuaderno.jpg" alt="The notebook, printed"><span>The notebook, printed</span></button>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-gob" data-chapter="4" data-sub="Bolívar · For 2X" aria-label="What Bolívar means for 2X">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What it means for 2X</p>
+      <h2 class="h-l rv" style="--i:1">Many programmes.<br><span style="color:var(--cink)">One brand people remember.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">2X also speaks to very different audiences through many programmes, and needs to be recognised by people who don’t know it yet. That is what we did for Bolívar: reach far beyond its own community.</p>
+      <div class="bridges" data-bridges>
+        <button class="flip rv" style="--i:3" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With Bolívar</small><b>Programmes with their own identity</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Challenge, Certification, Ignite and RFF under one family</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:4" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With Bolívar</small><b>Trade groups, mayors and citizens</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Investors, investees, FIs and partners</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:5" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With Bolívar</small><b>Presence at events across the territory</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Summit, forums and regional events</b><span class="tap">How we’d do it ✓</span></span></span></button>
+      </div>
+      <p class="hand rv bridge-count" style="--i:6; color:var(--muted-ink)">0 of 3 connected</p>
+    </div></div>
+  </section>
+
+  <section class="screen dark grain" data-chapter="4" data-sub="Bolívar · Case seen" data-case-end="gob" aria-label="Bolívar case seen">
+    <div class="scroll"><div class="in done-grid">
+      <div>
+        <p class="eyebrow rv">Case 02 complete</p>
+        <h2 class="h-l rv" style="--i:1">A Secretariat nobody saw, <span style="color:var(--accent-soft)">seen by 11,628 accounts in a month.</span></h2>
+        <p class="lede muted rv" style="--i:2">Reaching beyond your own community is what we would do for 2X.</p>
+        <div class="actions rv" style="--i:3">
+          <button class="btn alt" type="button" data-goto-hub>Back to the cases</button>
+          <button class="btn ghost" type="button" data-next>Next case: Chamber of Commerce →</button>
+        </div>
+      </div>
+      <div class="seal" aria-hidden="true" style="--depth:-30" data-depth><span>Case<br>seen<small class="seal-n">1 of 5</small></span></div>
+    </div></div>
+  </section>
+  <!-- Chamber of Commerce -->
+  <section class="screen cs th-camara grain" data-chapter="4" data-sub="Chamber of Commerce" data-case-start="camara" aria-label="Chamber of Commerce case">
+    <div class="scroll"><div class="in cover">
+      <div>
+        <div class="chips rv"><span class="chip">Case 03</span><span class="chip">Institutional alliance</span><span class="chip">Cartagena and Bolívar</span></div>
+        <h2 class="h-xl rv" style="--i:1; margin-top:20px">A 15-year plan.<br><span class="t">A launch to match.</span></h2>
+        <dl class="facts rv" style="--i:3">
+          <div><dt>Client</dt><dd><img class="ande-logo" src="assets/camara-logo.png" alt="Cartagena Chamber of Commerce"></dd></div>
+          <div><dt>Duration</dt><dd>October 2024 –<br>November 2025</dd></div>
+          <div><dt>Partners</dt><dd>Government of Bolívar, City of Cartagena and the Regional Competitiveness Commission</dd></div>
+        </dl>
+      </div>
+      <img class="tilt rv" style="--i:2; --depth:-34" data-depth src="assets/camara-evento.jpg" alt="Launch of the Plan">
+    </div></div>
+  </section>
+
+  <section class="screen light th-camara" data-chapter="4" data-sub="Chamber · The challenge" aria-label="Chamber of Commerce challenge">
+    <div class="scroll"><div class="in reto-grid">
+      <div>
+        <p class="eyebrow rv">The challenge</p>
+        <p class="statement rv" style="--i:1">The previous plan dated from 2008. The new one was built by <b>more than 300 stakeholders</b>, and all that technical work had to become something mayors, businesses and citizens would <span class="circled">want to use.<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M20 44 C 18 14, 150 4, 186 30 C 206 50, 150 76, 88 74 C 30 72, 6 54, 24 30 C 34 18, 60 12, 84 10"/></svg></span></p>
+      </div>
+      <div class="rv" style="--i:3">
+        <p class="hand" style="color:var(--muted-ink)">sources: Plan presentation and launch schedule (July 2025)</p>
+        <div class="chips" style="margin-top:14px; color:var(--ink)"><span class="chip">Mayors</span><span class="chip">Businesses</span><span class="chip">Trade groups</span><span class="chip">Academia</span><span class="chip">Citizens</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-camara" data-chapter="4" data-sub="Chamber · Your guess" aria-label="Guess the Chamber of Commerce result">
+    <div class="scroll"><div class="in guess">
+      <div>
+        <p class="eyebrow rv">Before you see the result</p>
+        <p class="guess-q rv" style="--i:1">Cartagena and Bolívar needed a new Regional Competitiveness Plan. <b>What year was the previous plan from?</b></p>
+        <p class="hand rv" style="--i:3; color:var(--muted-ink); margin-top:16px">source: Plan institutional presentation, 2025</p>
+      </div>
+      <div class="dial warm-card rv" style="--i:2; --depth:-24" data-depth data-game="camara">
+        <div class="options" role="group" aria-label="Your bet">
+          <button class="opt" type="button" data-bet="0" data-verdict="Much earlier: the plan in force was from 2008. Seventeen years later, more than 300 stakeholders built the new one.">2020</button>
+          <button class="opt" type="button" data-bet="1" data-verdict="Further back still: 2008. The new one was built by more than 300 stakeholders.">2015</button>
+          <button class="opt" type="button" data-bet="2" data-verdict="You got it: 2008. Seventeen years later, more than 300 stakeholders built the new one, and we gave it a brand, a document and a stage.">2008</button>
+        </div>
+        <div class="reveal" hidden aria-live="polite">
+          <div class="score"><b>2008</b><span>the previous plan</span><span class="badge">New plan 2025–2040</span></div>
+          <p class="reveal-note">300+ stakeholders · 7 subregional dialogues · 24+ interviews · 11 strategic pillars</p>
+          <div class="verdict"></div>
+          <button class="btn" type="button" data-next style="justify-self:start">See all the results →</button>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen cs-deep th-camara grain" data-chapter="4" data-sub="Chamber · Results" aria-label="Chamber of Commerce results">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">In numbers</p>
+      <h2 class="h-l rv" style="--i:1">From the workshop<br><span style="color:var(--teal)">to the stage.</span></h2>
+      <div class="kpis">
+        <div class="kpi rv" style="--i:2"><span class="w">Territory</span><span class="v"><span data-count="7">0</span></span><span class="d">subregions invited to workshops with our pieces, October 2024</span></div>
+        <div class="kpi rv" style="--i:3"><span class="w">Launches</span><span class="v"><span data-count="2">0</span></span><span class="d">public events: the Plan and Bolívar en Cifras</span></div>
+        <div class="kpi rv" style="--i:4"><span class="w">Content</span><span class="v"><span data-count="11">0</span></span><span class="d">strategic pillars brought into the designed document</span></div>
+        <div class="kpi rv" style="--i:5"><span class="w">Identity</span><span class="v"><span data-count="5">0</span></span><span class="d">logo proposals for Bolívar en Cifras</span></div>
+      </div>
+      <p class="band rv" style="--i:6"><b>From the workshop to the stage.</b> A public forum in October 2024, the Plan launch in July 2025 and Bolívar en Cifras in November 2025.</p>
+      <div class="rv" style="--i:7; margin-top:22px"><p style="margin:0; font-weight:700">Tap each host town to light up the territory</p><div class="lightup" data-lightup><button type="button" aria-pressed="false">Turbaná</button><button type="button" aria-pressed="false">Calamar</button><button type="button" aria-pressed="false">San Juan Nepomuceno</button><button type="button" aria-pressed="false">Magangué</button><button type="button" aria-pressed="false">Santa Rosa del Sur</button><button type="button" aria-pressed="false">San Martín de Loba</button><button type="button" aria-pressed="false">Mompox</button></div><p class="lightup-count hand">0 of 7 lit</p></div>
+      <p class="hand rv muted" style="--i:8; margin-top:18px">source: invitations, launch pieces and Plan presentation</p>
+    </div></div>
+  </section>
+
+  <section class="screen light th-camara" data-chapter="4" data-sub="Chamber · What we did" aria-label="What we did for the Chamber of Commerce">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we did</p>
+      <h2 class="h-l rv" style="--i:1">Brand, document<br><span style="color:var(--cink)">and stage.</span></h2>
+      <div class="moves">
+        <article class="move rv" style="--i:2"><span class="ix" style="background:var(--accent)">1</span><h3>A brand for the Plan</h3><p>The “Cartagena y Bolívar Más Competitivo” key visual, the Plan’s graphic line and the Bolívar en Cifras identity, chosen from five logo proposals.</p></article>
+        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--coral)">2</span><h3>The document</h3><p>Layout of the Plan for print and digital, covers, the institutional presentation and the Bolívar en Cifras 2025 report.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--leaf)">3</span><h3>The stage</h3><p>Invitations to workshops in the seven subregions and the 2024 forum; for the launch, backdrops, totems, a vertical reel and bumpers for each speaker.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-camara" data-chapter="4" data-sub="Chamber · The work" aria-label="Chamber of Commerce pieces">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">The work</p>
+      <h2 class="h-l rv" style="--i:1">This is how<br>the launch looked.</h2>
+      <p class="hand rv" style="--i:2; color:var(--muted-ink); margin:10px 0 0">From the welcome banner to the panel screens. Tap one to see it in full.</p>
+      <div class="pieces many">
+        <button class="piece rv" data-depth style="--i:2; --depth:-6; --c:4; --bg:#2b2d8f" type="button" data-cap="Plan report cover"><img src="assets/camara-camara-cover.jpg" alt="Plan report cover"><span>Plan report cover</span></button>
+        <button class="piece rv" data-depth style="--i:3; --depth:5; --c:8; --bg:#e8e6f2" type="button" data-cap="Plan launch, July 2025"><img src="assets/camara-evento.jpg" alt="Plan launch, July 2025"><span>Plan launch, July 2025</span></button>
+        <button class="piece rv" data-depth style="--i:4; --depth:-4; --c:4; --bg:#ff9f1c" type="button" data-cap="Launch invitation, 15 July 2025"><img src="assets/camara-camara-lanzamiento.jpg" alt="Launch invitation, 15 July 2025"><span>Launch invitation, 15 July 2025</span></button>
+        <button class="piece rv" data-depth style="--i:5; --depth:6; --c:4; --bg:#e8e6f2" type="button" data-cap="Panel “Driving Competitive Development”"><img src="assets/camara-camara-panel.jpg" alt="Panel “Driving Competitive Development”"><span>Panel “Driving Competitive Development”</span></button>
+        <button class="piece rv" data-depth style="--i:6; --depth:-5; --c:4; --bg:#2b2d8f" type="button" data-cap="Bolívar en Cifras launch, November 2025"><img src="assets/camara-camara-bolivar-cifras.jpg" alt="Bolívar en Cifras launch, November 2025"><span>Bolívar en Cifras launch, November 2025</span></button>
+        <button class="piece rv" data-depth style="--i:7; --depth:-6; --c:5; --bg:#ffffff" type="button" data-cap="2024 forum key visual"><img src="assets/camara-camara-key-visual.jpg" alt="2024 forum key visual"><span>2024 forum key visual</span></button>
+        <button class="piece rv" data-depth style="--i:8; --depth:5; --c:7; --bg:#2b2d8f" type="button" data-cap="The stage, in the Plan’s identity"><img src="assets/camara-orador.jpg" alt="The stage, in the Plan’s identity"><span>The stage, in the Plan’s identity</span></button>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-camara" data-chapter="4" data-sub="Chamber · For 2X" aria-label="What the Chamber case means for 2X">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What it means for 2X</p>
+      <h2 class="h-l rv" style="--i:1">Technical work,<br><span style="color:var(--cink)">on stage.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">2X explains complex criteria and research, and presents them to investors, partners and media. With the Plan we did both: a technical document people understand and a launch people see.</p>
+      <div class="bridges" data-bridges>
+        <button class="flip rv" style="--i:3" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With the Chamber</small><b>A technical document, designed</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Criteria, guides and research made clear</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:4" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With the Chamber</small><b>Institutional launches</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Report and programme launches</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:5" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With the Chamber</small><b>An alliance of several institutions</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Co-branded work with partners and DFIs</b><span class="tap">How we’d do it ✓</span></span></span></button>
+      </div>
+      <p class="hand rv bridge-count" style="--i:6; color:var(--muted-ink)">0 of 3 connected</p>
+    </div></div>
+  </section>
+
+  <section class="screen dark grain" data-chapter="4" data-sub="Chamber · Case seen" data-case-end="camara" aria-label="Chamber of Commerce case seen">
+    <div class="scroll"><div class="in done-grid">
+      <div>
+        <p class="eyebrow rv">Case 03 complete</p>
+        <h2 class="h-l rv" style="--i:1">A technical 15-year plan, <span style="color:var(--accent-soft)">with a brand, a document and a stage.</span></h2>
+        <p class="lede muted rv" style="--i:2">Putting technical work on stage is what we would do for 2X.</p>
+        <div class="actions rv" style="--i:3">
+          <button class="btn alt" type="button" data-goto-hub>Back to the cases</button>
+          <button class="btn ghost" type="button" data-next>Next case: UNDP →</button>
+        </div>
+      </div>
+      <div class="seal" aria-hidden="true" style="--depth:-30" data-depth><span>Case<br>seen<small class="seal-n">1 of 5</small></span></div>
+    </div></div>
+  </section>
+
+  <!-- UNDP -->
+  <section class="screen cs th-pnud grain" data-chapter="4" data-sub="UNDP" data-case-start="pnud" aria-label="UNDP case">
+    <div class="scroll"><div class="in cover">
+      <div>
+        <div class="chips rv"><span class="chip">Case 04</span><span class="chip">International cooperation</span><span class="chip">Risk management</span><span class="chip">Cartagena</span></div>
+        <h2 class="h-xl rv" style="--i:1; margin-top:20px">A works project on the beach.<br><span class="t">A city kept informed.</span></h2>
+        <dl class="facts rv" style="--i:3">
+          <div><dt>Client</dt><dd><img class="ande-logo" src="assets/pnud-logo.png" alt="UNDP Colombia"></dd></div>
+          <div><dt>Duration</dt><dd>September 2021 –<br>June 2023</dd></div>
+          <div><dt>Partner</dt><dd>UNGRD, Colombia’s disaster risk agency</dd></div>
+        </dl>
+      </div>
+      <img class="tilt rv" style="--i:2; --depth:-34" data-depth src="assets/pnud-pnud-mural.jpg" alt="Co-creative mural on the beach">
+    </div></div>
+  </section>
+
+  <section class="screen light th-pnud" data-chapter="4" data-sub="UNDP · The challenge" aria-label="UNDP challenge">
+    <div class="scroll"><div class="in reto-grid">
+      <div>
+        <p class="eyebrow rv">The challenge</p>
+        <p class="statement rv" style="--i:1">100% of Cartagena’s beaches were at risk of erosion, and the works to protect them would change daily life for <b>fishers and beach vendors</b>. People had to be informed before, during and after, in Spanish and English, and the community had to be <span class="circled">heard.<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M20 44 C 18 14, 150 4, 186 30 C 206 50, 150 76, 88 74 C 30 72, 6 54, 24 30 C 34 18, 60 12, 84 10"/></svg></span></p>
+      </div>
+      <div class="rv" style="--i:3">
+        <p class="hand" style="color:var(--muted-ink)">sources: communications strategy (Nov 2021) and final agreement report (2023)</p>
+        <div class="chips" style="margin-top:14px; color:var(--ink)"><span class="chip">Artisanal fishers</span><span class="chip">Beach vendors</span><span class="chip">Tourists</span><span class="chip">Hotels and restaurants</span><span class="chip">Residents</span><span class="chip">Media</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-pnud" data-chapter="4" data-sub="UNDP · Your guess" aria-label="Guess the UNDP result">
+    <div class="scroll"><div class="in guess">
+      <div>
+        <p class="eyebrow rv">Before you see the result</p>
+        <p class="guess-q rv" style="--i:1">The strategy explained the coastal protection works on Facebook, Instagram and WhatsApp. <b>How many people do you think it reached?</b></p>
+        <p class="hand rv" style="--i:3; color:var(--muted-ink); margin-top:16px">source: UNGRD–UNDP final agreement report, 2023</p>
+      </div>
+      <div class="dial warm-card rv" style="--i:2; --depth:-24" data-depth data-game="pnud">
+        <div class="options" role="group" aria-label="Your bet">
+          <button class="opt" type="button" data-bet="0" data-verdict="Ten times more: 839,800 people reached. And on the beach, 7,500 flyers, 100% of the goal.">About 80,000</button>
+          <button class="opt" type="button" data-bet="1" data-verdict="Almost three times that: 839,800 people. And on the beach, 7,500 flyers, 100% of the goal.">About 300,000</button>
+          <button class="opt" type="button" data-bet="2" data-verdict="You got it: 839,800 people, plus 7,500 flyers handed out on the beach.">More than 800,000</button>
+        </div>
+        <div class="reveal" hidden aria-live="polite">
+          <div class="score"><b>839,800</b><span>people</span><span class="badge">Social reach</span></div>
+          <div class="goal-bar"><div class="lbl"><span>Flyers on the beach</span><span>7,500 · 100% of goal</span></div><div class="track"><i data-to="100"></i></div></div>
+          <div class="verdict"></div>
+          <button class="btn" type="button" data-next style="justify-self:start">See all the results →</button>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen cs-deep th-pnud grain" data-chapter="4" data-sub="UNDP · Results" aria-label="UNDP results">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we achieved</p>
+      <h2 class="h-l rv" style="--i:1">839,800 people.<br><span style="color:var(--teal)">One project explained.</span></h2>
+      <div class="kpis">
+        <div class="kpi rv" style="--i:2"><span class="w">Reach</span><span class="v"><span data-count="839800">0</span></span><span class="d">people reached on Facebook, Instagram and WhatsApp</span></div>
+        <div class="kpi rv" style="--i:3"><span class="w">Social</span><span class="v"><span data-count="178">0</span></span><span class="d">social media posts</span></div>
+        <div class="kpi rv" style="--i:4"><span class="w">Video</span><span class="v"><span data-count="40">0</span></span><span class="d">videos: life stories, explainers and results</span></div>
+        <div class="kpi rv" style="--i:5"><span class="w">On the beach</span><span class="v"><span data-count="7500">0</span></span><span class="d">flyers handed to tourists and residents, 100% of the goal</span></div>
+      </div>
+      <p class="band rv" style="--i:6"><b>Digital marketing workshops.</b> 35 beach vendors (October 2022) and 30 fishers from FEDECARYBOL (March 2023) learned to sell through social media and WhatsApp.</p>
+      <p class="rv muted" style="--i:7; margin:24px 0 0; font-weight:600">90+ people at the co-creative mural and beach clean-up in June 2023, with these partners</p>
+      <div class="media rv" style="--i:7; margin-top:10px"><span class="pill">Global Shapers</span><span class="pill">EPA</span><span class="pill">PACARIBE</span><span class="pill">Aguas de Cartagena</span><span class="pill">CEMPRE</span></div>
+      <p class="hand rv muted" style="--i:8; margin-top:18px">source: UNGRD–UNDP final agreement report, 2023</p>
+    </div></div>
+  </section>
+
+  <section class="screen light th-pnud" data-chapter="4" data-sub="UNDP · What we did" aria-label="What we did for UNDP">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we did</p>
+      <h2 class="h-l rv" style="--i:1">From the screen<br><span style="color:var(--cink)">to the sand.</span></h2>
+      <div class="moves">
+        <article class="move rv" style="--i:2"><span class="ix" style="background:var(--accent)">1</span><h3>Owned channels</h3><p>A Facebook page, Instagram @proteccioncostera.social, WhatsApp Business and a virtual office, to inform people and take their questions.</p></article>
+        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--coral)">2</span><h3>Content that explains</h3><p>40 videos, 178 posts, 55 information pieces and 30 press releases, plus a radio spot.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--leaf)">3</span><h3>On the beach</h3><p>7,500 flyers in Spanish and English, digital marketing workshops for vendors and fishers, and a co-creative mural with a beach clean-up.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-pnud" data-chapter="4" data-sub="UNDP · The work" aria-label="UNDP pieces">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">The work</p>
+      <h2 class="h-l rv" style="--i:1">This is how<br>the works were explained.</h2>
+      <p class="hand rv" style="--i:2; color:var(--muted-ink); margin:10px 0 0">Pieces telling the project and the progress of community compensation. Tap one to see it in full.</p>
+      <div class="pieces">
+        <button class="piece rv" data-depth style="--i:2; --depth:-6; --c:5; --bg:#e7e5e0" type="button" data-cap="Leaflet “What is the project about?”"><img src="assets/pnud-pnud-mockup-plegable.jpg" alt="Leaflet “What is the project about?”"><span>Leaflet “What is the project about?”</span></button>
+        <button class="piece rv" data-depth style="--i:3; --depth:5; --c:7; --bg:#0b5aa6" type="button" data-cap="Co-creative mural “Love, care, protect”, June 2023"><img src="assets/pnud-pnud-mural.jpg" alt="Co-creative mural, June 2023"><span>Co-creative mural, June 2023</span></button>
+        <button class="piece rv" data-depth style="--i:4; --depth:-4; --c:4; --bg:#ffc83d" type="button" data-cap="“How are we doing?” Payments to beach vendors"><img src="assets/pnud-vendedores.jpg" alt="Payments to beach vendors"><span>Payments to beach vendors</span></button>
+        <button class="piece rv" data-depth style="--i:5; --depth:6; --c:4; --bg:#0b5aa6" type="button" data-cap="Compensation for artisanal fishers"><img src="assets/pnud-pescadores.jpg" alt="Compensation for artisanal fishers"><span>Compensation for artisanal fishers</span></button>
+        <button class="piece rv" data-depth style="--i:6; --depth:-5; --c:4; --bg:#e7e5e0" type="button" data-cap="Progress infographic: 414 community meetings"><img src="assets/pnud-pnud-compensacion.jpg" alt="Progress infographic: 414 community meetings"><span>Progress infographic: 414 community meetings</span></button>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-pnud" data-chapter="4" data-sub="UNDP · For 2X" aria-label="What UNDP means for 2X">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What it means for 2X</p>
+      <h2 class="h-l rv" style="--i:1">Sensitive topics,<br><span style="color:var(--cink)">said clearly.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Trust depends on people understanding what is happening and what is being done for them. With UNDP we communicated exactly that: a risk, a works project and the compensation for those affected.</p>
+      <div class="bridges" data-bridges>
+        <button class="flip rv" style="--i:3" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With UNDP</small><b>Coastal erosion risk</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Gender lens and climate, explained simply</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:4" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With UNDP</small><b>Fishers and vendors, in their own words</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Women entrepreneurs’ stories from the field</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:5" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With UNDP</small><b>Flyers, workshops and a mural</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Learning materials for each audience</b><span class="tap">How we’d do it ✓</span></span></span></button>
+      </div>
+      <p class="hand rv bridge-count" style="--i:6; color:var(--muted-ink)">0 of 3 connected</p>
+    </div></div>
+  </section>
+
+  <section class="screen dark grain" data-chapter="4" data-sub="UNDP · Case seen" data-case-end="pnud" aria-label="UNDP case seen">
+    <div class="scroll"><div class="in done-grid">
+      <div>
+        <p class="eyebrow rv">Case 04 complete</p>
+        <h2 class="h-l rv" style="--i:1">A project that changed the beach, <span style="color:var(--accent-soft)">explained to 839,800 people.</span></h2>
+        <p class="lede muted rv" style="--i:2">Explaining sensitive topics clearly is what we would do for 2X.</p>
+        <div class="actions rv" style="--i:3">
+          <button class="btn alt" type="button" data-goto-hub>Back to the cases</button>
+          <button class="btn ghost" type="button" data-next>Next case: Latimpacto →</button>
+        </div>
+      </div>
+      <div class="seal" aria-hidden="true" style="--depth:-30" data-depth><span>Case<br>seen<small class="seal-n">1 of 5</small></span></div>
+    </div></div>
+  </section>
+  <!-- Latimpacto -->
+  <section class="screen cs th-lat grain" data-chapter="4" data-sub="Latimpacto" data-case-start="lat" aria-label="Latimpacto case">
+    <div class="scroll"><div class="in cover">
+      <div>
+        <div class="chips rv"><span class="chip">Case 05</span><span class="chip">Impact investing</span><span class="chip">Latin America</span></div>
+        <h2 class="h-xl rv" style="--i:1; margin-top:20px">A regional network.<br><span class="t">Three languages, one ecosystem.</span></h2>
+        <dl class="facts rv" style="--i:3">
+          <div><dt>Client</dt><dd><img class="ande-logo" src="assets/lat-logo.png" alt="Latimpacto"></dd></div>
+          <div><dt>Duration</dt><dd>April –<br>December 2022</dd></div>
+          <div><dt>Languages</dt><dd>Spanish, English and Portuguese</dd></div>
+        </dl>
+      </div>
+      <img class="tilt rv" style="--i:2; --depth:-34" data-depth src="assets/lat-lat-video-memorias.jpg" alt="Group photo at Impact Minds: Standing Together in Cartagena">
+    </div></div>
+  </section>
+
+  <section class="screen light th-lat" data-chapter="4" data-sub="Latimpacto · The challenge" aria-label="Latimpacto challenge">
+    <div class="scroll"><div class="in reto-grid">
+      <div>
+        <p class="eyebrow rv">The challenge</p>
+        <p class="statement rv" style="--i:1">Position the Impact Minds event and Latimpacto as <b>the reference for social and environmental impact</b> in Latin America. That meant launching an Instagram account <span class="circled">from scratch<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M20 44 C 18 14, 150 4, 186 30 C 206 50, 150 76, 88 74 C 30 72, 6 54, 24 30 C 34 18, 60 12, 84 10"/></svg></span> and covering the event live on four networks.</p>
+      </div>
+      <div class="rv" style="--i:3">
+        <p class="hand" style="color:var(--muted-ink)">sources: communications strategy (April 2022) and 2022 activity plan</p>
+        <div class="chips" style="margin-top:14px; color:var(--ink)"><span class="chip">Donor foundations</span><span class="chip">Impact funds</span><span class="chip">Companies</span><span class="chip">Intermediaries</span><span class="chip">Family offices</span><span class="chip">Next gen</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-lat" data-chapter="4" data-sub="Latimpacto · Your guess" aria-label="Guess the Latimpacto result">
+    <div class="scroll"><div class="in guess">
+      <div>
+        <p class="eyebrow rv">Before you see the result</p>
+        <p class="guess-q rv" style="--i:1">In May 2022, the Instagram account we launched for Latimpacto had 359 followers. <b>How much do you think it grew in two months?</b></p>
+        <p class="hand rv" style="--i:3; color:var(--muted-ink); margin-top:16px">source: digital platforms KPI sheet, 2022</p>
+      </div>
+      <div class="dial warm-card rv" style="--i:2; --depth:-24" data-depth data-game="lat">
+        <div class="options" role="group" aria-label="Your bet">
+          <button class="opt" type="button" data-bet="0" data-verdict="Six times that: +62%, from 359 to 583 followers in two months.">About 10%</button>
+          <button class="opt" type="button" data-bet="1" data-verdict="Twice that: +62%, from 359 to 583 followers in two months.">About 30%</button>
+          <button class="opt" type="button" data-bet="2" data-verdict="You got it: +62% in two months. And almost half of the newsletter’s recipients opened it.">More than 60%</button>
+        </div>
+        <div class="reveal" hidden aria-live="polite">
+          <div class="score"><b>+62%</b><span>from 359 to 583</span><span class="badge">In two months</span></div>
+          <div class="goal-bar"><div class="lbl"><span>Newsletter opens</span><span>1,489 of 3,117</span></div><div class="track"><i data-to="47.8"></i></div></div>
+          <div class="goal-bar"><div class="lbl"><span>Clicks in the same newsletter</span><span>817</span></div><div class="track"><i data-to="26.2"></i></div></div>
+          <div class="verdict"></div>
+          <button class="btn" type="button" data-next style="justify-self:start">See all the results →</button>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen cs-deep th-lat grain" data-chapter="4" data-sub="Latimpacto · Results" aria-label="Latimpacto results">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we achieved</p>
+      <h2 class="h-l rv" style="--i:1">A new channel.<br><span style="color:var(--teal)">Full from day one.</span></h2>
+      <div class="kpis">
+        <div class="kpi rv" style="--i:2"><span class="w">Instagram</span><span class="v">+<span data-count="62">0</span>%</span><span class="d">followers in two months: from 359 to 583</span></div>
+        <div class="kpi rv" style="--i:3"><span class="w">Newsletter</span><span class="v"><span data-count="1489">0</span></span><span class="d">opens from 3,117 sends of a single issue</span></div>
+        <div class="kpi rv" style="--i:4"><span class="w">Clicks</span><span class="v"><span data-count="817">0</span></span><span class="d">clicks in that same newsletter</span></div>
+        <div class="kpi rv" style="--i:5"><span class="w">LinkedIn</span><span class="v">+<span data-count="343">0</span></span><span class="d">followers in one month: from 4,650 to 4,993</span></div>
+      </div>
+      <p class="band rv" style="--i:6"><b>Impact Minds: Standing Together, Cartagena 2022.</b> 353 participants from 26 countries and more than 190 organisations at the event we communicated before, during and after.</p>
+      <p class="rv muted" style="--i:7; margin:24px 0 0; font-weight:600">5 attending organisations whose testimonials we published after the event</p>
+      <div class="media rv" style="--i:7; margin-top:10px"><span class="pill">UNDP Colombia</span><span class="pill">Grupo Gaia (Brazil)</span><span class="pill">Fundación Copel</span><span class="pill">Fundación FEMSA</span><span class="pill">Yunus Social Business</span></div>
+      <p class="hand rv muted" style="--i:8; margin-top:18px">source: digital platforms KPI sheet, 2022</p>
+    </div></div>
+  </section>
+
+  <section class="screen light th-lat" data-chapter="4" data-sub="Latimpacto · What we did" aria-label="What we did for Latimpacto">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What we did</p>
+      <h2 class="h-l rv" style="--i:1">From the event<br><span style="color:var(--cink)">to the ecosystem.</span></h2>
+      <div class="moves">
+        <article class="move rv" style="--i:2"><span class="ix" style="background:var(--accent)">1</span><h3>Impact Minds: the build-up</h3><p>We launched Latimpacto’s Instagram days before the event, with a countdown, a teaser reel shot in Cartagena, an agenda piece and a social map of 43 speakers to amplify the conversation.</p></article>
+        <article class="move rv" style="--i:3"><span class="ix" style="background:var(--coral)">2</span><h3>Impact Minds: the memories</h3><p>After the event: a recap video, a memories video, 13 brand photographs, attendee testimonials, a thread on the TED-style talks, sponsor thank-yous and the updated event page. Then, the promotion of the 2023 edition in Brazil.</p></article>
+        <article class="move rv" style="--i:4"><span class="ix" style="background:var(--leaf)">3</span><h3>All year round</h3><p>Community management on Instagram, Facebook, X, LinkedIn and YouTube, with paid media in October; a website with blogs in Spanish, English and Portuguese; email marketing and a newsletter per language.</p></article>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-lat" data-chapter="4" data-sub="Latimpacto · The work" aria-label="Latimpacto pieces">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">The work</p>
+      <h2 class="h-l rv" style="--i:1">This is how<br>the network looked.</h2>
+      <p class="hand rv" style="--i:2; color:var(--muted-ink); margin:10px 0 0">Impact Minds 2022 and 2023, plus pieces for social, launches and the Latimpacto website. Tap one to see it in full.</p>
+      <div class="pieces many">
+        <a class="piece rv video" data-depth style="--i:2; --depth:-6; --c:8; --bg:#4a1a78" href="https://www.youtube.com/watch?v=ySJYuiyUQXU" target="_blank" rel="noopener" aria-label="Watch the video on YouTube"><img src="assets/lat-lat-video-memorias.jpg" alt="Group photo at Impact Minds: Standing Together in Cartagena"><i class="play" aria-hidden="true">▶</i><span>Watch the video on YouTube</span></a>
+        <button class="piece rv" data-depth style="--i:3; --depth:5; --c:4; --bg:#f7a072" type="button" data-cap="#ImpactMinds2023 campaign, Brazil"><img src="assets/lat-lat-save-the-date.jpg" alt="Impact Minds 2023 save the date"><span>#ImpactMinds2023, Brazil</span></button>
+        <button class="piece rv" data-depth style="--i:4; --depth:-4; --c:4; --bg:#4a1a78" type="button" data-cap="Impact Minds key facts"><img src="assets/lat-lat-datos-clave.jpg" alt="Impact Minds key facts"><span>Impact Minds key facts</span></button>
+        <button class="piece rv" data-depth style="--i:5; --depth:6; --c:4; --bg:#f3e9f7" type="button" data-cap="Year-end carousel"><img src="assets/lat-lat-carrusel-diciembre.jpg" alt="Year-end carousel"><span>Year-end carousel</span></button>
+        <button class="piece rv" data-depth style="--i:6; --depth:-5; --c:4; --bg:#5b1f8f" type="button" data-cap="Climate action study launch"><img src="assets/lat-lat-lanzamiento-estudio.jpg" alt="Climate action study launch"><span>Climate action study launch</span></button>
+        <button class="piece rv" data-depth style="--i:7; --depth:-6; --c:4; --bg:#f3e9f7" type="button" data-cap="Pan-Amazonian working group"><img src="assets/lat-lat-pan-amazonico.jpg" alt="Pan-Amazonian working group"><span>Pan-Amazonian working group</span></button>
+        <button class="piece rv" data-depth style="--i:8; --depth:5; --c:4; --bg:#f7a072" type="button" data-cap="Fast-track to investment programme"><img src="assets/lat-lat-fast-track.jpg" alt="Fast-track to investment programme"><span>Fast-track to investment</span></button>
+        <button class="piece rv" data-depth style="--i:8; --depth:-4; --c:4; --bg:#5b1f8f" type="button" data-cap="LinkedIn cover"><img src="assets/lat-lat-portada-linkedin.jpg" alt="LinkedIn cover"><span>LinkedIn cover</span></button>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-lat" data-chapter="4" data-sub="Latimpacto · Testimonial" aria-label="Latimpacto testimonial">
+    <div class="scroll"><div class="in quote">
+      <div class="mk" aria-hidden="true">“</div>
+      <div>
+        <blockquote>Brain Studio was key to consolidating our digital ecosystem and marketing strategy. We value their commitment and dedication.</blockquote>
+        <cite class="rv" style="--i:6">Carolina Suárez, CEO · Latimpacto</cite>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="screen light th-lat" data-chapter="4" data-sub="Latimpacto · For 2X" aria-label="What Latimpacto means for 2X">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">What it means for 2X</p>
+      <h2 class="h-l rv" style="--i:1">Impact investing,<br><span style="color:var(--cink)">in three languages.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Latimpacto speaks to the same world as 2X: funds, foundations and family offices. We opened a channel from zero and grew it in weeks, around a live event and a newsletter people actually open.</p>
+      <div class="bridges" data-bridges>
+        <button class="flip rv" style="--i:3" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With Latimpacto</small><b>Instagram launched from scratch</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>New channels and programme launches</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:4" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With Latimpacto</small><b>A newsletter per language</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Member and investor communications</b><span class="tap">How we’d do it ✓</span></span></span></button>
+        <button class="flip rv" style="--i:5" type="button" aria-pressed="false"><span class="fi"><span class="fa"><small>With Latimpacto</small><b>Live coverage of Impact Minds</b><span class="tap">Tap to connect ↻</span></span><span class="fb"><small>For 2X</small><b>Live coverage of the Summit</b><span class="tap">How we’d do it ✓</span></span></span></button>
+      </div>
+      <p class="hand rv bridge-count" style="--i:6; color:var(--muted-ink)">0 of 3 connected</p>
+    </div></div>
+  </section>
+
+  <section class="screen dark grain" data-chapter="4" data-sub="Latimpacto · Case seen" data-case-end="lat" aria-label="Latimpacto case seen">
+    <div class="scroll"><div class="in done-grid">
+      <div>
+        <p class="eyebrow rv">Case 05 complete</p>
+        <h2 class="h-l rv" style="--i:1">A brand-new account, <span style="color:var(--accent-soft)">+62% in two months.</span></h2>
+        <p class="lede muted rv" style="--i:2">Opening channels people actually follow is what we would do for 2X.</p>
+        <div class="actions rv" style="--i:3">
+          <button class="btn alt" type="button" data-goto-hub>Back to the cases</button>
+          <button class="btn ghost" type="button" data-next>How we could work in 2027 →</button>
+        </div>
+      </div>
+      <div class="seal" aria-hidden="true" style="--depth:-30" data-depth><span>Case<br>seen<small class="seal-n">1 of 5</small></span></div>
+    </div></div>
+  </section>
+
+  <!-- 05 What's next: a zoomable world. Overview → lane → idea, the camera flies in at each level -->
+  <section class="screen world-screen" data-zoom data-world data-chapter="5" aria-label="What could come next">
+    <div class="stage" id="stage">
+      <div class="dust" data-k=".2"></div>
+      <div class="dust" data-k=".5"></div>
+      <div class="world" id="world"></div>
+      <div class="dust near" data-k="1.3"></div>
+    </div>
+    <div class="depth" id="depth" aria-hidden="true"><span class="lbl">Depth</span><i data-l="0"></i><i data-l="1"></i><i data-l="2"></i><span class="lvl" id="depthTxt">Overview</span></div>
+    <aside class="hud" id="hud" aria-live="polite"></aside>
+    <div class="detail" id="detail" hidden></div>
+  </section>
+
+  <!-- 06 Business Case demo -->
+  <section class="screen light" data-zoom data-chapter="6" aria-label="Explore the Business Case">
+    <div class="scroll"><div class="in demo-grid">
+      <div>
+        <p class="eyebrow rv">06 · One example from lane C</p>
+        <h2 class="h-l rv" style="--i:1">Let readers explore<br><span style="color:var(--accent)">the Business Case.</span></h2>
+        <p class="lede rv" style="--i:2; color:var(--muted-ink)">A published report that people enter by role. Two paths, three approved insights and one clear next step: the full report.</p>
+        <p class="hand rv measure" style="--i:3; color:var(--muted-ink)">what we’d measure: path chosen, clicks to the report, journeys completed</p>
+      </div>
+      <div class="demo" data-demo>
+        <div class="demo-bar"><i></i><i></i><i></i><span>Illustrative concept</span></div>
+        <div class="demo-body">
+          <div class="demo-step" data-step="1">
+            <span class="kick">The Business Case for 2X Challenge Qualification</span>
+            <h3>Explore the business case for 2X Challenge Qualification</h3>
+            <p>Start with the perspective that matches your work.</p>
+            <div class="paths">
+              <button class="path" type="button" data-path="investor"><b>I make investment decisions</b><span>Start here →</span></button>
+              <button class="path" type="button" data-path="investee"><b>I’m part of an organisation receiving investment</b><span>Start here →</span></button>
+            </div>
+            <a class="link-out" href="https://www.2xglobal.org/knowledge-hub-blog/2x-challenge-qualification-business-case" target="_blank" rel="noopener">Read the full report ↗</a>
+          </div>
+          <div class="demo-step" data-step="2" hidden>
+            <span class="kick" id="demoKick">For investors</span>
+            <h3 id="demoTitle">A question to bring to your next portfolio conversation</h3>
+            <p id="demoText">Investors see first how the findings can open a conversation with their investees.</p>
+            <div class="insight">
+              <small>Approved insight · from the report summary</small>
+              <span class="ph"></span><span class="ph s"></span>
+              <p>Final wording and figures come from the published report, once 2X validates them.</p>
+            </div>
+            <div class="demo-actions">
+              <button class="btn" type="button" data-demo-next>Next step →</button>
+              <button class="btn line" type="button" data-demo-switch>Switch perspective</button>
+            </div>
+          </div>
+          <div class="demo-step" data-step="3" hidden>
+            <span class="kick">Next step</span>
+            <h3>Read the full report</h3>
+            <p>Every path ends on the official publication, so the source stays with 2X.</p>
+            <div class="demo-actions">
+              <a class="btn" href="https://www.2xglobal.org/knowledge-hub-blog/2x-challenge-qualification-business-case" target="_blank" rel="noopener">Open the report ↗</a>
+              <button class="btn line" type="button" data-demo-restart>Start again</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 07 Pick a pilot -->
+  <section class="screen light" data-zoom data-chapter="7" aria-label="Choose one priority to pilot">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">07 · Next step</p>
+      <h2 class="h-l rv" style="--i:1">Choose one priority<br><span style="color:var(--accent)">to pilot.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">Twelve ideas, grouped by the three ways of working. We don’t need all of them. Pick the one that matters most for 2X right now.</p>
+      <div class="pilot rv" style="--i:3" data-pilot>
+        <div class="pilot-col"><h3><i style="background:var(--accent)">A</i>Strategy and ideas</h3>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>01</small>Message architecture for an initiative</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>02</small>Campaign concept lab</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="A"><small>03</small>Editorial system for a content series</button>
+        </div>
+        <div class="pilot-col"><h3><i style="background:var(--coral)">B</i>Campaigns and production</h3>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>04</small>Launch campaign for a report</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>05</small>Video series of cases and voices</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>06</small>Kit for events and partners</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="B"><small>07</small>Explaining certification journeys</button>
+        </div>
+        <div class="pilot-col"><h3><i style="background:var(--leaf)">C</i>Digital experiences</h3>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>08</small>Searchable resource hub</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>09</small>Interactive learning journey</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>10</small>Explorer of cases and lessons</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>11</small>Digital experience for a 2X event</button>
+          <button class="pilot-opt" type="button" aria-pressed="false" data-lane="C"><small>12</small>Interactive report and data explorer</button>
+        </div>
+      </div>
+      <div class="pilot-out" id="pilotOut" aria-live="polite">
+        <b id="pilotName">Pick one idea above to see how a pilot would start.</b>
+        <span id="pilotLane">To confirm the scope together we’d agree on five things:</span>
+        <div class="chips"><span class="chip">Audience</span><span class="chip">Goal</span><span class="chip">Owner at 2X</span><span class="chip">Starting material</span><span class="chip">A date</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 08 Trusted by + Let's talk -->
+  <section class="screen light" data-chapter="8" aria-label="Who trusts us">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">08 · Who trusts us</p>
+      <h2 class="h-l rv" style="--i:1">Brands and organisations<br><span style="color:var(--accent)">that have trusted Brain Studio.</span></h2>
+      <p class="lede rv" style="--i:2; color:var(--muted-ink)">International cooperation, public sector, trade groups, foundations and companies in more than 30 sectors, in Colombia and ten other countries.</p>
+      <div class="logo-wall rv" style="--i:3"><img src="assets/clientes-logos.png" alt="2X Global, USAID, UNDP, TRASO, Latimpacto, ANDE, Government of Bolívar, City of Cartagena and Cartagena Chamber of Commerce"></div>
+    </div></div>
+  </section>
+
+  <section class="screen dark grain" data-zoom data-chapter="8" data-sub="Let’s talk" aria-label="Let’s talk">
+    <div class="scroll"><div class="in">
+      <p class="eyebrow rv">Let’s talk</p>
+      <h2 class="h-xl rv" style="--i:1">Your vendor, yes.<br><span style="color:var(--accent-soft)">Your partner, we hope.</span></h2>
+      <p class="lede muted rv" style="--i:2">Tell us which priority comes first and we’ll come back with a scope for that pilot.</p>
+      <div class="contact rv" style="--i:3">
+        <a href="mailto:contacto@brainstudioagencia.com"><small>Email</small><b>contacto@brainstudioagencia.com</b></a>
+        <a href="https://wa.me/573015201362" target="_blank" rel="noopener"><small>WhatsApp</small><b>+57 301 520 1362</b></a>
+        <a href="https://www.brainstudioagencia.com" target="_blank" rel="noopener"><small>Web</small><b>brainstudioagencia.com</b></a>
+        <a href="https://www.instagram.com/brainstudioagencia/" target="_blank" rel="noopener"><small>Instagram</small><b>@brainstudioagencia</b></a>
+      </div>
+      <div class="actions rv" style="--i:4"><button class="btn alt" type="button" id="restart">Back to the start</button></div>
+    </div></div>
+  </section>
+</main>
+
+<div class="map" id="map" role="dialog" aria-modal="true" aria-label="Proposal map">
+  <div class="panel">
+    <button class="close" type="button" id="mapClose" aria-label="Close the map"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+    <h2>Map</h2>
+    <p class="muted" style="margin:0">Jump to any chapter. Your progress is saved in this browser.</p>
+    <ol class="chapters" id="chapters"></ol>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged piece"><div><img id="lbImg" alt=""><p id="lbCap"></p></div></div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const screens = $$('.screen');
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('bs-2x:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('bs-2x:' + k, JSON.stringify(v)); } catch (e) {} },
+  };
+  const CHAPTERS = [
+    { n: '00', t: 'Start', s: 'Brain Studio × 2X Global' },
+    { n: '01', t: 'Brain × 2X', s: 'How it started, and what we want' },
+    { n: '02', t: 'Who we are', s: 'Brain Studio in numbers' },
+    { n: '03', t: 'What we do', s: 'Six fronts, one ecosystem' },
+    { n: '04', t: 'Case studies', s: 'Five stories, one at a time' },
+    { n: '05', t: 'What could come next', s: 'Three worlds, twelve ideas' },
+    { n: '06', t: 'The Business Case', s: 'An illustrative example' },
+    { n: '07', t: 'Pick a pilot', s: 'Choose one priority' },
+    { n: '08', t: 'Let’s talk', s: 'Who trusts us, and contact' },
+  ];
+  const firstOf = (ch) => screens.findIndex((s) => +s.dataset.chapter === ch);
+  const hubIndex = screens.findIndex((s) => s.getAttribute('aria-label') === 'Case studies');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let idx = 0, busy = false, started = false;
+
+  // ——— Números ———
+  const fmt = (v, dec) => v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  function countUp(el) {
+    const target = parseFloat(el.dataset.count), dec = +(el.dataset.dec || 0);
+    if (reduce) { el.textContent = fmt(target, dec); return; }
+    const t0 = performance.now(), dur = 1400;
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(target * e, dec);
+      if (p < 1) requestAnimationFrame(step);
+    };
+    el.textContent = fmt(0, dec);
+    setTimeout(() => requestAnimationFrame(step), 350);
+  }
+  function enter(s) {
+    s.classList.add('on');
+    $$('[data-count]', s).forEach(countUp);
+    $$('[data-fill]', s).forEach((el) => { el.style.width = '0%'; requestAnimationFrame(() => requestAnimationFrame(() => { el.style.width = el.dataset.fill + '%'; })); });
+    if (s.dataset.caseEnd) markSeen(s.dataset.caseEnd);
+  }
+  function leave(s) { s.classList.remove('on'); }
+
+  // ——— Navegación ———
+  function layout() {
+    screens.forEach((s, i) => { s.dataset.state = i < idx ? 'past' : i > idx ? 'future' : 'current'; s.setAttribute('aria-hidden', i === idx ? 'false' : 'true'); s.inert = i !== idx; });
+    const s = screens[idx], ch = CHAPTERS[+s.dataset.chapter];
+    $('#where').innerHTML = `<b>${ch.n} · ${ch.t}</b>${s.dataset.sub ? ' · ' + s.dataset.sub : ''}`;
+    $('#count').textContent = String(idx).padStart(2, '0') + ' / ' + String(screens.length - 1).padStart(2, '0');
+    $('#bar').style.width = (idx / (screens.length - 1) * 100) + '%';
+    $('#prev').disabled = idx <= 1; $('#next').disabled = idx >= screens.length - 1;
+    document.body.classList.toggle('intro', idx === 0);
+    renderMap();
+  }
+  function go(n) {
+    n = Math.max(0, Math.min(screens.length - 1, n));
+    if (n === idx || busy) return;
+    if (n > 0 && !started) return;
+    busy = true;
+    leave(screens[idx]);
+    idx = n;
+    if (!reduce) { const dk = $('#deck'); dk.classList.toggle('cam', false); void dk.offsetWidth; dk.classList.add('cam'); }
+    layout();
+    enter(screens[idx]);
+    if (idx > 0) store.set('idx', idx);
+    setTimeout(() => { busy = false; }, reduce ? 50 : 800);
+  }
+  window.__go = (n) => { started = true; go(n); };
+  $('#next').addEventListener('click', () => go(idx + 1));
+  $('#prev').addEventListener('click', () => go(idx - 1));
+  $$('[data-next]').forEach((b) => b.addEventListener('click', () => go(idx + 1)));
+  $$('[data-goto]').forEach((b) => b.addEventListener('click', () => go(+b.dataset.goto)));
+  $$('[data-goto-hub]').forEach((b) => b.addEventListener('click', () => go(hubIndex)));
+  $$('.case[data-case]').forEach((c) => c.addEventListener('click', () => {
+    const i = screens.findIndex((x) => x.dataset.caseStart === c.dataset.case);
+    if (i < 0 || busy) return;
+    if (reduce) return go(i);
+    const s = screens[idx], sc = s.querySelector('.scroll'), r = c.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    sc.style.transformOrigin = `${r.left + r.width / 2 - sr.left}px ${r.top + r.height / 2 - sr.top + sc.scrollTop}px`;
+    s.classList.add('dive'); window.sfx('flip');
+    setTimeout(() => { go(i); setTimeout(() => { s.classList.toggle('dive', false); sc.style.transformOrigin = ''; }, 900); }, 420);
+  }));
+  $('#restart').addEventListener('click', () => { go(0); });
+
+  [$('#deck'), ...screens].forEach((el) => el.addEventListener('scroll', () => { if (el.scrollLeft || el.scrollTop) { el.scrollLeft = 0; el.scrollTop = 0; } }));
+  const edge = (sc, dir) => !sc || (dir > 0 ? sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2 : sc.scrollTop <= 1);
+  let acc = 0, accT;
+  addEventListener('wheel', (e) => {
+    if (overlayOpen()) return;
+    const d = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    const sc = screens[idx].querySelector('.scroll');
+    if (window.__world && window.__world.active()) { e.preventDefault(); if (d < 0) window.__world.back(); return; }
+    if (!edge(sc, d)) return;
+    e.preventDefault();
+    if (busy) { acc = 0; return; }
+    acc += d; clearTimeout(accT); accT = setTimeout(() => { acc = 0; }, 180);
+    if (Math.abs(acc) > 60) { go(idx + (acc > 0 ? 1 : -1)); acc = 0; }
+  }, { passive: false });
+  let tx = 0, ty = 0;
+  addEventListener('touchstart', (e) => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  addEventListener('touchend', (e) => {
+    if (overlayOpen() || e.target.closest('input')) return;
+    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    const vertical = Math.abs(dy) > Math.abs(dx);
+    const d = vertical ? -dy : -dx;
+    if (Math.abs(d) < 50) return;
+    if (window.__world && window.__world.active()) { if (d < 0) window.__world.back(); return; }
+    const sc = screens[idx].querySelector('.scroll');
+    if (vertical && !edge(sc, d)) return;
+    go(idx + (d > 0 ? 1 : -1));
+  }, { passive: true });
+  addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea')) return;
+    if (overlayOpen()) { if (e.key === 'Escape') closeOverlays(); return; }
+    if (idx === 0) return;
+    if (window.__world && window.__world.active()) { if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Escape', 'Backspace'].includes(e.key)) { e.preventDefault(); window.__world.back(); } else if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(e.key)) e.preventDefault(); return; }
+    if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(e.key) || (e.key === ' ' && !e.target.matches('button'))) { e.preventDefault(); go(idx + 1); }
+    if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
+    if (e.key === 'Home') go(1);
+    if (e.key === 'End') go(screens.length - 1);
+  });
+
+  // ——— Sonidos: pocos y bajitos, generados en el navegador; el altavoz del header los silencia ———
+  const SFX = (() => {
+    let ctx = null, holdOsc = null, holdGain = null;
+    let on = store.get('sound', true);
+    const btn = $('#sndBtn');
+    const paintBtn = () => { btn.setAttribute('aria-pressed', String(on)); btn.setAttribute('aria-label', on ? 'Sound on' : 'Sound off'); };
+    paintBtn();
+    btn.addEventListener('click', () => { on = !on; store.set('sound', on); paintBtn(); if (!on) holdStop(); else ping(); });
+    const ac = () => { if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (ctx.state === 'suspended') ctx.resume(); return ctx; };
+    const tone = (freq, dur, { type = 'sine', gain = .06, to = freq, delay = 0 } = {}) => {
+      const c = ac(); if (!c || !on) return;
+      const o = c.createOscillator(), g = c.createGain(), t0 = c.currentTime + delay;
+      o.type = type; o.frequency.setValueAtTime(freq, t0); if (to !== freq) o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + .01); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+      o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + .02);
+    };
+    const ping = () => tone(880, .12, { gain: .04 });
+    // Mientras se mantiene presionado: un tono que sube con el avance
+    const holdStart = () => { const c = ac(); if (!c || !on || holdOsc) return; holdOsc = c.createOscillator(); holdGain = c.createGain(); holdOsc.type = 'sine'; holdOsc.frequency.value = 220; holdGain.gain.value = 0; holdOsc.connect(holdGain).connect(c.destination); holdOsc.start(); holdGain.gain.linearRampToValueAtTime(.035, c.currentTime + .08); };
+    const holdAt = (p) => { if (holdOsc) holdOsc.frequency.setTargetAtTime(220 + p * 330, ctx.currentTime, .03); };
+    const holdStop = () => { if (!holdOsc) return; const o = holdOsc, g = holdGain; holdOsc = null; holdGain = null; g.gain.setTargetAtTime(0, ctx.currentTime, .04); o.stop(ctx.currentTime + .25); };
+    return {
+      holdStart, holdAt, holdStop,
+      done() { holdStop(); tone(523, .18, { gain: .07 }); tone(784, .32, { gain: .07, delay: .11 }); },
+      reveal() { tone(880, .16, { gain: .045 }); tone(1320, .22, { gain: .03, delay: .05 }); },
+      seal() { tone(150, .2, { to: 60, gain: .12 }); },
+      flip() { tone(1800, .035, { type: 'triangle', gain: .03, to: 900 }); },
+    };
+  })();
+  window.sfx = (k) => { if (SFX[k]) SFX[k](); };
+
+  // ——— Inicio: mantener presionado ———
+  const hold = $('#hold'), ring = $('#ring');
+  const C = 2 * Math.PI * 104; ring.style.strokeDasharray = C; ring.style.strokeDashoffset = C;
+  const HOLD = 1400; let prog = 0, holding = false, raf, last;
+  const paint = () => { ring.style.strokeDashoffset = C * (1 - prog); };
+  function loop(t) {
+    const dt = last ? t - last : 16; last = t;
+    prog = holding ? Math.min(1, prog + dt / HOLD) : Math.max(0, prog - dt / 400);
+    paint(); SFX.holdAt(prog);
+    if (prog >= 1) return begin();
+    if (holding || prog > 0) raf = requestAnimationFrame(loop); else last = null;
+  }
+  function press() { if (started) return; holding = true; hold.classList.add('holding'); SFX.holdStart(); cancelAnimationFrame(raf); last = null; raf = requestAnimationFrame(loop); }
+  function release() { if (!holding) return; holding = false; hold.classList.remove('holding'); SFX.holdStop(); }
+  function begin(target = 1) {
+    if (holding) SFX.done(); else SFX.holdStop();
+    holding = false; started = true;
+    hold.classList.remove('holding'); hold.classList.add('done');
+    if (!reduce) { const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+    setTimeout(() => { go(target); showHint(); }, reduce ? 0 : 450);
+  }
+  hold.addEventListener('pointerdown', (e) => { e.preventDefault(); press(); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => hold.addEventListener(ev, release));
+  hold.addEventListener('contextmenu', (e) => e.preventDefault());
+  addEventListener('keydown', (e) => { if (idx === 0 && !started && (e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); press(); } });
+  addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') release(); });
+  const saved = store.get('idx', 0);
+  if (saved > 1) { const r = $('#resume'); r.hidden = false; r.addEventListener('click', () => begin(saved)); }
+
+  function showHint() {
+    if (store.get('hinted', false)) return;
+    store.set('hinted', true);
+    const h = $('#hint'); h.classList.add('show'); setTimeout(() => h.classList.remove('show'), 4200);
+  }
+
+  // ——— Juego: apuesta en cada caso ———
+  $$('[data-game]').forEach((g) => {
+    const opts = $$('.opt', g), r = $('.reveal', g);
+    opts.forEach((b) => b.addEventListener('click', () => {
+      opts.forEach((o) => { o.disabled = true; o.classList.toggle('picked', o === b); });
+      setTimeout(() => $('.options', g).classList.add('decided'), reduce ? 0 : 450);
+      r.hidden = false; window.sfx('reveal');
+      $('.verdict', r).textContent = b.dataset.verdict;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        r.classList.add('show');
+        $$('.track i', r).forEach((i) => { i.style.width = i.dataset.to + '%'; });
+      }));
+      store.set('bet:' + g.dataset.game, b.dataset.bet);
+    }));
+  });
+
+  // ——— Del caso a su marca: voltear tarjetas ———
+  $$('[data-bridges]').forEach((box) => {
+    const cards = $$('.flip', box), out = box.parentElement.querySelector('.bridge-count');
+    const paint = () => { if (!out) return; const n = cards.filter((c) => c.classList.contains('on')).length; out.textContent = n === cards.length ? 'All connected ✓' : `${n} of ${cards.length} connected`; };
+    cards.forEach((c) => c.addEventListener('click', () => { const on = !c.classList.contains('on'); c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on)); window.sfx('flip'); paint(); }));
+  });
+
+  // ——— Enciende el territorio ———
+  $$('[data-lightup]').forEach((box) => {
+    const bs = $$('button', box), out = box.parentElement.querySelector('.lightup-count');
+    bs.forEach((b) => b.addEventListener('click', () => {
+      const on = !b.classList.contains('lit'); b.classList.toggle('lit', on); b.setAttribute('aria-pressed', String(on));
+      const n = bs.filter((x) => x.classList.contains('lit')).length;
+      if (out) out.textContent = n === bs.length ? `${n} of ${n}: the whole territory is lit ✓` : `${n} of ${bs.length} lit`;
+    }));
+  });
+
+  // ——— Títulos palabra por palabra ———
+  let w = 0;
+  const splitWords = (el) => {
+    [...el.childNodes].forEach((n) => {
+      if (n.nodeType === 3) {
+        const parts = n.textContent.split(/(\s+)/);
+        const frag = document.createDocumentFragment();
+        parts.forEach((p) => {
+          if (!p) return;
+          if (/^\s+$/.test(p)) { frag.appendChild(document.createTextNode(p)); return; }
+          const o = document.createElement('span'); o.className = 'wd';
+          const i = document.createElement('span'); i.textContent = p; i.style.setProperty('--w', w++);
+          o.appendChild(i); frag.appendChild(o);
+        });
+        n.replaceWith(frag);
+      } else if (n.nodeType === 1 && n.tagName !== 'BR' && n.tagName !== 'svg') splitWords(n);
+    });
+  };
+  $$('.h-xl, .h-l').forEach((h) => { w = 0; splitWords(h); });
+
+  // ——— Testimonio palabra por palabra ———
+  $$('.quote blockquote').forEach((q) => { q.innerHTML = q.textContent.trim().split(/\s+/).map((w, i) => `<span class="w" style="--i:${i}">${w}</span>`).join(' '); });
+
+  // ——— Casos vistos ———
+  function markSeen(id) { const s = new Set(store.get('seen', [])); s.add(id); store.set('seen', [...s]); paintSeen(); setTimeout(() => SFX.seal(), reduce ? 0 : 500); }
+  function paintSeen() {
+    const known = $$('.case[data-case]').map((c) => c.dataset.case);
+    const seen = store.get('seen', []).filter((id) => known.includes(id));
+    $('#seenTxt').textContent = `${seen.length} of 5 seen`;
+    $$('#seenDots i').forEach((d, i) => d.classList.toggle('on', i < seen.length));
+    $$('.seal-n').forEach((n) => { n.textContent = `${Math.max(1, seen.length)} of 5`; });
+    $$('.case[data-case]').forEach((c) => {
+      const has = seen.includes(c.dataset.case), st = c.querySelector('.stamp');
+      if (has && !st) c.insertAdjacentHTML('beforeend', '<span class="stamp">Seen ✓</span>');
+    });
+  }
+  paintSeen();
+
+  // ——— Mapa ———
+  const map = $('#map');
+  function renderMap() {
+    const cur = +screens[idx].dataset.chapter;
+    $('#chapters').innerHTML = CHAPTERS.map((c, i) => `<li><button type="button" data-ch="${i}" ${c.locked ? 'disabled' : ''} class="${i === cur ? 'here' : ''}"><span class="n">${c.n}</span><span><span class="t">${c.t}</span><span class="s">${c.s}</span></span>${c.locked ? '<span class="tag">Full proposal</span>' : i === cur ? '<span class="tag">You are here</span>' : ''}</button></li>`).join('');
+    $$('#chapters [data-ch]').forEach((b) => b.addEventListener('click', () => { closeOverlays(); const i = +b.dataset.ch; go(i === 0 ? 0 : firstOf(i)); }));
+  }
+  $('#mapBtn').addEventListener('click', () => { map.classList.add('open'); setTimeout(() => $('#mapClose').focus(), 50); });
+  $('#mapClose').addEventListener('click', closeOverlays);
+  map.addEventListener('click', (e) => { if (e.target === map) closeOverlays(); });
+
+  // ——— Piezas ampliadas ———
+  const lb = $('#lightbox');
+  $$('button.piece').forEach((p) => p.addEventListener('click', () => { $('#lbImg').src = p.querySelector('img').src; $('#lbImg').alt = p.dataset.cap; $('#lbCap').textContent = p.dataset.cap; lb.classList.add('open'); }));
+  lb.addEventListener('click', closeOverlays);
+  function overlayOpen() { return map.classList.contains('open') || lb.classList.contains('open'); }
+  function closeOverlays() { map.classList.remove('open'); lb.classList.remove('open'); }
+
+  // ——— Fondo con parallax ———
+  // Degradados de marca: mancha verde azulada arriba a la izquierda y anillo rosa/magenta saliendo por el borde
+  const LOOKS = {
+    dark: [
+      { k: 'blob', x: '-14%', y: '-22%', s: '58vmax', c1: '#31aa8a', c2: 'rgba(0,155,191,.55)', o: .75, d: 70, dx: '50px', dy: '40px', t: '28s' },
+      { k: 'ring', x: '78%', y: '42%', s: '46vmax', c1: '#e04fa0', c2: 'rgba(255,106,104,.8)', o: .7, d: -95, dx: '-40px', dy: '-30px', t: '33s' },
+    ],
+    light: [
+      { k: 'blob', x: '-12%', y: '-24%', s: '54vmax', c1: '#31aa8a', c2: 'rgba(0,155,191,.45)', o: .7, d: 70, dx: '50px', dy: '40px', t: '28s' },
+      { k: 'ring', x: '80%', y: '48%', s: '44vmax', c1: '#e04fa0', c2: 'rgba(255,106,104,.8)', o: .65, d: -95, dx: '-40px', dy: '-30px', t: '33s' },
+    ],
+    sunny: [
+      { k: 'blob', x: '60%', y: '-30%', s: '60vmax', c1: 'rgba(252,210,0,.85)', c2: 'rgba(243,146,0,.4)', o: .6, d: 70, dx: '-50px', dy: '40px', t: '30s' },
+      { k: 'ring', x: '-18%', y: '55%', s: '48vmax', c1: 'rgba(255,255,255,.55)', c2: 'rgba(255,190,220,.4)', o: .6, d: -95, dx: '40px', dy: '-30px', t: '34s' },
+    ],
+    ande: [
+      { k: 'blob', x: '66%', y: '-26%', s: '56vmax', c1: '#62d2c1', c2: 'rgba(0,155,191,.5)', o: .55, d: 70, dx: '-50px', dy: '40px', t: '28s' },
+      { k: 'ring', x: '-16%', y: '58%', s: '44vmax', c1: '#009bbf', c2: 'rgba(98,210,193,.6)', o: .55, d: -95, dx: '40px', dy: '-30px', t: '33s' },
+    ],
+  };
+  LOOKS['ande-deep'] = LOOKS.ande;
+  LOOKS['th-gob'] = [
+    { k: 'blob', x: '66%', y: '-26%', s: '56vmax', c1: '#fcd200', c2: 'rgba(49,170,138,.45)', o: .5, d: 70, dx: '-50px', dy: '40px', t: '28s' },
+    { k: 'ring', x: '-16%', y: '58%', s: '44vmax', c1: '#009bbf', c2: 'rgba(252,210,0,.45)', o: .5, d: -95, dx: '40px', dy: '-30px', t: '33s' },
+  ];
+  LOOKS['th-2x'] = [
+    { k: 'blob', x: '66%', y: '-26%', s: '56vmax', c1: '#f3b61f', c2: 'rgba(176,54,15,.45)', o: .5, d: 70, dx: '-50px', dy: '40px', t: '28s' },
+    { k: 'ring', x: '-16%', y: '58%', s: '44vmax', c1: '#e04fa0', c2: 'rgba(243,182,31,.5)', o: .5, d: -95, dx: '40px', dy: '-30px', t: '33s' },
+  ];
+  LOOKS['th-camara'] = [
+    { k: 'blob', x: '66%', y: '-26%', s: '56vmax', c1: '#ff9f1c', c2: 'rgba(224,79,160,.4)', o: .5, d: 70, dx: '-50px', dy: '40px', t: '28s' },
+    { k: 'ring', x: '-16%', y: '58%', s: '44vmax', c1: '#5c63d8', c2: 'rgba(255,159,28,.45)', o: .5, d: -95, dx: '40px', dy: '-30px', t: '33s' },
+  ];
+  LOOKS['th-pnud'] = [
+    { k: 'blob', x: '66%', y: '-26%', s: '56vmax', c1: '#ffc83d', c2: 'rgba(49,170,138,.45)', o: .5, d: 70, dx: '-50px', dy: '40px', t: '28s' },
+    { k: 'ring', x: '-16%', y: '58%', s: '44vmax', c1: '#009bbf', c2: 'rgba(255,200,61,.45)', o: .5, d: -95, dx: '40px', dy: '-30px', t: '33s' },
+  ];
+  LOOKS['th-lat'] = [
+    { k: 'blob', x: '66%', y: '-26%', s: '56vmax', c1: '#f7a072', c2: 'rgba(224,79,160,.45)', o: .5, d: 70, dx: '-50px', dy: '40px', t: '28s' },
+    { k: 'ring', x: '-16%', y: '58%', s: '44vmax', c1: '#a8118c', c2: 'rgba(247,160,114,.5)', o: .5, d: -95, dx: '40px', dy: '-30px', t: '33s' },
+  ];
+  screens.forEach((s) => {
+    const kind = s.classList.contains('light') ? 'light' : Object.keys(LOOKS).find((k) => s.classList.contains(k)) || 'dark';
+    const orbs = document.createElement('div'); orbs.className = 'orbs'; orbs.setAttribute('aria-hidden', 'true');
+    orbs.innerHTML = LOOKS[kind].map((p) => `<span class="orb ${p.k}" style="--x:${p.x};--y:${p.y};--s:${p.s};--c1:${p.c1};--c2:${p.c2};--o:${p.o};--d:${p.d};--dx:${p.dx};--dy:${p.dy};--t:${p.t}"></span>`).join('');
+    s.prepend(orbs);
+  });
+  if (!reduce) {
+    let tx2 = 0, ty2 = 0, cx = 0, cy = 0;
+    addEventListener('pointermove', (e) => { tx2 = (e.clientX / innerWidth - .5) * 2; ty2 = (e.clientY / innerHeight - .5) * 2; }, { passive: true });
+    const root = document.documentElement;
+    const follow = () => {
+      cx += (tx2 - cx) * .045; cy += (ty2 - cy) * .045;
+      root.style.setProperty('--mx', cx.toFixed(3)); root.style.setProperty('--my', cy.toFixed(3));
+      requestAnimationFrame(follow);
+    };
+    requestAnimationFrame(follow);
+  }
+
+  // ——— Camera: the Business Case demo dives into the card you tap ———
+  $$('[data-demo]').forEach((d) => {
+    const steps = $$('.demo-step', d); let cur = steps[0];
+    const COPY = {
+      investor: { k: 'For investors', t: 'A question to bring to your next portfolio conversation', p: 'Investors see first how the findings can open a conversation with their investees.' },
+      investee: { k: 'For organisations receiving investment', t: 'What your leadership, impact and reporting teams can take from it', p: 'Organisations see first what their teams can learn and use in their own reporting.' },
+    };
+    const show = (n, from) => {
+      const next = steps[n - 1]; if (next === cur) return;
+      const swap = () => { cur.hidden = true; cur.classList.toggle('out', false); cur.style.transformOrigin = ''; next.hidden = false; next.classList.toggle('in', false); void next.offsetWidth; next.classList.add('in'); cur = next; };
+      if (reduce) return swap();
+      const br = cur.getBoundingClientRect(), r = from ? from.getBoundingClientRect() : br;
+      cur.style.transformOrigin = `${r.left + r.width / 2 - br.left}px ${r.top + r.height / 2 - br.top}px`;
+      cur.classList.add('out'); window.sfx('flip'); setTimeout(swap, 380);
+    };
+    $$('[data-path]', d).forEach((b) => b.addEventListener('click', () => {
+      const c = COPY[b.dataset.path];
+      $('#demoKick').textContent = c.k; $('#demoTitle').textContent = c.t; $('#demoText').textContent = c.p;
+      show(2, b);
+    }));
+    $('[data-demo-next]', d).addEventListener('click', (e) => show(3, e.currentTarget));
+    $('[data-demo-switch]', d).addEventListener('click', (e) => show(1, e.currentTarget));
+    $('[data-demo-restart]', d).addEventListener('click', (e) => show(1, e.currentTarget));
+  });
+
+  // ——— Pick a pilot ———
+  const LANES = { A: 'Lane A: strategy and ideas, by agreed hours.', B: 'Lane B: campaigns and production, by scope.', C: 'Lane C: a digital experience 2X owns, starting with discovery.' };
+  $$('[data-pilot]').forEach((box) => {
+    const bs = $$('.pilot-opt', box), out = $('#pilotOut');
+    const pick = (b, quiet) => {
+      bs.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      $('#pilotName').textContent = 'Pilot: ' + b.lastChild.textContent.trim();
+      $('#pilotLane').textContent = LANES[b.dataset.lane] + ' To confirm the scope together we’d agree on:';
+      if (!quiet) { out.classList.toggle('pop', false); void out.offsetWidth; out.classList.add('pop'); window.sfx('reveal'); }
+      store.set('pilot', bs.indexOf(b));
+    };
+    bs.forEach((b) => b.addEventListener('click', () => pick(b)));
+    window.__pickPilot = (i) => { if (bs[i]) pick(bs[i], true); };
+    const sv = store.get('pilot', -1); if (bs[sv]) pick(bs[sv], true);
+  });
+
+  // ——— 05 The 2X world: overview → lane → idea, with a flying camera ———
+  (() => {
+    const scr = $('[data-world]'); if (!scr) return;
+    const world = $('#world'), stage = $('#stage'), hud = $('#hud'), detail = $('#detail');
+    const dusts = $$('.dust', scr);
+    const LANES = [
+      { id: 'A', c: '#009bbf', name: 'Strategy and ideas', how: 'By agreed hours',
+        text: 'For questions that don’t have a production scope yet. We agree on the question, the people, an hour cap and a concrete output. No extra hours without your OK.',
+        found: ['Annual Report 2025 editorial concepts', 'Summit Montréal identity routes'] },
+      { id: 'B', c: '#ff6a68', name: 'Campaigns and production', how: 'By scope',
+        text: 'For needs with an audience, a goal and a calendar. Concept, original pieces, adaptations, languages, formats and review rounds, scoped and quoted per project.',
+        found: ['Certification for FIs campaign', 'Summit Montréal system and signage', 'RFF Cape Town edit', 'GLI Forum booth'] },
+      { id: 'C', c: '#31aa8a', name: 'Digital experiences 2X owns', how: 'Discovery, build, support',
+        text: 'Tools for your audiences, with your identity and your approved content. Discovery, build and support are separate steps, each quoted on its own.',
+        found: ['This proposal, built the same way'] },
+    ];
+    const IDEAS = [
+      ['A', 'Message architecture for an initiative', 'One piece of content tries to explain too much to too many audiences. It can be correct and still leave readers unsure why it matters or what to do next.', 'Review a defined sample of approved content, interview the owners, separate goals by audience, and build the core message, arguments, allowed evidence, FAQs and calls to action in one editable matrix.', 'One initiative and one priority channel, with agreed hours. The output is a message architecture ready to approve, not a full campaign.', 'Comprehension tests with readers from the intended audience: can they name the goal and the next step?'],
+      ['A', 'Campaign concept lab', 'Pieces get approved one by one without a shared idea, or visual preferences are debated before agreeing what the campaign must achieve.', 'Write the brief, develop distinct creative routes with their argument and limits, and show the chosen one as a storyboard or a few sample pieces.', 'One campaign, one decision moment and a prototype of the chosen route. You approve the concept before any extended production.', 'Agreement on direction, message comprehension in a small test, and fit with the channels and resources you have.'],
+      ['A', 'Editorial system for a content series', 'Every post starts from zero and series lose continuity. A finding, an opinion, a case and a call for applications can blur together.', 'Define editorial territories, goals per series, piece structure, tone, evidence rules and a model calendar, so the team decides with less ambiguity.', 'One editorial cycle using existing approved content, producing only the agreed examples.', 'Message consistency, share of pieces with a clear source and call to action, and fewer correction rounds.'],
+      ['B', 'Launch campaign for a report', 'A launch often ends at announcing the PDF. Readers never find out which questions it answers or which chapters are for them.', 'Pick findings with the technical team and build a sequence of build-up, launch and deep dives: pieces, short videos and partner material, every claim linked to its source.', 'One report, one main audience and a small sequence of pieces, before adding formats or languages.', 'Qualified visits to the report page, clicks to chapters and questions received. A download alone doesn’t prove reading.', true],
+      ['B', 'Video series of cases and voices', 'Stories end up as generic testimonials or pieces that are too long, with results shown without the starting point or the decisions behind them.', 'Choose stories with 2X, secure permissions, prepare interviews and edit one main story plus cut-downs, reviewed by the people in it.', 'One approved story, one main piece and a defined set of versions. Filming on site, archive or a remote interview are priced differently.', 'Completion by channel, clicks to the full case, and feedback from the people featured.'],
+      ['B', 'Kit for events and partners', 'Every speaker and partner announces the event differently, ready-to-use pieces are missing and the follow-up gets lost.', 'Map before, during and after; produce messages, speaker cards, screens and signage, channel content and a post-event recap.', 'One virtual session or one block of an event, with one approver and a wrap-up.', 'Kit use by partners, clicks to registration, valid registrations and recap views.'],
+      ['B', 'Explaining certification journeys', 'Introductory information, requirements, stages and decisions get mixed together, and promotional pieces can create expectations the official process doesn’t support.', 'Work only with current content approved by 2X, separating overview, documentation and official contact, with consistent terms and technical review.', 'One audience and one informational sequence validated by the responsible team, tested for comprehension before wide distribution.', 'Clarity of purpose, finding the right channel, relevant enquiries and clicks to official resources.'],
+      ['C', 'Searchable resource hub', 'A library sorted by date or file type makes people know a resource’s name in advance. They find documents, but not which one to open first.', 'Inventory an approved set, define tags, design search, filters, resource cards and topic paths, and agree who publishes and updates.', 'One small collection for one audience, checking first what the current website already does well.', 'Search success and time in test tasks, searches with no results, resources opened.'],
+      ['C', 'Interactive learning journey', 'The material exists, but its length or technical level makes it hard to start. Readers can’t tell what to understand first.', 'Turn approved content into short modules with examples and comprehension questions, with sources and links to go deeper, tested with users.', 'One focused topic and one defined group of participants, before any larger course platform.', 'Understanding before and after, completion, open questions and perceived usefulness.'],
+      ['C', 'Explorer of cases and lessons', 'Stories are read in isolation, so it’s hard to find related lessons or compare contexts.', 'Set inclusion rules, write consistent case cards, tag verifiable variables and offer search and topic paths, with dates and limits on each case.', 'A short collection approved by 2X, to test the filters and the upkeep before growing.', 'Success finding a relevant case, variety of resources read, and feedback on usefulness.'],
+      ['C', 'Digital experience for a 2X event', 'Information is scattered across emails, documents and links, and after the event the recordings and materials are hard to find.', 'A microsite or event section with agenda, approved profiles, logistics and resources, mobile-first, with an archive for afterwards.', 'One small event or one day of programme, keeping registration in the tools 2X already uses.', 'Finding a session, mobile use, clicks to resources and post-event views.'],
+      ['C', 'Interactive report and data explorer', 'Static charts and long tables make a report hard to read. A reader finds a number without its universe, period or limits.', 'Take an authorised, documented dataset, design narrative views and filters, and keep references and methodology one tap away.', 'One chapter or one set of charts with concrete reading questions.', 'Correct understanding of results, reading questions answered, methodology views.', true],
+    ].map((r, i) => ({ n: i + 1, lane: r[0], t: r[1], prob: r[2], doo: r[3], pilot: r[4], meas: r[5], demo: !!r[6] }));
+    const laneOf = (id) => LANES.find((l) => l.id === id);
+    const pad = (n) => String(n).padStart(2, '0');
+
+    // ——— Build the world ———
+    let POS = {};
+    const portrait = () => innerWidth < 900 && innerHeight > innerWidth;
+    function positions() {
+      return portrait()
+        ? { core: [0, -20], A: [-330, -650], B: [330, -650], C: [0, 610], box: [1300, 1900] }
+        : { core: [0, -10], A: [-640, -420], B: [640, -420], C: [0, 560], box: [2000, 1720] };
+    }
+    function build() {
+      POS = positions();
+      world.classList.toggle('portrait', portrait());
+      const [cx, cy] = POS.core;
+      let h = `<svg class="w-links" width="3000" height="3000" viewBox="-1500 -1500 3000 3000" style="left:0;top:0">${LANES.map((l) => { const [x, y] = POS[l.id]; return `<path d="M${cx} ${cy} Q ${(cx + x) / 2 + (y - cy) * .15} ${(cy + y) / 2 - (x - cx) * .15} ${x} ${y}"/>`; }).join('')}</svg>`;
+      h += `<div class="w-core" style="left:${cx}px;top:${cy}px"><span>2027</span><b>2X × Brain</b><span>What’s next</span></div>`;
+      LANES.forEach((l) => {
+        const [x, y] = POS[l.id];
+        h += `<div class="w-orbit" style="left:${x}px;top:${y}px"></div>`;
+        h += `<button class="w-planet" type="button" data-lane="${l.id}" style="left:${x}px;top:${y}px;--lc:${l.c}" aria-label="Enter lane ${l.id}: ${l.name}"><span class="pl"><span class="lt">${l.id}</span><span class="nm">${l.name}</span><span class="go">Tap to go in</span></span></button>`;
+        const mine = IDEAS.filter((d) => d.lane === l.id);
+        mine.forEach((d, k) => {
+          const a = -Math.PI / 2 + k * 2 * Math.PI / mine.length;
+          d.x = x + Math.cos(a) * 190; d.y = y + Math.sin(a) * 190;
+          h += `<button class="w-node" type="button" data-idea="${d.n}" style="left:${d.x}px;top:${d.y}px;--lc:${l.c}" tabindex="-1"><span class="in"><small>${pad(d.n)}</small><b>${d.t}</b></span></button>`;
+        });
+      });
+      world.innerHTML = h;
+      $$('.w-planet', world).forEach((p) => p.addEventListener('click', (e) => { e.stopPropagation(); if (level === 0) toLane(p.dataset.lane); else if (level === 1 && lane !== p.dataset.lane) toLane(p.dataset.lane); }));
+      $$('.w-node', world).forEach((n) => n.addEventListener('click', (e) => { e.stopPropagation(); if (level >= 1) toIdea(+n.dataset.idea); }));
+      paintPicked();
+    }
+    // Stars in three depths
+    dusts.forEach((d, j) => {
+      const k = +d.dataset.k, n = j === 2 ? 14 : 70;
+      d.innerHTML = Array.from({ length: n }, () => `<i style="left:${(Math.random() * 100).toFixed(2)}%;top:${(Math.random() * 100).toFixed(2)}%;--z:${(j === 2 ? 6 + Math.random() * 10 : 1 + Math.random() * 2.4 * k + k).toFixed(1)}px;--o:${(j === 2 ? .25 : .3 + Math.random() * .6).toFixed(2)};--t:${(3 + Math.random() * 5).toFixed(1)}s;--c:${['#5cc8e0', '#ff6a68', '#31aa8a', '#fcd200'][Math.floor(Math.random() * 4)]}"></i>`).join('');
+    });
+
+    // ——— Camera ———
+    let level = 0, lane = null, idea = null, cam = { x: 0, y: 0, s: 1 };
+    function focus() {
+      const W = innerWidth, H = innerHeight, top = 66;
+      if (level === 2) return { fx: W / 2, fy: H / 2, aw: W, ah: H };
+      if (W >= 900) { const left = 380 + 48; return { fx: left + (W - left) / 2, fy: top + (H - top) / 2, aw: W - left - 60, ah: H - top - 60 }; }
+      const hh = hud.offsetHeight + 96; return { fx: W / 2, fy: top + (H - top - hh) / 2, aw: W - 24, ah: H - top - hh - 10 };
+    }
+    function shoot() {
+      const f = focus();
+      let x, y, s;
+      if (level === 0) { [x, y] = [0, (POS.box[1] === 1900 ? -20 : 70)]; s = Math.min(f.aw / POS.box[0], f.ah / POS.box[1]); }
+      else if (level === 1) { [x, y] = POS[lane]; s = Math.min(f.aw / 620, f.ah / 620); }
+      else { const d = IDEAS[idea - 1]; x = d.x; y = d.y; s = Math.max(f.aw, f.ah) / 132 * 1.45; }
+      cam = { x, y, s };
+      world.style.transform = `translate(${f.fx - x * s}px, ${f.fy - y * s}px) scale(${s})`;
+      dusts.forEach((d) => { const k = +d.dataset.k; d.style.transform = `translate(${-x * k * .12}px, ${-y * k * .12}px) scale(${1 + level * k * .35})`; });
+      world.classList.toggle('lv0', level === 0); world.classList.toggle('lv2', level === 2); world.classList.toggle('in-lane', level >= 1);
+      $$('.depth i', scr).forEach((i) => i.classList.toggle('on', +i.dataset.l <= level));
+      $('#depthTxt').textContent = ['Overview', 'Lane ' + (lane || ''), 'Idea ' + (idea ? pad(idea) : '')][level];
+      $$('.w-node', world).forEach((n) => { n.tabIndex = level >= 1 && IDEAS[+n.dataset.idea - 1].lane === lane ? 0 : -1; n.classList.toggle('deep', level === 2 && +n.dataset.idea === idea); });
+    }
+    function fresh(html) { hud.innerHTML = html; hud.classList.remove('fresh'); void hud.offsetWidth; hud.classList.add('fresh'); }
+    function hudOverview() {
+      fresh(`<span class="kick">05 · What could come next</span><h3>Three worlds. Twelve ideas.</h3><p>Each world is a way to work with Brain in 2027. Go in to find the ideas inside, and go in again to see how a first pilot would look.</p><div class="list">${LANES.map((l) => `<button type="button" data-go-lane="${l.id}" style="--lc:${l.c}"><small>${l.id}</small>${l.name}</button>`).join('')}</div><span class="tip">tap a planet to dive in</span>`);
+      $$('[data-go-lane]', hud).forEach((b) => b.addEventListener('click', () => toLane(b.dataset.goLane)));
+    }
+    function hudLane() {
+      const l = laneOf(lane), mine = IDEAS.filter((d) => d.lane === lane);
+      fresh(`<button class="back" type="button" data-out>← Zoom out</button><span class="kick" style="color:${l.c}">Lane ${l.id} · ${l.how}</span><h3>${l.name}</h3><p>${l.text}</p><div class="list">${mine.map((d) => `<button type="button" data-go-idea="${d.n}" style="--lc:${l.c}"><small>${pad(d.n)}</small>${d.t}</button>`).join('')}</div><div class="found"><small>Found at this depth: work we already did together</small><div class="chips">${l.found.map((f) => `<span class="chip">${f}</span>`).join('')}</div></div>`);
+      $('[data-out]', hud).addEventListener('click', out);
+      $$('[data-go-idea]', hud).forEach((b) => b.addEventListener('click', () => toIdea(+b.dataset.goIdea)));
+    }
+    function showDetail() {
+      const d = IDEAS[idea - 1], l = laneOf(d.lane), picked = store.get('pilot', -1) === d.n - 1;
+      detail.style.setProperty('--lc', l.c);
+      detail.innerHTML = `<div class="card"><div class="top-row"><button class="back" type="button" data-out>← Back to lane ${l.id}</button><span class="lane-tag">Lane ${l.id} · ${l.name}</span></div>
+        <h3><small>IDEA ${pad(d.n)}</small>${d.t}</h3>
+        <div class="grid4"><div class="blk" style="--i:0"><small>The problem</small><p>${d.prob}</p></div><div class="blk" style="--i:1"><small>What we’d do</small><p>${d.doo}</p></div><div class="blk" style="--i:2"><small>A first pilot</small><p>${d.pilot}</p></div><div class="blk" style="--i:3"><small>How we’d know it works</small><p>${d.meas}</p></div></div>
+        <div class="acts"><button class="btn ${picked ? 'on' : ''}" type="button" data-pick>${picked ? 'Chosen as our pilot ✓' : 'Choose this as our pilot'}</button>${d.demo ? '<button class="btn line" type="button" data-demo-go>See an example →</button>' : ''}<button class="btn line" type="button" data-next-step>Go to the next step →</button></div></div>`;
+      detail.hidden = false;
+      $('[data-out]', detail).addEventListener('click', out);
+      $('[data-pick]', detail).addEventListener('click', (e) => { if (window.__pickPilot) window.__pickPilot(d.n - 1); e.currentTarget.textContent = 'Chosen as our pilot ✓'; e.currentTarget.classList.add('on'); paintPicked(); window.sfx('reveal'); });
+      const dg = $('[data-demo-go]', detail); if (dg) dg.addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Explore the Business Case')));
+      $('[data-next-step]', detail).addEventListener('click', () => go(screens.findIndex((s) => s.getAttribute('aria-label') === 'Choose one priority to pilot')));
+    }
+    function paintPicked() { const p = store.get('pilot', -1); $$('.w-node', world).forEach((n) => n.classList.toggle('picked', +n.dataset.idea - 1 === p)); }
+    function toLane(id) { lane = id; idea = null; level = 1; detail.hidden = true; hud.classList.remove('hide'); hudLane(); shoot(); window.sfx('flip'); }
+    function toIdea(n) {
+      idea = n; lane = IDEAS[n - 1].lane; level = 2; hud.classList.add('hide'); detail.hidden = true; shoot(); window.sfx('reveal');
+      setTimeout(() => { if (level === 2 && idea === n) showDetail(); }, reduce ? 0 : 900);
+    }
+    function out() {
+      if (level === 2) { detail.hidden = true; hud.classList.remove('hide'); level = 1; idea = null; hudLane(); shoot(); }
+      else if (level === 1) { level = 0; lane = null; hudOverview(); shoot(); }
+      window.sfx('flip');
+    }
+    function reset() { level = 0; lane = null; idea = null; detail.hidden = true; hud.classList.remove('hide'); hudOverview(); shoot(); }
+    stage.addEventListener('click', (e) => { if (level > 0 && !e.target.closest('.w-node, .w-planet')) out(); });
+    let rT; addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => { build(); shoot(); }, 150); });
+    build(); hudOverview(); requestAnimationFrame(shoot);
+    new MutationObserver(() => { if (scr.classList.contains('on')) { paintPicked(); if (level === 0) shoot(); } else if (scr.dataset.state !== 'current' && level > 0) reset(); }).observe(scr, { attributes: true, attributeFilter: ['class'] });
+
+    // Deck gestures: while inside the world, "back" means zoom out and "forward" stays put
+    let wT = 0;
+    window.__world = {
+      active: () => scr.dataset.state === 'current' && level > 0,
+      back() { const t = performance.now(); if (t - wT > 900) { wT = t; out(); } },
+    };
+  })();
+
+  layout();
+  enter(screens[0]);
+})();
+</script>
+
+</body>
+</html>
