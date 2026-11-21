@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, X } from '@/components/ui/icons';
-import { VOICE_MAX_CHARS, VOICE_TAIL, nextSpeech } from '@/lib/briaVoice';
+import { VOICE_MAX_CHARS, VOICE_TAIL, nextSpeech, voiceFiller } from '@/lib/briaVoice';
 import { requestVoiceAudio } from '@/lib/briaVoiceRequest';
 import BriaVoiceOrb from './BriaVoiceOrb';
 import { useBriaDictation } from './useBriaDictation';
@@ -17,9 +17,9 @@ export const VOICE_STATUS = { listening: 'Te escucho…', hearing: 'Te escucho�
 export const replyToSpeak = (chat, spokenId) => { const last = chat?.turns?.at(-1); return last?.role === 'assistant' && last.id !== 'pending' && last.id !== spokenId && String(last.text || '').trim() ? last : null; };
 /** Qué tan fuerte habla la persona ahora mismo, de 0 a 1, con las últimas medidas del micrófono. */
 export const orbLevel = (levels = []) => Math.min(1, Math.max(0, ...levels.slice(-3).map(Number).filter(Number.isFinite)));
-export default function BriaVoiceMode({ chat, busy, liveText = '', request, send, audio, onClose, silent = false, speak = requestVoiceAudio }) {
+export default function BriaVoiceMode({ chat, busy, liveText = '', liveStatus = '', request, send, audio, onClose, silent = false, speak = requestVoiceAudio }) {
   const [phase, setPhase] = useState('listening'), [paused, setPaused] = useState(false), [notice, setNotice] = useState(silent ? 'Bria todavía no tiene voz elegida: te responde por escrito en el chat.' : '');
-  const spoken = useRef(chat?.turns?.at(-1)?.role === 'assistant' ? chat.turns.at(-1).id : null), player = useRef(audio || null), url = useRef(''), failures = useRef(0), alive = useRef(true);
+  const spoken = useRef(chat?.turns?.at(-1)?.role === 'assistant' ? chat.turns.at(-1).id : null), player = useRef(audio || null), url = useRef(''), failures = useRef(0), alive = useRef(true), turns = useRef(0);
   // Lo que Bria va diciendo de la respuesta en curso: hasta dónde del texto ya se pidió (`said`), los trozos en cola,
   // si uno suena ahora, si ya llegó el final, cuánto se ha dicho y si la persona la interrumpió (`muted`).
   const talk = useRef({ said: 0, seen: '', queue: [], playing: false, ended: false, total: 0, muted: false });
@@ -44,7 +44,7 @@ export default function BriaVoiceMode({ chat, busy, liveText = '', request, send
       const element = player.current; url.current = URL.createObjectURL(blob);
       element.onended = next; element.onerror = next; element.src = url.current; setPhase('speaking');
       return element.play();
-    }).catch((failure) => { if (talk.current !== state || !alive.current || item.control.signal.aborted) return; setNotice(failure?.code === 'VOICE_DAILY_LIMIT' ? failure.message : 'No pude decirlo en voz alta. La respuesta quedó escrita en el chat.'); next(); });
+    }).catch((failure) => { if (talk.current !== state || !alive.current || item.control.signal.aborted) return; if (item.aside) { next(); return; } setNotice(failure?.code === 'VOICE_DAILY_LIMIT' ? failure.message : 'No pude decirlo en voz alta. La respuesta quedó escrita en el chat.'); next(); });
   };
   /** Pide ya el audio de un trozo (los pedidos van en paralelo) y lo deja en la cola para sonar en su turno. */
   const say = (text) => {
@@ -69,6 +69,15 @@ export default function BriaVoiceMode({ chat, busy, liveText = '', request, send
     state.seen = liveText;
     for (let piece = nextSpeech(liveText, state.said, { first: state.total === 0 }); piece; piece = nextSpeech(liveText, state.said, { first: false })) { state.said = piece.to; say(piece.text); }
   }, [liveText, busy, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Si Bria va a consultar algo antes de haber dicho nada, avisa con una frase corta en vez de quedarse callada.
+  useEffect(() => {
+    const state = talk.current;
+    if (silent || !busy || !liveStatus || state.ended || state.muted || state.aside || state.total > 0 || phase !== 'thinking') return;
+    state.aside = true; turns.current += 1;
+    const control = new AbortController(), sound = speak(voiceFiller(turns.current), { signal: control.signal });
+    sound.catch(() => {});
+    state.queue.push({ audio: sound, control, aside: true }); pump();
+  }, [liveStatus, busy, phase]); // eslint-disable-line react-hooks/exhaustive-deps
   // El final: cuando Bria termina de escribir se dice lo que faltaba. Si no hubo respuesta nueva o aún no hay voz, vuelve a escuchar.
   useEffect(() => {
     const state = talk.current;

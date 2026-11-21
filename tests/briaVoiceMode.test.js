@@ -170,3 +170,30 @@ test('el canal de voz llega a las instrucciones como último renglón y pide res
   const routes = (await import('node:fs')).readFileSync('src/routes/api/briaConversations.js', 'utf8');
   assert.match(routes, /req\.body\?\.channel === 'voz'/);
 });
+
+test('en voz Bria llega informada: sus pendientes van antes del mensaje y el turno deja su cronómetro', async () => {
+  const { runAssistant, dayBriefMessage } = await import('../src/lib/briaAssistant.js');
+  assert.equal(dayBriefMessage(null), null); assert.equal(dayBriefMessage({ data: {} }), null);
+  const seen = [], lines = [];
+  const result = await runAssistant({
+    question: '¿Qué tengo hoy?', person: { name: 'Rodny' }, user: { id: 'u1' }, today: '2026-11-21', channel: 'voz', tools: [],
+    ai: { generate: async (request) => { seen.push(request.input); request.onTextDelta?.('Tienes'); return { text: 'Tienes la propuesta de Aristea.', functionCalls: [], output: [] }; } },
+    onEvent: () => {}, logger: { info: line => lines.push(line), error: () => {}, warn: () => {} },
+    context: { dayBrief: async () => ({ data: { tareas: [{ id: 't1', titulo: 'Propuesta de Aristea' }] }, sources: [{ kind: 'tarea', id: 't1', label: 'Propuesta de Aristea' }] }), notebook: async () => { throw new Error('sin cuaderno'); } }
+  });
+  const input = seen[0];
+  assert.match(input.at(-2).content, /Propuesta de Aristea/); assert.equal(input.at(-2).role, 'developer');
+  assert.equal(input.at(-1).role, 'user', 'el mensaje de la persona sigue siendo lo último');
+  assert.deepEqual(result.sources.map(source => source.id), ['t1']);
+  assert.deepEqual(result.failures.map(failure => failure.tool), ['cuaderno'], 'una lectura previa que falla no tumba las otras');
+  assert.match(lines.find(line => /Tiempos/.test(line)), /canal=voz total=\d+ms previo=\d+ms ronda1=\d+ms primerTexto=\d+ms/);
+  assert.doesNotMatch(lines.join('\n'), /Aristea|Rodny/, 'el cronómetro no lleva nada de lo dicho');
+});
+
+test('si Bria va a consultar algo lo dice con una frase corta que rota', async () => {
+  const { voiceFiller, VOICE_FILLERS } = await import('../src/lib/briaVoice.js');
+  assert.ok(VOICE_FILLERS.every(text => text.length <= 40));
+  assert.notEqual(voiceFiller(1), voiceFiller(2)); assert.equal(voiceFiller(VOICE_FILLERS.length), voiceFiller(0));
+  const source = (await import('node:fs')).readFileSync('src/components/bria/BriaVoiceMode.jsx', 'utf8');
+  assert.match(source, /state\.aside \|\| state\.total > 0/, 'solo una vez por turno y solo antes de empezar a responder');
+});
