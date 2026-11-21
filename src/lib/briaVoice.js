@@ -9,7 +9,7 @@ export const VOICE_DAILY_CHARS = 20000;
 export const VOICE_MODEL = 'eleven_flash_v2_5';
 export const VOICE_TAIL = 'Lo demás te lo dejé escrito en el chat.';
 // Escuchar: se considera voz por encima de SPEECH, silencio por debajo de QUIET; tras hablar, este silencio cierra el turno.
-export const VOICE_SPEECH_LEVEL = 0.16, VOICE_QUIET_LEVEL = 0.08, VOICE_SILENCE_MS = 1400, VOICE_MIN_SPEECH_MS = 350;
+export const VOICE_SPEECH_LEVEL = 0.16, VOICE_QUIET_LEVEL = 0.08, VOICE_SILENCE_MS = 900, VOICE_MIN_SPEECH_MS = 350;
 
 /** Lo que se dice en voz: la respuesta sin formato, sin enlaces, sin tablas ni código, en frases corridas. */
 export const speakableText = (markdown, { max = VOICE_MAX_CHARS } = {}) => {
@@ -35,6 +35,23 @@ export const speakableText = (markdown, { max = VOICE_MAX_CHARS } = {}) => {
 };
 
 export const isVoiceId = (value) => typeof value === 'string' && /^[A-Za-z0-9]{10,40}$/.test(value);
+// Hablar mientras escribe (21 de noviembre de 2026, Rodny: «tarda mucho en responder… quiero que sea rápido,
+// conversacional»): Bria empieza a decir la primera frase apenas la tiene, sin esperar la respuesta completa. El
+// primer trozo sale corto para arrancar pronto; los siguientes, más largos para que suene de corrido.
+export const SPEECH_FIRST_MIN = 24, SPEECH_NEXT_MIN = 90;
+/**
+ * El siguiente trozo para decir de un texto que todavía se está escribiendo. Corta solo en fin de frase o de línea;
+ * con `final`, devuelve lo que quede. `{ text, to }` o null si aún no hay una frase completa.
+ */
+export const nextSpeech = (text, from = 0, { first = false, final = false } = {}) => {
+  const rest = String(text || '').slice(from);
+  if (final) return rest.trim() ? { text: rest, to: from + rest.length } : null;
+  const min = first ? SPEECH_FIRST_MIN : SPEECH_NEXT_MIN, ends = /[.!?…](?=["»)\]]?\s)|\n+/g;
+  let match, cut = -1;
+  while ((match = ends.exec(rest))) { const end = match.index + match[0].length; if (rest.slice(0, end).trim().length >= min) { cut = end; if (first) break; } }
+  return cut > 0 ? { text: rest.slice(0, cut), to: from + cut } : null;
+};
+
 /** La configuración de la voz desde el entorno. Sin clave o sin voz, Bria no habla y la pantalla de voz no aparece. */
 export const voiceConfig = (env = process.env) => {
   const apiKey = String(env.ELEVENLABS_API_KEY || '').trim(), voiceId = String(env.ELEVENLABS_VOICE_ID || '').trim();

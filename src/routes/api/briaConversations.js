@@ -56,7 +56,7 @@ export const createBriaConversationRouter = ({ service } = {}) => {
     req.briaExpectedRevision = revision;
     next();
   };
-  const message = req => ({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], expectedRevision: req.briaExpectedRevision, session: sessionOf(req) });
+  const message = req => ({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], expectedRevision: req.briaExpectedRevision, session: req.body?.channel === 'voz' ? { ...(sessionOf(req) || {}), channel: 'voz' } : sessionOf(req) });
   // El adelanto del dictado: lo grabado hasta ahora, para mostrarlo en gris. Tope propio de tamaño; nunca devuelve error de transcripción.
   router.post('/dictation/preview', authorizeInput, receive(audioPreview.single('audio')), handle((req, instance) => instance.previewTranscription(req.user, req.file)));
   router.post('/dictation', authorizeInput, receive(audio.single('audio')), handle((req, instance) => instance.transcribe(req.user, req.file)));

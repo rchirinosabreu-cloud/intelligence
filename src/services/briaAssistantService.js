@@ -130,7 +130,7 @@ export const createBriaAssistantService = ({
         user,
         person,
         // Por dónde habla (1 de noviembre de 2026): la sesión de WhatsApp lo dice y Bria responde como se lee en un celular.
-        channel: session?.channel === 'whatsapp' ? 'whatsapp' : 'plataforma',
+        channel: ['whatsapp', 'voz'].includes(session?.channel) ? session.channel : 'plataforma',
         // Las manos de la plataforma usan la sesión del navegador: por WhatsApp no la hay y no se ofrecen (22 de octubre de 2026).
         tools: [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
         ai: createBriaModelRuntime({ ai: client, user }),

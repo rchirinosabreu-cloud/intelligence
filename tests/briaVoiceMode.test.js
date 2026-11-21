@@ -130,6 +130,10 @@ test('la pantalla de voz: fases, qué se dice y cómo se abre', async () => {
   assert.match(orb, /prefers-reduced-motion/); assert.match(orb, /if \(current !== 'paused'\) clock \+=/, 'en pausa las nubes no se mueven'); assert.doesNotMatch(orb, /shadow|inset/, 'plano: sin brillo ni sombra de esfera');
   assert.match(dictation, /if \(handsFree \|\| recording\.current !== session/, 'en la voz no se pide el texto en gris');
   assert.match(mode, /if \(!reply \|\| silent\)/, 'sin voz elegida no se pide audio');
+  // Hablar mientras escribe: la pantalla recibe el texto en vivo y manda a decir cada frase completa.
+  assert.match(mode, /nextSpeech\(liveText, state\.said, \{ first: state\.total === 0 \}\)/);
+  assert.match(conversation, /liveText=\{live\.text\}/); assert.match(conversation, /send\(said, \{ channel: 'voz' \}\)/);
+  assert.match(mode, /!paused && !busy && voice === 'idle'/, 'no se graba mientras Bria todavía escribe');
   // Funciones puras, copiadas de sus módulos para probarlas sin el empaquetador.
   const pure = [mode.match(/export const replyToSpeak = [^\n]+/)[0], mode.match(/export const orbLevel = [^\n]+/)[0], orb.match(/export const orbEnergy = [\s\S]*?\n};/)[0]].join('\n');
   const { orbEnergy, orbLevel, replyToSpeak } = await import(`data:text/javascript,${encodeURIComponent(pure)}`);
@@ -140,4 +144,29 @@ test('la pantalla de voz: fases, qué se dice y cómo se abre', async () => {
   assert.equal(replyToSpeak(chat, null).id, 'a1'); assert.equal(replyToSpeak(chat, 'a1'), null, 'no repite lo ya dicho');
   assert.equal(replyToSpeak({ turns: [chat.turns[0]] }, null), null); assert.equal(replyToSpeak(null, null), null);
   assert.equal(replyToSpeak({ turns: [{ id: 'a2', role: 'assistant', text: '  ' }] }, null), null);
+});
+
+test('hablar mientras escribe: los trozos salen en fin de frase, el primero pronto', async () => {
+  const { nextSpeech, VOICE_SILENCE_MS } = await import('../src/lib/briaVoice.js');
+  const text = 'Claro que sí, Rodny. Hoy tienes dos reuniones: una a las tres con Aristea y otra a las cinco con el equipo. También hay un correo sin responder de ayer.';
+  assert.equal(nextSpeech('Claro que', 0, { first: true }), null, 'sin frase completa todavía no dice nada');
+  assert.equal(nextSpeech('Sí. ', 0, { first: true }), null, 'una frase demasiado corta espera a la siguiente');
+  const first = nextSpeech(text, 0, { first: true });
+  assert.equal(first.text, 'Claro que sí, Rodny. Hoy tienes dos reuniones: una a las tres con Aristea y otra a las cinco con el equipo. '.slice(0, first.to)); assert.ok(first.to <= 110 && /[.]\s?$/.test(first.text.trimEnd() + ' '));
+  assert.equal(nextSpeech('Cuesta 3.5 millones y', 0, { first: true }), null, 'un decimal no es fin de frase');
+  assert.equal(nextSpeech(text, first.to), null, 'lo que sigue espera a tener una frase larga o el final');
+  const rest = nextSpeech(text, first.to, { final: true });
+  assert.equal(first.text + rest.text, text, 'nada se pierde ni se repite'); assert.equal(rest.to, text.length);
+  assert.equal(nextSpeech(text, text.length, { final: true }), null);
+  assert.ok(VOICE_SILENCE_MS <= 1000, 'el turno se cierra con menos de un segundo de silencio');
+});
+
+test('el canal de voz llega a las instrucciones como último renglón y pide respuestas habladas y cortas', async () => {
+  const { buildInstructions } = await import('../src/lib/briaAssistant.js');
+  const args = { person: { name: 'Rodny', jobTitle: 'Director' }, today: '2026-11-21', tools: [{ name: 'mis_tareas', description: 'Tus tareas' }] };
+  const platform = buildInstructions(args), voice = buildInstructions({ ...args, channel: 'voz' });
+  assert.match(voice.split('\n').at(-1), /hablada/); assert.match(voice.split('\n').at(-1), /una a tres frases/);
+  assert.equal(voice.split('\n').slice(0, -1).join('\n'), platform.split('\n').slice(0, -1).join('\n'), 'solo cambia el último renglón');
+  const routes = (await import('node:fs')).readFileSync('src/routes/api/briaConversations.js', 'utf8');
+  assert.match(routes, /req\.body\?\.channel === 'voz'/);
 });
