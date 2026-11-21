@@ -25,6 +25,7 @@ import { temporalRelation } from './briaTemporalEvidence.js';
 import { unsupportedFigures } from './briaFigures.js';
 import { notebookMessage } from './briaNotebook.js';
 import { liveStateMessage, liveClientMessage } from './briaLiveState.js';
+import { liveDayMessage } from './briaLiveDay.js';
 import { decisionMemoryMessage } from './briaDecisionMemory.js';
 import { pmSessionMessage } from './briaPmSession.js';
 import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS } from './briaQuick.js';
@@ -282,14 +283,15 @@ export const runAssistant = async ({
   const turnStartedAt = Date.now(), timings = { rounds: [] };
   // Memoria, cuaderno y resumen del día se leen a la vez y entran en ese orden, antes del mensaje de la persona,
   // que sigue siendo lo último que lee el modelo. Sin cualquiera de los tres se responde igual.
-  const [recalledRead, notebookRead, briefRead, liveRead, bookRead, pmRead, clientsRead] = await Promise.allSettled([
+  const [recalledRead, notebookRead, briefRead, liveRead, bookRead, pmRead, clientsRead, dayRead] = await Promise.allSettled([
     context.recallMemory ? context.recallMemory({ question, history }) : null,
     context.notebook ? context.notebook() : null,
     context.dayBrief ? context.dayBrief() : null,
     context.liveState ? context.liveState() : null,
     context.decisionMemory ? context.decisionMemory() : null,
     context.pmSession ? context.pmSession() : null,
-    context.liveClients ? context.liveClients() : null
+    context.liveClients ? context.liveClients() : null,
+    context.liveDay ? context.liveDay() : null
   ]);
   const notes = [];
   const before = (message) => { input.splice(input.length - 1, 0, message); evidence.push(message.content); notes.push(message.content); };
@@ -325,6 +327,9 @@ export const runAssistant = async ({
   // El estado vivo de las cuentas (etapa 2): parrilla, aprobaciones y devoluciones por cliente.
   if (clientsRead.status === 'fulfilled') { const message = liveClientMessage(clientsRead.value); if (message) before(message); }
   else logger.error('[BriaAssistant] No se pudo leer el estado vivo de las cuentas:', describeError(clientsRead.reason));
+  // El estado vivo del día (etapa 3): quién está en qué, la agenda, los correos que esperan y la última hora.
+  if (dayRead.status === 'fulfilled') { const message = liveDayMessage(dayRead.value); if (message) before(message); }
+  else logger.error('[BriaAssistant] No se pudo leer el estado vivo del día:', describeError(dayRead.reason));
   // El libro de decisiones (21 de noviembre de 2026): qué propuso Bria, qué se decidió y qué pasó. Sin él se responde igual.
   if (bookRead.status === 'fulfilled') { const message = decisionMemoryMessage(bookRead.value); if (message) before(message); }
   else logger.error('[BriaAssistant] No se pudo leer el libro de decisiones:', describeError(bookRead.reason));
