@@ -74,3 +74,8 @@ export const hearTurn = (state = {}, { level = 0, at = 0 } = {}) => {
   else next.quietSince = null;
   return { ...next, done: next.spoke && next.quietSince !== null && at - next.quietSince >= VOICE_SILENCE_MS };
 };
+
+// Cuando Bria tiene que ir a consultar algo, lo dice en vez de quedarse callada (21 de noviembre de 2026). Una frase
+// corta por turno, que no cuenta como parte de la respuesta.
+export const VOICE_FILLERS = ['Dame un segundo, lo reviso.', 'Déjame mirar.', 'Ya lo consulto.', 'Un momento, lo busco.'];
+export const voiceFiller = (turn = 0) => VOICE_FILLERS[Math.abs(Math.trunc(Number(turn) || 0)) % VOICE_FILLERS.length];

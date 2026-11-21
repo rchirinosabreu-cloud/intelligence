@@ -119,6 +119,11 @@ export const createBriaAssistantService = ({
       const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;
       const remembered = typeof knowledge === 'function' ? knowledge() : knowledge;
       const diary = typeof notebook === 'function' ? notebook() : notebook;
+      const channel = ['whatsapp', 'voz'].includes(session?.channel) ? session.channel : 'plataforma';
+      const allTools = [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)];
+      // En voz Bria llega informada (21 de noviembre de 2026): sus pendientes van leídos antes de responder, con la
+      // misma herramienta y los mismos permisos, para no gastar una ronda del modelo en ir a buscarlos.
+      const ownTasks = channel === 'voz' ? allTools.find(tool => tool.name === 'mis_tareas' && tool.allowed(user)) : null;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -130,9 +135,9 @@ export const createBriaAssistantService = ({
         user,
         person,
         // Por dónde habla (1 de noviembre de 2026): la sesión de WhatsApp lo dice y Bria responde como se lee en un celular.
-        channel: ['whatsapp', 'voz'].includes(session?.channel) ? session.channel : 'plataforma',
+        channel,
         // Las manos de la plataforma usan la sesión del navegador: por WhatsApp no la hay y no se ofrecen (22 de octubre de 2026).
-        tools: [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
+        tools: allTools,
         ai: createBriaModelRuntime({ ai: client, user }),
         today: bogotaDate(now()),
         logger,
@@ -142,6 +147,7 @@ export const createBriaAssistantService = ({
         context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, agencyFacts: facts, knowledge: remembered, logger,
           ...(facts?.recall ? { recallMemory: ({ question: current, history: turns }) => facts.recall(user, { texto: [...turns.slice(-2).map(turn => turn.text), current].join('\n') }) } : {}),
           ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
+          ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
