@@ -24,6 +24,7 @@ import { humanDate } from './briaDate.js';
 import { temporalRelation } from './briaTemporalEvidence.js';
 import { unsupportedFigures } from './briaFigures.js';
 import { notebookMessage } from './briaNotebook.js';
+import { quickInstructions, quickMessages, quickTurn } from './briaQuick.js';
 export { humanDate } from './briaDate.js';
 
 export const MAX_TOOL_ROUNDS = 6;
@@ -283,7 +284,8 @@ export const runAssistant = async ({
     context.notebook ? context.notebook() : null,
     context.dayBrief ? context.dayBrief() : null
   ]);
-  const before = (message) => { input.splice(input.length - 1, 0, message); evidence.push(message.content); };
+  const notes = [];
+  const before = (message) => { input.splice(input.length - 1, 0, message); evidence.push(message.content); notes.push(message.content); };
   if (recalledRead.status === 'fulfilled') {
     const recalled = recalledRead.value, message = recalled && recalledMemoryMessage(recalled);
     if (message) {
@@ -312,7 +314,7 @@ export const runAssistant = async ({
   timings.before = Date.now() - turnStartedAt;
 
   const finish = (text = '') => {
-    logger.info?.(`[BriaAssistant] Tiempos canal=${channel} total=${Date.now() - turnStartedAt}ms previo=${timings.before}ms ${timings.rounds.map((round, index) => `ronda${index + 1}=${round.ms}ms${round.firstText != null ? ` primerTexto=${round.firstText}ms` : ''}${round.tools.length ? ` herramientas=${round.tools.map(tool => `${tool.name}:${tool.ms}ms`).join(',')}` : ''}`).join(' ')}`);
+    logger.info?.(`[BriaAssistant] Tiempos canal=${channel} total=${Date.now() - turnStartedAt}ms previo=${timings.before}ms${timings.quick ? ` rapida=${timings.quick}` : ''} ${timings.rounds.map((round, index) => `ronda${index + 1}=${round.ms}ms${round.firstText != null ? ` primerTexto=${round.firstText}ms` : ''}${round.tools.length ? ` herramientas=${round.tools.map(tool => `${tool.name}:${tool.ms}ms`).join(',')}` : ''}`).join(' ')}`);
     return finishResult(text);
   };
   const finishResult = (text = '') => ({
@@ -323,6 +325,29 @@ export const runAssistant = async ({
     ...((approvalOptions(pendingAction).length ? approvalOptions(pendingAction) : quickReplies).length ? { quickReplies: normalizeQuickReplies(approvalOptions(pendingAction).length ? approvalOptions(pendingAction) : quickReplies) } : {}),
     rounds, usage: summarizeAiCalls(modelCalls)
   });
+
+  // La vía rápida de la voz (21 de noviembre de 2026): un modelo pequeño responde primero con lo ya leído y sin
+  // herramientas. Si pide consultar, falla, se corta, da una cifra sin fuente o pide confirmar algo, lo que alcanzó a
+  // escribirse se borra y el turno sigue por el camino completo, que no cambia. Nunca tumba la respuesta.
+  if (quickTurn({ channel, attachments, context })) {
+    const startedAt = Date.now();
+    let streamed = false, reason;
+    try {
+      const reply = await context.quick.answer({ system: quickInstructions({ person, today }), messages: quickMessages({ history, notes, question }),
+        ...(onEvent ? { onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); } } : {}) });
+      modelCalls.push({ model: reply?.model, latencyMs: Date.now() - startedAt, usage: normalizeAiUsage(reply?.usage) });
+      reason = reply?.handoff ? reply.reason || 'consulta' : !String(reply?.text || '').trim() ? 'vacia'
+        : unsupportedFigures(reply.text, evidence).length ? 'cifras' : asksToConfirm(reply.text) ? 'confirmar' : null;
+      if (!reason) { timings.quick = `${Date.now() - startedAt}ms`; return finish(reply.text); }
+    } catch (error) {
+      reason = 'fallo';
+      (logger.warn || logger.error)('[BriaAssistant] La vía rápida no respondió:', error?.status || error?.name || 'error');
+    }
+    timings.quick = `${reason}:${Date.now() - startedAt}ms`;
+    if (streamed) emit({ type: 'reset' });
+    // La persona oye «déjame mirar» mientras el camino completo consulta.
+    emit({ type: 'status', label: toolProgressLabel() });
+  }
 
   const execute = async (call) => {
     const tool = byName.get(call.name);
