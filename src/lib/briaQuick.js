@@ -40,6 +40,9 @@ export const quickMessages = ({ history = [], notes = [], question }) => {
   return messages;
 };
 
-/** Solo un turno hablado limpio: sin adjuntos, sin borrador en curso, sin seguimiento ni revisión pendiente. */
-export const quickTurn = ({ channel, attachments = [], context = {} }) => Boolean(context.quick) && channel === 'voz'
-  && !attachments.length && !context.pendingAction && !context.investigation && !context.reviewRequested && !context.selectionTurn;
+/**
+ * Solo un turno hablado sin borrador en curso ni revisión pendiente. Quién ofrece `quick` (el servicio) ya descartó
+ * los turnos con un archivo recién adjuntado. La primera versión también miraba `selectionTurn` y los adjuntos de
+ * contexto, que en una conversación guardada existen siempre: en producción la vía rápida no corrió ni una vez.
+ */
+export const quickTurn = ({ channel, context = {} }) => Boolean(context.quick) && channel === 'voz' && !context.pendingAction && !context.reviewRequested;

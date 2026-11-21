@@ -329,7 +329,7 @@ export const runAssistant = async ({
   // La vía rápida de la voz (21 de noviembre de 2026): un modelo pequeño responde primero con lo ya leído y sin
   // herramientas. Si pide consultar, falla, se corta, da una cifra sin fuente o pide confirmar algo, lo que alcanzó a
   // escribirse se borra y el turno sigue por el camino completo, que no cambia. Nunca tumba la respuesta.
-  if (quickTurn({ channel, attachments, context })) {
+  if (quickTurn({ channel, context })) {
     const startedAt = Date.now();
     let streamed = false, reason;
     try {
@@ -390,7 +390,7 @@ export const runAssistant = async ({
       for (const card of outcome?.accessCards || []) if (card?.id) accessCards.set(card.id, { id: card.id, cliente: card.cliente, plataforma: card.plataforma, nombre: card.nombre });
       if (outcome?.accessCapture) accessCapture = outcome.accessCapture;
       let data = outcome?.data ?? null;
-      if (outcome?.pendingAction && data && typeof data === 'object') {
+      if (outcome?.pendingAction && outcome.pendingAction.status !== 'CANCELLED' && data && typeof data === 'object') {
         const facts = { ...data }; delete facts.message;
         data = { ...facts, instruccionRespuesta: 'Redacta la respuesta a este mensaje con el estado devuelto. Si falta algo, pregunta solo lo que permita avanzar, conservando lo conocido. No copies una pregunta de formulario. Si está listo, explica lo relevante sin repetir todos los datos: el servidor adjunta los datos exactos para aprobar. Nada está ejecutado.' };
       }

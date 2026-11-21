@@ -59,6 +59,9 @@ export const wrapLegacyAction = (type, draft, extra = {}) => {
   };
 };
 
+/** Cierra una acción (y su borrador, si lo tiene) sin ejecutarla. */
+export const closeAction = (action, status) => ({ ...action, status, ...(action.draft ? { draft: { ...action.draft, status } } : {}) });
+
 export const actionStage = (action) => {
   if (!action) return null;
   if (['DONE', 'CANCELLED'].includes(action.status)) return action.status;
