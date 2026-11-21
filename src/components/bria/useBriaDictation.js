@@ -26,6 +26,7 @@ const meter = (stream, onLevel) => {
     return () => { clearInterval(interval); try { source.disconnect(); } catch { /* ya suelto */ } context.close?.().catch?.(() => {}); };
   } catch { return () => {}; }
 };
+// En manos libres no se pide el adelanto: en la pantalla de voz no se muestra texto.
 // Manos libres (la voz de Bria, mismo día): con `handsFree`, el dictado se cierra solo cuando la persona ya habló y
 // calla un rato (`hearTurn`), y si pasan `idleMs` sin que diga nada, se cancela y avisa por `onIdle`.
 export function useBriaDictation({ request, active = true, disabled = false, handsFree = false, idleMs = 45000, onText, onError, onBusy, onIdle }) {
@@ -99,7 +100,7 @@ export function useBriaDictation({ request, active = true, disabled = false, han
       const started = Date.now(); session.timer = timer.current = setInterval(() => { const elapsed = Math.floor((Date.now() - started) / 1000); setSeconds(elapsed); if (elapsed >= 300) stop(); }, 1000);
       const peek = async () => {
         const elapsedMs = Date.now() - started;
-        if (recording.current !== session || recorder.state !== 'recording' || !previewDue({ elapsedMs, lastAtMs: session.previewAt || 0, pending: session.previewing, bytes: session.bytes })) return;
+        if (handsFree || recording.current !== session || recorder.state !== 'recording' || !previewDue({ elapsedMs, lastAtMs: session.previewAt || 0, pending: session.previewing, bytes: session.bytes })) return;
         session.previewing = true; session.previewAt = elapsedMs;
         try {
           const body = new FormData(), type = recorder.mimeType || 'audio/webm'; body.append('audio', new Blob(session.chunks, { type }), type.includes('mp4') ? 'dictado.mp4' : 'dictado.webm');

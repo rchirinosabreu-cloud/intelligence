@@ -35,16 +35,6 @@ export const speakableText = (markdown, { max = VOICE_MAX_CHARS } = {}) => {
 };
 
 export const isVoiceId = (value) => typeof value === 'string' && /^[A-Za-z0-9]{10,40}$/.test(value);
-// Lo que Bria dice para que quien elige la voz la oiga como sonaría de verdad, en español y con su tono.
-export const VOICE_SAMPLE = 'Hola, soy Bria. Ya revisé tu día: tienes dos reuniones y un correo de un cliente esperando respuesta. ¿Por dónde quieres empezar?';
-
-/** Una voz de la cuenta de ElevenLabs, reducida a lo que hace falta para elegirla. */
-export const voiceOption = (voice = {}) => {
-  const labels = voice.labels && typeof voice.labels === 'object' ? voice.labels : {};
-  const clean = (value) => String(value || '').replace(/[_-]+/g, ' ').trim().slice(0, 60);
-  return isVoiceId(voice.voice_id) ? { id: voice.voice_id, name: clean(voice.name) || 'Sin nombre', gender: clean(labels.gender).toLowerCase(), accent: clean(labels.accent), age: clean(labels.age), style: clean(labels.description || labels.descriptive), about: String(voice.description || '').trim().slice(0, 200) } : null;
-};
-
 /** La configuración de la voz desde el entorno. Sin clave o sin voz, Bria no habla y la pantalla de voz no aparece. */
 export const voiceConfig = (env = process.env) => {
   const apiKey = String(env.ELEVENLABS_API_KEY || '').trim(), voiceId = String(env.ELEVENLABS_VOICE_ID || '').trim();
