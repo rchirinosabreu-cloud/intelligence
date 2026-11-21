@@ -6,7 +6,13 @@
 
 export const VOICE_MAX_CHARS = 1200;
 export const VOICE_DAILY_CHARS = 20000;
-export const VOICE_MODEL = 'eleven_flash_v2_5';
+// El modelo (Rodny, 21 de noviembre de 2026: «pasemos a v4 turbo»): Eleven v4 Turbo cuesta lo mismo que Flash v2.5 y es
+// más expresivo. Los modelos v3 y v4 se piden por «Text to Dialogue»; si ElevenLabs lo rechaza, se dice con Flash.
+export const VOICE_MODEL = 'eleven_v4_turbo', VOICE_FALLBACK_MODEL = 'eleven_flash_v2_5';
+/** Los modelos de diálogo (v3 y v4) no usan la ruta de texto a voz de siempre. */
+export const isDialogueModel = (model) => /^eleven_v[34]/.test(String(model || ''));
+/** En v3 y v4 lo que va entre corchetes es una orden de actuación («[risas]»): el texto de Bria va sin ellos. */
+export const withoutAudioTags = (text) => String(text || '').replace(/[[\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 export const VOICE_TAIL = 'Lo demás te lo dejé escrito en el chat.';
 // Escuchar: se considera voz por encima de SPEECH, silencio por debajo de QUIET; tras hablar, este silencio cierra el turno.
 export const VOICE_SPEECH_LEVEL = 0.16, VOICE_QUIET_LEVEL = 0.08, VOICE_SILENCE_MS = 900, VOICE_MIN_SPEECH_MS = 350;

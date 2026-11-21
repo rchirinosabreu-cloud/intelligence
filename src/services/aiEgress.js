@@ -31,8 +31,9 @@ export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = (
     provider = 'openai';
   } else if (target.origin === 'https://api.fireflies.ai' && target.pathname === '/graphql') {
     provider = 'fireflies'; model = 'graphql';
-  } else if (target.origin === 'https://api.elevenlabs.io' && /^\/v1\/text-to-speech\/[A-Za-z0-9]{10,40}\/stream$/.test(target.pathname) && !multipart) {
-    // La voz de Bria (20 de noviembre de 2026): solo texto a voz, con el modelo que viaja en `model_id`.
+  } else if (target.origin === 'https://api.elevenlabs.io' && (/^\/v1\/text-to-speech\/[A-Za-z0-9]{10,40}\/stream$/.test(target.pathname) || target.pathname === '/v1/text-to-dialogue/stream') && !multipart) {
+    // La voz de Bria (20 de noviembre de 2026): solo texto a voz, con el modelo que viaja en `model_id`. Los modelos
+    // v3 y v4 se piden por la ruta de diálogo (21 de noviembre de 2026); sigue siendo texto a voz.
     provider = 'elevenlabs';
   } else {
     reject('Destino de IA no inventariado.', 'AI_DESTINATION_INVALID', `${target.host}${target.pathname}`);
