@@ -68,6 +68,12 @@ test('cuando el modelo pide consultar, devuelve el relevo; un fallo del proveedo
   const asked = governed(handoff);
   const reply = await createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k' }, fetchImpl: asked.fetchImpl }).answer({ system: 's', messages: [{ role: 'user', content: '¿Cuánto debe Aristea?' }] });
   assert.deepEqual({ handoff: reply.handoff, reason: reply.reason }, { handoff: true, reason: 'consulta' });
+  // Una lectura que el modelo pide no es un relevo: vuelve como llamada, con sus argumentos, para que el turno la ejecute.
+  const read = governed(JSON.parse(JSON.stringify(handoff).replaceAll(QUICK_HANDOFF, 'buscar_pendientes').replace('"partial_json":"{}"', '"partial_json":"{\\"responsable\\":\\"Brayan\\"}"')));
+  const wanted = await createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k' }, fetchImpl: read.fetchImpl }).answer({ system: 's', messages: [{ role: 'user', content: '¿Qué debe Brayan?' }],
+    tools: [{ name: 'buscar_pendientes', description: 'Busca pendientes.', parameters: { type: 'object', properties: { responsable: { type: 'string' } } }, run: async () => ({}) }] });
+  assert.deepEqual({ handoff: wanted.handoff, calls: wanted.calls }, { handoff: false, calls: [{ id: 'toolu_1', name: 'buscar_pendientes', args: { responsable: 'Brayan' } }] });
+  assert.deepEqual(JSON.parse(read.sent[0].options.body).tools.map(tool => [tool.name, Object.keys(tool).sort().join()]), [['buscar_pendientes', 'description,input_schema,name'], [QUICK_HANDOFF, 'description,input_schema,name']]);
   const down = governed([], { status: 529 });
   await assert.rejects(createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k' }, fetchImpl: down.fetchImpl }).answer({ system: 's', messages: [{ role: 'user', content: 'Hola' }] }), error => error.status === 529);
   assert.equal(down.sent.length, 1, 'sin reintentos: el camino completo responde');
@@ -117,20 +123,21 @@ test('lo que se contesta con lo ya leído sale de la vía rápida, sin tocar el 
   assert.equal(result.answer, 'Tienes la propuesta de Aristea, por 4.500.000.');
   assert.deepEqual({ rounds: result.rounds, toolsUsed: result.toolsUsed, sources: result.sources.map(source => source.id) }, { rounds: 0, toolsUsed: [], sources: ['t1'] });
   assert.equal(result.usage.totalTokens, 815);
-  assert.deepEqual(events.map(event => event.type), ['delta', 'delta']);
+  assert.deepEqual(events, [{ type: 'delta', text: 'Tienes la propuesta de Aristea, por 4.500.000.' }], 'la primera frase sale entera, no a medias');
   assert.match(asked[0].system, /Hablas con Rodny/);
   assert.deepEqual(asked[0].messages.map(message => message.role), ['user', 'assistant', 'user']);
   assert.match(asked[0].messages.at(-1).content, /Propuesta de Aristea[\s\S]*¿Qué tengo hoy\?$/);
   assert.match(lines.find(line => /Tiempos/.test(line)), /canal=voz total=\d+ms previo=\d+ms rapida=\d+ms $/);
 });
 
-test('si pide consultar, falla, se queda vacía, inventa una cifra o pide confirmar, sigue el camino completo y la persona oye que Bria va a mirar', async () => {
+test('si pide consultar, falla, se queda vacía, inventa una cifra, pide confirmar o promete responder después, sigue el camino completo y la persona oye que Bria va a mirar', async () => {
   const cases = {
     consulta: async () => ({ text: '', handoff: true, reason: 'consulta' }),
     fallo: async () => { throw Object.assign(new Error('Overloaded'), { status: 529 }); },
     vacia: async () => ({ text: '  ', handoff: false }),
     cifras: async (request) => { request.onTextDelta('Aristea debe 9.870.000.'); return { text: 'Aristea debe 9.870.000.', handoff: false }; },
-    confirmar: async () => ({ text: '¿Confirmas que lo cree?', handoff: false })
+    confirmar: async () => ({ text: '¿Confirmas que lo cree?', handoff: false }),
+    promesa: async (request) => { request.onTextDelta('No lo tengo aquí, necesito consultarlo a fondo. '); request.onTextDelta('Te respondo enseguida.'); return { text: 'No lo tengo aquí, necesito consultarlo a fondo. Te respondo enseguida.', handoff: false }; }
   };
   for (const [reason, answer] of Object.entries(cases)) {
     const events = [], lines = [], seen = [];
@@ -139,7 +146,7 @@ test('si pide consultar, falla, se queda vacía, inventa una cifra o pide confir
     assert.equal(result.answer, 'Listo.', reason);
     assert.equal(seen.length, 1, `${reason}: el modelo grande responde una vez`);
     assert.equal(seen[0].input.at(-1).role, 'user');
-    assert.deepEqual(events.map(event => event.type), [...(reason === 'cifras' ? ['delta', 'reset'] : []), 'status', 'delta'], reason);
+    assert.deepEqual(events.map(event => event.type), ['status', 'delta'], `${reason}: de la vía rápida no se oye nada`);
     assert.match(lines.find(line => /Tiempos/.test(line)), new RegExp(`rapida=${reason}:\\d+ms ronda1=`), reason);
   }
 });
@@ -187,4 +194,56 @@ test('Bria puede descartar el borrador en curso cuando se lo piden con cualquier
   assert.equal(output.descartado, true); assert.equal(output.instruccionRespuesta, undefined);
   const service = (await import('node:fs')).readFileSync('src/services/briaAssistantService.js', 'utf8');
   assert.match(service, /conversationChoiceTool, discardDraftTool/); assert.match(service, /llama descartar_borrador/);
+});
+
+test('la vía rápida consulta ella misma: lee con los permisos de la persona y responde con lo que encontró', async () => {
+  const { quickDefers, QUICK_READS } = await import('../src/lib/briaQuick.js');
+  for (const text of ['No lo tengo aquí.', 'No puedo verlas desde aquí.', 'Déjame revisarlo.', 'Voy a consultar y te cuento.', 'Te respondo luego.']) assert.equal(quickDefers(text), true, text);
+  for (const text of ['Brayan tiene dos tareas vencidas.', 'Hola, Rodny. ¿En qué te ayudo?', 'No tienes nada vencido hoy.']) assert.equal(quickDefers(text), false, text);
+  for (const write of ['guardar_en_memoria', 'cambiar_pendiente', 'operar_en_plataforma', 'preparar_pendiente', 'descartar_borrador']) assert.equal(QUICK_READS.has(write), false, write);
+  const ran = [];
+  const tools = [
+    { name: 'buscar_pendientes', description: 'Busca pendientes.', parameters: { type: 'object', properties: { responsable: { type: 'string' } } }, allowed: () => true, run: async (args) => { ran.push(args); return { data: { total: 2, tareas: [{ id: 't7', titulo: 'Reel de Aristea', vence: '2026-11-18' }, { id: 't8', titulo: 'Informe mensual', vence: '2026-11-19' }] }, sources: [{ kind: 'tarea', id: 't7', label: 'Reel de Aristea' }] }; } },
+    { name: 'tareas_de_cliente', description: 'Sin permiso.', allowed: () => false, run: async () => { throw new Error('no debe correr'); } },
+    { name: 'cambiar_pendiente', description: 'Escribe.', allowed: () => true, run: async () => { throw new Error('la vía rápida no escribe'); } }
+  ];
+  const events = [], lines = [], asked = [];
+  const quick = { answer: async (request) => {
+    asked.push({ tools: request.tools.map(tool => tool.name), messages: structuredClone(request.messages), system: request.system });
+    if (asked.length === 1) { request.onTextDelta('Déjame revisar. '); return { text: 'Déjame revisar.', calls: [{ id: 'toolu_1', name: 'buscar_pendientes', args: { responsable: 'Brayan' } }], content: [{ type: 'tool_use', id: 'toolu_1', name: 'buscar_pendientes', input: { responsable: 'Brayan' } }], handoff: false, usage: { input_tokens: 900, output_tokens: 20 } }; }
+    request.onTextDelta('Brayan tiene dos tareas vencidas. '); request.onTextDelta('La más vieja es el reel de Aristea.');
+    return { text: 'Brayan tiene dos tareas vencidas. La más vieja es el reel de Aristea.', calls: [], handoff: false, usage: { input_tokens: 1100, output_tokens: 25 } };
+  } };
+  const result = await turn({ quick, events, lines, tools, question: '¿Qué tareas vencidas tiene Brayan?' });
+  assert.equal(result.answer, 'Brayan tiene dos tareas vencidas. La más vieja es el reel de Aristea.');
+  assert.deepEqual(ran, [{ responsable: 'Brayan' }]);
+  assert.deepEqual(asked[0].tools, ['buscar_pendientes'], 'solo lecturas que la persona tiene; nada que escriba');
+  assert.match(asked[0].system, /buscar_pendientes/);
+  assert.deepEqual(asked[1].messages.slice(-2).map(message => message.role), ['assistant', 'user']);
+  assert.deepEqual(asked[1].messages.at(-1).content.map(block => [block.type, block.tool_use_id]), [['tool_result', 'toolu_1']]);
+  assert.match(asked[1].messages.at(-1).content[0].content, /Reel de Aristea/);
+  assert.deepEqual({ toolsUsed: result.toolsUsed, sources: result.sources.map(source => source.id).sort(), tokens: result.usage.totalTokens }, { toolsUsed: ['buscar_pendientes'], sources: ['t1', 't7'], tokens: 2045 });
+  assert.deepEqual(events.map(event => event.type), ['status', 'delta', 'delta'], '«déjame revisar» no se oye; sí el aviso de que consulta y la respuesta');
+  assert.equal(events[1].text, 'Brayan tiene dos tareas vencidas. ');
+  assert.match(lines.find(line => /Tiempos/.test(line)), /rapida=\d+ms consultas=buscar_pendientes:\d+ms $/);
+});
+
+test('la vía rápida no puede llamar lo que no se le ofreció, y no consulta sin fin', async () => {
+  const tools = [{ name: 'buscar_pendientes', description: 'Busca.', allowed: () => true, run: async () => ({ data: { total: 0, tareas: [] } }) },
+    { name: 'cambiar_pendiente', description: 'Escribe.', allowed: () => true, run: async () => { throw new Error('la vía rápida no escribe'); } }];
+  const outputs = [];
+  let step = 0;
+  const quick = { answer: async (request) => {
+    const last = request.messages.at(-1);
+    if (Array.isArray(last.content)) outputs.push(last.content[0].content);
+    step += 1;
+    const name = step === 1 ? 'cambiar_pendiente' : 'buscar_pendientes';
+    return { text: '', calls: [{ id: `toolu_${step}`, name, args: {} }], content: [{ type: 'tool_use', id: `toolu_${step}`, name, input: {} }], handoff: false };
+  } };
+  const lines = [];
+  const result = await turn({ quick, lines, tools, generate: async () => ({ text: 'Respuesta completa.', functionCalls: [], output: [] }) });
+  assert.equal(result.answer, 'Respuesta completa.');
+  assert.match(outputs[0], /no está disponible aquí/);
+  assert.equal(step, 3, 'una respuesta y dos rondas de consulta como máximo');
+  assert.match(lines.find(line => /Tiempos/.test(line)), /rapida=rondas:\d+ms consultas=/);
 });
