@@ -49,6 +49,7 @@ import { isTrustedSession } from '../lib/taskWorkCorrection.js';
 export const MORNING_BRIEF_NOTIFICATION = 'BRIA_LECTURA_MANANA';
 // El chat de las lecturas se llama igual todos los días: la fecha la dice cada lectura.
 export const MORNING_BRIEF_THREAD_TITLE = 'Lectura de la mañana';
+export const LIVE_FIRST_WAIT_MS = 1500;
 export const SNAPSHOT_FROM = 6 * 60;
 export const READING_FROM = 6 * 60 + 30;
 export const BRIEF_FROM = 7 * 60 + 30;
@@ -218,6 +219,7 @@ export const createDailyReadingService = ({
 
   // El estado vivo de las cuentas: una sola foto para toda la agencia cada dos minutos; cada quien ve su alcance.
   const liveCache = createLiveStateCache({ ttlMs: LIVE_CLIENTS_TTL_MS, clock: () => now().getTime() });
+  let livePhoto = null;
 
   return {
     scopeFor,
@@ -225,10 +227,15 @@ export const createDailyReadingService = ({
     /** Las cuentas ahora mismo, para ponerlas delante de Bria. Un PM con cuentas asignadas ve las suyas; el resto, la agencia. */
     async liveClients(user) {
       const service = this;
-      const { today, clients } = await liveCache('agencia', async () => { const at = now(); const photo = await service.readToday(at); return { today: photo.today, clients: photo.clients, at }; });
+      // Nunca frena la respuesta: si la foto guardada venció, se sirve esa y se refresca por detrás; la primera vez
+      // se espera como mucho segundo y medio (la lectura sigue y queda lista para el mensaje siguiente).
+      const fresh = liveCache('agencia', async () => { const at = now(); const photo = await service.readToday(at); return (livePhoto = { today: photo.today, clients: photo.clients, at }); });
+      fresh.catch(error => logger.error('[DailyReading] No se pudo leer el estado vivo de las cuentas:', error?.message || error));
+      const photo = livePhoto || await Promise.race([fresh.catch(() => null), new Promise(resolve => { const timer = setTimeout(resolve, LIVE_FIRST_WAIT_MS, null); timer.unref?.(); })]);
+      if (!photo) return null;
       const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
-      const mine = isAdmin ? [] : clients.filter(client => client.pmId && client.pmId === user?.teamMember?.id);
-      return liveClientState({ clients: mine.length ? mine : clients, today, at: now() });
+      const mine = isAdmin ? [] : photo.clients.filter(client => client.pmId && client.pmId === user?.teamMember?.id);
+      return liveClientState({ clients: mine.length ? mine : photo.clients, today: photo.today, at: photo.at });
     },
 
     /** Cómo amaneció la plataforma. La actividad (tareas cerradas, horas) es la del día anterior completo, en Bogotá. */

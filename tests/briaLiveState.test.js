@@ -119,6 +119,12 @@ test('one photo serves the agency for two minutes and a project manager sees onl
   assert.match(unassigned.text, /Foobespain/, 'sin cuentas asignadas lee la agencia, como en la lectura');
   assert.equal(reads, 1);
   clock += 121_000;
-  await service.liveClients({ id: 'u1', role: 'ADMIN' });
+  let release;
+  service.readToday = () => { reads += 1; return new Promise(resolve => { release = () => resolve({ today: '2026-11-21', people: [], clients: [account('n', 'Nueva', 'red')] }); }); };
+  const stale = await service.liveClients({ id: 'u1', role: 'ADMIN' });
+  assert.match(stale.text, /Aristea/, 'la foto vencida se sirve de inmediato mientras se refresca por detrás');
+  assert.equal(reads, 2);
+  release(); await new Promise(resolve => setImmediate(resolve));
+  assert.match((await service.liveClients({ id: 'u1', role: 'ADMIN' })).text, /Nueva/);
   assert.equal(reads, 2);
 });
