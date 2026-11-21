@@ -14,16 +14,12 @@ export const createBriaVoiceRouter = ({ service } = {}) => {
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   router.use(guard);
   router.get('/', (req, res) => res.json(voice().status(req.user)));
-  router.get('/voices', async (req, res) => {
-    try { res.json(await voice().voices(req.user)); }
-    catch (failure) { if (!failure?.status || failure.status >= 500) console.error('[BriaVoice]', failure?.code || failure?.name || 'error'); res.status(failure?.status || 502).json({ message: failure?.status ? failure.message : 'No se pudieron traer las voces.', code: failure?.code }); }
-  });
   router.post('/speak', async (req, res) => {
     const text = typeof req.body?.text === 'string' ? req.body.text : '';
     if (!text.trim() || text.length > 20000) return res.status(400).json({ message: 'No hay nada que decir.' });
     const abort = new AbortController(); res.on('close', () => { if (!res.writableEnded) abort.abort(); });
     try {
-      const upstream = await voice().speak(req.user, { text, signal: abort.signal, voiceId: typeof req.body?.voiceId === 'string' ? req.body.voiceId : undefined });
+      const upstream = await voice().speak(req.user, { text, signal: abort.signal });
       res.setHeader('Content-Type', 'audio/mpeg');
       Readable.fromWeb(upstream.body).on('error', () => res.destroy()).pipe(res);
     } catch (failure) {
