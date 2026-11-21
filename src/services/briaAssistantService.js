@@ -45,6 +45,7 @@ import { getDailyReadingService } from './dailyReadingService.js';
 import { briaInvestigationTools } from './briaInvestigationTools.js';
 import { getBriaNotebookService } from './briaNotebookService.js';
 import { getQuickBrain } from './briaQuickBrain.js';
+import { liveTaskState, createLiveStateCache } from '../lib/briaLiveState.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -82,6 +83,7 @@ export const createBriaAssistantService = ({
     try { return typeof mail === 'function' ? mail() : mail; }
     catch (error) { logger.error('[BriaAssistant] Los buzones no están disponibles:', error.message); return null; }
   };
+  const liveCache = createLiveStateCache({ clock: () => now().getTime() });
   const loadPerson = async (user) => {
     const row = await db.user.findUnique({
       where: { id: user?.userId || user?.id || '' },
@@ -128,6 +130,13 @@ export const createBriaAssistantService = ({
       const ownTasks = channel === 'voz' ? allTools.find(tool => tool.name === 'mis_tareas' && tool.allowed(user)) : null;
       // Un archivo recién adjuntado necesita el camino completo; los archivos viejos del chat no frenan la vía rápida.
       const quickBrain = channel === 'voz' && !attachments.some(file => file.current !== false) ? (typeof quick === 'function' ? quick() : quick) : null;
+      // El estado vivo: las tareas del equipo, con la misma herramienta y los permisos de quien pregunta, una vez por minuto.
+      const teamTasks = allTools.find(tool => tool.name === 'buscar_pendientes' && tool.allowed(user));
+      const readLive = async () => {
+        const today = bogotaDate(now()), toolContext = { db, user, person, today, now };
+        const [overdue, open] = await Promise.all([teamTasks.run({ vencidas: true }, toolContext), teamTasks.run({}, toolContext)]);
+        return liveTaskState({ overdue: overdue?.data, open: open?.data, today, at: now() });
+      };
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -153,6 +162,7 @@ export const createBriaAssistantService = ({
           ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
           // La vía rápida solo existe en voz y solo si el servicio tiene la clave de la API de Claude.
           ...(quickBrain ? { quick: quickBrain } : {}),
+          ...(teamTasks ? { liveState: () => liveCache(person.userId, readLive) } : {}),
           ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });

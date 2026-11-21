@@ -85,7 +85,19 @@ export const hearTurn = (state = {}, { level = 0, at = 0, speechLevel = VOICE_SP
 // con naturalidad»). Mientras Bria habla, el micrófono sigue escuchando con cancelación de eco; si la persona habla
 // claro y sostenido, Bria se calla y lo que la persona dijo se conserva desde la primera palabra. El umbral es más
 // alto y más largo que al escuchar en silencio, para que el resto de la propia voz de Bria en los parlantes no la corte.
-export const VOICE_BARGE = { speechLevel: 0.3, minSpeechMs: 450 };
+export const VOICE_BARGE = { minLevel: 0.1, ratio: 2.2, maxLevel: 0.4, minSpeechMs: 300 };
+/**
+ * El umbral para cortar a Bria se calibra solo (mismo día, tras la primera prueba de Rodny: «no dejó de hablar
+ * mientras yo hablaba»). Con un número fijo alto no bastaba: mientras suena la voz de Bria el navegador atenúa el
+ * micrófono para cancelar el eco, y la voz de la persona no llegaba a la marca. Ahora se va midiendo el piso de lo que
+ * el micrófono oye mientras Bria habla (su eco y el ruido del sitio) y cuenta como voz lo que lo supera con holgura.
+ * `floor` solo se actualiza con medidas por debajo del umbral, para que la persona hablando no lo suba.
+ */
+export const bargeGate = (floor, level, gate = VOICE_BARGE) => {
+  const base = floor == null ? level : floor;
+  const speechLevel = Math.min(gate.maxLevel, Math.max(gate.minLevel, base * gate.ratio));
+  return { speechLevel, minSpeechMs: gate.minSpeechMs, floor: floor == null ? level : level < speechLevel ? base * 0.9 + level * 0.1 : base };
+};
 export const VOICE_MIC = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
 
 // Cuando Bria tiene que ir a consultar algo, lo dice en vez de quedarse callada (21 de noviembre de 2026). Una frase

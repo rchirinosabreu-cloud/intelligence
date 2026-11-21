@@ -24,6 +24,7 @@ import { humanDate } from './briaDate.js';
 import { temporalRelation } from './briaTemporalEvidence.js';
 import { unsupportedFigures } from './briaFigures.js';
 import { notebookMessage } from './briaNotebook.js';
+import { liveStateMessage } from './briaLiveState.js';
 import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS } from './briaQuick.js';
 export { humanDate } from './briaDate.js';
 
@@ -279,10 +280,11 @@ export const runAssistant = async ({
   const turnStartedAt = Date.now(), timings = { rounds: [] };
   // Memoria, cuaderno y resumen del día se leen a la vez y entran en ese orden, antes del mensaje de la persona,
   // que sigue siendo lo último que lee el modelo. Sin cualquiera de los tres se responde igual.
-  const [recalledRead, notebookRead, briefRead] = await Promise.allSettled([
+  const [recalledRead, notebookRead, briefRead, liveRead] = await Promise.allSettled([
     context.recallMemory ? context.recallMemory({ question, history }) : null,
     context.notebook ? context.notebook() : null,
-    context.dayBrief ? context.dayBrief() : null
+    context.dayBrief ? context.dayBrief() : null,
+    context.liveState ? context.liveState() : null
   ]);
   const notes = [];
   const before = (message) => { input.splice(input.length - 1, 0, message); evidence.push(message.content); notes.push(message.content); };
@@ -311,6 +313,10 @@ export const runAssistant = async ({
     const message = dayBriefMessage(briefRead.value);
     if (message) { before(message); for (const source of briefRead.value.sources || []) if (source?.kind && source?.id) sources.set(`${source.kind}:${source.id}`, source); }
   } else logger.error('[BriaAssistant] No se pudo preparar el resumen del día:', describeError(briefRead.reason));
+  // El estado vivo (21 de noviembre de 2026): la foto de las tareas del equipo, leída hace menos de un minuto. Sin
+  // ella se responde igual, consultando.
+  if (liveRead.status === 'fulfilled') { const message = liveStateMessage(liveRead.value); if (message) before(message); }
+  else logger.error('[BriaAssistant] No se pudo leer el estado vivo:', describeError(liveRead.reason));
   timings.before = Date.now() - turnStartedAt;
 
   const finish = (text = '') => {

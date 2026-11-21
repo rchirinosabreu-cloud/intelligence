@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BRIA_AUDIO_MAX_BYTES } from '@/lib/briaAttachments';
 import { levelOf, pushLevel, previewDue } from '@/lib/briaComposer';
-import { hearTurn, VOICE_MIC } from '@/lib/briaVoice';
+import { hearTurn, bargeGate, VOICE_MIC } from '@/lib/briaVoice';
 
 // Un solo dictado para toda Bria (11 de octubre de 2026): el chat y la consulta rápida desde la mascota graban,
 // acotan y transcriben igual. El audio va al servidor (`POST /dictation`) y el texto vuelve por `onText`; quien
@@ -96,7 +96,10 @@ export function useBriaDictation({ request, active = true, disabled = false, han
         const at = Date.now() - session.startedAt;
         // `speechGate` sube el umbral mientras Bria habla; `onSpeech` avisa una vez, cuando la persona empieza a hablar.
         const spokeBefore = Boolean(session.turn?.spoke);
-        session.turn = hearTurn(session.turn, { level: value, at, ...(callbacks.current.speechGate?.() || {}) });
+        // Mientras Bria habla el umbral sale del piso que se va midiendo; al volver a escuchar en silencio, el de siempre.
+        let gate = {};
+        if (callbacks.current.speechGate?.()) { const measured = bargeGate(session.floor, value); session.floor = measured.floor; gate = { speechLevel: measured.speechLevel, minSpeechMs: measured.minSpeechMs }; }
+        session.turn = hearTurn(session.turn, { level: value, at, ...gate });
         if (session.turn.spoke && !spokeBefore) callbacks.current.onSpeech?.();
         if (session.turn.done) stop();
         else if (!session.turn.spoke && at >= idleMs) { cancel(); callbacks.current.onIdle?.(); }
