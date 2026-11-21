@@ -24,7 +24,7 @@ import { humanDate } from './briaDate.js';
 import { temporalRelation } from './briaTemporalEvidence.js';
 import { unsupportedFigures } from './briaFigures.js';
 import { notebookMessage } from './briaNotebook.js';
-import { quickInstructions, quickMessages, quickTurn } from './briaQuick.js';
+import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS } from './briaQuick.js';
 export { humanDate } from './briaDate.js';
 
 export const MAX_TOOL_ROUNDS = 6;
@@ -326,29 +326,6 @@ export const runAssistant = async ({
     rounds, usage: summarizeAiCalls(modelCalls)
   });
 
-  // La vía rápida de la voz (21 de noviembre de 2026): un modelo pequeño responde primero con lo ya leído y sin
-  // herramientas. Si pide consultar, falla, se corta, da una cifra sin fuente o pide confirmar algo, lo que alcanzó a
-  // escribirse se borra y el turno sigue por el camino completo, que no cambia. Nunca tumba la respuesta.
-  if (quickTurn({ channel, context })) {
-    const startedAt = Date.now();
-    let streamed = false, reason;
-    try {
-      const reply = await context.quick.answer({ system: quickInstructions({ person, today }), messages: quickMessages({ history, notes, question }),
-        ...(onEvent ? { onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); } } : {}) });
-      modelCalls.push({ model: reply?.model, latencyMs: Date.now() - startedAt, usage: normalizeAiUsage(reply?.usage) });
-      reason = reply?.handoff ? reply.reason || 'consulta' : !String(reply?.text || '').trim() ? 'vacia'
-        : unsupportedFigures(reply.text, evidence).length ? 'cifras' : asksToConfirm(reply.text) ? 'confirmar' : null;
-      if (!reason) { timings.quick = `${Date.now() - startedAt}ms`; return finish(reply.text); }
-    } catch (error) {
-      reason = 'fallo';
-      (logger.warn || logger.error)('[BriaAssistant] La vía rápida no respondió:', error?.status || error?.name || 'error');
-    }
-    timings.quick = `${reason}:${Date.now() - startedAt}ms`;
-    if (streamed) emit({ type: 'reset' });
-    // La persona oye «déjame mirar» mientras el camino completo consulta.
-    emit({ type: 'status', label: toolProgressLabel() });
-  }
-
   const execute = async (call) => {
     const tool = byName.get(call.name);
     if (!tool) {
@@ -430,6 +407,65 @@ export const runAssistant = async ({
       return { error: `No se pudo consultar ${call.name} ahora mismo. Dile a la persona que esa parte falló y responde con lo demás.` };
     }
   };
+
+  // La vía rápida de la voz (21 de noviembre de 2026): un modelo pequeño responde primero con lo ya leído y con las
+  // consultas de solo lectura de la persona, por el mismo ejecutor y con sus mismos permisos. Si hace falta cambiar algo
+  // o mirar más, si falla, se corta, promete responder después, da una cifra sin fuente o pide confirmar, lo que
+  // alcanzó a escribirse se borra y el turno sigue por el camino completo, que no cambia. Nunca tumba la respuesta.
+  if (quickTurn({ channel, context })) {
+    const startedAt = Date.now(), quickCalls = [];
+    const reads = offered.filter(tool => QUICK_READS.has(tool.name));
+    const messages = quickMessages({ history, notes, question });
+    let streamed = false, reason;
+    try {
+      for (let step = 0; !reason; step++) {
+        if (step > QUICK_MAX_READ_ROUNDS) { reason = 'rondas'; break; }
+        // La primera frase se retiene: la voz no puede decir nada antes de una frase entera, y así un «déjame
+        // consultarlo» nunca llega a oírse.
+        let held = '', released = false, silenced = false;
+        const callStartedAt = Date.now();
+        const reply = await context.quick.answer({ system: quickInstructions({ person, today, tools: reads }), messages, tools: reads,
+          ...(onEvent ? { onTextDelta: (text) => {
+            if (silenced) return;
+            if (released) return emit({ type: 'delta', text });
+            held += text;
+            if (!/[.!?…]\s/.test(held) && held.length < 140) return;
+            if (quickDefers(held)) { silenced = true; return; }
+            released = true; streamed = true; emit({ type: 'delta', text: held });
+          } } : {}) });
+        modelCalls.push({ model: reply?.model, latencyMs: Date.now() - callStartedAt, usage: normalizeAiUsage(reply?.usage) });
+        const calls = reply?.calls || [], text = String(reply?.text || '').trim();
+        if (reply?.handoff) { reason = reply.reason || 'consulta'; break; }
+        if (calls.length) {
+          if (streamed) { streamed = false; emit({ type: 'reset' }); }
+          const results = [];
+          for (const call of calls) {
+            const toolStartedAt = Date.now();
+            const output = reads.some(tool => tool.name === call.name) ? await execute(call) : { error: 'Esa consulta no está disponible aquí.' };
+            quickCalls.push(`${call.name}:${Date.now() - toolStartedAt}ms`);
+            const serialized = JSON.stringify(output);
+            evidence.push(serialized);
+            results.push({ type: 'tool_result', tool_use_id: call.id, content: serialized });
+          }
+          messages.push({ role: 'assistant', content: reply.content }, { role: 'user', content: results });
+          continue;
+        }
+        reason = !text ? 'vacia' : quickDefers(text) ? 'promesa' : unsupportedFigures(text, evidence).length ? 'cifras' : asksToConfirm(text) ? 'confirmar' : null;
+        if (!reason) {
+          if (onEvent && !released) emit({ type: 'delta', text });
+          timings.quick = `${Date.now() - startedAt}ms${quickCalls.length ? ` consultas=${quickCalls.join(',')}` : ''}`;
+          return finish(text);
+        }
+      }
+    } catch (error) {
+      reason = 'fallo';
+      (logger.warn || logger.error)('[BriaAssistant] La vía rápida no respondió:', error?.status || error?.name || 'error');
+    }
+    timings.quick = `${reason}:${Date.now() - startedAt}ms${quickCalls.length ? ` consultas=${quickCalls.join(',')}` : ''}`;
+    if (streamed) emit({ type: 'reset' });
+    // La persona oye «déjame mirar» mientras el camino completo consulta.
+    emit({ type: 'status', label: toolProgressLabel() });
+  }
 
   // eslint-disable-next-line no-constant-condition
   while (true) {

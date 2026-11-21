@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, X } from '@/components/ui/icons';
-import { VOICE_MAX_CHARS, VOICE_TAIL, nextSpeech, voiceFiller } from '@/lib/briaVoice';
+import { VOICE_BARGE, VOICE_MAX_CHARS, VOICE_TAIL, nextSpeech, voiceFiller } from '@/lib/briaVoice';
 import { requestVoiceAudio } from '@/lib/briaVoiceRequest';
 import BriaVoiceOrb from './BriaVoiceOrb';
 import { useBriaDictation } from './useBriaDictation';
@@ -11,6 +11,9 @@ import { useBriaDictation } from './useBriaDictation';
 // Fases: `listening` (te escucho) → `thinking` (Bria responde) → `speaking` (lo dice) → `listening`. Con el micrófono
 // en pausa nada se graba. En pantalla no hay rótulos de estado ni lo que se va dictando (Rodny, mismo día: «para eso
 // están los gestos y movimientos»): lo cuenta el círculo, y el estado se dice solo a los lectores de pantalla.
+// Interrumpir hablando (21 de noviembre de 2026): mientras Bria habla el micrófono sigue grabando; si la persona habla,
+// Bria se calla y esa misma grabación es su turno. Si Bria termina sin que la interrumpan, esa grabación se descarta
+// (solo tendría la voz de Bria) y se empieza a escuchar de cero. Tocar el círculo sigue interrumpiendo.
 // Si la voz falla o se acabó el tope del día, la respuesta queda escrita y se sigue escuchando.
 export const VOICE_STATUS = { listening: 'Te escucho…', hearing: 'Te escucho…', transcribing: 'Entendiendo lo que dijiste…', thinking: 'Bria está pensando…', speaking: 'Bria está hablando', paused: 'Micrófono en pausa' };
 /** La última respuesta de Bria que todavía no se ha dicho, o null. */
@@ -23,11 +26,16 @@ export default function BriaVoiceMode({ chat, busy, liveText = '', liveStatus = 
   // Lo que Bria va diciendo de la respuesta en curso: hasta dónde del texto ya se pidió (`said`), los trozos en cola,
   // si uno suena ahora, si ya llegó el final, cuánto se ha dicho y si la persona la interrumpió (`muted`).
   const talk = useRef({ said: 0, seen: '', queue: [], playing: false, ended: false, total: 0, muted: false });
+  const barged = useRef(false), before = useRef('listening'), held = useRef('');
+  const deliver = (said) => { const last = chat?.turns?.at(-1); if (last?.role === 'assistant') spoken.current = last.id; failures.current = 0; if (!silent) setNotice(''); stopAudio(); talk.current = { said: 0, seen: '', queue: [], playing: false, ended: false, total: 0, muted: false }; setPhase('thinking'); send(said); };
   const { voice, levels, start, cancel } = useBriaDictation({
     request, handsFree: true,
-    onText: (text) => { const said = String(text || '').trim(); if (!said) return; failures.current = 0; if (!silent) setNotice(''); stopAudio(); talk.current = { said: 0, seen: '', queue: [], playing: false, ended: false, total: 0, muted: false }; setPhase('thinking'); send(said); },
+    // Si la interrumpieron mientras todavía escribía, lo dicho espera a que termine: el chat no recibe otro mensaje antes.
+    onText: (text) => { const said = String(text || '').trim(); if (!said) return; if (busy) { held.current = said; return; } deliver(said); },
+    onSpeech: () => { if (phase !== 'speaking') return; barged.current = true; stopAudio(); talk.current.muted = true; talk.current.ended = true; setPhase('listening'); },
+    speechGate: () => (phase === 'speaking' ? VOICE_BARGE : null),
     onError: (message) => { if (!message) return; failures.current += 1; if (/micrófono|navegador/i.test(message) || failures.current >= 3) { setPaused(true); setNotice(message); } },
-    onIdle: () => { setPaused(true); setNotice('Pausé el micrófono porque no escuché nada. Tócalo para seguir.'); }
+    onIdle: () => { if (phase === 'speaking' || phase === 'thinking') return; setPaused(true); setNotice('Pausé el micrófono porque no escuché nada. Tócalo para seguir.'); }
   });
   function stopAudio() { const state = talk.current; state.queue.forEach(item => item.control.abort()); state.queue = []; state.playing = false; const element = player.current; if (element) { element.onended = null; element.onerror = null; element.pause(); } if (url.current) { URL.revokeObjectURL(url.current); url.current = ''; } }
   /** Reproduce la cola en orden. Cuando se vacía y ya llegó el final de la respuesta, vuelve a escuchar. */
@@ -59,7 +67,11 @@ export default function BriaVoiceMode({ chat, busy, liveText = '', liveStatus = 
   useEffect(() => { alive.current = true; if (!player.current) player.current = new Audio(); return () => { alive.current = false; stopAudio(); }; }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Escuchar: mientras sea su turno, el micrófono no esté en pausa y Bria no esté escribiendo, la grabación arranca sola.
   // Si la interrumpieron mientras escribía, se espera a que termine: el chat no recibe otro mensaje hasta entonces.
-  useEffect(() => { if (phase === 'listening' && !paused && !busy && voice === 'idle') start(); }, [phase, paused, busy, voice]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!paused && voice === 'idle' && ((phase === 'listening' && !busy && !held.current) || (phase === 'speaking' && !silent))) start(); }, [phase, paused, busy, voice]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Bria dejó de hablar sin que la interrumpieran: lo grabado mientras hablaba no es de la persona y se descarta.
+  useEffect(() => { if (before.current === 'speaking' && phase !== 'speaking' && !barged.current) cancel(); if (phase === 'speaking') barged.current = false; before.current = phase; }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Lo que la persona dijo al interrumpir se envía apenas Bria termina de escribir.
+  useEffect(() => { if (busy || !held.current) return; const said = held.current; held.current = ''; deliver(said); }, [busy]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (busy || !talk.current.muted) return; const last = chat?.turns?.at(-1); if (last?.role === 'assistant') spoken.current = last.id; }, [busy, chat?.turns?.length]); // lo interrumpido no se repite
   // Hablar mientras escribe: cada frase completa del texto que va llegando se manda a decir sin esperar el resto.
   useEffect(() => {

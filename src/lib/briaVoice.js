@@ -72,14 +72,21 @@ export const voiceConfig = (env = process.env) => {
  * Cuándo se cierra el turno de quien habla: ya dijo algo y lleva un rato en silencio. `state` se va pasando de una
  * medida a la siguiente. Devuelve el estado nuevo y `done` cuando toca dejar de grabar.
  */
-export const hearTurn = (state = {}, { level = 0, at = 0 } = {}) => {
+export const hearTurn = (state = {}, { level = 0, at = 0, speechLevel = VOICE_SPEECH_LEVEL, minSpeechMs = VOICE_MIN_SPEECH_MS } = {}) => {
   const next = { speechMs: state.speechMs || 0, lastAt: state.lastAt ?? at, quietSince: state.quietSince ?? null, spoke: Boolean(state.spoke) };
   const step = Math.max(0, Math.min(500, at - next.lastAt)); next.lastAt = at;
-  if (level >= VOICE_SPEECH_LEVEL) { next.speechMs += step; next.quietSince = null; if (next.speechMs >= VOICE_MIN_SPEECH_MS) next.spoke = true; }
+  if (level >= speechLevel) { next.speechMs += step; next.quietSince = null; if (next.speechMs >= minSpeechMs) next.spoke = true; }
   else if (level < VOICE_QUIET_LEVEL) { if (next.quietSince === null) next.quietSince = at; }
   else next.quietSince = null;
   return { ...next, done: next.spoke && next.quietSince !== null && at - next.quietSince >= VOICE_SILENCE_MS };
 };
+
+// Interrumpir hablando (Rodny, 21 de noviembre de 2026: «no admite interrupciones… quiero que sea una conversación
+// con naturalidad»). Mientras Bria habla, el micrófono sigue escuchando con cancelación de eco; si la persona habla
+// claro y sostenido, Bria se calla y lo que la persona dijo se conserva desde la primera palabra. El umbral es más
+// alto y más largo que al escuchar en silencio, para que el resto de la propia voz de Bria en los parlantes no la corte.
+export const VOICE_BARGE = { speechLevel: 0.3, minSpeechMs: 450 };
+export const VOICE_MIC = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
 
 // Cuando Bria tiene que ir a consultar algo, lo dice en vez de quedarse callada (21 de noviembre de 2026). Una frase
 // corta por turno, que no cuenta como parte de la respuesta.
