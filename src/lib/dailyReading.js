@@ -14,6 +14,7 @@ import { JUDGMENT_WORDS } from './briaPulse.js';
 import { levelLabel } from './agencySnapshot.js';
 import { decisionsSection, isSuppressed, signalProblem } from './decisionLog.js';
 import { pmSessionSection } from './briaPmSession.js';
+import { operationModelSection } from './briaOperationModel.js';
 import { saveDailyContext, contextualReview, dailyMemoryIds } from './dailyReadingContext.js';
 
 export const DAILY_READING_USE_CASE = 'bria.daily-reading';
@@ -350,7 +351,7 @@ const levelParts = (now, before = null) => [['red', 'en rojo'], ['yellow', 'en a
  * El mensaje de la mañana para una persona de dirección. `scope.clientIds` (Set) limita las cuentas a las suyas, o
  * null para toda la agencia; `scope.people` dice si ve la carga del equipo (quien tiene Manager).
  */
-export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds: null, people: true }, log = null, agenda = null, pm = null }) => {
+export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds: null, people: true }, log = null, agenda = null, pm = null, operation = null }) => {
   const agency = !scope.clientIds;
   const label = fullDay(reading.day);
   const lines = [`Buenos días, ${firstName(recipientName)}. Así ${agency ? 'amaneció la agencia' : 'amanecieron tus cuentas'} este ${label}.`, ''];
@@ -395,6 +396,7 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
   if (remaining > 0) lines.push(`${remaining === 1 ? 'Queda' : 'Quedan'} ${plural(remaining, 'propuesta', 'propuestas')} en esta lectura. Pídeme la lectura completa para revisarlas.`, '');
   // La revisión de project manager del día (21 de noviembre de 2026): tareas concretas, después de las cuentas.
   if (pm) lines.push(...pmSessionSection(pm));
+  if (operation) lines.push(...operationModelSection(operation));
   // Detailed evidence, history and all proposals are available when reviewing.
   // No automatic question/menu or recipe is appended to the model's voice.
   if (!reading.signals?.length && reading.source !== 'MODELO') lines.push('No veo cambios que pidan una decisión hoy.');

@@ -89,6 +89,28 @@ export const createDailyReadingRepository = ({ pool }) => ({
     return rows[0]?.session || null;
   },
 
+  /** Las sesiones desde `since`, de la más reciente a la más antigua: lo que lee el modelo de la operación. */
+  async pmSessionsSince(since, limit = 7) {
+    const { rows } = await pool.query('SELECT session FROM bria_memory.pm_sessions WHERE day_key >= $1 ORDER BY day_key DESC LIMIT $2', [since, limit]);
+    return rows.map((row) => row.session);
+  },
+
+  /* ---- El modelo de la operación (21 de noviembre de 2026): uno por semana; el primero que se guarda queda. ---- */
+  async saveOperationModel(weekKey, model) {
+    await pool.query('INSERT INTO bria_memory.operation_models(week_key,day_key,model,model_name,usage) VALUES($1,$2,$3,$4,$5) ON CONFLICT (week_key) DO NOTHING',
+      [weekKey, model.day, JSON.stringify(model), model.model || null, model.usage ? JSON.stringify(model.usage) : null]);
+    return this.operationModel(weekKey);
+  },
+  async operationModel(weekKey) {
+    const { rows } = await pool.query('SELECT model FROM bria_memory.operation_models WHERE week_key=$1', [weekKey]);
+    return rows[0]?.model || null;
+  },
+  /** El más reciente, de esta semana o de una anterior: Bria no se queda sin memoria si una semana no hubo sesión. */
+  async latestOperationModel() {
+    const { rows } = await pool.query('SELECT model FROM bria_memory.operation_models ORDER BY week_key DESC LIMIT 1');
+    return rows[0]?.model || null;
+  },
+
   /* ---- El libro de decisiones (19 de octubre de 2026) ---- */
 
   /** Repetir es inocuo; corregir abre otra revisión y conserva la historia anterior. */

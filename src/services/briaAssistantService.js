@@ -93,6 +93,7 @@ export const createBriaAssistantService = ({
   const dayCache = createLiveStateCache({ clock: () => now().getTime() });
   // Con una base inyectada (pruebas) solo corre el lector que se inyecte; en producción, el del servicio.
   const dayReader = liveDay === undefined ? (db === prisma ? createLiveDayReader({ db, mail: mailFor, logger }) : null) : liveDay;
+  const modelCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
   const pmCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
   const bookCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
   const loadPerson = async (user) => {
@@ -180,6 +181,7 @@ export const createBriaAssistantService = ({
           ...(teamTasks ? { liveState: () => liveCache(person.userId, readLive) } : {}),
           // El libro de decisiones va delante de quien dirige: lo propuesto, lo decidido y lo que pasó.
           ...(pmPlan ? { pmSession: () => pmCache(user.id, () => pmPlan.today(user, now())) } : {}),
+          ...(typeof pmPlan?.operationModel === 'function' ? { operationModel: () => modelCache(user.id, () => pmPlan.operationModel(user)) } : {}),
           ...(typeof readings?.liveClients === 'function' ? { liveClients: () => readings.liveClients(user) } : {}),
           // El día en curso: quién está en qué, la agenda, los correos que esperan y lo que se movió en la última hora.
           ...(dayReader ? { liveDay: () => dayCache(person.userId, () => dayReader(user, now())) } : {}),

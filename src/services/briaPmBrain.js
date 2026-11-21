@@ -16,11 +16,11 @@ export const createPmBrain = ({ env = process.env, fetchImpl = governedFetch, Cl
   const model = env.BRIA_PM_MODEL || PM_MODEL;
   return {
     model,
-    async plan({ system, user, schema }) {
+    async plan({ system, user, schema, useCase = PM_SESSION_USE_CASE }) {
       let response = null;
       const client = new Client({
         apiKey, baseURL: 'https://api.anthropic.com', maxRetries: 1, timeout: timeoutMs,
-        fetch: async (url, init = {}) => (response = await fetchImpl(url, { ...init, governanceContext: { useCase: PM_SESSION_USE_CASE }, reportsStreamUsage: true }))
+        fetch: async (url, init = {}) => (response = await fetchImpl(url, { ...init, governanceContext: { useCase }, reportsStreamUsage: true }))
       });
       try {
         // Este modelo siempre piensa; la profundidad se pide con el esfuerzo. Se transmite para no depender de un

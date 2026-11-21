@@ -489,7 +489,11 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       let pm = null;
       try { pm = await pmOf()?.today(user, now()) || null; }
       catch (error) { logger.error('[DailyReading] Sin la sesión de project manager esta vez:', error?.message || error); }
-      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions, agenda: day, pm });
+      // El modelo de la operación entra al mensaje solo el día en que se hace; después vive delante de Bria.
+      let operation = null;
+      try { const weekly = await pmOf()?.operationModel?.(user); operation = weekly?.day === reading.day ? weekly : null; }
+      catch (error) { logger.error('[DailyReading] Sin el modelo de la operación esta vez:', error?.message || error); }
+      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions, agenda: day, pm, operation });
       const scope = scopeFor(user, reading);
       const sources = [...new Map([...dailyContextSources({ ...reading.context, accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }), ...(decisions?.sources || [])].map(source => [`${source.kind}:${source.id}`, source])).values()];
       const store = chats();
@@ -513,6 +517,8 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       done.reading = reading?.source || null;
       // La sesión de project manager, después de la lectura y antes de entregarla. Nunca frena la entrega.
       if (reading) { const session = await pmOf()?.ensure(at); if (session) done.pm = session.risks?.length || 0; }
+      // El modelo de la operación, una vez por semana y después de la sesión, que es una de sus fuentes.
+      if (reading) { const weekly = await pmOf()?.ensureModel?.(at); if (weekly) done.operation = weekly.weekKey; }
       if (minutes < BRIEF_FROM || !reading) return { dayKey: today, ...done };
       let delivered = 0, already = 0, failed = 0;
       for (const user of await listPeople(db)) {
