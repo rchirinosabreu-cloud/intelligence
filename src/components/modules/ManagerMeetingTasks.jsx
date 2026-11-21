@@ -198,9 +198,9 @@ export default function ManagerMeetingTasks() {
           <span className="flex h-14 w-14 shrink-0 items-center justify-center"><BriaPortrait className="h-12 w-12 object-contain" /></span>
           <div className="min-w-0">
             <h2 className="text-lg font-semibold sm:text-xl">
-              {totals.pending ? `Armé ${plural(totals.pending, 'pendiente', 'pendientes')} de ${plural(totals.minutes, 'reunión', 'reuniones')}. Tú decides cuáles entran.` : 'No hay compromisos de reuniones esperando tu decisión'}
+              {totals.pending ? `Armé ${plural(totals.pending, 'pendiente', 'pendientes')} de ${plural(totals.minutes, 'reunión', 'reuniones')}. Tú decides cuáles entran.` : 'No hay compromisos de reuniones recientes esperando tu decisión'}
             </h2>
-            <p className="mt-0.5 text-sm text-white/90">Salen de lo que Fireflies anotó en cada minuta. Abre uno para revisarlo y despacharlo a Kanban, o descártalo.</p>
+            <p className="mt-0.5 text-sm text-white/90">Salen de lo que Fireflies anotó en las minutas de los últimos 3 días hábiles. Abre uno para revisarlo y despacharlo a Kanban, o descártalo.</p>
           </div>
           <button type="button" onClick={load} disabled={loading} aria-label="Actualizar" className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25 disabled:opacity-60">
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />

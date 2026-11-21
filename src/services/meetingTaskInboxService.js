@@ -5,12 +5,22 @@
 // qué. Nada se borra. El pendiente en sí lo crea el mismo `createTask` y las mismas puertas que el botón de Gestión.
 
 import prisma from '../lib/prisma.js';
-import { bogotaDate } from '../lib/colombiaBusinessDays.js';
+import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { rankByName } from '../lib/fuzzyMatch.js';
 import { buildMeetingInbox, discardProblem, markCreated, markDiscarded, sourceProblem } from '../lib/meetingTaskInbox.js';
 
 const MINUTE_SELECT = { id: true, title: true, meetingAt: true, status: true, actionItems: true, updatedAt: true };
-const INBOX_DAYS = 90;
+// Solo lo reciente (Rodny, 21 de noviembre de 2026: «me aparecen 598 pendientes de reuniones por aprobar… máximo debería
+// leer las reuniones de los últimos 3 días y dejar de proponer si ya no se tomó acción»). Antes entraban 90 días. Se
+// cuentan días hábiles de Bogotá para que la reunión del viernes siga el lunes. Lo viejo no se borra ni se descarta:
+// deja de proponerse, y la minuta sigue en Reuniones.
+export const INBOX_BUSINESS_DAYS = 3;
+/** El primer instante del día de Bogotá desde el que una reunión todavía se propone. */
+export const inboxSince = (at = new Date(), days = INBOX_BUSINESS_DAYS) => {
+  let day = bogotaDate(at), left = days;
+  while (left > 0) { day = new Date(new Date(`${day}T00:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10); if (isBusinessDay(day)) left -= 1; }
+  return new Date(`${day}T05:00:00Z`);
+};
 const fail = (message, status, code) => Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
 const tidy = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
 
@@ -25,7 +35,7 @@ export const createMeetingTaskInboxService = ({ db = prisma, notify, now = () =>
 
   const list = async () => {
     const at = now();
-    const since = new Date(at.getTime() - INBOX_DAYS * 86_400_000);
+    const since = inboxSince(at);
     const [minutes, team, clients] = await Promise.all([
       db.meetingMinute.findMany({ where: { deletedAt: null, status: 'READY', meetingAt: { gte: since } }, select: MINUTE_SELECT, orderBy: { meetingAt: 'desc' }, take: 200 }),
       loadTeam(), loadClients()

@@ -129,3 +129,19 @@ test('discarding keeps the commitment with who, when and why; a created or alrea
   await assert.rejects(service.discard(rodny, { minuteId: 'mm-1', n: 1, motivo: 'YA_HECHO' }), (error) => error.status === 409 && /ya es un pendiente/.test(error.message));
   await assert.rejects(service.discard(rodny, { minuteId: 'mm-1', n: 9, motivo: 'YA_HECHO' }), (error) => error.status === 404);
 });
+
+test('the tray only proposes meetings from the last three business days, so an old backlog stops piling up', async () => {
+  const { inboxSince, INBOX_BUSINESS_DAYS } = await import('../src/services/meetingTaskInboxService.js');
+  assert.equal(INBOX_BUSINESS_DAYS, 3);
+  // Sábado 21 de noviembre de 2026 en Bogotá: tres hábiles atrás es el miércoles 18 (el 16 fue festivo y no se toca).
+  assert.equal(inboxSince(new Date('2026-11-21T17:00:00Z')).toISOString(), '2026-11-18T05:00:00.000Z');
+  // Lunes 23: la reunión del viernes 20 y la del miércoles 18 siguen; el fin de semana no gasta días.
+  assert.equal(inboxSince(new Date('2026-11-23T15:00:00Z')).toISOString(), '2026-11-18T05:00:00.000Z');
+  assert.equal(inboxSince(new Date('2026-11-24T15:00:00Z')).toISOString(), '2026-11-19T05:00:00.000Z');
+  let asked = null;
+  const db = fakeDb();
+  const original = db.meetingMinute.findMany;
+  db.meetingMinute.findMany = async (query) => { asked = query; return original(query); };
+  await build(db).service.list(rodny);
+  assert.equal(asked.where.meetingAt.gte.toISOString(), inboxSince(NOW()).toISOString());
+});
