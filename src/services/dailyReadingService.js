@@ -18,6 +18,7 @@ import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/agencySnapshot.js';
 import { buildDailyDigest, buildDailyReadingRequest, buildDailyReadingCorrection, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief, visibleReadingDecisions } from '../lib/dailyReading.js';
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
+import { decisionMemory, isTalkEntry, talkVerdict, normalizeResult, resolveEntryRef, talkDecision, MEMORY_DAYS } from '../lib/briaDecisionMemory.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
@@ -343,6 +344,8 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       let settled = 0;
       for (const entry of await repo.pendingOutcomes(today, { fromDays: OUTCOME_AFTER_DAYS, untilDays: OUTCOME_UNTIL_DAYS })) {
         const verdict = decisionOutcome(entry, { signals, current });
+        // Lo que contó la persona no se pisa con una foto que no sabe decir nada; una señal real sí lo corrige.
+        if (verdict?.outcome === 'SIN_EVIDENCIA' && entry.outcomeSource === 'PERSONA') continue;
         if (verdict && await repo.setOutcome(entry.id, { outcome: verdict.outcome, text: verdict.text, day: today, expectedRevision: entry.revision })) settled += 1;
       }
       return settled;
@@ -369,7 +372,16 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
      * Anota lo que la persona decidió sobre una decisión de la lectura, dicho con sus palabras («ya le escribí a Gema»,
      * «eso no», «la semana que viene»). Si no se entiende a cuál o qué decidió, no se anota y se dice por qué.
      */
-    async recordVerdict({ user, ref, veredicto, nota = null, dia = null }) {
+    async recordVerdict({ user, ref, veredicto, nota = null, dia = null, propuesta = null, sobre = null, tipo = null }) {
+      // Una propuesta hecha en conversación, fuera de la lectura (21 de noviembre de 2026): entra al mismo libro.
+      if (propuesta) {
+        const decision = talkDecision({ title: propuesta, about: sobre, kind: tipo, day: bogotaDate(now()) });
+        if (!decision) return { saved: false, motivo: 'La propuesta necesita una frase que diga qué se propuso.' };
+        const said = VERDICTS.includes(veredicto) ? veredicto : talkVerdict(veredicto, normalizeVerdict);
+        if (!said) return { saved: false, motivo: 'No me quedó claro si la aceptó, la descartó o la dejó para después.' };
+        const saved = await repo.recordDecision({ decision, dayKey: bogotaDate(now()), user: { ref: user.id, name: user.teamMember?.name || user.name || null }, verdict: said, note: nota ? String(nota).slice(0, 300) : null, decidedAt: now() });
+        return { saved: true, decision: decision.title, veredicto: saved.verdict, dia: saved.dayKey, origen: 'CONVERSACION' };
+      }
       let reading = dia ? await repo.reading(dia) : await repo.latestReading();
       if (!reading) return { saved: false, motivo: 'Todavía no hay una lectura con decisiones.' };
       ({ reading, viewer: user } = await currentView(user, reading));
@@ -383,6 +395,40 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       return { saved: true, decision: decision.title, veredicto: entry.verdict, dia: reading.day };
     },
 
+    /** Las anotaciones que esta persona puede leer: las propias; administración, las de todos. */
+    async bookFor(user, today, days = MEMORY_DAYS) {
+      if (typeof repo.recentDecisions !== 'function') return [];
+      const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
+      return repo.recentDecisions(today, { days, ...(isAdmin ? {} : { userRef: user.id }) });
+    },
+
+    /**
+     * Cómo salió algo ya anotado, contado por la persona («lo de Aristea funcionó», «eso no sirvió»). Solo se anota si
+     * se entiende a cuál anotación se refiere y qué pasó; nunca se supone.
+     */
+    async recordResult({ user, ref, resultado, nota = null }) {
+      if (typeof repo.reportOutcome !== 'function') return { saved: false, motivo: 'El libro de decisiones no está disponible.' };
+      const today = bogotaDate(now());
+      const entries = (await this.bookFor(user, today)).filter(entry => entry.kind !== 'NO_HACER');
+      const entry = resolveEntryRef(ref, entries);
+      if (!entry) return { saved: false, motivo: entries.length ? `No sé a cuál anotación te refieres: ${entries.slice(-6).map(row => row.title).join(' · ')}.` : 'No hay decisiones anotadas en los últimos 30 días.' };
+      const outcome = normalizeResult(resultado);
+      if (!outcome) return { saved: false, motivo: 'No me quedó claro si funcionó o si sigue igual.' };
+      const who = user.teamMember?.name || user.name || 'la persona';
+      const detail = String(nota || resultado || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+      const saved = await repo.reportOutcome(entry.id, { outcome, text: `Según ${who}: ${detail}`, day: today, expectedRevision: entry.revision });
+      return saved ? { saved: true, decision: entry.title, resultado: outcome } : { saved: false, motivo: 'La anotación cambió mientras tanto; vuelve a intentarlo.' };
+    },
+
+    /** El libro delante de Bria en cada conversación: lo anotado, lo que sigue sin respuesta y el marcador. */
+    async decisionMemory(user) {
+      const today = bogotaDate(now());
+      const [board, entries] = await Promise.all([this.decisionBoard(user), this.bookFor(user, today)]);
+      const noted = new Set(board.entries.filter(entry => entry.dayKey === board.reading?.day).map(entry => entry.decisionId));
+      const pending = board.decisions.filter(decision => !noted.has(decision.id) && !decision.needsContextReview && decision.kind !== 'NO_HACER');
+      return decisionMemory({ entries, pending, card: board.scorecard, today, viewerRef: user.id });
+    },
+
     /**
      * Lo que Manager necesita para su tablero de decisiones: la última lectura con el alcance de la persona, sus
      * anotaciones en el libro y su marcador. Mismo alcance que el mensaje de la mañana y que `anotar_decision`.
@@ -394,7 +440,8 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       const decisions = visibleReadingDecisions(reading, scopeFor(user, reading));
       const entries = typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30, userRef: user.id }) : [];
       const readings = [reading, ...(typeof repo.readingsBefore === 'function' ? await repo.readingsBefore(reading.day, 30) : [])];
-      const proposed = readings.reduce((sum, row) => sum + visibleReadingDecisions(row, scopeFor(user, row)).length, 0);
+      // Lo propuesto en conversación también cuenta como propuesta: sin eso el marcador anotaría más de lo propuesto.
+      const proposed = readings.reduce((sum, row) => sum + visibleReadingDecisions(row, scopeFor(user, row)).length, 0) + entries.filter(isTalkEntry).length;
       return { reading, decisions, entries, scorecard: scorecard(entries, { proposed }) };
     },
 
@@ -491,7 +538,7 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
           { opcion: 'Descartar', efecto: 'Anotar el motivo; no cancela ni borra trabajo en la plataforma.' }
         ],
         senales: visibleSignals.slice(0, 25).map((row) => ({ sobre: row.subjectName, cambio: row.direction, texto: row.text })),
-        libroDeDecisiones: scorecard(all, { proposed })
+        libroDeDecisiones: scorecard(all, { proposed: proposed + all.filter(isTalkEntry).length })
       };
       const span = Math.min(Math.max(Number(days) || 14, 3), 40);
       const latest = await repo.snapshot(reading.day);

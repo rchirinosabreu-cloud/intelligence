@@ -184,3 +184,25 @@ test('real PostgreSQL: decision events are immutable, ordered and survive remova
     await pool.end();
   }
 });
+
+test('real PostgreSQL: a result told by the person is saved the same day, with its source, and a later signal can still correct it', { skip: !connectionString }, async () => {
+  const pool = isolatedPool();
+  const day = '2099-04-02', user = { ref: 'pg-talk', name: 'Dirección' };
+  const decision = { id: `charla:${day}:mover dos tareas`, title: 'Mover dos tareas', kind: 'HACER', subjectName: 'Equipo', evidence: [] };
+  try {
+    await pool.query(await schemaSql());
+    await pool.query(await schemaSql());
+    const repo = createDailyReadingRepository({ pool });
+    const saved = await repo.recordDecision({ decision, dayKey: day, user, verdict: 'HECHO', decidedAt: new Date(`${day}T15:00:00Z`) });
+    assert.equal(await repo.reportOutcome(saved.id, { outcome: 'MEJORO', text: 'Según Dirección: funcionó', day, expectedRevision: 1 }), true);
+    assert.equal(await repo.reportOutcome(saved.id, { outcome: 'MEJORO', text: 'x', day, expectedRevision: 7 }), false, 'a stale revision is rejected');
+    const [told] = await repo.recentDecisions(day, { userRef: user.ref });
+    assert.deepEqual([told.outcome, told.outcomeSource, told.outcomeDay], ['MEJORO', 'PERSONA', day]);
+    assert.deepEqual(told.history.at(-1), { type: 'OUTCOME', revision: 1, outcome: 'MEJORO', text: 'Según Dirección: funcionó', day, source: 'PERSONA' });
+    assert.equal(await repo.setOutcome(saved.id, { outcome: 'SIGUE', text: 'Sigue con 2 tareas vencidas.', day: '2099-04-03', expectedRevision: 1 }), true);
+    const [seen] = await repo.recentDecisions('2099-04-03', { userRef: user.ref });
+    assert.deepEqual([seen.outcome, seen.outcomeSource], ['SIGUE', 'SENALES']);
+  } finally {
+    await pool.end();
+  }
+});

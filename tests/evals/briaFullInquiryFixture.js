@@ -38,7 +38,7 @@ export const createFullInquiryFixture = (ai, { initialTurns = [], overview = fal
       usage: service({ summary: record('usage', {}) }), platform: service({ call: async ({ method }) => { assert.equal(method, 'GET'); return { ok: false, status: 404, error: 'No hay información adicional en esa ruta de esta cuenta ficticia. Usa las lecturas propias de Gestión, Actividad y Carga.' }; } }),
       agencyFacts: service({ contextForClients: async (_user, clients) => { reads.push('account-context'); return { cuentas: clients.map(row => ({ clientId: row.id, estado: 'CONSULTADO', parcial: false, hechos: [] })) }; }, consult: record('facts', { hechos: [], dudas: [] }), recall: record('recall', { hechos: [], cuentas: [] }), howToWorkWith: record('person-context', { hechos: [] }) }),
       vault: service({ list: record('vault', []) }), mail: service({ recentImportant: record('mail', []), readMessage: record('message', null) }),
-      permissions: service({}), dailyReading: service({ explain: record('daily', { propuestas: [] }) }), serviceHealth: service({ getSummary: record('health', { overall: 'GREEN', troubled: [] }) }), ...assistantOptions
+      permissions: service({}), dailyReading: service({ explain: record('daily', { propuestas: [] }), decisionMemory: record('decision-memory', null) }), serviceHealth: service({ getSummary: record('health', { overall: 'GREEN', troubled: [] }) }), ...assistantOptions
     },
     assistantContext: {
       getTasks: async id => { assert.equal(id, client.id); reads.push('tasks'); return structuredClone(tasks); },
