@@ -26,7 +26,7 @@ test('sin clave o sin voz, Bria no habla; el modelo y el tope se pueden ajustar'
   assert.equal(voiceConfig({ ...env, ELEVENLABS_VOICE_ID: '../otra/ruta' }).enabled, false, 'el id de voz no puede traer rutas');
   const config = voiceConfig({ ...env, ELEVENLABS_MODEL_ID: 'eleven_v4_turbo', BRIA_VOICE_DAILY_CHARS: '500' });
   assert.deepEqual([config.enabled, config.model, config.dailyChars], [true, 'eleven_v4_turbo', 500]);
-  assert.equal(voiceConfig({ ...env, ELEVENLABS_MODEL_ID: 'x y', BRIA_VOICE_DAILY_CHARS: '-1' }).model, 'eleven_flash_v2_5');
+  assert.equal(voiceConfig({ ...env, ELEVENLABS_MODEL_ID: 'x y', BRIA_VOICE_DAILY_CHARS: '-1' }).model, 'eleven_v4_turbo');
 });
 
 test('el turno se cierra cuando la persona ya habló y calla un rato', () => {
@@ -43,7 +43,8 @@ test('el turno se cierra cuando la persona ya habló y calla un rato', () => {
 
 test('la salida a ElevenLabs pasa por la puerta de egreso: destino inventariado, modelo identificado y sin metadatos internos', async () => {
   let decision, sent;
-  const client = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async (context) => { decision = context; } }, fetchImpl: async (url, options) => { sent = { url, options }; return new Response('audio', { status: 200, headers: { 'content-type': 'audio/mpeg' } }); } });
+  const flash = { ...env, ELEVENLABS_MODEL_ID: 'eleven_flash_v2_5' };
+  const client = createElevenLabsClient({ config: () => voiceConfig(flash), usageLog: quietLog, governance: { assertEgress: async (context) => { decision = context; } }, fetchImpl: async (url, options) => { sent = { url, options }; return new Response('audio', { status: 200, headers: { 'content-type': 'audio/mpeg' } }); } });
   const response = await client.speak({ text: 'Hola' });
   assert.equal(await response.text(), 'audio');
   assert.deepEqual([decision.provider, decision.model, decision.useCase], ['elevenlabs', 'eleven_flash_v2_5', 'bria.voice']);
@@ -196,4 +197,26 @@ test('si Bria va a consultar algo lo dice con una frase corta que rota', async (
   assert.notEqual(voiceFiller(1), voiceFiller(2)); assert.equal(voiceFiller(VOICE_FILLERS.length), voiceFiller(0));
   const source = (await import('node:fs')).readFileSync('src/components/bria/BriaVoiceMode.jsx', 'utf8');
   assert.match(source, /state\.aside \|\| state\.total > 0/, 'solo una vez por turno y solo antes de empezar a responder');
+});
+
+test('la voz sale con Eleven v4 Turbo por la ruta de diálogo y vuelve a Flash si ElevenLabs lo rechaza', async () => {
+  const { isDialogueModel, withoutAudioTags, VOICE_MODEL } = await import('../src/lib/briaVoice.js');
+  assert.equal(VOICE_MODEL, 'eleven_v4_turbo'); assert.equal(isDialogueModel('eleven_v4_turbo'), true); assert.equal(isDialogueModel('eleven_flash_v2_5'), false);
+  assert.equal(withoutAudioTags('Listo [risas] ya quedó'), 'Listo risas ya quedó');
+  const calls = [], log = [];
+  let clock = 0, reject = false;
+  const client = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async () => {} }, now: () => clock, logger: { error: line => log.push(line) },
+    fetchImpl: async (url, options) => { const body = JSON.parse(options.body); calls.push([new URL(url).pathname, body.model_id]); return reject && body.model_id === 'eleven_v4_turbo' ? new Response('{}', { status: 400 }) : new Response('audio', { status: 200 }); } });
+  assert.equal(await (await client.speak({ text: 'Hola [susurra] Rodny' })).text(), 'audio');
+  assert.deepEqual(calls, [['/v1/text-to-dialogue/stream', 'eleven_v4_turbo']]);
+  reject = true; calls.length = 0;
+  assert.equal(await (await client.speak({ text: 'Hola' })).text(), 'audio', 'el rechazo no deja a Bria muda');
+  assert.deepEqual(calls, [['/v1/text-to-dialogue/stream', 'eleven_v4_turbo'], ['/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream', 'eleven_flash_v2_5']]);
+  assert.match(log[0], /HTTP 400/);
+  calls.length = 0; await client.speak({ text: 'Otra' });
+  assert.deepEqual(calls.map(call => call[1]), ['eleven_flash_v2_5'], 'no reintenta en cada frase');
+  clock = 11 * 60000; calls.length = 0; reject = false; await client.speak({ text: 'Otra' });
+  assert.deepEqual(calls.map(call => call[1]), ['eleven_v4_turbo'], 'pasado un rato vuelve a intentar');
+  const out = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async () => {} }, logger: { error() {} }, fetchImpl: async () => new Response('{}', { status: 429 }) });
+  await assert.rejects(out.speak({ text: 'Hola' }), { code: 'VOICE_QUOTA' }, 'sin créditos no se reintenta con otro modelo');
 });
