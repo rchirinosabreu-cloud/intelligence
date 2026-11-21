@@ -605,28 +605,28 @@ const SharedContentPlan = () => {
   return (
     <div className="min-h-screen bg-zinc-50 pb-20 dark:bg-zinc-950">
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-white/5 dark:bg-zinc-900/95">
-        <div className="mx-auto flex h-24 max-w-6xl flex-wrap items-center gap-4 px-6">
+        {/* En el celular el avance baja a su propia fila: con alto fijo se montaba sobre el contenido (21 de noviembre de 2026). */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6 sm:py-4 lg:min-h-24">
           <ClientAvatar client={plan.client} size={44} className="rounded-xl" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-bold tracking-tight text-zinc-900 dark:text-white">{plan.client.name}</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Parrilla de {planPeriodName(plan)}{planPeriodRange(plan) ? ` · ${planPeriodRange(plan)}` : ''}
             </p>
           </div>
-          <div className="flex-grow" />
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:items-end sm:gap-2">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               <span className="font-bold text-brand-green-deep dark:text-brand-green">{approvedCount} aprobadas</span>
               {pendingCount > 0 && <> · {pendingCount} por revisar</>}
             </p>
-            <div className="h-1.5 w-52 overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10 sm:w-52">
               <div className="h-full rounded-full bg-brand-green transition-all" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto mt-10 max-w-6xl space-y-8 px-6">
+      <main className="mx-auto mt-6 max-w-6xl space-y-6 px-4 sm:mt-10 sm:space-y-8 sm:px-6">
         {openItem ? (
           <PieceDetail
             item={openItem}
@@ -653,7 +653,7 @@ const SharedContentPlan = () => {
               <div className="max-w-2xl space-y-3">
                 <h2 className="text-3xl font-bold leading-tight tracking-tight lg:text-4xl">Revisión de contenidos</h2>
                 <p className="text-base leading-relaxed text-white/90">
-                  Hola 👋 Aquí tienes la propuesta de contenidos para este mes. Toca una pieza para verla completa, dejarnos tus comentarios o aprobarla.
+                  Hola 👋 Aquí tienes la propuesta de contenidos {planPeriodRange(plan) ? `del ${planPeriodRange(plan)}` : 'para este mes'}. Toca una pieza para verla completa, dejarnos tus comentarios o aprobarla.
                 </p>
               </div>
             </section>

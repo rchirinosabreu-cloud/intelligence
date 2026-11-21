@@ -28,6 +28,9 @@ export const getPublicPlan = async (req, res) => {
       id: plan.id,
       month: plan.month,
       year: plan.year,
+      // El período que cubre según el día de corte del contrato: el cliente tiene que ver «noviembre–diciembre» y
+      // su rango, no solo el mes en que empieza (Rodny, 21 de noviembre de 2026). Solo nombre y fechas.
+      cycle: plan.cycle ? { label: plan.cycle.label, start: plan.cycle.start, end: plan.cycle.end, mixed: plan.cycle.mixed } : null,
       strategicObjectives: plan.strategicObjectives,
       client: {
         name: plan.client.name,
