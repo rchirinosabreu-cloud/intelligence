@@ -87,7 +87,7 @@ export function useBriaDictation({ request, active = true, disabled = false, han
         if (session.cancelled || !mounted.current || !isActive.current) { if (mounted.current) changeVoice('idle'); return; }
         transcribe(new Blob(session.chunks, { type: recorder.mimeType || 'audio/webm' }));
       };
-      recorder.start(1000); session.startedAt = Date.now(); setSeconds(0); setLevels([]); setPreview(''); changeVoice('recording');
+      recorder.start(500); session.startedAt = Date.now(); setSeconds(0); setLevels([]); setPreview(''); changeVoice('recording');
       session.unmeter = meter(stream, value => {
         if (!mounted.current || recording.current !== session) return;
         setLevels(current => pushLevel(current, value));

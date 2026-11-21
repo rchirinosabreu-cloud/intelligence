@@ -123,7 +123,14 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     const found = ANSWERS.find(entry => entry.match.test(question)) || DEFAULT_ANSWER;
     row.turns.push({ id: `${row.id}:${row.revision * 2}`, role: 'user', text: question, attachments: (req.files || []).map(file => ({ id: randomUUID(), name: file.originalname, size: file.size, status: 'READ' })) }, { id: `${row.id}:${row.revision * 2 + 1}`, role: 'assistant', text: found.answer, sources: found.sources || [], failures: found.failures || [] });
     if (!row.revision) row.title = question.slice(0, 90);
-    row.revision++; row.updatedAt = new Date().toISOString(); res.json(row);
+    row.revision++; row.updatedAt = new Date().toISOString();
+    // En la muestra de voz la respuesta llega en vivo, palabra por palabra, para ver a Bria hablar mientras escribe.
+    if (/[?&]voz/.test(String(req.headers.referer || '')) && String(req.headers.accept || '').includes('text/event-stream')) {
+      res.status(200).setHeader('Content-Type', 'text/event-stream; charset=utf-8'); res.flushHeaders?.();
+      for (const word of found.answer.split(/(?<=\s)/)) { res.write(`data: ${JSON.stringify({ type: 'delta', text: word })}\n\n`); await wait(45); }
+      res.write(`data: ${JSON.stringify({ type: 'done', chat: row })}\n\n`); return res.end();
+    }
+    res.json(row);
   });
   // Que Bria se mida (14 de octubre de 2026): el pulgar se guarda en el turno de Bria y vuelve el chat entero.
   api.post('/api/bria/conversations/:id/rating', async (req, res) => {

@@ -50,9 +50,9 @@ test('en el celular Bria se abre a pantalla completa y sigue a la pantalla visib
 
 test('el texto en gris del dictado: tramos con techo, uno a la vez y sin errores a la vista', async () => {
   const { previewDue, PREVIEW_MAX_BYTES } = await import('../src/lib/briaComposer.js');
-  assert.equal(previewDue({ elapsedMs: 1000, bytes: 9000 }), false, 'muy pronto');
+  assert.equal(previewDue({ elapsedMs: 800, bytes: 9000 }), false, 'muy pronto');
   assert.equal(previewDue({ elapsedMs: 2600, bytes: 9000 }), true);
-  assert.equal(previewDue({ elapsedMs: 4000, lastAtMs: 2600, bytes: 9000 }), false, 'cada 2,5 s al comienzo');
+  assert.equal(previewDue({ elapsedMs: 3500, lastAtMs: 2600, bytes: 9000 }), false, 'cada 1,2 s al comienzo');
   assert.equal(previewDue({ elapsedMs: 5200, lastAtMs: 2600, bytes: 9000 }), true);
   assert.equal(previewDue({ elapsedMs: 5200, lastAtMs: 2600, bytes: 9000, pending: true }), false, 'uno a la vez');
   assert.equal(previewDue({ elapsedMs: 43000, lastAtMs: 40000, bytes: 9000 }), false, 'pasados 30 s, cada 5 s');

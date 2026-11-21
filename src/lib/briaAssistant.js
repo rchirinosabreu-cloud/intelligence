@@ -91,7 +91,9 @@ export const toolDeclarations = (tools = []) => tools.map(({ name, description, 
 // Por dónde habla (1 de noviembre de 2026): en el celular una respuesta de pantalla no se lee. Va en la última línea,
 // con lo que cambia por persona, para no mover el prefijo que la caché de prompt comparte.
 const CHANNEL_NOTE = {
-  whatsapp: ' Esta conversación es por WhatsApp y se lee en el celular: ve a lo esencial en pocas líneas, párrafos de una o dos frases, sin tablas ni encabezados; si hay más que contar, dilo y ofrece ampliar.'
+  whatsapp: ' Esta conversación es por WhatsApp y se lee en el celular: ve a lo esencial en pocas líneas, párrafos de una o dos frases, sin tablas ni encabezados; si hay más que contar, dilo y ofrece ampliar.',
+  // La voz (21 de noviembre de 2026): la persona la está oyendo, no leyendo. Corto y hablado, para que la charla sea ágil.
+  voz: ' Esta conversación es hablada: la persona te oye, no te lee. Responde como en una charla, en una a tres frases cortas, empezando por lo que importa; sin listas, tablas, encabezados, enlaces ni símbolos. Si hay mucho que contar, da lo esencial y ofrece seguir o dejarlo escrito.'
 };
 
 export const buildInstructions = ({ person, today, tools = [], user = null, channel = 'plataforma' }) => {
