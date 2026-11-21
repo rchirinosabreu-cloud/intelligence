@@ -50,7 +50,7 @@ export default function BriaVoiceOrb({ state = 'listening', level = 0, className
       const step = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
       const { state: current, level: heard } = live.current, target = orbEnergy(current, heard, now / 1000);
       energy += (target - energy) * Math.min(1, step * 8); // suaviza los saltos entre estados
-      clock += step * (0.25 + 2.2 * energy); // las nubes van más rápido con más energía
+      if (current !== 'paused') clock += step * (0.25 + 2.2 * energy); // las nubes van más rápido con más energía; en pausa se quedan quietas
       paint(context, size, still ? 1 : clock, still ? 0.3 : energy, current === 'paused');
       element.style.transform = `scale(${(1 + (still ? 0 : 0.1 * energy)).toFixed(3)})`;
       if (!still) frame = requestAnimationFrame(draw);

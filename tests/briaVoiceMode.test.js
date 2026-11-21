@@ -127,7 +127,7 @@ test('la pantalla de voz: fases, qué se dice y cómo se abre', async () => {
   await transformWithEsbuild(orb, 'BriaVoiceOrb.jsx', { loader: 'jsx', jsx: 'automatic' });
   assert.match(mode, /<BriaVoiceOrb state=/); assert.doesNotMatch(mode, /Bria3D|data-bria-voice-pick|data-bria-voice-heard|preview/);
   assert.match(mode, /role="status" aria-live="polite" className="sr-only"/, 'el estado se dice solo a los lectores de pantalla');
-  assert.match(orb, /prefers-reduced-motion/); assert.doesNotMatch(orb, /shadow|inset/, 'plano: sin brillo ni sombra de esfera');
+  assert.match(orb, /prefers-reduced-motion/); assert.match(orb, /if \(current !== 'paused'\) clock \+=/, 'en pausa las nubes no se mueven'); assert.doesNotMatch(orb, /shadow|inset/, 'plano: sin brillo ni sombra de esfera');
   assert.match(dictation, /if \(handsFree \|\| recording\.current !== session/, 'en la voz no se pide el texto en gris');
   assert.match(mode, /if \(!reply \|\| silent\)/, 'sin voz elegida no se pide audio');
   // Funciones puras, copiadas de sus módulos para probarlas sin el empaquetador.
