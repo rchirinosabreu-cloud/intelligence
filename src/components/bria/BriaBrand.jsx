@@ -26,7 +26,7 @@ import pensandoAnim from '@/assets/bria-3d/pensando.webp';
 import pensandoStill from '@/assets/bria-3d/pensando.png';
 
 // La guía de marca de Bria (Rodny, 18 de noviembre de 2026). Tres piezas y un solo sitio que las importa:
-// - el isotipo firma lo que dice Bria (avisos, mensajes del chat, la píldora de un logro);
+// - el isotipo firma lo que dice Bria (avisos, mensajes del chat, la tarjeta de un logro);
 // - el logo (isotipo + «BRIA · Brain Intelligence», con Roc Grotesk dentro de la imagen) va donde Bria se presenta;
 // - el personaje, en tres poses del mismo atlas aprobado (atenta, trabajando con su portátil, celebrando), cuando Bria
 //   actúa o celebra. Siempre sobre fondo transparente: nunca dentro de un círculo ni de una caja (Rodny, mismo día).
