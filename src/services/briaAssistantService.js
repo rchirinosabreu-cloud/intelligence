@@ -44,6 +44,7 @@ import { createDailyReadingTools } from './dailyReadingTools.js';
 import { getDailyReadingService } from './dailyReadingService.js';
 import { briaInvestigationTools } from './briaInvestigationTools.js';
 import { getBriaNotebookService } from './briaNotebookService.js';
+import { getQuickBrain } from './briaQuickBrain.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -68,7 +69,8 @@ export const createBriaAssistantService = ({
   permissions = getPermissionRequestService,
   dailyReading = getDailyReadingService,
   serviceHealth = serviceHealthService,
-  notebook = getBriaNotebookService
+  notebook = getBriaNotebookService,
+  quick = getQuickBrain
 } = {}) => {
   // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
   const vaultFor = () => {
@@ -124,6 +126,7 @@ export const createBriaAssistantService = ({
       // En voz Bria llega informada (21 de noviembre de 2026): sus pendientes van leídos antes de responder, con la
       // misma herramienta y los mismos permisos, para no gastar una ronda del modelo en ir a buscarlos.
       const ownTasks = channel === 'voz' ? allTools.find(tool => tool.name === 'mis_tareas' && tool.allowed(user)) : null;
+      const quickBrain = channel === 'voz' ? (typeof quick === 'function' ? quick() : quick) : null;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -147,6 +150,8 @@ export const createBriaAssistantService = ({
         context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, agencyFacts: facts, knowledge: remembered, logger,
           ...(facts?.recall ? { recallMemory: ({ question: current, history: turns }) => facts.recall(user, { texto: [...turns.slice(-2).map(turn => turn.text), current].join('\n') }) } : {}),
           ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
+          // La vía rápida solo existe en voz y solo si el servicio tiene la clave de la API de Claude.
+          ...(channel === 'voz' && quickBrain ? { quick: quickBrain } : {}),
           ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });

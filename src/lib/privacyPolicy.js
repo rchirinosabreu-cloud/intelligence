@@ -60,4 +60,7 @@
 // servicio de transcripción para mostrar el texto a medida que la persona habla, también si luego cancela.
 // 2.25 (20 de noviembre de 2026): la voz de Bria. ElevenLabs entra como encargado: recibe el texto de la respuesta
 // que Bria va a decir en voz alta, no la voz de la persona ni el historial; el audio no se guarda.
-export const PRIVACY_POLICY_VERSION = '2.25 · 2026-11-20';
+// 2.26 (21 de noviembre de 2026): la respuesta rápida de Bria en voz. Anthropic entra como encargado: recibe la
+// pregunta hablada ya transcrita, una parte acotada del diálogo, los pendientes de quien pregunta y los recuerdos
+// pertinentes, solo cuando el servicio tiene configurada esa API; lo que requiere consultar sigue con el modelo habitual.
+export const PRIVACY_POLICY_VERSION = '2.26 · 2026-11-21';
