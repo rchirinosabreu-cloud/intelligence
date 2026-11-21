@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, X } from '@/components/ui/icons';
-import { VOICE_BARGE, VOICE_MAX_CHARS, VOICE_TAIL, nextSpeech, voiceFiller } from '@/lib/briaVoice';
+import { VOICE_MAX_CHARS, VOICE_TAIL, nextSpeech, voiceFiller } from '@/lib/briaVoice';
 import { requestVoiceAudio } from '@/lib/briaVoiceRequest';
 import BriaVoiceOrb from './BriaVoiceOrb';
 import { useBriaDictation } from './useBriaDictation';
@@ -33,7 +33,7 @@ export default function BriaVoiceMode({ chat, busy, liveText = '', liveStatus = 
     // Si la interrumpieron mientras todavía escribía, lo dicho espera a que termine: el chat no recibe otro mensaje antes.
     onText: (text) => { const said = String(text || '').trim(); if (!said) return; if (busy) { held.current = said; return; } deliver(said); },
     onSpeech: () => { if (phase !== 'speaking') return; barged.current = true; stopAudio(); talk.current.muted = true; talk.current.ended = true; setPhase('listening'); },
-    speechGate: () => (phase === 'speaking' ? VOICE_BARGE : null),
+    speechGate: () => phase === 'speaking',
     onError: (message) => { if (!message) return; failures.current += 1; if (/micrófono|navegador/i.test(message) || failures.current >= 3) { setPaused(true); setNotice(message); } },
     onIdle: () => { if (phase === 'speaking' || phase === 'thinking') return; setPaused(true); setNotice('Pausé el micrófono porque no escuché nada. Tócalo para seguir.'); }
   });

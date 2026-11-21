@@ -222,21 +222,27 @@ test('la voz sale con Eleven v4 Turbo por la ruta de diálogo y vuelve a Flash s
   await assert.rejects(out.speak({ text: 'Hola' }), { code: 'VOICE_QUOTA' }, 'sin créditos no se reintenta con otro modelo');
 });
 
-test('interrumpir hablando: mientras Bria habla el micrófono sigue oyendo, con un umbral más alto y cancelación de eco', async () => {
-  const { VOICE_BARGE, VOICE_MIC, VOICE_SPEECH_LEVEL, VOICE_MIN_SPEECH_MS } = await import('../src/lib/briaVoice.js');
-  assert.ok(VOICE_BARGE.speechLevel > VOICE_SPEECH_LEVEL && VOICE_BARGE.minSpeechMs > VOICE_MIN_SPEECH_MS, 'cuesta más cortar a Bria que empezar un turno en silencio');
+test('interrumpir hablando: mientras Bria habla el micrófono sigue oyendo, y el umbral se calibra con lo que suena', async () => {
+  const { VOICE_BARGE, VOICE_MIC, bargeGate } = await import('../src/lib/briaVoice.js');
   assert.deepEqual(VOICE_MIC.audio, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
-  const feed = (level, ms, gate) => { let state = {}; for (let at = 100; at <= ms; at += 100) state = hearTurn(state, { level, at, ...gate }); return state; };
-  assert.equal(feed(0.2, 2000).spoke, true, 'en silencio, hablar normal abre el turno');
-  assert.equal(feed(0.2, 2000, VOICE_BARGE).spoke, false, 'el resto de la voz de Bria en los parlantes no la corta');
-  assert.equal(feed(0.6, 300, VOICE_BARGE).spoke, false, 'un golpe o una tos corta tampoco');
-  assert.equal(feed(0.6, 600, VOICE_BARGE).spoke, true, 'hablar claro y sostenido sí');
+  // Lo mismo que hace el dictado en cada medida: calibra el piso y decide si eso fue voz.
+  const hear = (levels) => { let floor, turn = {}, at = 0, spokeAt = null; for (const level of levels) { at += 90; const gate = bargeGate(floor, level); floor = gate.floor; turn = hearTurn(turn, { level, at, speechLevel: gate.speechLevel, minSpeechMs: gate.minSpeechMs }); if (turn.spoke && spokeAt === null) spokeAt = at; } return { spokeAt, floor }; };
+  const times = (level, count) => Array.from({ length: count }, (_, index) => level + (index % 2 ? 0.01 : -0.01));
+  assert.equal(hear(times(0.03, 60)).spokeAt, null, 'el eco bajo y parejo de Bria no la corta');
+  assert.equal(hear(times(0.12, 60)).spokeAt, null, 'un eco alto pero parejo (parlantes fuertes) tampoco');
+  assert.equal(hear([...times(0.03, 20), 0.5, 0.5, ...times(0.03, 20)]).spokeAt, null, 'un golpe corto tampoco');
+  const quiet = hear([...times(0.03, 20), ...times(0.14, 12)]);
+  assert.ok(quiet.spokeAt !== null && quiet.spokeAt <= (20 + 6) * 90, 'una voz atenuada por la cancelación de eco sí la corta, en menos de medio segundo');
+  assert.ok(quiet.floor < 0.05, 'la voz de la persona no sube el piso');
+  assert.ok(hear([...times(0.12, 20), ...times(0.35, 12)]).spokeAt !== null, 'con parlantes fuertes hay que hablar más fuerte, pero se puede');
+  assert.ok(VOICE_BARGE.minLevel >= 0.08 && VOICE_BARGE.maxLevel <= 0.5);
   const fs = await import('node:fs');
   const dictation = fs.readFileSync('src/components/bria/useBriaDictation.js', 'utf8'), mode = fs.readFileSync('src/components/bria/BriaVoiceMode.jsx', 'utf8');
   assert.match(dictation, /getUserMedia\(handsFree \? VOICE_MIC : \{ audio: true \}\)/);
+  assert.match(dictation, /bargeGate\(session\.floor, value\)/);
   assert.match(dictation, /if \(session\.turn\.spoke && !spokeBefore\) callbacks\.current\.onSpeech\?\.\(\)/);
   assert.match(mode, /onSpeech: \(\) => \{ if \(phase !== 'speaking'\) return; barged\.current = true; stopAudio\(\);/);
-  assert.match(mode, /speechGate: \(\) => \(phase === 'speaking' \? VOICE_BARGE : null\)/);
+  assert.match(mode, /speechGate: \(\) => phase === 'speaking'/);
   assert.match(mode, /\(phase === 'speaking' && !silent\)\)\) start\(\)/, 'también escucha mientras habla');
   assert.match(mode, /before\.current === 'speaking' && phase !== 'speaking' && !barged\.current\) cancel\(\)/, 'lo grabado sin interrupción se descarta');
   assert.match(mode, /if \(busy\) \{ held\.current = said; return; \}/, 'lo dicho al interrumpir espera a que Bria termine de escribir');
