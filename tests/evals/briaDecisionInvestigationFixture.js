@@ -85,7 +85,7 @@ export const createDecisionInvestigationFixture = (ai, { initialTurns = [] } = {
     initialTurns,
     assistantTools: briaAssistantTools,
     knowledge: boundary({ list: async () => [], businessContext: async (_user, selected) => ({ agency: { state: 'CONSULTADO', partial: false, learnings: [] }, accounts: selected.map(client => ({ clientId: client.id, state: 'CONSULTADO', partial: false, learnings: [] })) }) }),
-    assistantOptions: { agencyFacts: factsService, taskDrafts: boundary({}), dispatchDrafts: boundary({}), deleteDrafts: boundary({}), actions: boundary({}), dailyReading: boundary({ decisionMemory: async () => null, explain: async () => ({ propuestas: [], lectura: null }) }) },
+    assistantOptions: { agencyFacts: factsService, taskDrafts: boundary({}), dispatchDrafts: boundary({}), deleteDrafts: boundary({}), actions: boundary({}), dailyReading: boundary({ decisionMemory: async () => null, liveClients: async () => null, explain: async () => ({ propuestas: [], lectura: null }) }) },
     assistantContext: {
       getTasks: async id => recordRead('task-list', { clientId: id }, tasks.filter(task => task.clientId === id)),
       operations: boundary({ listOperations: async () => recordRead('portfolio', {}, operations), getOperation: async slug => { const row = operations.find(client => client.slug === slug); if (!row) throw Object.assign(new Error('No encontramos ese cliente ficticio.'), { status: 404 }); return recordRead('operation', { slug }, row); } }),

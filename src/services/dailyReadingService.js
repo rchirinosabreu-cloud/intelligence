@@ -21,6 +21,7 @@ import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, no
 import { decisionMemory, isTalkEntry, talkVerdict, normalizeResult, resolveEntryRef, talkDecision, MEMORY_DAYS } from '../lib/briaDecisionMemory.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { getPmSessionService } from './briaPmSessionService.js';
+import { liveClientState, createLiveStateCache, LIVE_CLIENTS_TTL_MS } from '../lib/briaLiveState.js';
 import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { projectReadingContext, dailyContextSources } from '../lib/dailyReadingContext.js';
@@ -48,6 +49,7 @@ import { isTrustedSession } from '../lib/taskWorkCorrection.js';
 export const MORNING_BRIEF_NOTIFICATION = 'BRIA_LECTURA_MANANA';
 // El chat de las lecturas se llama igual todos los días: la fecha la dice cada lectura.
 export const MORNING_BRIEF_THREAD_TITLE = 'Lectura de la mañana';
+export const LIVE_FIRST_WAIT_MS = 1500;
 export const SNAPSHOT_FROM = 6 * 60;
 export const READING_FROM = 6 * 60 + 30;
 export const BRIEF_FROM = 7 * 60 + 30;
@@ -215,8 +217,26 @@ export const createDailyReadingService = ({
     return { clientIds: mine.length ? new Set(mine) : null, people };
   };
 
+  // El estado vivo de las cuentas: una sola foto para toda la agencia cada dos minutos; cada quien ve su alcance.
+  const liveCache = createLiveStateCache({ ttlMs: LIVE_CLIENTS_TTL_MS, clock: () => now().getTime() });
+  let livePhoto = null;
+
   return {
     scopeFor,
+
+    /** Las cuentas ahora mismo, para ponerlas delante de Bria. Un PM con cuentas asignadas ve las suyas; el resto, la agencia. */
+    async liveClients(user) {
+      const service = this;
+      // Nunca frena la respuesta: si la foto guardada venció, se sirve esa y se refresca por detrás; la primera vez
+      // se espera como mucho segundo y medio (la lectura sigue y queda lista para el mensaje siguiente).
+      const fresh = liveCache('agencia', async () => { const at = now(); const photo = await service.readToday(at); return (livePhoto = { today: photo.today, clients: photo.clients, at }); });
+      fresh.catch(error => logger.error('[DailyReading] No se pudo leer el estado vivo de las cuentas:', error?.message || error));
+      const photo = livePhoto || await Promise.race([fresh.catch(() => null), new Promise(resolve => { const timer = setTimeout(resolve, LIVE_FIRST_WAIT_MS, null); timer.unref?.(); })]);
+      if (!photo) return null;
+      const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
+      const mine = isAdmin ? [] : photo.clients.filter(client => client.pmId && client.pmId === user?.teamMember?.id);
+      return liveClientState({ clients: mine.length ? mine : photo.clients, today: photo.today, at: photo.at });
+    },
 
     /** Cómo amaneció la plataforma. La actividad (tareas cerradas, horas) es la del día anterior completo, en Bogotá. */
     async readToday(at = now()) {
