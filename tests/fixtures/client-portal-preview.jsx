@@ -98,6 +98,7 @@ const plan = {
   id: 'p1',
   month: 9,
   year: 2026,
+  cycle: { label: 'Septiembre–octubre', start: '2026-09-15', end: '2026-10-14', mixed: true },
   strategicObjectives: 'Posicionar a ENDOVA como una unidad de atención especializada cercana, explicando la experiencia completa del paciente antes, durante y después del procedimiento.',
   client: { name: 'PromoGroup IPS', logoUrl: null },
   items

@@ -468,7 +468,7 @@ const ContentItemCard = ({
               className="min-w-0 flex-grow rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-xl font-bold tracking-tight text-zinc-900 outline-none transition focus:border-zinc-200 dark:text-zinc-50 dark:focus:border-white/10"
             />
           ) : (
-            <h3 className="min-w-0 flex-grow truncate px-2 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{item.objective}</h3>
+            <h3 className="min-w-0 flex-grow px-2 text-xl font-bold [overflow-wrap:anywhere] sm:truncate tracking-tight text-zinc-900 dark:text-zinc-50">{item.objective}</h3>
           )}
 
           <button
@@ -1624,7 +1624,7 @@ const ContentPlanDetail = () => {
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
       <PageHeader
-        title={planPeriodName(plan)}
+        title={planPeriodName(plan).replace(/^./, letter => letter.toUpperCase())}
         subtitle={planPeriodRange(plan) ? `Del ${planPeriodRange(plan)}, según el día de corte del contrato.` : 'Planificación estratégica de contenidos digitales.'}
 
         breadcrumbs={[
@@ -1677,7 +1677,7 @@ const ContentPlanDetail = () => {
             className="w-full sm:w-auto"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Añadir Contenido
+            Nueva pieza
           </Button>
         </div>
       </PageHeader>

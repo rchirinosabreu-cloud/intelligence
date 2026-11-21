@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -6,11 +6,9 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getContentPlanMonthName, planPeriodName, planPeriodRange } from '@/lib/contentPlanPeriod';
 import {
-  Plus, Calendar, Filter, Search, MoreHorizontal,
-  ChevronRight, ChevronDown, Loader2, Trash2, Eye,
-  Folder, Grid, List, Clock, FileSpreadsheet
+  Plus, Search, MoreHorizontal, ChevronRight, ChevronDown, ChevronUp,
+  Loader2, Trash2, Eye, FileSpreadsheet
 } from '@/components/ui/icons';
-import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Button } from '@/components/ui/button';
@@ -25,6 +23,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from 'react-hot-toast';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+// Cuántas parrillas se ven de entrada por cliente; las anteriores se abren con «Ver anteriores» (21 de noviembre de 2026).
+const RECENT_PLANS = 3;
+const ROW = 'flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan/30 dark:hover:bg-white/5 sm:px-5';
+const PLAN_STATUS = {
+  PLANIFICACION: { label: 'Planificación', chip: 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300' },
+  EN_APROBACION: { label: 'En aprobación', chip: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow' },
+  ACTIVO: { label: 'Activa', chip: 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan' },
+  FINALIZADO: { label: 'Finalizada', chip: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green' }
+};
 
 const ContentGrids = () => {
   const confirm = useConfirmDialog();
@@ -43,7 +51,6 @@ const ContentGrids = () => {
     setSearchParams(next, { replace: true, state: location.state });
   };
   const setActiveClientId = value => updateView('client', value);
-  const gridRef = useRef(null);
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
@@ -68,15 +75,6 @@ const ContentGrids = () => {
     },
     staleTime: 60_000
   });
-
-  // Solo el fondo de esta pantalla cierra la carpeta. Un clic de navegación fuera de ella
-  // (barra lateral, aviso o regreso) no debe escribir después la URL anterior y cancelar la salida.
-  const closeFolderOnBackground = (event) => {
-    if (event.defaultPrevented || event.target.closest('a, button, input, select, textarea, [role="button"], [role="link"]')) return;
-    if (gridRef.current && (!gridRef.current.contains(event.target) || event.target === gridRef.current)) {
-      setActiveClientId(null);
-    }
-  };
 
   const toggleClient = (clientId) => {
     setActiveClientId(activeClientId === clientId ? null : clientId);
@@ -174,221 +172,160 @@ const ContentGrids = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500" onClick={closeFolderOnBackground}>
+    <div className="space-y-6">
       <PageHeader
-        title="Parrillas de Contenido"
-        subtitle="Estructura jerárquica organizada por clientes."
+        title="Parrillas"
+        subtitle="La parrilla de cada cliente, por período."
       >
-        <Button
-          size="lg"
-          onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto shadow-lg shadow-brand-cyan/20"
-        >
+        <Button size="lg" onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" />
-          Nuevo Plan
+          Nueva parrilla
         </Button>
       </PageHeader>
 
-      {/* Control Bar */}
-      <div className="p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm flex flex-col md:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative w-full flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
-            type="text"
-            placeholder="Buscar por cliente, mes o año..."
+            type="search"
+            aria-label="Buscar parrillas"
+            placeholder="Buscar por cliente, mes o año"
             value={searchTerm}
             onChange={(e) => updateView('q', e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-brand-cyan/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 text-sm text-zinc-900 outline-none transition-colors focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/20 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100"
           />
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="px-4 py-2 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-xl text-xs font-medium flex items-center gap-2 whitespace-nowrap">
-            <Folder className="w-3 h-3" />
-            {filteredClientGroups.length} Clientes
-          </div>
-        </div>
+        <p className="shrink-0 text-sm text-zinc-500 dark:text-zinc-400" data-grids-count>
+          {filteredClientGroups.length} {filteredClientGroups.length === 1 ? 'cliente' : 'clientes'}
+        </p>
       </div>
 
-      {/* Main Folder View */}
       {isLoading ? (
-        <div className="p-20 flex flex-col items-center justify-center gap-4">
-          <Loader2 className="w-10 h-10 text-brand-cyan-deep dark:text-brand-cyan animate-spin" />
-          <p className="text-zinc-500 animate-pulse">Cargando carpetas de clientes...</p>
+        <div className="flex flex-col items-center justify-center gap-3 p-16">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-cyan-deep dark:text-brand-cyan" />
+          <p className="text-sm text-zinc-500">Cargando parrillas…</p>
         </div>
       ) : filteredClientGroups.length > 0 ? (
-        <div ref={gridRef} className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          <AnimatePresence mode="popLayout">
-            {filteredClientGroups.map((group) => (
-              <motion.div
-                key={group.id}
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="group flex flex-col h-fit"
-              >
-                {/* Client Card (Accordion Trigger) */}
-                <div
-                  onClick={() => toggleClient(group.id)}
-                  className={`
-                    p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden
-                    ${activeClientId === group.id
-                      ? 'bg-white dark:bg-zinc-900 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-xl'
-                      : 'bg-white/50 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-white/5 hover:border-brand-cyan/30 shadow-sm'}
-                  `}
-                >
-                  <div className="flex items-center justify-between relative z-10">
-                    <div className="flex items-center gap-4">
-                      <ClientAvatar client={group.client} size={48} className="rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm" />
-                      <div>
-                        <h3 className="font-bold text-zinc-900 dark:text-white leading-tight">
-                          {group.client?.name}
-                        </h3>
-                        <p className="text-xs text-zinc-500 flex flex-wrap items-center gap-1 mt-1 font-medium tracking-tight">
-                          {group.plans.length > 0 && (
-                            <span>{group.plans.length} {group.plans.length === 1 ? 'Plan' : 'Planes'} • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}</span>
-                          )}
-                          {group.external && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green" data-external-badge>
-                              <FileSpreadsheet className="w-3 h-3" />Hoja de MIO
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    {activeClientId === group.id ? (
-                      <ChevronDown className="w-5 h-5 text-brand-cyan-deep dark:text-brand-cyan" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-brand-cyan-deep dark:group-hover:text-brand-cyan transition-colors" />
-                    )}
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {filteredClientGroups.map((group) => {
+            const rows = group.plans.length + (group.external?.months.length || 0);
+            const expanded = activeClientId === group.id || Boolean(searchTerm);
+            const externalMonths = group.external?.months || [];
+            const visiblePlans = expanded ? group.plans : group.plans.slice(0, Math.max(0, RECENT_PLANS - externalMonths.length));
+            const hidden = group.plans.length - visiblePlans.length;
+            return (
+              <section key={group.id} data-client-card={group.id} aria-label={`Parrillas de ${group.client?.name || 'cliente'}`}
+                className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
+                <header className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3.5 dark:border-white/5 sm:px-5">
+                  <ClientAvatar client={group.client} size={40} className="shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-base font-bold leading-tight text-zinc-900 dark:text-white">{group.client?.name}</h3>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      <span>{rows} {rows === 1 ? 'parrilla' : 'parrillas'}</span>
+                      {group.external && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green">
+                          <FileSpreadsheet className="h-3 w-3" />Hoja de MIO
+                        </span>
+                      )}
+                    </p>
                   </div>
-                </div>
+                </header>
 
-                {/* Expanded Plan List */}
-                <AnimatePresence>
-                  {activeClientId === group.id && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mt-2 space-y-2 px-3 pb-2 border-l-2 border-brand-cyan/10 ml-6 pt-2">
-                        {group.external?.months.map((month) => (
-                          <div
-                            key={`hoja-${month.slug}`}
-                            onClick={() => navigate(`/parrillas/hoja/${group.client.slug}/${month.slug}`)}
-                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/5 hover:bg-brand-green-soft dark:hover:bg-brand-green/10 border border-transparent hover:border-brand-green/30 transition-all cursor-pointer"
-                            data-external-month={month.slug}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 shadow-sm">
-                                <FileSpreadsheet className="w-3.5 h-3.5 text-brand-green-deep dark:text-brand-green" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
-                                  {month.label} {month.year}
-                                </span>
-                                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">
-                                  {month.problem && !month.created ? month.problem : `Hoja de MIO · ${month.created} ${month.created === 1 ? 'pieza' : 'piezas'}`}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {month.changes > 0 && (
-                                <span className="rounded-md bg-brand-yellow-soft px-2 py-0.5 text-xs font-semibold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" data-external-changes-count>
-                                  {month.changes} {month.changes === 1 ? 'cambio' : 'cambios'}
-                                </span>
-                              )}
-                              <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
-                            </div>
-                          </div>
-                        ))}
-                        {group.plans.map((plan) => (
-                          <div
-                            key={plan.id}
-                            onClick={() => navigateToPlan(plan)}
-                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/5 hover:bg-brand-cyan-soft dark:hover:bg-brand-cyan/10 border border-transparent hover:border-brand-cyan/20 transition-all cursor-pointer group/item"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 shadow-sm">
-                                <Calendar className="w-3.5 h-3.5 text-brand-cyan-deep dark:text-brand-cyan" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
-                                  {planPeriodName(plan)}
-                                </span>
-                                {planPeriodRange(plan) && <span className="text-xs text-zinc-500 dark:text-zinc-400">{planPeriodRange(plan)}</span>}
-                                <span className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${
-                                  plan.status === 'FINALIZADO' ? 'text-brand-green-deep dark:text-brand-green' : 'text-zinc-400'
-                                }`}>
-                                  {plan.status.replace('_', ' ')}
-                                </span>
-                              </div>
-                            </div>
+                <ul className="divide-y divide-zinc-100 dark:divide-white/5">
+                  {externalMonths.map((month) => (
+                    <li key={`hoja-${month.slug}`} className="flex items-stretch">
+                      <button type="button" data-external-month={month.slug}
+                        onClick={() => navigate(`/parrillas/hoja/${group.client.slug}/${month.slug}`)}
+                        className={ROW}>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold first-letter:uppercase text-zinc-900 dark:text-zinc-100">{month.label} {month.year}</span>
+                          <span className="mt-0.5 block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                            {month.problem && !month.created ? month.problem : `Hoja de MIO · ${month.created} ${month.created === 1 ? 'pieza' : 'piezas'}`}
+                          </span>
+                        </span>
+                        {month.changes > 0 && (
+                          <span className="shrink-0 rounded-md bg-brand-yellow-soft px-2 py-0.5 text-xs font-semibold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" data-external-changes>
+                            {month.changes} {month.changes === 1 ? 'cambio' : 'cambios'}
+                          </span>
+                        )}
+                        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
+                      </button>
+                    </li>
+                  ))}
+                  {visiblePlans.map((plan) => {
+                    const pieces = plan._count?.items ?? null;
+                    const status = PLAN_STATUS[plan.status] || PLAN_STATUS.PLANIFICACION;
+                    return (
+                      <li key={plan.id} className="flex items-stretch">
+                        <button type="button" data-plan-row={plan.id} onClick={() => navigateToPlan(plan)} className={ROW}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold first-letter:uppercase text-zinc-900 dark:text-zinc-100">{planPeriodName(plan)}</span>
+                            <span className="mt-0.5 block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                              {[planPeriodRange(plan), pieces === null ? null : `${pieces} ${pieces === 1 ? 'pieza' : 'piezas'}`].filter(Boolean).join(' · ')}
+                            </span>
+                          </span>
+                          <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${status.chip}`}>{status.label}</span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
+                        </button>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" aria-label={`Más acciones de ${planPeriodName(plan)}`}
+                                className="flex w-11 shrink-0 items-center justify-center border-l border-zinc-100 text-zinc-400 transition-colors hover:bg-zinc-50 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan/30 dark:border-white/5 dark:hover:bg-white/5 dark:hover:text-zinc-200">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => navigateToPlan(plan)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
+                                <Eye className="w-4 h-4" />
+                                <span>Abrir parrilla</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/5" />
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(plan.id, group.client?.name)}
+                                className="flex cursor-pointer items-center gap-2 py-2 text-destructive focus:bg-destructive/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span>Eliminar</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
 
-                            <div className="flex items-center gap-2">
-                              {isAdmin && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                    <button className="p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-lg transition-all text-zinc-500">
-                                      <MoreHorizontal className="w-3.5 h-3.5" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-48">
-                                    <DropdownMenuItem onClick={() => navigateToPlan(plan)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
-                                      <Eye className="w-4 h-4" />
-                                      <span>Ver Plan</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/5" />
-                                    <DropdownMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(plan.id, group.client?.name);
-                                      }}
-                                      className="flex cursor-pointer items-center gap-2 py-2 text-destructive focus:bg-destructive/10"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                      <span>Eliminar</span>
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
-                              <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                {(hidden > 0 || (activeClientId === group.id && group.plans.length > RECENT_PLANS)) && (
+                  <button type="button" onClick={() => toggleClient(group.id)} aria-expanded={activeClientId === group.id}
+                    className="flex min-h-11 w-full items-center justify-center gap-1.5 border-t border-zinc-100 px-4 text-sm font-semibold text-brand-cyan-deep transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan/30 dark:border-white/5 dark:text-brand-cyan dark:hover:bg-white/5">
+                    {hidden > 0 ? `Ver ${hidden} ${hidden === 1 ? 'anterior' : 'anteriores'}` : 'Ver menos'}
+                    {hidden > 0 ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                  </button>
+                )}
+              </section>
+            );
+          })}
         </div>
       ) : (
-        <div className="p-20 flex flex-col items-center justify-center gap-6 text-center bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
-          <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-white/5 flex items-center justify-center">
-            <Search className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
-          </div>
-          <div className="space-y-2 max-w-sm">
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-              {searchTerm ? 'Sin coincidencias' : 'Comienza con tu primera parrilla'}
+        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-white/15 dark:bg-zinc-900 sm:p-16">
+          <div className="space-y-1.5 max-w-sm">
+            <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+              {searchTerm ? 'Sin coincidencias' : 'Todavía no hay parrillas'}
             </h3>
             <p className="text-zinc-500 dark:text-zinc-400 text-sm">
               {searchTerm
-                ? `No pudimos encontrar carpetas o periodos que coincidan con "${searchTerm}".`
-                : 'Organiza la estrategia de contenido por carpetas de clientes. Crea una nueva para verla aquí.'
+                ? `Ningún cliente o período coincide con «${searchTerm}».`
+                : 'Crea la primera parrilla de un cliente para verla aquí.'
               }
             </p>
           </div>
-          <Button
-            size="lg"
-            onClick={() => setIsModalOpen(true)}
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Crear primera carpeta
-          </Button>
+          {!searchTerm && (
+            <Button size="lg" onClick={() => setIsModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva parrilla
+            </Button>
+          )}
         </div>
       )}
 
