@@ -21,6 +21,7 @@ import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, no
 import { decisionMemory, isTalkEntry, talkVerdict, normalizeResult, resolveEntryRef, talkDecision, MEMORY_DAYS } from '../lib/briaDecisionMemory.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { getPmSessionService } from './briaPmSessionService.js';
+import { liveClientState, createLiveStateCache, LIVE_CLIENTS_TTL_MS } from '../lib/briaLiveState.js';
 import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { projectReadingContext, dailyContextSources } from '../lib/dailyReadingContext.js';
@@ -215,8 +216,20 @@ export const createDailyReadingService = ({
     return { clientIds: mine.length ? new Set(mine) : null, people };
   };
 
+  // El estado vivo de las cuentas: una sola foto para toda la agencia cada dos minutos; cada quien ve su alcance.
+  const liveCache = createLiveStateCache({ ttlMs: LIVE_CLIENTS_TTL_MS, clock: () => now().getTime() });
+
   return {
     scopeFor,
+
+    /** Las cuentas ahora mismo, para ponerlas delante de Bria. Un PM con cuentas asignadas ve las suyas; el resto, la agencia. */
+    async liveClients(user) {
+      const service = this;
+      const { today, clients } = await liveCache('agencia', async () => { const at = now(); const photo = await service.readToday(at); return { today: photo.today, clients: photo.clients, at }; });
+      const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
+      const mine = isAdmin ? [] : clients.filter(client => client.pmId && client.pmId === user?.teamMember?.id);
+      return liveClientState({ clients: mine.length ? mine : clients, today, at: now() });
+    },
 
     /** Cómo amaneció la plataforma. La actividad (tareas cerradas, horas) es la del día anterior completo, en Bogotá. */
     async readToday(at = now()) {

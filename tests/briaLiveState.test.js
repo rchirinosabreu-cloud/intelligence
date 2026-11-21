@@ -84,3 +84,41 @@ test('el servicio arma la foto con buscar_pendientes y los permisos de quien pre
   assert.equal(calls.length, 0, 'sin permiso de Gestión no hay foto del equipo');
   assert.equal(inputs.at(-1).some(item => /Estado de las tareas del equipo/.test(String(item.content))), false);
 });
+
+// Etapa 2: las cuentas.
+const account = (id, name, level, over = {}) => ({ id, name, pmId: over.pmId || null, metrics: { level, reasons: over.reasons || [], cycle: over.cycle === null ? null : { label: 'noviembre', quota: 12, created: 10, published: 6, approved: 8, overdueItems: 0, expected: 6, ...(over.cycle || {}) }, awaitingApproval: 0, returnedPieces: 0, openTasks: 4, overdueTasks: 0, returnedTasks: 0, ...over.metrics } });
+
+test('the account photo leads with what needs attention and keeps calm accounts in one line', async () => {
+  const { liveClientState, liveClientMessage } = await import('../src/lib/briaLiveState.js');
+  const state = liveClientState({ today: '2026-11-21', clients: [
+    account('v', 'Verde SAS', 'green'),
+    account('a', 'Aristea', 'red', { reasons: ['Van 3 piezas menos de las esperadas.'], cycle: { published: 3, expected: 6, overdueItems: 2 }, metrics: { awaitingApproval: 4, returnedPieces: 1, overdueTasks: 3 } }),
+    account('f', 'Foobespain', 'green', { metrics: { awaitingApproval: 1 } }),
+    account('s', 'Sin parrilla', 'gray', { cycle: null })
+  ] });
+  assert.equal(state.total, 4);
+  const lines = state.text.split('\n');
+  assert.match(lines[0], /4 activas; 1 en rojo, 0 en amarillo, 2 en verde, 1 sin medir/);
+  assert.equal(lines[1], '- Aristea (rojo): parrilla de noviembre: 3 de 12 publicadas (deberían ir 6), 8 aprobadas, 10 creadas, 2 piezas atrasadas; 4 piezas esperan aprobación del cliente; 1 pieza devuelta; 3 tareas vencidas de 4 abiertas. Motivo del semáforo: Van 3 piezas menos de las esperadas.');
+  assert.match(lines[2], /^- Foobespain \(verde\): .*1 pieza espera aprobación del cliente\.$/);
+  assert.equal(lines[3], 'Sin novedades (nada espera aprobación, nada devuelto ni vencido): Sin parrilla, Verde SAS (6 de 12).');
+  assert.match(liveClientMessage(state).content, /sin anunciar que vas a consultar/);
+  assert.equal(liveClientMessage(liveClientState({ today: '2026-11-21', clients: [] })), null);
+});
+
+test('one photo serves the agency for two minutes and a project manager sees only their accounts', async () => {
+  const { createDailyReadingService } = await import('../src/services/dailyReadingService.js');
+  let clock = Date.parse('2026-11-21T15:00:00Z'), reads = 0;
+  const service = createDailyReadingService({ db: {}, repository: {}, proactive: {}, conversations: {}, now: () => new Date(clock), logger: { error() {}, warn() {}, info() {} } });
+  service.readToday = async () => { reads += 1; return { today: '2026-11-21', people: [], clients: [account('a', 'Aristea', 'red', { pmId: 'm-camila' }), account('f', 'Foobespain', 'yellow', { pmId: 'm-otro' })] }; };
+  const admin = await service.liveClients({ id: 'u1', role: 'ADMIN' });
+  assert.match(admin.text, /Aristea/); assert.match(admin.text, /Foobespain/);
+  const pm = await service.liveClients({ id: 'u2', role: 'PROJECT_MANAGER', teamMember: { id: 'm-camila' } });
+  assert.match(pm.text, /Aristea/); assert.doesNotMatch(pm.text, /Foobespain/);
+  const unassigned = await service.liveClients({ id: 'u3', role: 'PROJECT_MANAGER', teamMember: { id: 'm-nadie' } });
+  assert.match(unassigned.text, /Foobespain/, 'sin cuentas asignadas lee la agencia, como en la lectura');
+  assert.equal(reads, 1);
+  clock += 121_000;
+  await service.liveClients({ id: 'u1', role: 'ADMIN' });
+  assert.equal(reads, 2);
+});

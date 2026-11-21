@@ -175,6 +175,7 @@ export const createBriaAssistantService = ({
           ...(teamTasks ? { liveState: () => liveCache(person.userId, readLive) } : {}),
           // El libro de decisiones va delante de quien dirige: lo propuesto, lo decidido y lo que pasó.
           ...(pmPlan ? { pmSession: () => pmCache(user.id, () => pmPlan.today(user, now())) } : {}),
+          ...(typeof readings?.liveClients === 'function' ? { liveClients: () => readings.liveClients(user) } : {}),
           ...(decisionBook ? { decisionMemory: () => bookCache(user.id, () => decisionBook.decisionMemory(user)) } : {}),
           ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
