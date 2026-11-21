@@ -46,6 +46,9 @@ import { briaInvestigationTools } from './briaInvestigationTools.js';
 import { getBriaNotebookService } from './briaNotebookService.js';
 import { getQuickBrain } from './briaQuickBrain.js';
 import { liveTaskState, createLiveStateCache } from '../lib/briaLiveState.js';
+import { DECISION_MEMORY_TTL_MS } from '../lib/briaDecisionMemory.js';
+import { isManagerRole } from '../config/security.js';
+import { getPmSessionService } from './briaPmSessionService.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -71,6 +74,7 @@ export const createBriaAssistantService = ({
   dailyReading = getDailyReadingService,
   serviceHealth = serviceHealthService,
   notebook = getBriaNotebookService,
+  pmSession,
   quick = getQuickBrain
 } = {}) => {
   // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
@@ -84,6 +88,8 @@ export const createBriaAssistantService = ({
     catch (error) { logger.error('[BriaAssistant] Los buzones no están disponibles:', error.message); return null; }
   };
   const liveCache = createLiveStateCache({ clock: () => now().getTime() });
+  const pmCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
+  const bookCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
   const loadPerson = async (user) => {
     const row = await db.user.findUnique({
       where: { id: user?.userId || user?.id || '' },
@@ -132,6 +138,10 @@ export const createBriaAssistantService = ({
       const quickBrain = channel === 'voz' && !attachments.some(file => file.current !== false) ? (typeof quick === 'function' ? quick() : quick) : null;
       // El estado vivo: las tareas del equipo, con la misma herramienta y los permisos de quien pregunta, una vez por minuto.
       const teamTasks = allTools.find(tool => tool.name === 'buscar_pendientes' && tool.allowed(user));
+      const readings = isManagerRole(user?.role) ? (typeof dailyReading === 'function' ? dailyReading() : dailyReading) : null;
+      // Con dependencias inyectadas (pruebas) solo corre la sesión que se inyecte; en producción, la del servicio.
+      const pmPlan = String(user?.role || '').toUpperCase() === 'ADMIN' ? (pmSession === undefined ? (dailyReading === getDailyReadingService ? getPmSessionService() : null) : (typeof pmSession === 'function' ? pmSession() : pmSession)) : null;
+      const decisionBook = typeof readings?.decisionMemory === 'function' ? readings : null;
       const readLive = async () => {
         const today = bogotaDate(now()), toolContext = { db, user, person, today, now };
         const [overdue, open] = await Promise.all([teamTasks.run({ vencidas: true }, toolContext), teamTasks.run({}, toolContext)]);
@@ -163,6 +173,9 @@ export const createBriaAssistantService = ({
           // La vía rápida solo existe en voz y solo si el servicio tiene la clave de la API de Claude.
           ...(quickBrain ? { quick: quickBrain } : {}),
           ...(teamTasks ? { liveState: () => liveCache(person.userId, readLive) } : {}),
+          // El libro de decisiones va delante de quien dirige: lo propuesto, lo decidido y lo que pasó.
+          ...(pmPlan ? { pmSession: () => pmCache(user.id, () => pmPlan.today(user, now())) } : {}),
+          ...(decisionBook ? { decisionMemory: () => bookCache(user.id, () => decisionBook.decisionMemory(user)) } : {}),
           ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });

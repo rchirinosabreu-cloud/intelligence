@@ -53,3 +53,5 @@ Lo que sí se exige:
 - **Pruebas reales** solo contra `TEST_DATABASE_URL` aislada, nunca contra la base que indica `.env`.
 
 Desde el 23 de octubre de 2026, `decision_log.revision` protege las correcciones humanas frente a un seguimiento calculado con una versión anterior; `decision_events` conserva el recorrido. La lectura de la mañana añade `conversation_id` opcional a `whatsapp_alerts` para retomar el chat original después de seleccionar explícitamente «Revisar lectura».
+Desde el 21 de noviembre de 2026, `decision_log` también guarda lo que Bria propone en conversación (id `charla:día:asunto`) y `outcome_source` dice si el resultado lo dieron las señales (`SENALES`) o lo contó la persona (`PERSONA`).
+Desde el 21 de noviembre de 2026, `pm_sessions` guarda la sesión diaria de project manager de Bria: una fila por día hábil con sus propuestas ya validadas (riesgos, movimientos de tareas y lo que se le debe a cada cliente); no guarda el texto enviado al modelo.

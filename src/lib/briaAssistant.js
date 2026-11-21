@@ -25,6 +25,8 @@ import { temporalRelation } from './briaTemporalEvidence.js';
 import { unsupportedFigures } from './briaFigures.js';
 import { notebookMessage } from './briaNotebook.js';
 import { liveStateMessage } from './briaLiveState.js';
+import { decisionMemoryMessage } from './briaDecisionMemory.js';
+import { pmSessionMessage } from './briaPmSession.js';
 import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS } from './briaQuick.js';
 export { humanDate } from './briaDate.js';
 
@@ -280,11 +282,13 @@ export const runAssistant = async ({
   const turnStartedAt = Date.now(), timings = { rounds: [] };
   // Memoria, cuaderno y resumen del día se leen a la vez y entran en ese orden, antes del mensaje de la persona,
   // que sigue siendo lo último que lee el modelo. Sin cualquiera de los tres se responde igual.
-  const [recalledRead, notebookRead, briefRead, liveRead] = await Promise.allSettled([
+  const [recalledRead, notebookRead, briefRead, liveRead, bookRead, pmRead] = await Promise.allSettled([
     context.recallMemory ? context.recallMemory({ question, history }) : null,
     context.notebook ? context.notebook() : null,
     context.dayBrief ? context.dayBrief() : null,
-    context.liveState ? context.liveState() : null
+    context.liveState ? context.liveState() : null,
+    context.decisionMemory ? context.decisionMemory() : null,
+    context.pmSession ? context.pmSession() : null
   ]);
   const notes = [];
   const before = (message) => { input.splice(input.length - 1, 0, message); evidence.push(message.content); notes.push(message.content); };
@@ -317,6 +321,12 @@ export const runAssistant = async ({
   // ella se responde igual, consultando.
   if (liveRead.status === 'fulfilled') { const message = liveStateMessage(liveRead.value); if (message) before(message); }
   else logger.error('[BriaAssistant] No se pudo leer el estado vivo:', describeError(liveRead.reason));
+  // El libro de decisiones (21 de noviembre de 2026): qué propuso Bria, qué se decidió y qué pasó. Sin él se responde igual.
+  if (bookRead.status === 'fulfilled') { const message = decisionMemoryMessage(bookRead.value); if (message) before(message); }
+  else logger.error('[BriaAssistant] No se pudo leer el libro de decisiones:', describeError(bookRead.reason));
+  // La sesión de project manager de hoy (21 de noviembre de 2026): lo que Bria ya revisó esta mañana.
+  if (pmRead.status === 'fulfilled') { const message = pmSessionMessage(pmRead.value); if (message) before(message); }
+  else logger.error('[BriaAssistant] No se pudo leer la sesión de project manager:', describeError(pmRead.reason));
   timings.before = Date.now() - turnStartedAt;
 
   const finish = (text = '') => {
