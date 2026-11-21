@@ -28,6 +28,7 @@ import { liveStateMessage, liveClientMessage } from './briaLiveState.js';
 import { liveDayMessage } from './briaLiveDay.js';
 import { decisionMemoryMessage } from './briaDecisionMemory.js';
 import { pmSessionMessage } from './briaPmSession.js';
+import { operationModelMessage } from './briaOperationModel.js';
 import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS } from './briaQuick.js';
 export { humanDate } from './briaDate.js';
 
@@ -283,7 +284,7 @@ export const runAssistant = async ({
   const turnStartedAt = Date.now(), timings = { rounds: [] };
   // Memoria, cuaderno y resumen del día se leen a la vez y entran en ese orden, antes del mensaje de la persona,
   // que sigue siendo lo último que lee el modelo. Sin cualquiera de los tres se responde igual.
-  const [recalledRead, notebookRead, briefRead, liveRead, bookRead, pmRead, clientsRead, dayRead] = await Promise.allSettled([
+  const [recalledRead, notebookRead, briefRead, liveRead, bookRead, pmRead, clientsRead, dayRead, modelRead] = await Promise.allSettled([
     context.recallMemory ? context.recallMemory({ question, history }) : null,
     context.notebook ? context.notebook() : null,
     context.dayBrief ? context.dayBrief() : null,
@@ -291,7 +292,8 @@ export const runAssistant = async ({
     context.decisionMemory ? context.decisionMemory() : null,
     context.pmSession ? context.pmSession() : null,
     context.liveClients ? context.liveClients() : null,
-    context.liveDay ? context.liveDay() : null
+    context.liveDay ? context.liveDay() : null,
+    context.operationModel ? context.operationModel() : null
   ]);
   const notes = [];
   const before = (message) => { input.splice(input.length - 1, 0, message); evidence.push(message.content); notes.push(message.content); };
@@ -336,6 +338,9 @@ export const runAssistant = async ({
   // La sesión de project manager de hoy (21 de noviembre de 2026): lo que Bria ya revisó esta mañana.
   if (pmRead.status === 'fulfilled') { const message = pmSessionMessage(pmRead.value); if (message) before(message); }
   else logger.error('[BriaAssistant] No se pudo leer la sesión de project manager:', describeError(pmRead.reason));
+  // El modelo de la operación: lo que Bria concluyó esta semana al mirar cuatro semanas juntas.
+  if (modelRead.status === 'fulfilled') { const message = operationModelMessage(modelRead.value); if (message) before(message); }
+  else logger.error('[BriaAssistant] No se pudo leer el modelo de la operación:', describeError(modelRead.reason));
   timings.before = Date.now() - turnStartedAt;
 
   const finish = (text = '') => {

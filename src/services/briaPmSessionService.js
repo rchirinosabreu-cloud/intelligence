@@ -8,6 +8,8 @@ import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { decisionMemory, MEMORY_DAYS } from '../lib/briaDecisionMemory.js';
 import { buildPmDigest, buildPmRequest, parsePmSession, validatePmSession, PM_HORIZON_DAYS } from '../lib/briaPmSession.js';
+import { buildOperationDigest, buildOperationRequest, parseOperationModel, validateOperationModel, operationModelText, OPERATION_DAYS } from '../lib/briaOperationModel.js';
+import { weekKeyOf } from '../lib/weeklyReading.js';
 import { OPEN_TASK_STATUSES } from './taskSearch.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { getPmBrain } from './briaPmBrain.js';
@@ -19,7 +21,7 @@ const isAdmin = (user) => String(user?.role || '').toUpperCase() === 'ADMIN';
 export const createPmSessionService = ({ db = prisma, repository, brain = getPmBrain, now = () => new Date(), logger = console } = {}) => {
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const model = () => (typeof brain === 'function' ? brain() : brain);
-  const attempts = new Map();
+  const attempts = new Map(), modelAttempts = new Map();
 
   const readTeam = async (today) => {
     const open = { AND: [activeTaskSourceWhere], status: { in: OPEN_TASK_STATUSES }, isPrivate: false };
@@ -64,6 +66,51 @@ export const createPmSessionService = ({ db = prisma, repository, brain = getPmB
         logger.error?.('[BriaPmSession] No se pudo hacer la sesión de hoy:', error?.message || error);
         return null;
       }
+    },
+
+    /**
+     * El modelo de la operación de esta semana: el guardado, o uno nuevo el primer día hábil en que haya modelo y
+     * fotos suficientes. Mira solo cuentas. Nunca lanza.
+     */
+    async ensureModel(at = now()) {
+      const today = bogotaDate(at), weekKey = weekKeyOf(at);
+      try {
+        const existing = await repo.operationModel(weekKey);
+        if (existing) return existing;
+        const thinker = model();
+        if (!thinker || !isBusinessDay(today)) return null;
+        const tried = modelAttempts.get(today) || 0;
+        if (tried >= PM_MAX_ATTEMPTS) return null;
+        modelAttempts.clear(); modelAttempts.set(today, tried + 1);
+        // Hasta hoy inclusive: la foto de hoy ya se tomó antes de la lectura.
+        const tomorrow = bogotaDate(new Date(Date.parse(`${today}T12:00:00Z`) + DAY));
+        const [history, entries, sessions, previous] = await Promise.all([
+          repo.history(tomorrow, OPERATION_DAYS), repo.recentDecisions(today, { days: MEMORY_DAYS }),
+          repo.pmSessionsSince(bogotaDate(new Date(Date.parse(`${today}T12:00:00Z`) - 7 * DAY))), repo.latestOperationModel()
+        ]);
+        const lastDay = history.at(-1)?.day;
+        const names = new Map(lastDay ? (await repo.snapshot(lastDay)).clients.map((client) => [client.id, client.name]) : []);
+        const digest = buildOperationDigest({ today, weekKey, history, names, book: decisionMemory({ entries, today }).text, sessions, previous: operationModelText(previous) });
+        if (!digest) return null;
+        const answer = await thinker.plan(buildOperationRequest({ digest }));
+        const result = validateOperationModel(parseOperationModel(answer.text), digest);
+        if (result.rejected) logger.warn?.('[BriaOperationModel] Conclusiones sin sustento descartadas:', result.rejected);
+        if (result.empty) return null;
+        const saved = await repo.saveOperationModel(weekKey, { ...result, model: answer.model || null, usage: answer.usage || null });
+        logger.info?.(`[BriaOperationModel] Semana ${weekKey}: fotos=${digest.days} patrones=${result.patterns.length} cuellos=${result.bottlenecks.length} aprendizajes=${result.lessons.length} vigilar=${result.watch.length} descartadas=${result.rejected}`);
+        return saved;
+      } catch (error) {
+        logger.error?.('[BriaOperationModel] No se pudo hacer el modelo de la semana:', error?.message || error);
+        return null;
+      }
+    },
+
+    /** El modelo más reciente, para quien dirige la agencia. Va con la sesión: solo administración. */
+    async operationModel(user, at = now()) {
+      if (!isAdmin(user)) return null;
+      const latest = await repo.latestOperationModel();
+      // Un modelo de hace más de tres semanas ya no describe la operación de hoy.
+      return latest?.day && Date.parse(`${bogotaDate(at)}T12:00:00Z`) - Date.parse(`${latest.day}T12:00:00Z`) <= 21 * DAY ? latest : null;
     },
 
     /** La sesión de hoy para quien dirige la agencia. Habla de la carga de todo el equipo: solo administración. */

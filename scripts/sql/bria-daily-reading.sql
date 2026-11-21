@@ -131,3 +131,14 @@ CREATE TABLE IF NOT EXISTS bria_memory.pm_sessions (
   usage JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- El modelo de la operación (21 de noviembre de 2026): lo que Bria concluye una vez por semana al mirar cuatro semanas
+-- de fotos de las cuentas, ya validado contra los datos. Una fila por semana; no guarda el texto enviado al modelo.
+CREATE TABLE IF NOT EXISTS bria_memory.operation_models (
+  week_key TEXT PRIMARY KEY CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),
+  day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  model JSONB NOT NULL,
+  model_name TEXT,
+  usage JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
