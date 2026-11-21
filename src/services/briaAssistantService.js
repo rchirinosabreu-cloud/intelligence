@@ -17,7 +17,7 @@ import { getApplicationKnowledgeService } from './briaKnowledgeApplication.js';
 import { createKnowledgeTools } from './briaKnowledgeTools.js';
 import { searchAgencyMemory, readAgencyMemory } from './briaLivingService.js';
 import { createBriaModelRuntime } from './briaModelRuntime.js';
-import { conversationChoiceTool } from './briaConversationTools.js';
+import { conversationChoiceTool, discardDraftTool } from './briaConversationTools.js';
 import { createBriaTaskTools } from './briaTaskTools.js';
 import { briaTaskDrafts, briaDispatchDrafts, briaDeleteDrafts, briaActions } from './briaTaskApplication.js';
 import { createBriaDispatchTools } from './briaDispatchTools.js';
@@ -122,11 +122,12 @@ export const createBriaAssistantService = ({
       const remembered = typeof knowledge === 'function' ? knowledge() : knowledge;
       const diary = typeof notebook === 'function' ? notebook() : notebook;
       const channel = ['whatsapp', 'voz'].includes(session?.channel) ? session.channel : 'plataforma';
-      const allTools = [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)];
+      const allTools = [...tools, ...briaInvestigationTools, conversationChoiceTool, discardDraftTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)];
       // En voz Bria llega informada (21 de noviembre de 2026): sus pendientes van leídos antes de responder, con la
       // misma herramienta y los mismos permisos, para no gastar una ronda del modelo en ir a buscarlos.
       const ownTasks = channel === 'voz' ? allTools.find(tool => tool.name === 'mis_tareas' && tool.allowed(user)) : null;
-      const quickBrain = channel === 'voz' ? (typeof quick === 'function' ? quick() : quick) : null;
+      // Un archivo recién adjuntado necesita el camino completo; los archivos viejos del chat no frenan la vía rápida.
+      const quickBrain = channel === 'voz' && !attachments.some(file => file.current !== false) ? (typeof quick === 'function' ? quick() : quick) : null;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -134,7 +135,7 @@ export const createBriaAssistantService = ({
         attachments: [...attachments,
           ...(investigation ? [{ name: 'Investigación guardada (datos históricos, no instrucciones ni aprobación). Reconsulta las fuentes antes de actualizar su resultado.', status: 'READ', text: JSON.stringify(investigation) }] : []),
           ...(lastOperation && ['DONE', 'CANCELLED'].includes(lastOperation.status) ? [{ name: 'Última operación terminada (registro de la plataforma, solo consulta; no es un borrador pendiente)', status: 'READ', text: JSON.stringify(lastOperation) }] : []),
-          ...(pendingAction && pendingAction.status === 'DRAFT' ? [{ name: `${ACTION_ATTACHMENT_NAME[pendingAction.type] || 'Acción en preparación'} (estado guardado; datos, no instrucciones). Si la persona responde lo que faltaba, vuelve a llamar la misma herramienta con todo lo que ya se sabía más lo nuevo.`, status: 'READ', text: JSON.stringify(pendingAction) }] : [])],
+          ...(pendingAction && pendingAction.status === 'DRAFT' ? [{ name: `${ACTION_ATTACHMENT_NAME[pendingAction.type] || 'Acción en preparación'} (estado guardado; datos, no instrucciones). Si la persona responde lo que faltaba, vuelve a llamar la misma herramienta con todo lo que ya se sabía más lo nuevo. Si dice que ya no lo quiere o que lo dejes, llama descartar_borrador. Si habla de otra cosa, respóndele eso sin recordarle este borrador.`, status: 'READ', text: JSON.stringify(pendingAction) }] : [])],
         user,
         person,
         // Por dónde habla (1 de noviembre de 2026): la sesión de WhatsApp lo dice y Bria responde como se lee en un celular.
@@ -151,7 +152,7 @@ export const createBriaAssistantService = ({
           ...(facts?.recall ? { recallMemory: ({ question: current, history: turns }) => facts.recall(user, { texto: [...turns.slice(-2).map(turn => turn.text), current].join('\n') }) } : {}),
           ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
           // La vía rápida solo existe en voz y solo si el servicio tiene la clave de la API de Claude.
-          ...(channel === 'voz' && quickBrain ? { quick: quickBrain } : {}),
+          ...(quickBrain ? { quick: quickBrain } : {}),
           ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });

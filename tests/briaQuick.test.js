@@ -93,13 +93,14 @@ test('los mensajes empiezan por la persona, alternan y llevan lo leído antes de
   assert.deepEqual(QUICK_TOOL.input_schema.properties, {});
 });
 
-test('solo un turno hablado limpio va por la vía rápida', () => {
+test('va por la vía rápida un turno hablado sin borrador en curso, aunque la conversación tenga historia', () => {
   const quick = { answer: async () => ({}) };
   assert.equal(quickTurn({ channel: 'voz', context: { quick } }), true);
   assert.equal(quickTurn({ channel: 'voz', context: {} }), false);
   assert.equal(quickTurn({ channel: 'plataforma', context: { quick } }), false);
-  assert.equal(quickTurn({ channel: 'voz', attachments: [{ name: 'a' }], context: { quick } }), false);
-  for (const busy of ['pendingAction', 'investigation', 'reviewRequested', 'selectionTurn']) assert.equal(quickTurn({ channel: 'voz', context: { quick, [busy]: { id: 1 } } }), false, busy);
+  // En una conversación guardada siempre hay `selectionTurn`, y suele haber un seguimiento y archivos viejos.
+  assert.equal(quickTurn({ channel: 'voz', context: { quick, selectionTurn: 'c1:4', investigation: { id: 'i1' }, pendingAction: null } }), true);
+  for (const busy of ['pendingAction', 'reviewRequested']) assert.equal(quickTurn({ channel: 'voz', context: { quick, [busy]: { id: 1 } } }), false, busy);
 });
 
 const turn = ({ quick, generate, events = [], lines = [], question = '¿Qué tengo hoy?', history = [], tools = [] }) => runAssistant({
@@ -155,6 +156,35 @@ test('el servicio solo ofrece la vía rápida en voz y cuando existe', async () 
   assert.equal(voice.answer, 'Hola, Rodny.'); assert.equal(generated.length, 0);
   const written = await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola' });
   assert.equal(written.answer, 'Hola desde el modelo grande.'); assert.equal(asked.length, 1, 'el chat escrito no pasa por la vía rápida');
+  // Como llega de una conversación guardada: con su turno, un archivo viejo del chat y la última operación.
+  const saved = { session: { channel: 'voz' }, selectionTurn: 'c1:7', lastOperation: { id: 'a1', type: 'TASK_UPDATE', status: 'DONE', title: 'Cambio', result: 'Listo.' }, attachments: [{ id: 'f1', name: 'viejo.pdf', current: false, status: 'READ', text: 'x' }] };
+  assert.equal((await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola', ...saved })).answer, 'Hola, Rodny.');
+  const fresh = await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Mira esto', ...saved, attachments: [{ id: 'f2', name: 'nuevo.pdf', current: true, status: 'READ', text: 'x' }] });
+  assert.equal(fresh.answer, 'Hola desde el modelo grande.', 'un archivo recién adjuntado va por el camino completo');
+  const drafting = await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola', ...saved, pendingAction: { id: 'a2', type: 'TASK_UPDATE', status: 'DRAFT', title: 'Cambio' } });
+  assert.equal(drafting.answer, 'Hola desde el modelo grande.', 'con un borrador en curso responde el camino completo');
   const off = await createBriaAssistantService({ ...base, quick: () => null }).ask({ user: user(), question: 'Hola', session: { channel: 'voz' } });
   assert.equal(off.answer, 'Hola desde el modelo grande.');
+});
+
+test('Bria puede descartar el borrador en curso cuando se lo piden con cualquier palabra', async () => {
+  const { discardDraftTool } = await import('../src/services/briaConversationTools.js');
+  assert.deepEqual((await discardDraftTool.run({}, {})).data.descartado, false);
+  assert.equal((await discardDraftTool.run({}, { pendingAction: { id: 'a0', status: 'DONE' } })).pendingAction, undefined);
+  const draft = { id: 'a1', type: 'TASK_CREATE', status: 'DRAFT', title: 'Pendiente nuevo', draft: { status: 'DRAFT', items: [] } };
+  const seen = [];
+  const result = await runAssistant({
+    question: 'No, deja eso así, ya no lo quiero. ¿Qué más tengo?', person: { name: 'Rodny' }, user: { id: 'u1', role: 'ADMIN', modulePermissions: { bria: true } }, today: '2026-11-21', channel: 'voz', tools: [discardDraftTool],
+    ai: { generate: async (request) => { seen.push(request); return seen.length === 1
+      ? { text: '', functionCalls: [{ id: 'c1', name: 'descartar_borrador', args: {} }], output: [] }
+      : { text: 'Listo, lo descarté.', functionCalls: [], output: [] }; } },
+    logger: { info: () => {}, error: () => {}, warn: () => {} }, context: { pendingAction: draft }
+  });
+  assert.equal(result.answer, 'Listo, lo descarté.', 'sin documento de aprobación pegado');
+  assert.deepEqual({ status: result.pendingAction.status, draft: result.pendingAction.draft.status }, { status: 'CANCELLED', draft: 'CANCELLED' });
+  assert.equal(result.quickReplies, undefined, 'no ofrece confirmar algo descartado');
+  const output = JSON.parse(seen[1].input.at(-1).output);
+  assert.equal(output.descartado, true); assert.equal(output.instruccionRespuesta, undefined);
+  const service = (await import('node:fs')).readFileSync('src/services/briaAssistantService.js', 'utf8');
+  assert.match(service, /conversationChoiceTool, discardDraftTool/); assert.match(service, /llama descartar_borrador/);
 });

@@ -4,7 +4,7 @@ import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAt
 import { PREVIEW_MAX_BYTES as BRIA_PREVIEW_MAX_BYTES } from '../lib/briaComposer.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
 import { isTaskDraftStarter } from '../lib/briaTaskDraft.js';
-import { actionReply, actionStage, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
+import { actionReply, actionStage, closeAction, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { createBriaActionService } from './briaActionService.js';
 import { normalizeRating, turnPosition } from '../lib/briaRating.js';
 import { hasCurrentApprovalReview } from '../lib/briaResponse.js';
@@ -139,7 +139,6 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           await resolveActor(user);
           if (!await authorizeTurn(user, { pendingAction })) throw knowledgeError('Tu acceso para esta acción cambió.', 403);
         };
-        const closeAction = (action, status) => ({ ...action, status, ...(action.draft ? { draft: { ...action.draft, status } } : {}) });
         // Un sí o un no dicho con naturalidad («dale, así está bien») solo cuenta si lo último que dijo Bria es el
         // resumen de esta acción. Un borrador de pendiente sobrevive a preguntas sueltas, y un «ok, gracias» varios
         // mensajes después no puede crear nada.
