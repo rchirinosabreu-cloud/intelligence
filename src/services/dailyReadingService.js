@@ -20,6 +20,7 @@ import { buildDailyDigest, buildDailyReadingRequest, buildDailyReadingCorrection
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
 import { decisionMemory, isTalkEntry, talkVerdict, normalizeResult, resolveEntryRef, talkDecision, MEMORY_DAYS } from '../lib/briaDecisionMemory.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
+import { getPmSessionService } from './briaPmSessionService.js';
 import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { projectReadingContext, dailyContextSources } from '../lib/dailyReadingContext.js';
@@ -172,8 +173,10 @@ export const readDailyMemoryContext = async ({ clients, user, db, operations, so
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
   criteria = readDailyCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
-  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext, agenda
+  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext, agenda, pmSession
 } = {}) => {
+  // La sesión de project manager. Con almacenes inyectados (pruebas y muestras) solo corre la que se inyecte.
+  const pmOf = () => pmSession === undefined ? (repository || proactive || conversations ? null : getPmSessionService()) : (typeof pmSession === 'function' ? pmSession() : pmSession);
   // El día de la persona (correo y reuniones). Con almacenes inyectados (pruebas y muestras) solo corre el que se inyecte.
   const agendaOf = agenda || (repository || proactive || conversations ? null : (user, at) => getMorningAgendaService().forUser(user, at));
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
@@ -462,7 +465,11 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
         try { day = await agendaOf(user, now()); }
         catch (error) { logger.error('[DailyReading] Sin la agenda ni el correo esta vez:', error?.message || error); }
       }
-      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions, agenda: day });
+      // La revisión de project manager habla de la carga de todo el equipo: va solo a administración.
+      let pm = null;
+      try { pm = await pmOf()?.today(user, now()) || null; }
+      catch (error) { logger.error('[DailyReading] Sin la sesión de project manager esta vez:', error?.message || error); }
+      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions, agenda: day, pm });
       const scope = scopeFor(user, reading);
       const sources = [...new Map([...dailyContextSources({ ...reading.context, accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }), ...(decisions?.sources || [])].map(source => [`${source.kind}:${source.id}`, source])).values()];
       const store = chats();
@@ -484,6 +491,8 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       if (!isBusinessDay(today) || minutes < READING_FROM) return { dayKey: today, ...done };
       const reading = await this.generateReading(at);
       done.reading = reading?.source || null;
+      // La sesión de project manager, después de la lectura y antes de entregarla. Nunca frena la entrega.
+      if (reading) { const session = await pmOf()?.ensure(at); if (session) done.pm = session.risks?.length || 0; }
       if (minutes < BRIEF_FROM || !reading) return { dayKey: today, ...done };
       let delivered = 0, already = 0, failed = 0;
       for (const user of await listPeople(db)) {

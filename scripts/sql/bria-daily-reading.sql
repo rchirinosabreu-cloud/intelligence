@@ -121,3 +121,13 @@ CREATE TABLE IF NOT EXISTS bria_memory.daily_readings (
   usage JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- La sesión diaria de project manager (21 de noviembre de 2026): lo que Bria propuso sobre las tareas del equipo cada
+-- día hábil, ya validado contra los datos. Una fila por día; no guarda el texto enviado al modelo.
+CREATE TABLE IF NOT EXISTS bria_memory.pm_sessions (
+  day_key TEXT PRIMARY KEY CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  session JSONB NOT NULL,
+  model TEXT,
+  usage JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

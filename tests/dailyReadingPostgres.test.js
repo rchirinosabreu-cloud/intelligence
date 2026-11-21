@@ -196,6 +196,10 @@ test('real PostgreSQL: a result told by the person is saved the same day, with i
     const saved = await repo.recordDecision({ decision, dayKey: day, user, verdict: 'HECHO', decidedAt: new Date(`${day}T15:00:00Z`) });
     assert.equal(await repo.reportOutcome(saved.id, { outcome: 'MEJORO', text: 'Según Dirección: funcionó', day, expectedRevision: 1 }), true);
     assert.equal(await repo.reportOutcome(saved.id, { outcome: 'MEJORO', text: 'x', day, expectedRevision: 7 }), false, 'a stale revision is rejected');
+    // La sesión de project manager: una por día; la primera que se guarda queda.
+    assert.equal(await repo.pmSession(day), null);
+    assert.deepEqual(await repo.savePmSession(day, { day, summary: 'Primera', risks: [], model: 'm', usage: { input_tokens: 1 } }), { day, summary: 'Primera', risks: [], model: 'm', usage: { input_tokens: 1 } });
+    assert.equal((await repo.savePmSession(day, { day, summary: 'Segunda' })).summary, 'Primera');
     const [told] = await repo.recentDecisions(day, { userRef: user.ref });
     assert.deepEqual([told.outcome, told.outcomeSource, told.outcomeDay], ['MEJORO', 'PERSONA', day]);
     assert.deepEqual(told.history.at(-1), { type: 'OUTCOME', revision: 1, outcome: 'MEJORO', text: 'Según Dirección: funcionó', day, source: 'PERSONA' });

@@ -78,6 +78,17 @@ export const createDailyReadingRepository = ({ pool }) => ({
     return rows.map((row) => row.reading);
   },
 
+  /* ---- La sesión diaria de project manager (21 de noviembre de 2026): una por día; la primera que se guarda queda. ---- */
+  async savePmSession(dayKey, session) {
+    await pool.query('INSERT INTO bria_memory.pm_sessions(day_key,session,model,usage) VALUES($1,$2,$3,$4) ON CONFLICT (day_key) DO NOTHING',
+      [dayKey, JSON.stringify(session), session.model || null, session.usage ? JSON.stringify(session.usage) : null]);
+    return this.pmSession(dayKey);
+  },
+  async pmSession(dayKey) {
+    const { rows } = await pool.query('SELECT session FROM bria_memory.pm_sessions WHERE day_key=$1', [dayKey]);
+    return rows[0]?.session || null;
+  },
+
   /* ---- El libro de decisiones (19 de octubre de 2026) ---- */
 
   /** Repetir es inocuo; corregir abre otra revisión y conserva la historia anterior. */
