@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BRIA_AUDIO_MAX_BYTES } from '@/lib/briaAttachments';
 import { levelOf, pushLevel, previewDue } from '@/lib/briaComposer';
-import { hearTurn } from '@/lib/briaVoice';
+import { hearTurn, VOICE_MIC } from '@/lib/briaVoice';
 
 // Un solo dictado para toda Bria (11 de octubre de 2026): el chat y la consulta rápida desde la mascota graban,
 // acotan y transcriben igual. El audio va al servidor (`POST /dictation`) y el texto vuelve por `onText`; quien
@@ -29,9 +29,9 @@ const meter = (stream, onLevel) => {
 // En manos libres no se pide el adelanto: en la pantalla de voz no se muestra texto.
 // Manos libres (la voz de Bria, mismo día): con `handsFree`, el dictado se cierra solo cuando la persona ya habló y
 // calla un rato (`hearTurn`), y si pasan `idleMs` sin que diga nada, se cancela y avisa por `onIdle`.
-export function useBriaDictation({ request, active = true, disabled = false, handsFree = false, idleMs = 45000, onText, onError, onBusy, onIdle }) {
+export function useBriaDictation({ request, active = true, disabled = false, handsFree = false, idleMs = 45000, onText, onError, onBusy, onIdle, onSpeech, speechGate }) {
   const recording = useRef(null), mounted = useRef(true), isActive = useRef(active), generation = useRef(0), timer = useRef(null);
-  const callbacks = useRef({}); callbacks.current = { onText, onError, onBusy, onIdle };
+  const callbacks = useRef({}); callbacks.current = { onText, onError, onBusy, onIdle, onSpeech, speechGate };
   const [voice, setVoice] = useState('idle'), [seconds, setSeconds] = useState(0), [retryAudio, setRetryAudio] = useState(null), [levels, setLevels] = useState([]), [preview, setPreview] = useState('');
   const changeVoice = status => { setVoice(status); callbacks.current.onBusy?.(status !== 'idle'); };
   const fail = message => callbacks.current.onError?.(message);
@@ -67,7 +67,8 @@ export function useBriaDictation({ request, active = true, disabled = false, han
     const current = ++generation.current;
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('Este navegador no permite grabar dictados.');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // En manos libres se pide cancelación de eco: Bria puede estar hablando por los parlantes mientras se escucha.
+      const stream = await navigator.mediaDevices.getUserMedia(handsFree ? VOICE_MIC : { audio: true });
       if (!mounted.current || !isActive.current || current !== generation.current) { stream.getTracks().forEach(track => track.stop()); return; }
       const mimeType = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find(type => MediaRecorder.isTypeSupported(type));
       recording.current = { stream };
@@ -93,7 +94,10 @@ export function useBriaDictation({ request, active = true, disabled = false, han
         setLevels(current => pushLevel(current, value));
         if (!handsFree) return;
         const at = Date.now() - session.startedAt;
-        session.turn = hearTurn(session.turn, { level: value, at });
+        // `speechGate` sube el umbral mientras Bria habla; `onSpeech` avisa una vez, cuando la persona empieza a hablar.
+        const spokeBefore = Boolean(session.turn?.spoke);
+        session.turn = hearTurn(session.turn, { level: value, at, ...(callbacks.current.speechGate?.() || {}) });
+        if (session.turn.spoke && !spokeBefore) callbacks.current.onSpeech?.();
         if (session.turn.done) stop();
         else if (!session.turn.spoke && at >= idleMs) { cancel(); callbacks.current.onIdle?.(); }
       });

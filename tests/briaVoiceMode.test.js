@@ -134,7 +134,8 @@ test('la pantalla de voz: fases, qué se dice y cómo se abre', async () => {
   // Hablar mientras escribe: la pantalla recibe el texto en vivo y manda a decir cada frase completa.
   assert.match(mode, /nextSpeech\(liveText, state\.said, \{ first: state\.total === 0 \}\)/);
   assert.match(conversation, /liveText=\{live\.text\}/); assert.match(conversation, /send\(said, \{ channel: 'voz' \}\)/);
-  assert.match(mode, /!paused && !busy && voice === 'idle'/, 'no se graba mientras Bria todavía escribe');
+  // Desde el 21 de noviembre de 2026 también se graba mientras Bria habla, para poder interrumpirla; al escuchar sigue igual.
+  assert.match(mode, /phase === 'listening' && !busy && !held\.current/, 'en su turno no se graba mientras Bria todavía escribe');
   // Funciones puras, copiadas de sus módulos para probarlas sin el empaquetador.
   const pure = [mode.match(/export const replyToSpeak = [^\n]+/)[0], mode.match(/export const orbLevel = [^\n]+/)[0], orb.match(/export const orbEnergy = [\s\S]*?\n};/)[0]].join('\n');
   const { orbEnergy, orbLevel, replyToSpeak } = await import(`data:text/javascript,${encodeURIComponent(pure)}`);
@@ -219,4 +220,25 @@ test('la voz sale con Eleven v4 Turbo por la ruta de diálogo y vuelve a Flash s
   assert.deepEqual(calls.map(call => call[1]), ['eleven_v4_turbo'], 'pasado un rato vuelve a intentar');
   const out = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async () => {} }, logger: { error() {} }, fetchImpl: async () => new Response('{}', { status: 429 }) });
   await assert.rejects(out.speak({ text: 'Hola' }), { code: 'VOICE_QUOTA' }, 'sin créditos no se reintenta con otro modelo');
+});
+
+test('interrumpir hablando: mientras Bria habla el micrófono sigue oyendo, con un umbral más alto y cancelación de eco', async () => {
+  const { VOICE_BARGE, VOICE_MIC, VOICE_SPEECH_LEVEL, VOICE_MIN_SPEECH_MS } = await import('../src/lib/briaVoice.js');
+  assert.ok(VOICE_BARGE.speechLevel > VOICE_SPEECH_LEVEL && VOICE_BARGE.minSpeechMs > VOICE_MIN_SPEECH_MS, 'cuesta más cortar a Bria que empezar un turno en silencio');
+  assert.deepEqual(VOICE_MIC.audio, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+  const feed = (level, ms, gate) => { let state = {}; for (let at = 100; at <= ms; at += 100) state = hearTurn(state, { level, at, ...gate }); return state; };
+  assert.equal(feed(0.2, 2000).spoke, true, 'en silencio, hablar normal abre el turno');
+  assert.equal(feed(0.2, 2000, VOICE_BARGE).spoke, false, 'el resto de la voz de Bria en los parlantes no la corta');
+  assert.equal(feed(0.6, 300, VOICE_BARGE).spoke, false, 'un golpe o una tos corta tampoco');
+  assert.equal(feed(0.6, 600, VOICE_BARGE).spoke, true, 'hablar claro y sostenido sí');
+  const fs = await import('node:fs');
+  const dictation = fs.readFileSync('src/components/bria/useBriaDictation.js', 'utf8'), mode = fs.readFileSync('src/components/bria/BriaVoiceMode.jsx', 'utf8');
+  assert.match(dictation, /getUserMedia\(handsFree \? VOICE_MIC : \{ audio: true \}\)/);
+  assert.match(dictation, /if \(session\.turn\.spoke && !spokeBefore\) callbacks\.current\.onSpeech\?\.\(\)/);
+  assert.match(mode, /onSpeech: \(\) => \{ if \(phase !== 'speaking'\) return; barged\.current = true; stopAudio\(\);/);
+  assert.match(mode, /speechGate: \(\) => \(phase === 'speaking' \? VOICE_BARGE : null\)/);
+  assert.match(mode, /\(phase === 'speaking' && !silent\)\)\) start\(\)/, 'también escucha mientras habla');
+  assert.match(mode, /before\.current === 'speaking' && phase !== 'speaking' && !barged\.current\) cancel\(\)/, 'lo grabado sin interrupción se descarta');
+  assert.match(mode, /if \(busy\) \{ held\.current = said; return; \}/, 'lo dicho al interrumpir espera a que Bria termine de escribir');
+  assert.match(mode, /onIdle: \(\) => \{ if \(phase === 'speaking' \|\| phase === 'thinking'\) return;/);
 });
