@@ -49,6 +49,7 @@ import { liveTaskState, createLiveStateCache } from '../lib/briaLiveState.js';
 import { DECISION_MEMORY_TTL_MS } from '../lib/briaDecisionMemory.js';
 import { isManagerRole } from '../config/security.js';
 import { getPmSessionService } from './briaPmSessionService.js';
+import { createLiveDayReader } from './briaLiveDay.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -75,6 +76,7 @@ export const createBriaAssistantService = ({
   serviceHealth = serviceHealthService,
   notebook = getBriaNotebookService,
   pmSession,
+  liveDay,
   quick = getQuickBrain
 } = {}) => {
   // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
@@ -88,6 +90,9 @@ export const createBriaAssistantService = ({
     catch (error) { logger.error('[BriaAssistant] Los buzones no están disponibles:', error.message); return null; }
   };
   const liveCache = createLiveStateCache({ clock: () => now().getTime() });
+  const dayCache = createLiveStateCache({ clock: () => now().getTime() });
+  // Con una base inyectada (pruebas) solo corre el lector que se inyecte; en producción, el del servicio.
+  const dayReader = liveDay === undefined ? (db === prisma ? createLiveDayReader({ db, mail: mailFor, logger }) : null) : liveDay;
   const pmCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
   const bookCache = createLiveStateCache({ ttlMs: DECISION_MEMORY_TTL_MS, clock: () => now().getTime() });
   const loadPerson = async (user) => {
@@ -176,6 +181,8 @@ export const createBriaAssistantService = ({
           // El libro de decisiones va delante de quien dirige: lo propuesto, lo decidido y lo que pasó.
           ...(pmPlan ? { pmSession: () => pmCache(user.id, () => pmPlan.today(user, now())) } : {}),
           ...(typeof readings?.liveClients === 'function' ? { liveClients: () => readings.liveClients(user) } : {}),
+          // El día en curso: quién está en qué, la agenda, los correos que esperan y lo que se movió en la última hora.
+          ...(dayReader ? { liveDay: () => dayCache(person.userId, () => dayReader(user, now())) } : {}),
           ...(decisionBook ? { decisionMemory: () => bookCache(user.id, () => decisionBook.decisionMemory(user)) } : {}),
           ...(ownTasks ? { dayBrief: () => ownTasks.run({}, { db, person, today: bogotaDate(now()), now }) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
