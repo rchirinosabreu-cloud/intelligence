@@ -93,7 +93,8 @@ const FinalAssetThumb = ({ item }) => {
 
   const src = getPublicAssetUrl(asset);
   if ((asset.mimeType || '').startsWith('video/')) {
-    return <video src={src} className={`${base} bg-black`} preload="metadata" muted playsInline />;
+    // El servidor entrega el video por pedazos: el mosaico solo pide el primer cuadro (`#t=` lo pinta en iPhone).
+    return <video src={`${src}#t=0.001`} className={`${base} bg-black`} preload="metadata" muted playsInline />;
   }
   return <img src={src} alt="" className={base} />;
 };

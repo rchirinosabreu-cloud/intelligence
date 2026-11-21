@@ -1,9 +1,10 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
 import { isActiveTeamUser } from '../services/teamRosterService.js';
-import { getJwtSecret, hasModulePermission, isManagerRole } from '../config/security.js';
+import { getJwtSecret, hasModulePermission, isManagerRole, sanitizeUrlForLogs } from '../config/security.js';
 import { hasFinancialPermission } from '../utils/financialPermissions.js';
 import { mfaEnrollmentBlock } from '../lib/mfaPolicy.js';
+import { isMediaTicketPayload, mediaTicketFromRequest, verifyMediaTicket } from '../lib/mediaTicket.js';
 
 export { hasFinancialPermission };
 
@@ -24,7 +25,10 @@ export const authenticateToken = async (req, res, next) => {
   }
 
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const headerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  // El pase de reproducción solo se mira en la lectura de piezas finales y solo si no vino la sesión.
+  const mediaTicket = headerToken ? null : mediaTicketFromRequest(req);
+  const token = headerToken || mediaTicket;
 
   if (!token) {
     console.warn(`[Auth] No token provided for ${req.method} ${req.originalUrl}`);
@@ -37,9 +41,10 @@ export const authenticateToken = async (req, res, next) => {
 
   let user;
   try {
-    user = jwt.verify(token, JWT_SECRET);
+    user = mediaTicket ? verifyMediaTicket(mediaTicket, JWT_SECRET) : jwt.verify(token, JWT_SECRET);
+    if (!mediaTicket && isMediaTicketPayload(user)) throw Object.assign(new Error('media ticket used as session'), { name: 'JsonWebTokenError' });
   } catch (err) {
-    console.error(`[Auth] JWT Verification failed for ${req.method} ${req.originalUrl}:`, {
+    console.error(`[Auth] JWT Verification failed for ${req.method} ${sanitizeUrlForLogs(req.originalUrl)}:`, {
       message: err.message,
       name: err.name,
       expiredAt: err.expiredAt

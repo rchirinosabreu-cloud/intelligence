@@ -46,6 +46,7 @@ import apiRouter from './src/routes/index.js';
 import { createAuthRateLimiters } from './src/lib/authRateLimit.js';
 import { assertDemoDatabase, isDemoMode } from './src/lib/demoMode.js';
 import { demoFriendlyErrors } from './src/middlewares/demoFriendlyErrors.js';
+import { isMediaDelivery } from './src/lib/mediaTicket.js';
 import {
   configureSecurityHeaders,
   createRateLimiter,
@@ -67,8 +68,12 @@ configureSecurityHeaders(app);
 app.use(securityHeaders);
 app.use(errorResponseSanitizer);
 
-const apiRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 1200 });
-const publicRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 });
+// Un reproductor pide cada video en muchos pedazos cortos (21 de noviembre de 2026): esas lecturas llevan su
+// propio cupo (`mediaRateLimiter`) para que ver videos no agote el de la plataforma ni el del portal del cliente.
+const exceptMedia = limiter => (req, res, next) => (isMediaDelivery(req) ? next() : limiter(req, res, next));
+const apiRateLimiter = exceptMedia(createRateLimiter({ windowMs: 15 * 60 * 1000, max: 1200 }));
+const publicRateLimiter = exceptMedia(createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 }));
+const mediaRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 6000 });
 const aiRateLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 40 });
 
 // --- CORS CONFIGURATION ---
@@ -97,6 +102,7 @@ app.get('/api/health/ai', (_req, res) => {
   const health = getAIHealth();
   res.status(health.status === 'healthy' ? 200 : 503).json(health);
 });
+app.use('/api', (req, res, next) => (isMediaDelivery(req) ? mediaRateLimiter(req, res, next) : next()));
 app.use('/api/public', publicRateLimiter);
 app.use('/api/quotations/public', publicRateLimiter);
 app.use('/api/openai', aiRateLimiter);
