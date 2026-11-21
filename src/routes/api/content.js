@@ -33,6 +33,9 @@ import { getPlatformStorage } from '../../services/platformStorageService.js';
 import { reorderContentItemFinalAssets } from '../../services/finalAssetOrderService.js';
 import { getContentDelivery, replaceContentDelivery, prepareContentDelivery, confirmContentDelivery } from '../../services/contentDeliveryService.js';
 import { isDriveAsset } from '../../lib/finalAssetShape.js';
+import { sendStoredObject } from '../../lib/mediaRange.js';
+import { getJwtSecret } from '../../config/security.js';
+import { signMediaTicket, MEDIA_TICKET_SECONDS } from '../../lib/mediaTicket.js';
 import {
   getContentPlanReview,
   updateContentPlanReviewFinding
@@ -460,19 +463,22 @@ router.put('/items/:id/final-assets/order', async (req, res) => {
   }
 });
 
+// Pase de reproducción: lo pide la pantalla con su sesión y lo pone en la dirección del `<video>`.
+router.post('/media-ticket', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json({ ticket: signMediaTicket(req.user, getJwtSecret()), expiresIn: MEDIA_TICKET_SECONDS });
+});
+
 router.get('/items/:id/final-assets/:assetId', async (req, res) => {
   try {
     const asset = await getContentItemFinalAssetById(req.params.id, req.params.assetId);
     if (!asset) return res.status(404).json({ error: 'Final asset not found' });
     // Un enlace de Drive no tiene bytes nuestros que servir: se abre en Drive, no por aquí.
     if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
-    const object = await getPlatformStorage(asset.storageArea).getFromS3Stream(asset.storageKey);
-    res.setHeader('Content-Type', asset.mimeType || object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || 'pieza-final')}"`);
-    res.setHeader('Cache-Control', 'private, max-age=300');
-    return object.Body.pipe(res);
+    return await sendStoredObject(req, res, { storage: getPlatformStorage(asset.storageArea), key: asset.storageKey, mimeType: asset.mimeType, name: asset.name || 'pieza-final' });
   } catch (error) {
     console.error('[API] Error streaming final carousel asset:', error.response?.data || error);
+    if (res.headersSent) return res.destroy();
     return res.status(500).json({ error: 'Failed to load final asset', details: error.message });
   }
 });

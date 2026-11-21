@@ -231,7 +231,7 @@ const FinalAssetTile = ({
             allowFullScreen
             loading="lazy"
           />
-        ) : (isImage || isVideo) ? <FinalMediaPreview sourceUrl={sourceUrl} name={downloadName} isVideo={isVideo} open={mediaOpen} onOpenChange={setMediaOpen} triggerRef={eyeRef}
+        ) : (isImage || isVideo) ? <FinalMediaPreview sourceUrl={sourceUrl} name={downloadName} isVideo={isVideo} streamable={!customUrls} open={mediaOpen} onOpenChange={setMediaOpen} triggerRef={eyeRef}
           onDownload={downloadUrl ? download : undefined} downloading={downloading} downloadError={downloadError} /> : onOpenAsset ? (
           <button type="button" onClick={() => onOpenAsset(asset)} aria-label={`Ver ${asset.name || 'archivo'}`} className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-sm text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-white/5">
             <FileText className="h-8 w-8" />{asset.mimeType === 'application/pdf' ? 'PDF' : 'Archivo'}
