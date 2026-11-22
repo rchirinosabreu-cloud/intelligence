@@ -4,7 +4,7 @@
 // evidencia es una frase en español por hábito, hechos y números, nunca un juicio sobre la persona.
 import { DAILY_HABITS, EXTRA_ACTIONS, EFFORT_KEY, PROPORTION_KEY } from './platformLeague.js';
 import { describePlatformMutation } from './operationalMutationLabels.js';
-import { mergeAreaChecks } from './leagueAreaChecks.js';
+import { PM_RETURN_MIN_CREATED, areaEquityActive, mergeAreaChecks } from './leagueAreaChecks.js';
 import { isPublicationTask } from './contentTaskReciprocity.js';
 /** Las tareas de la lista desplegable de Reloj, como máximo. */
 export const RELOJ_LIST_MAX = 12;
@@ -38,15 +38,16 @@ const dueLabel = (value) => {
 };
 /** Qué quedó vencido, con su nombre: sin eso «Al día» se perdía sin que nadie supiera por qué (Rodny, 18 de noviembre de 2026).
  * Antes de las 18:00 de hoy la jornada sigue abierta: no se dice «al cierre quedaba», sino lo que falta por cerrar. */
-export function pendingEvidence(tasks = [], count = tasks.length, { open = false, day = null } = {}) {
+export function pendingEvidence(tasks = [], count = tasks.length, { open = false, day = null, closeLabel = '18:00' } = {}) {
   const named = (tasks || []).filter((task) => task?.title).slice(0, 2).map((task) => {
     const dueDay = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null;
     const due = dueLabel(task.dueDate);
     if (!due) return `«${task.title}»`;
+    if (task.moved) return `«${task.title}» (vencía el ${due} y se le movió la fecha hoy)`;
     if (open) return `«${task.title}» (${dueDay === day ? 'vence hoy' : `venció el ${due}`})`;
     return `«${task.title}» (vencía el ${due})`;
   });
-  const lead = open ? 'Antes de las 18:00 te falta cerrar' : 'Al cierre quedaba';
+  const lead = open ? `Antes de las ${closeLabel} te falta cerrar` : 'Al cierre quedaba';
   if (!named.length) return open
     ? `${lead} ${plural(count, 'tarea que vence hoy o antes', 'tareas que vencen hoy o antes')}.`
     : `${lead} ${plural(count, 'tarea vencida', 'tareas vencidas')}.`;
@@ -100,8 +101,9 @@ export function workRecordFromTrace(event = {}) {
  * `workRecords`: los módulos donde la persona dejó registro ese día; `presence`: si dejó alguna huella aunque no
  * registrara trabajo; `productionDays`: las jornadas de producción (eventos de Actividad) en que participó.
  * `areaChecks`: los chequeos de su área por hábito (`leagueAreaChecks.js`), que se suman a lo que dieron las tareas.
+ * `areas`: las áreas de la persona en Equipo (`memberAreas`), para las reglas que cambian por área.
  */
-export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [], areaChecks = null, closeState = null } = {}) {
+export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [], areaChecks = null, closeState = null, areas = [] } = {}) {
   const habits = {}, evidence = {}, extras = {};
   // La parte cumplida de cada hábito, en unidades: `{ ok, total }`. Sirve para pagar la parte de un hábito perdido.
   const units = {};
@@ -113,9 +115,16 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   //   cuenta si llegó a diez minutos medidos. Una jornada de producción vale con su tiempo declarado: en campo no hay cronómetro.
   const counted = closedTasks.filter((task) => !isPublicationTask(task.title || ''));
   const published = closedTasks.length - counted.length;
-  extras[EFFORT_KEY] = counted.length;
-  evidence[EFFORT_KEY] = counted.length
-    ? `${plural(counted.length, 'tarea cerrada', 'tareas cerradas')}${published ? ` (sin contar ${plural(published, 'de publicar', 'de publicar')})` : ''}.`
+  // Esfuerzo por área (Rodny, 21 de noviembre de 2026): además de las tareas, suman las unidades de trabajo del área
+  // —registros de Financiero, gestiones del CRM, jornadas con evidencia—, con el mismo tope del día.
+  const areaEffort = (areaChecks?.effort || []).filter((row) => Number(row?.units) > 0);
+  const areaUnits = areaEffort.reduce((sum, row) => sum + Number(row.units), 0);
+  extras[EFFORT_KEY] = counted.length + areaUnits;
+  const taskEffort = counted.length
+    ? `${plural(counted.length, 'tarea cerrada', 'tareas cerradas')}${published ? ` (sin contar ${plural(published, 'de publicar', 'de publicar')})` : ''}`
+    : null;
+  evidence[EFFORT_KEY] = taskEffort || areaUnits
+    ? `${[taskEffort, ...areaEffort.map((row) => row.text)].filter(Boolean).join(' · ')}.`
     : published ? 'Solo cerraste tareas de publicar, que no suman.' : 'Ninguna tarea cerrada.';
   const measuredOf = (task) => Number(task.measuredMs || 0);
   const kindOf = (task) => {
@@ -168,8 +177,8 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     const pending = Number(closeState.pending);
     habits.AL_DIA = pending === 0;
     evidence.AL_DIA = pending === 0
-      ? (closeState.open ? 'Por ahora nada pendiente: se confirma a las 18:00.' : 'Cerró la jornada sin nada vencido.')
-      : pendingEvidence(closeState.pendingTasks, pending, { open: Boolean(closeState.open), day });
+      ? (closeState.open ? `Por ahora nada pendiente: se confirma a las ${closeState.closeLabel || '18:00'}.` : 'Cerró la jornada sin nada vencido.')
+      : pendingEvidence(closeState.pendingTasks, pending, { open: Boolean(closeState.open), day, closeLabel: closeState.closeLabel || '18:00' });
   } else if (overdueAtDawn === null || overdueAtDawn === undefined) {
     habits.AL_DIA = null;
     evidence.AL_DIA = dawnEvidenceReason || 'Sin lectura de cómo terminó la jornada.';
@@ -216,6 +225,10 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   } else if (!closedTasks.length && Number(returnedToday) === 0) {
     habits.SIN_DEVOLUCION = null;
     evidence.SIN_DEVOLUCION = 'Sin entregas ese día.';
+  } else if (areaEquityActive(day) && areas.includes('PROJECT_MANAGEMENT') && createdTasks.length <= PM_RETURN_MIN_CREATED) {
+    // Rodny, 21 de noviembre de 2026: a un project manager le aplica «siempre y cuando haya creado más de 5 pendientes ese día».
+    habits.SIN_DEVOLUCION = null;
+    evidence.SIN_DEVOLUCION = `Como project manager, Sin devolución se juega el día en que creas más de ${PM_RETURN_MIN_CREATED} pendientes: hoy van ${createdTasks.length}.`;
   } else {
     habits.SIN_DEVOLUCION = Number(returnedToday) === 0;
     evidence.SIN_DEVOLUCION = Number(returnedToday) === 0 ? 'Nada devuelto.' : `${plural(Number(returnedToday), 'tarea devuelta', 'tareas devueltas')}.`;

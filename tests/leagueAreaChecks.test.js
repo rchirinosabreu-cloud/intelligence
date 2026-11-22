@@ -80,3 +80,30 @@ test('merge: a source plays even without tasks, and the habit is won only if eve
   mergeAreaChecks(lost, why, { AL_DIA: [plan] });
   assert.equal(lost.AL_DIA, false);
 });
+
+// Liga más pareja (Rodny, 21 de noviembre de 2026): las fuentes de Administrativa y de Producción audiovisual.
+test('Administrativa: payments play A tiempo against the due date; only what someone else voided loses Sin devolución; a record is worth half a point and a full one with its support', async () => {
+  const checks = await import('../src/lib/leagueAreaChecks.js');
+  const { financialOnTimeCheck, financialVoidCheck, financeEffort, areaEquityActive, AREA_EQUITY_FROM } = checks;
+  assert.equal(AREA_EQUITY_FROM, '2026-11-23');
+  assert.equal(areaEquityActive('2026-11-20'), false);
+  assert.equal(areaEquityActive('2026-11-23'), true);
+  assert.equal(checks.payablesOverdueCheck, undefined, 'overdue payables are not her fault: they never play Al día');
+  assert.equal(financialOnTimeCheck([{ doneOn: '2026-11-23', dueOn: null }]), null, 'without a due date it does not play');
+  assert.deepEqual(financialOnTimeCheck([{ doneOn: '2026-11-23', dueOn: '2026-11-25' }, { doneOn: '2026-11-23', dueOn: '2026-11-20' }]), { source: 'Financiero', ok: false, text: '1 de 2 pagos hechos en su fecha.' });
+  assert.equal(financialVoidCheck({ registered: 0, voidedByOthers: 0 }), null);
+  assert.equal(financialVoidCheck({ registered: 3, voidedByOthers: 0 }).ok, true);
+  assert.deepEqual(financialVoidCheck({ registered: 0, voidedByOthers: 1 }), { source: 'Financiero', ok: false, text: '1 registro anulado por otra persona.' });
+  assert.equal(financeEffort({}), null);
+  assert.deepEqual(financeEffort({ withSupport: 2, withoutSupport: 3 }), { source: 'Financiero', units: 3.5, text: '5 registros en Financiero, 2 con soporte' });
+  assert.deepEqual(financeEffort({ lateSupport: 1 }), { source: 'Financiero', units: 0.5, text: '1 soporte agregado a un registro anterior' });
+});
+
+test('Producción audiovisual: a past production day without evidence loses Al día and names it; evidence the same day is on time', async () => {
+  const { productionEvidencePendingCheck, productionEvidenceOnTimeCheck } = await import('../src/lib/leagueAreaChecks.js');
+  assert.equal(productionEvidencePendingCheck([]), null);
+  assert.equal(productionEvidencePendingCheck([{ title: 'Verona', hasEvidence: true }]).ok, true);
+  assert.deepEqual(productionEvidencePendingCheck([{ title: 'Verona', hasEvidence: true }, { title: 'Endova', hasEvidence: false }]), { source: 'Jornadas', ok: false, text: 'Falta la evidencia de «Endova».' });
+  assert.equal(productionEvidenceOnTimeCheck([]), null);
+  assert.deepEqual(productionEvidenceOnTimeCheck([{ date: '2026-11-23', evidenceDay: '2026-11-23' }, { date: '2026-11-19', evidenceDay: '2026-11-23' }]), { source: 'Jornadas', ok: false, text: '1 de 2 evidencias subidas el mismo día de la jornada.' });
+});

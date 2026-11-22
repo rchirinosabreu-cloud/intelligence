@@ -1,5 +1,5 @@
 // La insignia «Al día» al cierre de la jornada (Rodny, 12 de noviembre de 2026: «Dar "Al día" al cierre de la jornada a
-// quien terminó el día sin nada vencido»). Cada diez minutos, desde las 18:00 de Bogotá de un día hábil y hasta la
+// quien terminó el día sin nada vencido»). Cada diez minutos, desde el cierre de la jornada (17:00 de Bogotá desde el 23 de noviembre de 2026; antes, 18:00) de un día hábil y hasta la
 // medianoche, mira cómo terminó la jornada cada persona con Gestión y entrega la insignia a quien la ganó. La regla vive
 // en `caughtUpAtClose` (`recognitionRules.js`); la clave de la insignia hace que pasar varias veces no la repita.
 // No completa días anteriores: un día que se perdió por un reinicio se pierde, nunca se juzga con lo de otro día.
@@ -9,6 +9,7 @@ import { hasModulePermission } from '../config/security.js';
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
 import { completedTaskParticipationWhere, taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
+import { areaEquityActive } from '../lib/leagueAreaChecks.js';
 import { CAUGHT_UP_AWARD_WINDOW_MS, CAUGHT_UP_POLICY, caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
 import { insertRecognitionAward, recognitionTransaction } from './recognitionService.js';
 
@@ -21,10 +22,19 @@ export const CAUGHT_UP_CHECK_MS = 10 * 60 * 1000;
 export async function closeViewsFor(tx, { day, memberIds }) {
   const dayStart = new Date(`${day}T05:00:00.000Z`), cutoff = dayCloseCutoff(day);
   const nextUtcDay = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000);
+  // «Sin tener que mover fechas» (Rodny, 21 de noviembre de 2026): lo que vencía ese día o antes y se reprogramó durante
+  // la jornada sigue contando con la fecha que tenía. Vale la primera fecha del día si se movió varias veces.
+  const movedFrom = new Map();
+  if (areaEquityActive(day) && typeof tx.taskChangeEvent?.findMany === 'function') {
+    const moves = await tx.taskChangeEvent.findMany({ where: { kind: 'DUE_DATE', occurredAt: { gte: dayStart, lt: cutoff } }, orderBy: { occurredAt: 'asc' }, select: { taskId: true, fromValue: true } });
+    for (const move of moves) if (!movedFrom.has(move.taskId)) movedFrom.set(move.taskId, /^\d{4}-\d{2}-\d{2}/.test(String(move.fromValue || '')) ? String(move.fromValue).slice(0, 10) : null);
+    for (const [taskId, from] of movedFrom) if (!from || from > day) movedFrom.delete(taskId);
+  }
   const tasks = await tx.task.findMany({
     where: { AND: [activeTaskSourceWhere, { OR: [
       completedTaskParticipationWhere({ gte: dayStart }),
-      { status: { not: 'REALIZADA' }, OR: [{ dueDate: { lt: nextUtcDay } }, { focusDeadlineAt: { lt: cutoff } }] }
+      { status: { not: 'REALIZADA' }, OR: [{ dueDate: { lt: nextUtcDay } }, { focusDeadlineAt: { lt: cutoff } }] },
+      ...(movedFrom.size ? [{ id: { in: [...movedFrom.keys()] }, status: { not: 'REALIZADA' } }] : [])
     ] }] },
     select: { id: true, title: true, status: true, assigneeId: true, completedAt: true, dueDate: true, focusDeadlineAt: true, ...taskParticipationSelect }
   });
@@ -34,7 +44,7 @@ export async function closeViewsFor(tx, { day, memberIds }) {
     for (const memberId of participants) {
       if (!viewsOf.has(memberId)) continue;
       const view = taskForMember(task, memberId);
-      if (view) viewsOf.get(memberId).push(view);
+      if (view) viewsOf.get(memberId).push(movedFrom.has(task.id) ? { ...view, movedFrom: movedFrom.get(task.id) } : view);
     }
   }
   return viewsOf;
@@ -58,7 +68,7 @@ export async function awardCaughtUpAtClose(db = prisma, { now = new Date() } = {
     for (const member of members) {
       const result = caughtUpAtClose({ day, views: viewsOf.get(member.id) });
       if (!result.eligible) continue;
-      const id = await insertRecognitionAward(tx, { kind: 'CAUGHT_UP', recipientId: member.user.id, at: now, ruleVersion: 3,
+      const id = await insertRecognitionAward(tx, { kind: 'CAUGHT_UP', recipientId: member.user.id, at: now, ruleVersion: 4,
         evidence: { policy: CAUGHT_UP_POLICY, closedToday: result.closed, cutoff: cutoff.toISOString() } });
       if (id) granted += 1;
     }
@@ -78,6 +88,6 @@ export const initCaughtUpScheduler = ({ db = prisma, setIntervalFn = setInterval
     finally { running = false; }
   };
   setIntervalFn(tick, CAUGHT_UP_CHECK_MS)?.unref?.();
-  logger.log('[Reconocimientos] «Al día» programado al cierre de la jornada (días hábiles desde las 18:00, Bogotá).');
+  logger.log('[Reconocimientos] «Al día» programado al cierre de la jornada (días hábiles desde las 17:00, Bogotá).');
   return tick;
 };

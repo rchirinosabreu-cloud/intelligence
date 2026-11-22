@@ -8,11 +8,11 @@ export const DAILY_HABITS = [
   { key: 'RELOJ', label: 'Reloj', hint: 'En las tareas que trabajaste con reloj llegaste a 10 minutos, sin relojes olvidados. Lo que pasa directo a realizado no aplica.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
   // Al día, A tiempo y Documentado también se leen de la fuente de cada área (Rodny, 12 de noviembre de 2026: «Sí,
   // hábitos por área»): Parrillas, el CRM, Pautas y Financiero, además de las tareas. Ver `leagueAreaChecks.js`.
-  { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido: tareas, piezas sin publicar, seguimientos del CRM ni el gasto final de tus pautas.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },
-  { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Entregaste a tiempo: tus pendientes antes de su fecha y las piezas de hoy publicadas o programadas.', step: 'Cierra hoy lo que vence hoy y deja publicadas o programadas las piezas del día.' },
+  { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido a las 5:00 pm: tareas, piezas sin publicar, seguimientos del CRM, el gasto final de tus pautas ni jornadas sin evidencia.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },
+  { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Entregaste a tiempo: tus pendientes antes de su fecha, las piezas de hoy publicadas o programadas, tus pagos en su fecha y la evidencia de la jornada el mismo día.', step: 'Cierra hoy lo que vence hoy y deja publicadas o programadas las piezas del día.' },
   // Contexto real (Rodny, 12 de noviembre de 2026): veinte letras, un archivo o un enlace, y solo en lo que se delega.
   { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Lo que delegas lleva contexto real: un comentario de al menos 20 letras, un archivo o un enlace. También cuentan tus gestiones del CRM con nota y tus movimientos con soporte.', step: 'Dale contexto a lo que delegaste hoy: un comentario de al menos 20 letras, un archivo o un enlace.' },
-  { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nadie te devolvió un pendiente', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' },
+  { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nadie te devolvió un pendiente ni te anuló un registro de Financiero', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' },
   // Rodny, 9 de noviembre de 2026: Elisa registra ingresos y egresos y Brayan sale a jornadas de producción, y la liga no
   // se lo reconocía. El trabajo de cualquier módulo cuenta: lo que se registra en la plataforma, venga de donde venga.
   { key: 'TRABAJO_REGISTRADO', label: 'Trabajo registrado', hint: 'Dejaste registro de tu trabajo en la plataforma: un movimiento, una gestión, una pieza, una lectura de pauta, una jornada o una tarea con reloj.', step: 'Registra en la plataforma lo que hiciste hoy: el movimiento, la gestión, la pieza o la jornada.' }
@@ -45,15 +45,24 @@ export const RECOGNITION_POINTS = 5;
 // Entrega anticipada (Rodny, 20 de noviembre de 2026: «una por día está bien, la primera que sume sus cinco puntos, una
 // entrega anticipada adicional suma 2 puntos»): por persona y día de Bogotá, la primera vale 5 y cada una más, 2.
 export const EARLY_DELIVERY_EXTRA_POINTS = 2;
+// Rodny, 21 de noviembre de 2026: «Entrega anticipada, sí, tope de 7». Solo pagan las dos primeras del día (5 + 2):
+// «A tiempo» ya paga cumplir la fecha y sin tope esto volvía a pagar lo mismo. Rige desde el lunes 23 de noviembre.
+export const EARLY_DELIVERY_PAID_PER_DAY = 2;
+export const EARLY_DELIVERY_CAP_FROM = '2026-11-23';
+/** Cámara encendida en la reunión de tráfico (Rodny, 21 de noviembre de 2026): 2 puntos por persona y semana, los marca un administrador después de la reunión. */
+export const CAMERA_POINTS = 2;
 /** Los puntos de cada reconocimiento (id → puntos). Recibe todos los del período de cada persona, con `kind`. */
 export function recognitionPointsById(awards = []) {
-  const points = new Map(), firstOfDay = new Set();
+  const points = new Map(), seenOfDay = new Map();
   const ordered = [...awards].sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt) || String(a.id).localeCompare(String(b.id)));
   for (const award of ordered) {
     if (award.kind !== 'EARLY_DELIVERY') { points.set(award.id, RECOGNITION_POINTS); continue; }
-    const key = `${award.recipientId}:${bogotaDate(award.occurredAt)}`;
-    points.set(award.id, firstOfDay.has(key) ? EARLY_DELIVERY_EXTRA_POINTS : RECOGNITION_POINTS);
-    firstOfDay.add(key);
+    const day = bogotaDate(award.occurredAt);
+    const key = `${award.recipientId}:${day}`;
+    const count = seenOfDay.get(key) || 0;
+    seenOfDay.set(key, count + 1);
+    // Tope de 7 al día desde el 23 de noviembre de 2026: la primera 5, la segunda 2 y las demás no suman.
+    points.set(award.id, count === 0 ? RECOGNITION_POINTS : day >= EARLY_DELIVERY_CAP_FROM && count >= EARLY_DELIVERY_PAID_PER_DAY ? 0 : EARLY_DELIVERY_EXTRA_POINTS);
   }
   return points;
 }
@@ -74,7 +83,8 @@ export const PROPORTION_KEY = 'PROPORCION';
 /** Los puntos de esfuerzo de un día: un punto por tarea cerrada con reloj, con techo. */
 export function effortPoints(entry) {
   const tasks = Number(entry?.extras?.[EFFORT_KEY]);
-  return Number.isFinite(tasks) && tasks > 0 ? Math.min(tasks, EFFORT_DAILY_CAP) * EFFORT_POINTS_PER_TASK : 0;
+  // Los registros de Financiero sin soporte valen medio punto: el día se redondea al punto para que el puntaje siga entero.
+  return Number.isFinite(tasks) && tasks > 0 ? Math.round(Math.min(tasks, EFFORT_DAILY_CAP) * EFFORT_POINTS_PER_TASK) : 0;
 }
 
 /**
@@ -90,7 +100,7 @@ export function habitPoints(entry, key) {
   return Number.isFinite(share) && share > 0 ? Math.round(HABIT_POINTS * Math.min(1, share)) : 0;
 }
 
-/** La insignia «Al día» pide al menos dos cierres antes de las 18:00 (Rodny, 18 de noviembre de 2026). */
+/** La insignia «Al día» pide al menos dos cierres antes del cierre de la jornada (Rodny, 18 de noviembre de 2026; a las 17:00 desde el 23 de noviembre). */
 export const CAUGHT_UP_MIN_CLOSED = 2;
 
 /** Una insignia se enciende desde el 90 % de los días en que ese hábito se jugó. */
@@ -139,11 +149,11 @@ export function kudosScore(received = []) {
 }
 
 /** El puntaje del mes: hábitos, regalos, registros de tráfico y reconocimientos. */
-export function leagueScore({ days = [], kudos = [], meetings = 0, recognitions = 0, recognitionPoints: earned = null } = {}) {
+export function leagueScore({ days = [], kudos = [], meetings = 0, cameras = 0, recognitions = 0, recognitionPoints: earned = null } = {}) {
   const habits = habitsScore(days);
   const team = kudosScore(kudos);
   // `recognitionPoints` ya trae la regla de la entrega anticipada; `recognitions` (cuántos) queda para quien no la usa.
-  const awards = meetings * MEETING_POINTS + (Number.isFinite(earned) ? earned : recognitions * RECOGNITION_POINTS);
+  const awards = meetings * MEETING_POINTS + cameras * CAMERA_POINTS + (Number.isFinite(earned) ? earned : recognitions * RECOGNITION_POINTS);
   if (habits === null && !team && !awards) return null;
   return Math.round((habits || 0) + team + awards);
 }

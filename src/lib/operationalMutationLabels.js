@@ -19,6 +19,7 @@ const crud = (path, label, noun, updateMethod = 'PATCH') => [
 ];
 export const humanMutationCatalog = [
   entry('POST', '/api/league/kudos', 'Reconocimiento al equipo', 'regaló puntos de la liga a alguien del equipo'),
+  entry('POST', '/api/league/meetings/cameras', 'Reunión de tráfico', 'registró quién tuvo la cámara encendida en la reunión de tráfico'),
   entry('POST', '/api/league/meetings', 'Reunión de tráfico', 'registró quién llegó primero a la reunión de tráfico'),
   entry('DELETE', '/api/tasks/:id', 'Tarea eliminada', 'eliminó una tarea'),
   entry('POST', '/api/tasks/reorder', 'Tareas organizadas', 'cambió el orden de las tareas'),

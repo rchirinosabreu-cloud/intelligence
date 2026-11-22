@@ -554,12 +554,49 @@
   image-rendering: pixelated;
   animation: league-pixel-idle 4s ease-in-out infinite;
 }
+/* Avatares animados (Rodny, 21 de noviembre de 2026): la hoja tiene ocho cuadros en fila y cada paso la corre un
+   cuadro (12,5 %). 0 reposo, 1 a 3 saludo, 4 a 7 celebración. El gesto se hace una vez y vuelve al reposo. */
+@keyframes league-sprite-wave {
+  0% { transform: translateX(0); }
+  9% { transform: translateX(-12.5%); }
+  17% { transform: translateX(-25%); }
+  27% { transform: translateX(-37.5%); }
+  37% { transform: translateX(-25%); }
+  47% { transform: translateX(-37.5%); }
+  57% { transform: translateX(-25%); }
+  67% { transform: translateX(-37.5%); }
+  77% { transform: translateX(-12.5%); }
+  85%, 100% { transform: translateX(0); }
+}
+@keyframes league-sprite-celebrate {
+  0% { transform: translateX(0); }
+  5% { transform: translateX(-50%); }
+  15% { transform: translateX(-62.5%); }
+  21% { transform: translateX(-75%); }
+  34% { transform: translateX(-62.5%); }
+  40% { transform: translateX(-50%); }
+  48% { transform: translateX(-62.5%); }
+  54% { transform: translateX(-75%); }
+  67% { transform: translateX(-62.5%); }
+  73% { transform: translateX(-87.5%); }
+  94%, 100% { transform: translateX(0); }
+}
+.league-sprite-wave {
+  animation: league-sprite-wave 1.7s step-end 1 both;
+}
+.league-sprite-celebrate {
+  animation: league-sprite-celebrate 2.1s step-end 1 both;
+}
 @media (prefers-reduced-motion: reduce) {
   .league-dock {
     transition: none;
   }
   .league-pixel {
     animation: none;
+  }
+  .league-sprite {
+    animation: none;
+    transform: translateX(var(--league-still, 0));
   }
   .league-trophy-hello {
     animation: none;

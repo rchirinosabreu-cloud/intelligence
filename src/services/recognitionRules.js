@@ -1,4 +1,5 @@
 import { CAUGHT_UP_MIN_CLOSED } from '../lib/platformLeague.js';
+import { areaEquityActive } from '../lib/leagueAreaChecks.js';
 const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
 export function recognitionCalendar(at) {
   const day = dayFormatter.format(new Date(at));
@@ -28,7 +29,7 @@ export function taskAwardKinds({ teamDayCount, userDayCount, userWeekCount, earl
  * que venciera ese día o antes, ni un compromiso con hora anterior a las 18:00. Una devuelta espera a quien la creó y
  * no cuenta. Sin cerrar nada ese día no hay insignia: no se gana por no tener trabajo.
  */
-export const CAUGHT_UP_POLICY = 'cierre-del-dia-v3';
+export const CAUGHT_UP_POLICY = 'cierre-del-dia-v4';
 /**
  * Al menos dos cierres (Rodny, 18 de noviembre de 2026): la insignia valía lo mismo con una tarea que con siete, y
  * Brayan la ganó dos días seguidos cerrando una. La pasada solo entrega en la media hora que sigue al corte: después,
@@ -36,7 +37,13 @@ export const CAUGHT_UP_POLICY = 'cierre-del-dia-v3';
  */
 export { CAUGHT_UP_MIN_CLOSED };
 export const CAUGHT_UP_AWARD_WINDOW_MS = 30 * 60 * 1000;
-export const dayCloseCutoff = (day) => new Date(`${day}T23:00:00.000Z`);
+// La jornada cierra a las 5:00 p. m. (Rodny, 21 de noviembre de 2026: «que se cierre a las 5pm, o sea si a esa hora la
+// persona quedó con sus tareas al día, sin nada vencido sin tener que mover fechas, lo gana»). Rige desde el lunes 23
+// de noviembre; los días anteriores se siguen juzgando a las 18:00, como se jugaron.
+export const CLOSE_HOUR = 17;
+export const dayCloseHour = (day) => (areaEquityActive(day) ? CLOSE_HOUR : 18);
+export const dayCloseLabel = (day) => `${dayCloseHour(day)}:00`;
+export const dayCloseCutoff = (day) => new Date(`${day}T${dayCloseHour(day) + 5}:00:00.000Z`);
 // «Buen comienzo» cuenta desde las 8:00 de Bogotá (Rodny, 20 de noviembre de 2026: «pon buen comienzo con regla desde
 // las 8am»): Sara cerró una tarea a la 1:07 a. m. y se lo llevó, porque el día empezaba a medianoche. Lo que se cierra
 // en la madrugada sigue contando para todo lo demás (esfuerzo, ocho del día, cincuenta de la semana); solo no compite
@@ -49,13 +56,15 @@ export function caughtUpAtClose({ day, views = [] }) {
   const done = (view) => view.status === 'REALIZADA' && view.completedAt && new Date(view.completedAt) < cutoff;
   const openAtCutoff = (view) => OPEN_STATUSES.has(view.status) || (view.status === 'REALIZADA' && view.completedAt && new Date(view.completedAt) >= cutoff);
   const owed = (view) => {
+    // Una fecha movida ese mismo día no saca la tarea de la cuenta: vale la que tenía al empezar la jornada.
+    if (view.movedFrom && view.movedFrom <= day) return true;
     const due = recognitionDueDay(view.dueDate);
     return Boolean((due && due <= day) || (view.focusDeadlineAt && new Date(view.focusDeadlineAt) < cutoff));
   };
   const closed = views.filter((view) => done(view) && new Date(view.completedAt) >= dayStart).length;
   const pendingViews = views.filter((view) => openAtCutoff(view) && owed(view));
   const pending = pendingViews.length;
-  const pendingTasks = pendingViews.map((view) => ({ title: view.title || null, dueDate: view.dueDate || null }))
+  const pendingTasks = pendingViews.map((view) => ({ title: view.title || null, dueDate: view.movedFrom ? new Date(`${view.movedFrom}T12:00:00.000Z`) : view.dueDate || null, ...(view.movedFrom ? { moved: true } : {}) }))
     .sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || '')));
   return { eligible: closed >= CAUGHT_UP_MIN_CLOSED && pending === 0, closed, pending, pendingTasks };
 }

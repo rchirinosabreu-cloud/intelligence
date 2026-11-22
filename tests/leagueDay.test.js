@@ -3,6 +3,7 @@
 // devolvieron. Un hábito que no se jugó es `null` y nunca resta; un juicio nunca aparece en la evidencia.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { effortPoints } from '../src/lib/platformLeague.js';
 import { evaluateLeagueDay, isoWeekKey, isoWeekRange, previousWeekRange, openWindowOf, bogotaTimeOf, isProductionWork, workRecordFromTrace, MIN_MEASURED_MS, FORGOTTEN_SESSION_MS } from '../src/lib/leagueDay.js';
 
 const DAY = '2026-11-03';
@@ -205,4 +206,32 @@ test('Reloj: lo que pasa directo a realizado no aplica, pero suma Esfuerzo; Publ
   const none = evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0 })], returnedToday: 0 });
   assert.equal(none.habits.RELOJ, null);
   assert.equal(none.extras.ESFUERZO, 1);
+});
+
+// Rodny, 21 de noviembre de 2026: «Ninguna tarea devuelta sí puede aplicar al project manager siempre y cuando haya
+// creado más de 5 pendientes ese día»; rige desde el lunes 23.
+test('a project manager only plays Sin devolución the day more than five tasks were created', () => {
+  const NEW = '2026-11-23';
+  const closed = [task({ completedAt: `${NEW}T20:10:00.000Z`, originalDueDate: `${NEW}T12:00:00.000Z` })];
+  const created = (count) => Array.from({ length: count }, () => ({ documented: true }));
+  const few = evaluateLeagueDay({ day: NEW, closedTasks: closed, createdTasks: created(5), returnedToday: 0, areas: ['PROJECT_MANAGEMENT', 'DIRECCION'] });
+  assert.equal(few.habits.SIN_DEVOLUCION, null);
+  assert.match(few.evidence.SIN_DEVOLUCION, /más de 5 pendientes: hoy van 5/);
+  assert.equal(evaluateLeagueDay({ day: NEW, closedTasks: closed, createdTasks: created(6), returnedToday: 0, areas: ['PROJECT_MANAGEMENT'] }).habits.SIN_DEVOLUCION, true);
+  assert.equal(evaluateLeagueDay({ day: NEW, closedTasks: closed, createdTasks: created(6), returnedToday: 1, areas: ['PROJECT_MANAGEMENT'] }).habits.SIN_DEVOLUCION, false);
+  assert.equal(evaluateLeagueDay({ day: NEW, closedTasks: closed, createdTasks: [], returnedToday: 0, areas: ['DISENO'] }).habits.SIN_DEVOLUCION, true, 'other areas play it as always');
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()], createdTasks: [], returnedToday: 0, areas: ['PROJECT_MANAGEMENT'] }).habits.SIN_DEVOLUCION, true, 'before the 23rd nothing changes');
+});
+
+test('Elisa’s good day: her area sources play Al día, A tiempo and Sin devolución, and her records count as effort', () => {
+  const NEW = '2026-11-23';
+  const areaChecks = { AL_DIA: [], A_TIEMPO: [{ source: 'Financiero', ok: true, text: '2 de 2 pagos hechos en su fecha.' }],
+    DOCUMENTADO: [{ source: 'Financiero', ok: true, text: '6 de 6 registros con soporte o nota.' }], SIN_DEVOLUCION: [{ source: 'Financiero', ok: true, text: 'Ningún registro anulado por otra persona.' }] };
+  Object.defineProperty(areaChecks, 'effort', { value: [{ source: 'Financiero', units: 4.5, text: '6 registros en Financiero, 3 con soporte' }], enumerable: false });
+  const day = evaluateLeagueDay({ day: NEW, workRecords: ['Financiero'], presence: true, returnedToday: 0, areaChecks, areas: ['ADMINISTRATIVA'] });
+  assert.deepEqual(day.habits, { RELOJ: null, AL_DIA: null, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
+  assert.equal(day.extras.ESFUERZO, 4.5);
+  assert.equal(effortPoints(day), 5, 'the day rounds to the point so scores stay whole');
+  assert.equal(day.evidence.ESFUERZO, '6 registros en Financiero, 3 con soporte.');
+  assert.equal(day.evidence.SIN_DEVOLUCION, 'Financiero: Ningún registro anulado por otra persona.');
 });

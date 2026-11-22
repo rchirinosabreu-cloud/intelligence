@@ -112,3 +112,15 @@ test('a lost habit pays its done part, rounded, and effort pays one point per ta
   assert.equal(summarizeDays([entry]).earned, 4, 'a partial habit is not an earned habit for badges and full days');
   assert.equal(leagueScore({ days: [{ habits: {}, extras: { ESFUERZO: 2 } }] }), 2, 'effort alone is a score');
 });
+
+// Rodny, 21 de noviembre de 2026: «Entrega anticipada, sí, tope de 7» y 2 puntos por cámara encendida en tráfico.
+test('early delivery pays 5 and 2 and then nothing from 23 November; before that every extra one still pays 2', async () => {
+  const { recognitionPoints, leagueScore, CAMERA_POINTS } = await import('../src/lib/platformLeague.js');
+  const early = (id, at) => ({ id, kind: 'EARLY_DELIVERY', recipientId: 'u1', occurredAt: at });
+  assert.equal(recognitionPoints([early('a', '2026-11-23T15:00:00Z'), early('b', '2026-11-23T16:00:00Z'), early('c', '2026-11-23T17:00:00Z'), early('d', '2026-11-23T18:00:00Z')]), 7);
+  assert.equal(recognitionPoints([early('a', '2026-11-20T15:00:00Z'), early('b', '2026-11-20T16:00:00Z'), early('c', '2026-11-20T17:00:00Z')]), 9);
+  assert.equal(recognitionPoints([early('a', '2026-11-23T15:00:00Z'), early('b', '2026-11-24T15:00:00Z')]), 10, 'the cap is per day');
+  assert.equal(CAMERA_POINTS, 2);
+  assert.equal(leagueScore({ cameras: 3 }), 6);
+  assert.equal(leagueScore({ meetings: 1, cameras: 1 }), 12);
+});

@@ -126,6 +126,14 @@ const fakeRepo = (seed = []) => {
       if (this.meetings.filter(m => m.week_key === row.week_key).length >= limit) return null;
       const saved = {id:`meeting-${this.meetings.length + 1}`,...row}; this.meetings.push(saved); return saved;
     },
+    cameras: [],
+    async camerasOfMonth(monthKey) { return this.cameras.filter(c => c.day_key.startsWith(monthKey)); },
+    async camerasOfWeek(weekKey) { return this.cameras.filter(c => c.week_key === weekKey); },
+    async awardCameras({ member_ids, ...row }) {
+      const added = member_ids.filter(id => !this.cameras.some(c => c.week_key === row.week_key && c.member_id === id));
+      for (const member_id of added) this.cameras.push({ id: `camera-${this.cameras.length + 1}`, member_id, ...row });
+      return added;
+    },
     startedAt: async () => at("2026-10-01T05:00:00Z"),
     async saveDays(rows) { for (const row of rows) days.set(`${row.day_key}:${row.member_id}`, { ...row, computed_at: new Date() }); return rows.length; },
     async computedDays(monthKey) { return [...new Set([...days.values()].filter((r) => r.day_key.startsWith(monthKey)).map((r) => r.day_key))]; },
@@ -503,4 +511,23 @@ test('Al día reads the close of the day: what was owed and still open at 18:00,
   assert.equal(rows['m-rodny'].evidence.AL_DIA, 'Cerró la jornada sin nada vencido.');
   assert.equal(rows['m-helen'].habits.AL_DIA, false);
   assert.equal(rows['m-helen'].evidence.AL_DIA, 'Al cierre quedaba «Informe octubre» (vencía el 2 de octubre).');
+});
+
+// Rodny, 21 de noviembre de 2026: «2 puntos por tener la cámara encendida en la reunión de tráfico, eso va para el
+// ranking … que lo marque el administrador ya después de la reunión».
+test('only an admin marks who had the camera on in the traffic meeting: 2 points each, once per week, on the meeting day', async()=>{
+ const repo=fakeRepo();const db=fakeDb();const service=createPlatformLeagueService({db,repository:repo,snapshots,now:()=>at(DAY+'T19:00:00Z')});
+ await assert.rejects(service.awardCameras({userId:'u-helen',memberIds:['m-rodny'],day:DAY}),e=>e.statusCode===403);
+ await assert.rejects(service.awardCameras({userId:'u-rodny',memberIds:[],day:DAY}),e=>e.statusCode===400);
+ await assert.rejects(service.awardCameras({userId:'u-rodny',memberIds:['missing'],day:DAY}),e=>e.statusCode===404);
+ await assert.rejects(service.awardCameras({userId:'u-rodny',memberIds:['m-helen'],day:'2026-11-04'}),e=>e.statusCode===400);
+ const before=(await service.leagueFor({userId:'u-helen'})).score;
+ assert.deepEqual(await service.awardCameras({userId:'u-rodny',memberIds:['m-helen','m-rodny','m-helen'],day:DAY}),{added:2,already:0,points:2});
+ assert.deepEqual(await service.awardCameras({userId:'u-rodny',memberIds:['m-helen','m-jesu'],day:DAY}),{added:1,already:1,points:2},'marking again never doubles the points');
+ await assert.rejects(service.awardCameras({userId:'u-rodny',memberIds:['m-jesu'],day:'2026-11-02'}),e=>e.code==='LEAGUE_MEETING_OTHER_DAY');
+ const league=await service.leagueFor({userId:'u-helen'});
+ assert.equal(league.score,before+2);
+ assert.equal(league.week.score,(league.week.score|0));
+ assert.equal(league.meetings.cameraPoints,2);
+ assert.deepEqual(league.meetings.cameras.map(c=>c.memberId).sort(),['m-helen','m-jesu','m-rodny']);
 });

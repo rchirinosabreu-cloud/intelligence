@@ -59,7 +59,7 @@ test('today: each person gets the checks of what she carries, and nobody else\'s
   assert.deepEqual(francys.AL_DIA, [{ source: 'CRM', ok: false, text: '1 seguimiento vencido.' }]);
   assert.deepEqual(francys.DOCUMENTADO, [{ source: 'CRM', ok: false, text: '1 de 2 gestiones con nota.' }]);
   assert.deepEqual(checks.get('m-elisa').DOCUMENTADO, [{ source: 'Financiero', ok: false, text: '2 de 3 registros con soporte o nota.' }]);
-  assert.deepEqual(checks.get('m-brayan'), { AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [] }, 'without anything in those modules nothing is added');
+  assert.deepEqual(checks.get('m-brayan'), { AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [], SIN_DEVOLUCION: [] }, 'without anything in those modules nothing is added');
 });
 
 test('a past day only reads what carries its own date: no snapshot of today is used to judge yesterday', async () => {
@@ -67,7 +67,7 @@ test('a past day only reads what carries its own date: no snapshot of today is u
   const sources = createLeagueAreaSources({ db: fakeDb(calls), listOverduePlans: async () => { calls.push('plans'); return []; }, describeBudget: describe, now });
   const checks = await sources.read({ dayKey: '2026-11-11', isToday: false, start: new Date('2026-11-11T05:00:00Z'), end: start, members });
   assert.deepEqual(calls.sort(), ['accountsPayable', 'crmActivity', 'financialRecord']);
-  assert.deepEqual(checks.get('m-kamila'), { AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [] });
+  assert.deepEqual(checks.get('m-kamila'), { AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [], SIN_DEVOLUCION: [] });
   assert.equal(checks.get('m-francys').DOCUMENTADO.length, 0, 'yesterday had none of her gestiones in the window');
 });
 
@@ -86,7 +86,7 @@ test('a source that fails is left out and logged; the others still count', async
 test('a database without those models (the other test doubles) reads nothing and never reaches the real database', async () => {
   const sources = createLeagueAreaSources({ db: {}, now });
   const checks = await sources.read({ dayKey: DAY, isToday: true, start, end, members });
-  assert.deepEqual(checks.get('m-kamila'), { AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [] });
+  assert.deepEqual(checks.get('m-kamila'), { AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [], SIN_DEVOLUCION: [] });
 });
 
 test('today\'s snapshot is reused for a few minutes: opening the cup repeatedly does not reread every account', async () => {
@@ -99,4 +99,47 @@ test('today\'s snapshot is reused for a few minutes: opening the cup repeatedly 
   clock = new Date(clock.getTime() + 6 * 60_000);
   await sources.read({ dayKey: DAY, isToday: true, start, end, members });
   assert.equal(calls.filter((call) => call === 'plans').length, 2);
+});
+
+// Liga más pareja (Rodny, 21 de noviembre de 2026), desde el lunes 23: Administrativa lee sus cuentas por pagar y sus
+// pagos, Producción audiovisual sus evidencias, y las piezas de hoy dejan de contarle a quien lleva la cuenta como PM.
+test('from 23 November: Elisa plays Al día, A tiempo and Sin devolución with Financiero; Brayan with his production evidence; the PM no longer answers for today\'s pieces', async () => {
+  const NEW = '2026-11-23';
+  const from = new Date(`${NEW}T05:00:00.000Z`), to = new Date('2026-11-24T05:00:00.000Z');
+  const team = members.map((member) => ({ ...member, role: '', areas: { 'm-elisa': ['ADMINISTRATIVA'], 'm-brayan': ['AUDIOVISUAL'], 'm-francys': ['COMERCIAL'], 'm-rodny': ['PROJECT_MANAGEMENT', 'DIRECCION'], 'm-kamila': ['COMMUNITY'] }[member.id] }));
+  const db = fakeDb();
+  db.crmActivity.findMany = async () => [{ authorId: 'u-francys', note: 'Pidió la propuesta en PDF para el lunes', result: null, requestId: null }];
+  db.contentItem.findMany = async () => [{ status: 'PUBLICADO', plan: { clientId: 'c-verona' } }, { status: 'APROBADO', plan: { clientId: 'c-verona' } }, { status: 'PROGRAMADO', plan: { clientId: 'c-endova' } }];
+  db.accountsPayable.findMany = async ({ where }) => {
+    assert.equal(where.status, undefined, 'overdue payables are never read: they are not her fault');
+    if (where.voidedAt?.gte) return [{ createdById: 'u-elisa', voidedById: 'u-elisa' }, { createdById: 'u-elisa', voidedById: 'u-rodny' }];
+    return [{ createdById: 'u-elisa', notes: 'Arriendo', documentNumber: null, documents: [] }];
+  };
+  db.payablePayment = { findMany: async ({ where }) => where.reversedAt?.gte ? [] : [
+    { createdById: 'u-elisa', paidAt: new Date('2026-11-23T12:00:00Z'), financialRecordId: 'r1', payable: { dueDate: new Date('2026-11-25T00:00:00Z') } },
+    { createdById: 'u-elisa', paidAt: new Date('2026-11-23T12:00:00Z'), financialRecordId: null, payable: { dueDate: new Date('2026-11-20T00:00:00Z') } }] };
+  db.financialRecordDocument = { findMany: async ({ where }) => { assert.deepEqual(where.record.createdAt, { lt: from });
+    return [{ recordId: 'old-1', record: { createdById: 'u-elisa', documents: [] } }, { recordId: 'old-1', record: { createdById: 'u-elisa', documents: [] } }, { recordId: 'old-2', record: { createdById: 'u-elisa', documents: [{ id: 'd0' }] } }]; } };
+  db.accountsPayableDocument = { findMany: async () => [] };
+  db.receivablePayment = { findMany: async ({ where }) => { assert.deepEqual(where.createdById, { in: ['u-elisa'] }, 'only Administrativa is read'); return []; } };
+  db.productionDay = { findMany: async ({ where }) => where.evidenceAt
+    ? (assert.equal(where.evidenceAt.gte.toISOString(), '2026-11-20T23:05:00.000Z', 'from the close of the previous business day, so a weekend upload counts on Monday'),
+      [{ title: 'Verona', date: '2026-11-21', evidenceUrl: 'https://drive', evidenceAt: new Date('2026-11-21T22:00:00Z'), event: { memberIds: ['m-brayan'] } }])
+    : (assert.deepEqual(where.date, { gte: '2026-11-23', lt: NEW }, 'nothing older than the start of the rule chases anyone'), []) };
+  const sources = createLeagueAreaSources({ db, listOverduePlans: plans, describeBudget: describe, now: () => new Date(`${NEW}T20:00:00Z`) });
+  const checks = await sources.read({ dayKey: NEW, isToday: true, start: from, end: to, members: team });
+  const elisa = checks.get('m-elisa');
+  assert.deepEqual(elisa.AL_DIA, [], 'overdue payables do not play');
+  assert.deepEqual(elisa.A_TIEMPO, [{ source: 'Financiero', ok: false, text: '1 de 2 pagos hechos en su fecha.' }]);
+  assert.deepEqual(elisa.SIN_DEVOLUCION, [{ source: 'Financiero', ok: false, text: '1 registro anulado por otra persona.' }], 'correcting her own record does not count');
+  assert.deepEqual(elisa.effort, [{ source: 'Financiero', units: 3.5, text: '4 registros en Financiero, 2 con soporte y 1 soporte agregado a un registro anterior' }],
+    'with support: one movement and the payment without its own movement (1 each); without: one movement and one payable (half each); plus half for the support added to an older record');
+  assert.deepEqual(Object.keys(elisa), ['AL_DIA', 'A_TIEMPO', 'DOCUMENTADO', 'SIN_DEVOLUCION'], 'effort travels apart from the habits');
+  const brayan = checks.get('m-brayan');
+  assert.deepEqual(brayan.A_TIEMPO, [{ source: 'Jornadas', ok: true, text: '1 de 1 evidencia subida el mismo día de la jornada.' }]);
+  assert.deepEqual(brayan.effort, [{ source: 'Jornadas', units: 5, text: '1 jornada con evidencia, 5 cada una' }]);
+  assert.deepEqual(checks.get('m-francys').effort, [{ source: 'CRM', units: 1, text: '1 gestión en el CRM' }]);
+  assert.deepEqual(checks.get('m-rodny').A_TIEMPO, [], 'the project manager no longer plays today\'s pieces');
+  assert.equal(checks.get('m-rodny').AL_DIA.length, 1, 'but still answers for overdue pieces of the account');
+  assert.equal(checks.get('m-kamila').A_TIEMPO.length, 1);
 });

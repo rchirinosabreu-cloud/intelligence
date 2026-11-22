@@ -140,3 +140,17 @@ DO $$ DECLARE old_constraint TEXT; BEGIN
     ALTER TABLE bria_memory.league_meeting_awards ADD CONSTRAINT league_meeting_awards_week_member_key UNIQUE (run_id, week_key, member_id);
   END IF;
 END $$;
+
+-- Cámara encendida en la reunión de tráfico (Rodny, 21 de noviembre de 2026: «2 puntos por tener la cámara encendida en
+-- la reunión de tráfico, eso va para el ranking … que lo marque el administrador ya después de la reunión»). Una fila
+-- por persona y semana; sin cupo: la gana todo el que la tuvo encendida. Aditiva.
+CREATE TABLE IF NOT EXISTS bria_memory.league_camera_awards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id TEXT NOT NULL REFERENCES bria_memory.league_runs(id),
+  week_key TEXT NOT NULL CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),
+  day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  member_id TEXT NOT NULL,
+  awarded_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT league_camera_awards_week_member_key UNIQUE (run_id, week_key, member_id)
+);
