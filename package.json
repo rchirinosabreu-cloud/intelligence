@@ -52,6 +52,7 @@
     "seed": "node scripts/sync_service_catalog.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.12.0",
     "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@floating-ui/react": "^0.27.20",

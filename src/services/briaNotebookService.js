@@ -15,11 +15,17 @@ export const createBriaNotebookService = ({ repository, conversations, readings,
   const chats = conversations || createBriaConversationRepository({ pool: getSidecarPool(), workspace: 'application' });
   const decisions = readings || createDailyReadingRepository({ pool: getSidecarPool() });
   const userIdOf = (user) => user?.userId || user?.id;
-  // La nota de la plataforma es el primer turno de Bria de ese chat; lo que la persona escribió después no entra.
-  const deliveredText = async (userRef, delivery) => {
+  // La nota de la plataforma es el turno de Bria que lleva esa entrega; lo que la persona escribió después no entra.
+  // Desde el 20 de noviembre de 2026 cada entrega vive en un chat fijo con muchas notas: se busca la de ese día,
+  // semana o mes por su marca. Un chat de antes, con una sola nota sin marca, entrega su primer turno de Bria.
+  const deliveredText = async (userRef, delivery, mark = {}) => {
     if (!delivery?.conversationId) return null;
     const chat = await chats.get({ ref: userRef }, delivery.conversationId);
-    return chat?.turns?.find((turn) => turn.role === 'assistant')?.text || null;
+    const notes = (chat?.turns || []).filter((turn) => turn.role === 'assistant');
+    const [field, value] = Object.entries(mark)[0] || [];
+    const marked = field ? notes.findLast((turn) => turn[field] === value) : null;
+    if (marked) return marked.text || null;
+    return notes.some((turn) => field && turn[field]) ? null : notes[0]?.text || null;
   };
   return {
     async today(user) {
@@ -34,15 +40,15 @@ export const createBriaNotebookService = ({ repository, conversations, readings,
       };
       await Promise.all([
         read('pulso', async () => { if (isManagerRole(user?.role)) notebook.pulso = await repo.messagesOfDay(userRef, window.dayStart); }),
-        read('lectura', async () => { notebook.lecturaManana = await deliveredText(userRef, await repo.morningBriefDelivery(window.dayKey, userRef)); }),
+        read('lectura', async () => { notebook.lecturaManana = await deliveredText(userRef, await repo.morningBriefDelivery(window.dayKey, userRef), { dayKey: window.dayKey }); }),
         read('cierre', async () => {
           for (const dayKey of [window.dayKey, window.previousDayKey]) {
-            const text = await deliveredText(userRef, await repo.dailyCloseDelivery(dayKey, userRef));
+            const text = await deliveredText(userRef, await repo.dailyCloseDelivery(dayKey, userRef), { dayKey });
             if (text) { notebook.cierre = text; notebook.cierreDia = dayKey; return; }
           }
         }),
-        read('foco', async () => { notebook.focoSemana = await deliveredText(userRef, await repo.focusDelivery(window.weekKey, userRef)); }),
-        read('revision', async () => { notebook.revisionMes = await deliveredText(userRef, await repo.monthlyReviewDelivery(window.monthKey, userRef)); }),
+        read('foco', async () => { notebook.focoSemana = await deliveredText(userRef, await repo.focusDelivery(window.weekKey, userRef), { weekKey: window.weekKey }); }),
+        read('revision', async () => { notebook.revisionMes = await deliveredText(userRef, await repo.monthlyReviewDelivery(window.monthKey, userRef), { monthKey: window.monthKey }); }),
         read('decisiones', async () => { notebook.decisiones = await decisions.recentDecisions(window.dayKey, { days: 7, userRef }); })
       ]);
       return notebook;

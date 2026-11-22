@@ -8,7 +8,7 @@ const PURGE_EVERY_MS = 60 * 60 * 1000;
 
 // `wa_id` es la clave estable de quien escribe (su BSUID desde el 22 de octubre de 2026, o su número en un aviso
 // antiguo sin BSUID); `phone` es su número cuando Meta lo manda, para responder por número y mostrarlo.
-const linkOf = (row) => (row ? { userId: row.user_id, waId: row.wa_id, phone: row.phone || null, profileName: row.profile_name, conversationId: row.conversation_id, linkedAt: row.linked_at, lastMessageAt: row.last_message_at, lastInboundAt: row.last_inbound_at || null, alertsOff: row.alerts_off || [] } : null);
+const linkOf = (row) => (row ? { userId: row.user_id, waId: row.wa_id, phone: row.phone || null, profileName: row.profile_name, conversationId: row.conversation_id, linkedAt: row.linked_at, lastMessageAt: row.last_message_at, lastInboundAt: row.last_inbound_at || null, alertsOff: row.alerts_off || [], pulseUrgentOnly: Boolean(row.pulse_urgent_only) } : null);
 const alertOf = (row) => (row ? { id: row.id, userId: row.user_id, kind: row.kind, sourceRef: row.source_ref, conversationId: row.conversation_id || null, topic: row.topic, text: row.text, buttons: Array.isArray(row.buttons) ? row.buttons : [], status: row.status, via: row.via, error: row.error, createdAt: row.created_at, sentAt: row.sent_at, openedAt: row.opened_at } : null);
 
 export const createWhatsAppLinkRepository = ({ pool }) => {
@@ -55,6 +55,8 @@ export const createWhatsAppLinkRepository = ({ pool }) => {
     async touch(userId, at = new Date()) { await pool.query('UPDATE bria_memory.whatsapp_links SET last_message_at=$2 WHERE user_id=$1', [userId, at]); },
     async markInbound(userId, at = new Date()) { await pool.query('UPDATE bria_memory.whatsapp_links SET last_inbound_at=$2 WHERE user_id=$1', [userId, at]); },
     async setAlertsOff(userId, kinds) { await pool.query('UPDATE bria_memory.whatsapp_links SET alerts_off=$2 WHERE user_id=$1', [userId, kinds]); },
+    /** «Por WhatsApp solo lo urgente» (20 de noviembre de 2026): de los avisos del día, solo los de urgencia alta. */
+    async setPulseUrgentOnly(userId, value) { await pool.query('UPDATE bria_memory.whatsapp_links SET pulse_urgent_only=$2 WHERE user_id=$1', [userId, Boolean(value)]); },
     async alertsSince(userId, since) { return Number((await pool.query('SELECT count(*)::int AS n FROM bria_memory.whatsapp_alerts WHERE user_id=$1 AND created_at >= $2', [userId, since])).rows[0]?.n || 0); },
     /** null si ese origen ya se le avisó a esa persona: un mismo pedido o cierre no llega dos veces. */
     async saveAlert({ userId, kind, sourceRef, conversationId = null, topic = null, text, buttons = [], createdAt = new Date() }) {

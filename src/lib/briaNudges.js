@@ -66,7 +66,20 @@ const clientChoice = (verb, clientName) => (clientName && `${verb} ${clientName}
  * anuncio así? ¿a ver qué?»). Cada una es un enlace (`to`), algo que pedirle a Bria en el chat (`ask`: queda escrito,
  * la persona lo envía) o abrir una conversación (`conversationId`).
  */
-export const nudgeActions = ({ kind, personName = null, clientName = null, title = null, day = null, url = null, taskIds = [], conversationId = null, messageId = null } = {}) => {
+/**
+ * Pone en las acciones el borrador vigente de cada correo (`drafts`: Map de id de correo → { summary, reply }). Una
+ * acción cuyo borrador ya no existe se retira: queda lo que se le puede pedir a Bria.
+ */
+export const withMailDrafts = (actions = [], drafts = new Map()) => actions.flatMap((action) => {
+  if (!action?.draftOf) return [action];
+  const draft = drafts.get(action.draftOf);
+  if (!draft?.reply) return [];
+  // A quién y desde dónde iría la respuesta (20 de noviembre de 2026): solo cuando el servidor lo resolvió.
+  const route = draft.to && draft.from ? { messageId: action.draftOf, to: draft.to, from: draft.from, subject: String(draft.subject || ''), canSend: Boolean(draft.canSend) } : {};
+  return [{ label: action.label, draft: { summary: String(draft.summary || ''), reply: String(draft.reply), ...route } }];
+});
+
+export const nudgeActions = ({ kind, personName = null, clientName = null, title = null, day = null, url = null, taskIds = [], conversationId = null, messageId = null, draft = null } = {}) => {
   const name = firstName(personName);
   // Cada botón dice de quién es (Rodny, 10 de noviembre de 2026: «debería ser ‘ver pendientes de Kamila’»), con el
   // apodo que usa el equipo y sin pasar de 24 caracteres, que es lo que cabe en una opción de WhatsApp.
@@ -78,7 +91,19 @@ export const nudgeActions = ({ kind, personName = null, clientName = null, title
     // desde el navegador de social o de contacto, entonces el link no llevaría a ese correo»): lo que importa es el
     // aviso, que ya lo pone en el radar. Bria sí puede resumirlo, porque lo lee por IMAP y no por el navegador; propone
     // la respuesta y la persona la envía desde su correo. Bria nunca manda correos.
-    case 'CORREO_IMPORTANTE': return [{ label: 'Resumir y responder', ask: `Resume el correo «${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'}) y propón una respuesta breve y amable que yo pueda enviar.` }];
+    // El borrador listo (20 de noviembre de 2026): si Bria ya lo preparó, la tarjeta lo muestra ahí mismo y pedirle a
+    // Bria pasa a ser «ajustarlo». La acción solo lleva de qué correo es (`draftOf`): el texto vive en `mail_seen` y
+    // se va con esa fila a los 30 días; `briaNudgeService` lo trae al mostrar la tarjeta, así el aviso guardado nunca
+    // conserva una copia. Por WhatsApp solo viaja el pedido.
+    // Un correo que sigue sin respuesta ofrece lo mismo, con otro pedido.
+    case 'CORREO_IMPORTANTE': case 'CORREO_SIN_RESPUESTA': {
+      const about = `«${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'})`;
+      const ask = kind === 'CORREO_SIN_RESPUESTA'
+        ? { label: 'Preparar respuesta', ask: `El correo ${about} sigue sin respuesta. Léelo y propón una respuesta breve y amable que yo pueda enviar hoy.` }
+        : { label: 'Resumir y responder', ask: `Resume el correo ${about} y propón una respuesta breve y amable que yo pueda enviar.` };
+      if (!draft?.reply || !messageId) return [ask];
+      return [{ label: 'Ver borrador', draftOf: String(messageId) }, { label: 'Ajustar con Bria', ask: `Leí tu borrador para el correo ${about}. Vuelve a leer el correo y ajústalo con lo que te voy a indicar.` }];
+    }
     case 'SIN_PROCESO': return [board, summary];
     case 'VENCE_HOY': return [taskIds.length === 1 && url ? { label: 'Abrir la tarea', to: url } : board, summary];
     case 'CARGA_MANANA': return [{ label: 'Abrir el mapa de carga', to: '/manager?tab=ritmo' }, { label: 'Qué se puede mover', ask: `Revisa la carga de ${personName || name} para ${day ? `el ${day}` : 'mañana'} y propón qué tarea se mueve o se reparte.` }];

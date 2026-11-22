@@ -25,6 +25,9 @@ export const createBriaMailRouter = ({ service } = {}) => {
       res.status(status).json({ message: status === 500 ? 'No se pudo completar la operación con el buzón.' : failure.message, ...(failure.code && status !== 500 ? { code: failure.code } : {}) });
     }
   };
+  // Enviar con aprobación (20 de noviembre de 2026): la persona envía la respuesta que revisó en el aviso. Solo viajan
+  // el correo al que responde y el texto; a quién va y con qué asunto lo decide el servidor.
+  router.post('/reply', handle((req, instance) => instance.sendReply({ messageId: String(req.body?.messageId || '').slice(0, 400), text: typeof req.body?.text === 'string' ? req.body.text : '', actor: { ref: req.user?.userId || req.user?.id, name: req.user?.name || null } })));
   router.get('/accounts', handle(async (_req, instance) => ({ accounts: await instance.list() })));
   router.post('/accounts', admins, handle((req, instance) => instance.connect({ email: req.body?.email, label: req.body?.label, appPassword: req.body?.appPassword, actor: { ref: req.user?.userId || req.user?.id, name: req.user?.name || null } })));
   router.post('/accounts/:id/test', admins, handle((req, instance) => instance.test(req.params.id)));

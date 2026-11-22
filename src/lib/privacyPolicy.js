@@ -48,4 +48,19 @@
 // archivos sigue fuera del chat.
 // 2.20 (22 de octubre de 2026): la rentabilidad por cliente, solo para administradores, con un costo hora de la
 // agencia; la nómina entra sumada con los demás gastos, nunca por persona.
-export const PRIVACY_POLICY_VERSION = '2.20 · 2026-10-22';
+// 2.21 (20 de noviembre de 2026): de un correo importante de los buzones compartidos Bria deja listos un resumen
+// corto y un borrador de respuesta (se guardan 30 días con la fila del correo; el cuerpo sigue sin guardarse) y avisa
+// si sigue sin respuesta, mirando solo los encabezados de la carpeta de enviados. Sigue sin enviar correos.
+// 2.22 (20 de noviembre de 2026): la lectura de la mañana nombra las reuniones de hoy de la persona y el remitente
+// y el asunto de los correos importantes de los buzones compartidos; esa mención queda en su chat con Bria.
+// 2.23 (20 de noviembre de 2026): un administrador o project manager puede enviar, desde el aviso y con una
+// confirmación, la respuesta que revisó; sale del buzón compartido que recibió el correo y solo a quien lo escribió.
+// Se guarda quién la envió y cuándo; el texto queda en los enviados del buzón, no en la plataforma.
+// 2.24 (20 de noviembre de 2026): mientras se dicta, lo grabado hasta ese momento se envía por tramos al mismo
+// servicio de transcripción para mostrar el texto a medida que la persona habla, también si luego cancela.
+// 2.25 (20 de noviembre de 2026): la voz de Bria. ElevenLabs entra como encargado: recibe el texto de la respuesta
+// que Bria va a decir en voz alta, no la voz de la persona ni el historial; el audio no se guarda.
+// 2.26 (21 de noviembre de 2026): la respuesta rápida de Bria en voz. Anthropic entra como encargado: recibe la
+// pregunta hablada ya transcrita, una parte acotada del diálogo, los pendientes de quien pregunta y los recuerdos
+// pertinentes, solo cuando el servicio tiene configurada esa API; lo que requiere consultar sigue con el modelo habitual.
+export const PRIVACY_POLICY_VERSION = '2.26 · 2026-11-21';

@@ -4,7 +4,8 @@ import { QueryClientContext } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { clearManagementFilters } from '@/lib/managementFilterSession';
 import { clearChatDrafts } from '@/lib/teamChatDrafts';
-import { clearPrivateMedia } from '@/lib/privateMediaCache';
+import { claimPrivateMedia, clearPrivateMedia } from '@/lib/privateMediaCache';
+import { clearMediaTicket } from '@/lib/mediaPlayback';
 
 const AuthContext = createContext(null);
 
@@ -14,6 +15,7 @@ const clearAuthSession = (queryClient) => {
     queryClient?.clear();
     clearChatDrafts();
     clearPrivateMedia();
+    clearMediaTicket();
     clearManagementFilters(sessionStorage);
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
@@ -50,6 +52,11 @@ export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    // La copia de archivos en el dispositivo es de quien tiene la sesión: al reconocerla se descarta lo de otra
+    // persona y pasa la limpieza por tiempo y por tamaño (21 de noviembre de 2026).
+    const currentUserId = currentUser?.id;
+    useEffect(() => { if (currentUserId) claimPrivateMedia(currentUserId); }, [currentUserId]);
 
     useEffect(() => {
         const controller = new AbortController();

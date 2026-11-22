@@ -78,6 +78,39 @@ export const createDailyReadingRepository = ({ pool }) => ({
     return rows.map((row) => row.reading);
   },
 
+  /* ---- La sesión diaria de project manager (21 de noviembre de 2026): una por día; la primera que se guarda queda. ---- */
+  async savePmSession(dayKey, session) {
+    await pool.query('INSERT INTO bria_memory.pm_sessions(day_key,session,model,usage) VALUES($1,$2,$3,$4) ON CONFLICT (day_key) DO NOTHING',
+      [dayKey, JSON.stringify(session), session.model || null, session.usage ? JSON.stringify(session.usage) : null]);
+    return this.pmSession(dayKey);
+  },
+  async pmSession(dayKey) {
+    const { rows } = await pool.query('SELECT session FROM bria_memory.pm_sessions WHERE day_key=$1', [dayKey]);
+    return rows[0]?.session || null;
+  },
+
+  /** Las sesiones desde `since`, de la más reciente a la más antigua: lo que lee el modelo de la operación. */
+  async pmSessionsSince(since, limit = 7) {
+    const { rows } = await pool.query('SELECT session FROM bria_memory.pm_sessions WHERE day_key >= $1 ORDER BY day_key DESC LIMIT $2', [since, limit]);
+    return rows.map((row) => row.session);
+  },
+
+  /* ---- El modelo de la operación (21 de noviembre de 2026): uno por semana; el primero que se guarda queda. ---- */
+  async saveOperationModel(weekKey, model) {
+    await pool.query('INSERT INTO bria_memory.operation_models(week_key,day_key,model,model_name,usage) VALUES($1,$2,$3,$4,$5) ON CONFLICT (week_key) DO NOTHING',
+      [weekKey, model.day, JSON.stringify(model), model.model || null, model.usage ? JSON.stringify(model.usage) : null]);
+    return this.operationModel(weekKey);
+  },
+  async operationModel(weekKey) {
+    const { rows } = await pool.query('SELECT model FROM bria_memory.operation_models WHERE week_key=$1', [weekKey]);
+    return rows[0]?.model || null;
+  },
+  /** El más reciente, de esta semana o de una anterior: Bria no se queda sin memoria si una semana no hubo sesión. */
+  async latestOperationModel() {
+    const { rows } = await pool.query('SELECT model FROM bria_memory.operation_models ORDER BY week_key DESC LIMIT 1');
+    return rows[0]?.model || null;
+  },
+
   /* ---- El libro de decisiones (19 de octubre de 2026) ---- */
 
   /** Repetir es inocuo; corregir abre otra revisión y conserva la historia anterior. */
@@ -116,9 +149,16 @@ export const createDailyReadingRepository = ({ pool }) => ({
   },
   async setOutcome(id, { outcome, text, day, expectedRevision }) {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) return false;
-    const { rowCount } = await pool.query(`UPDATE bria_memory.decision_log SET outcome=$2, outcome_text=$3, outcome_day=$4
+    const { rowCount } = await pool.query(`UPDATE bria_memory.decision_log SET outcome=$2, outcome_text=$3, outcome_day=$4, outcome_source='SENALES'
       WHERE id=$1 AND revision=$5 AND kind <> 'NO_HACER' AND (outcome_day IS NULL OR outcome_day < $4)
         AND day_key < $4 AND day_key >= $6`, [id, outcome, text, day, expectedRevision, minusDays(day, 14)]);
+    return rowCount > 0;
+  },
+  /** El resultado que cuenta la persona (21 de noviembre de 2026). Vale para el mismo día y no lo pisa una foto sin evidencia. */
+  async reportOutcome(id, { outcome, text, day, expectedRevision }) {
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) return false;
+    const { rowCount } = await pool.query(`UPDATE bria_memory.decision_log SET outcome=$2, outcome_text=$3, outcome_day=$4, outcome_source='PERSONA'
+      WHERE id=$1 AND revision=$5 AND kind <> 'NO_HACER' AND day_key <= $4`, [id, outcome, text, day, expectedRevision]);
     return rowCount > 0;
   },
   /** Las entradas de los últimos `days` días hasta `today`, de todas las personas o de una. */
@@ -132,6 +172,6 @@ const entryOf = (row) => ({
   id: row.id, decisionId: row.decision_id, dayKey: row.day_key, userRef: row.user_ref, userName: row.user_name || null,
   title: row.title, kind: row.kind, subjectType: row.subject_type || null, subjectId: row.subject_id || null, subjectName: row.subject_name || null,
   evidence: row.evidence || [], verdict: row.verdict, note: row.note || null, decidedAt: row.decided_at,
-  outcome: row.outcome || null, outcomeDay: row.outcome_day || null, outcomeText: row.outcome_text || null,
+  outcome: row.outcome || null, outcomeDay: row.outcome_day || null, outcomeText: row.outcome_text || null, outcomeSource: row.outcome_source || null,
   revision: row.revision, history: row.history || []
 });

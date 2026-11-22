@@ -65,3 +65,13 @@ test('los avisos por WhatsApp: un interruptor por tipo, que solo cambia con la r
   assert.doesNotMatch(kinds, /^import /m, 'la pantalla no arrastra nada del servidor');
   assert.match(kinds, /Pedidos de acceso/);
 });
+
+test('«Solo lo urgente» lives under the day’s notices, shows only while they are on, and changes with what the server answers', () => {
+  const card = readFileSync('src/components/profile/WhatsAppLink.jsx', 'utf8');
+  assert.match(card, /kind === 'PULSE' && on && typeof urgentOnly === 'boolean'/);
+  assert.match(card, /data-whatsapp-urgent-only/);
+  assert.match(card, /body: JSON\.stringify\(\{ kind: 'PULSE', urgentOnly \}\)/);
+  assert.match(card, /\{ \.\.\.row, urgentOnly: saved\.urgentOnly \}/);
+  assert.match(readFileSync('src/routes/api/whatsapp.js', 'utf8'), /typeof urgentOnly === 'boolean' && on === undefined/);
+  assert.match(readFileSync('scripts/sql/bria-whatsapp.sql', 'utf8'), /ADD COLUMN IF NOT EXISTS pulse_urgent_only BOOLEAN NOT NULL DEFAULT false/);
+});

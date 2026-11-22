@@ -1,6 +1,6 @@
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // El foco de la semana en el servidor (10 de octubre de 2026): los lunes desde las 7 (Bogotá), para cada persona con
-// Bria, un chat nuevo con su resumen y un aviso en la campana. Una vez por semana y persona aunque el servidor se
+// Bria, su resumen en el chat fijo «Foco de la semana» y un aviso en la campana. Una vez por semana y persona aunque el servidor se
 // reinicie (`weekly_focus_deliveries`). Lo escribe la plataforma; no pasa por el modelo.
 
 import prisma from '../lib/prisma.js';
@@ -13,6 +13,7 @@ import { createBriaConversationRepository } from './briaConversationRepository.j
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { teamLoadService } from './teamLoadService.js';
 import { createNotification } from './notificationService.js';
+import { WEEKLY_FOCUS_THREAD_TITLE, leaveThreadNote } from '../lib/briaThreadNotes.js';
 
 export const WEEKLY_FOCUS_NOTIFICATION = 'BRIA_FOCO_SEMANAL';
 export const WEEKLY_FOCUS_CHECK_MS = 30 * 60 * 1000;
@@ -49,12 +50,12 @@ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere], OR: [{ assigneeId: 
       return buildWeeklyFocus({ personName: user.teamMember.name || user.name, today: bogotaDate(now()), tasks, teamSignals: signals });
     },
 
-    /** Deja el foco en un chat nuevo de la persona y la avisa. Devuelve lo entregado o lo que ya existía. */
+    /** Deja el foco en el chat fijo de focos de la persona y la avisa. Devuelve lo entregado o lo que ya existía. */
     async deliver(user, { signals = [], weekKey = weekKeyOf(now()) } = {}) {
       const existing = await repo.focusDelivery(weekKey, user.id);
       if (existing) return { ...existing, already: true };
       const { title, text } = await this.composeFor(user, { signals });
-      const chat = await chats.postAssistantNote(actorOf(user), { title, text, metadata: { note: 'FOCO_SEMANAL', weekKey } });
+      const chat = await leaveThreadNote(chats, actorOf(user), { threadTitle: WEEKLY_FOCUS_THREAD_TITLE, title, text, metadata: { note: 'FOCO_SEMANAL', weekKey } });
       const delivery = await repo.recordFocusDelivery(weekKey, user.id, chat.id);
       try { await notify({ userId: user.id, type: WEEKLY_FOCUS_NOTIFICATION, message: 'Bria dejó tu foco de la semana en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[WeeklyFocus] No se pudo avisar a una persona:', error?.message || error); }

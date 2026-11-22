@@ -1,5 +1,5 @@
 // La revisión de las cuentas al cerrar el mes (Rodny, 23 de octubre de 2026): desde las 8 de la mañana del primer día
-// hábil de cada mes (Bogotá), a cada administrador con Bria, un chat nuevo con la rentabilidad del mes que cerró frente
+// hábil de cada mes (Bogotá), a cada administrador con Bria, en el chat fijo «Revisión del mes», la rentabilidad del mes que cerró frente
 // al anterior y lo que conviene mirar; un aviso en la campana y, si lo vinculó, por WhatsApp. Una vez por mes y persona
 // aunque el servidor se reinicie (`monthly_review_deliveries`). Solo administradores, como la rentabilidad: dice
 // cuánto deja cada cuenta y cuánto cuesta operar la agencia. Lo escribe la plataforma; no pasa por el modelo.
@@ -14,6 +14,7 @@ import { createNotification } from './notificationService.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { alertByWhatsApp } from './whatsappAlertSender.js';
 import { dailyAlert } from '../lib/whatsappAlerts.js';
+import { MONTHLY_REVIEW_THREAD_TITLE, leaveThreadNote } from '../lib/briaThreadNotes.js';
 import { clientProfitabilityService } from './clientProfitabilityService.js';
 import prisma from '../lib/prisma.js';
 
@@ -42,13 +43,13 @@ export const createMonthlyReviewService = ({
       return { current, previous };
     },
 
-    /** Deja la revisión en un chat nuevo del administrador y lo avisa. Devuelve lo entregado o lo que ya existía. */
+    /** Deja la revisión en el chat fijo de revisiones del administrador y lo avisa. Devuelve lo entregado o lo que ya existía. */
     async deliver(user, months, monthKey) {
       if (!isAdmin(user)) return { skipped: 'solo administradores' };
       const existing = await repo.monthlyReviewDelivery(monthKey, user.id);
       if (existing) return { ...existing, already: true };
       const { title, text } = buildMonthlyReview({ personName: user.teamMember?.name || user.name, current: months.current, previous: months.previous });
-      const chat = await chats.postAssistantNote(actorOf(user), { title, text, metadata: { note: 'REVISION_MES', monthKey } });
+      const chat = await leaveThreadNote(chats, actorOf(user), { threadTitle: MONTHLY_REVIEW_THREAD_TITLE, title, text, metadata: { note: 'REVISION_MES', monthKey } });
       const delivery = await repo.recordMonthlyReviewDelivery(monthKey, user.id, chat.id);
       try { await notify({ userId: user.id, type: MONTHLY_REVIEW_NOTIFICATION, message: `Bria dejó la revisión de las cuentas de ${months.current.period.label} en el chat.`, relatedId: chat.id }); }
       catch (error) { logger.error('[MonthlyReview] No se pudo avisar a una persona:', error?.message || error); }

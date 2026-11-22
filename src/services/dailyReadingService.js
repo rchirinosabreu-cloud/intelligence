@@ -18,7 +18,10 @@ import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/agencySnapshot.js';
 import { buildDailyDigest, buildDailyReadingRequest, buildDailyReadingCorrection, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief, visibleReadingDecisions } from '../lib/dailyReading.js';
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
+import { decisionMemory, isTalkEntry, talkVerdict, normalizeResult, resolveEntryRef, talkDecision, MEMORY_DAYS } from '../lib/briaDecisionMemory.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
+import { getPmSessionService } from './briaPmSessionService.js';
+import { liveClientState, createLiveStateCache, LIVE_CLIENTS_TTL_MS } from '../lib/briaLiveState.js';
 import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { projectReadingContext, dailyContextSources } from '../lib/dailyReadingContext.js';
@@ -39,10 +42,14 @@ import { taskParticipations } from '../lib/taskParticipation.js';
 import { completedTaskParticipationViews, completedTaskParticipationWhere, projectTaskParticipation, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { getMorningAgendaService } from './morningAgendaService.js';
 import { dailyAlert } from '../lib/whatsappAlerts.js';
 import { isTrustedSession } from '../lib/taskWorkCorrection.js';
 
 export const MORNING_BRIEF_NOTIFICATION = 'BRIA_LECTURA_MANANA';
+// El chat de las lecturas se llama igual todos los días: la fecha la dice cada lectura.
+export const MORNING_BRIEF_THREAD_TITLE = 'Lectura de la mañana';
+export const LIVE_FIRST_WAIT_MS = 1500;
 export const SNAPSHOT_FROM = 6 * 60;
 export const READING_FROM = 6 * 60 + 30;
 export const BRIEF_FROM = 7 * 60 + 30;
@@ -168,8 +175,12 @@ export const readDailyMemoryContext = async ({ clients, user, db, operations, so
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
   criteria = readDailyCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
-  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext
+  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext, agenda, pmSession
 } = {}) => {
+  // La sesión de project manager. Con almacenes inyectados (pruebas y muestras) solo corre la que se inyecte.
+  const pmOf = () => pmSession === undefined ? (repository || proactive || conversations ? null : getPmSessionService()) : (typeof pmSession === 'function' ? pmSession() : pmSession);
+  // El día de la persona (correo y reuniones). Con almacenes inyectados (pruebas y muestras) solo corre el que se inyecte.
+  const agendaOf = agenda || (repository || proactive || conversations ? null : (user, at) => getMorningAgendaService().forUser(user, at));
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const deliveries = proactive || createBriaProactiveRepository({ pool: getSidecarPool() });
   const chats = () => conversations || createBriaConversationRepository({ pool: getSidecarPool(), workspace: 'application' });
@@ -206,8 +217,26 @@ export const createDailyReadingService = ({
     return { clientIds: mine.length ? new Set(mine) : null, people };
   };
 
+  // El estado vivo de las cuentas: una sola foto para toda la agencia cada dos minutos; cada quien ve su alcance.
+  const liveCache = createLiveStateCache({ ttlMs: LIVE_CLIENTS_TTL_MS, clock: () => now().getTime() });
+  let livePhoto = null;
+
   return {
     scopeFor,
+
+    /** Las cuentas ahora mismo, para ponerlas delante de Bria. Un PM con cuentas asignadas ve las suyas; el resto, la agencia. */
+    async liveClients(user) {
+      const service = this;
+      // Nunca frena la respuesta: si la foto guardada venció, se sirve esa y se refresca por detrás; la primera vez
+      // se espera como mucho segundo y medio (la lectura sigue y queda lista para el mensaje siguiente).
+      const fresh = liveCache('agencia', async () => { const at = now(); const photo = await service.readToday(at); return (livePhoto = { today: photo.today, clients: photo.clients, at }); });
+      fresh.catch(error => logger.error('[DailyReading] No se pudo leer el estado vivo de las cuentas:', error?.message || error));
+      const photo = livePhoto || await Promise.race([fresh.catch(() => null), new Promise(resolve => { const timer = setTimeout(resolve, LIVE_FIRST_WAIT_MS, null); timer.unref?.(); })]);
+      if (!photo) return null;
+      const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
+      const mine = isAdmin ? [] : photo.clients.filter(client => client.pmId && client.pmId === user?.teamMember?.id);
+      return liveClientState({ clients: mine.length ? mine : photo.clients, today: photo.today, at: photo.at });
+    },
 
     /** Cómo amaneció la plataforma. La actividad (tareas cerradas, horas) es la del día anterior completo, en Bogotá. */
     async readToday(at = now()) {
@@ -338,6 +367,8 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       let settled = 0;
       for (const entry of await repo.pendingOutcomes(today, { fromDays: OUTCOME_AFTER_DAYS, untilDays: OUTCOME_UNTIL_DAYS })) {
         const verdict = decisionOutcome(entry, { signals, current });
+        // Lo que contó la persona no se pisa con una foto que no sabe decir nada; una señal real sí lo corrige.
+        if (verdict?.outcome === 'SIN_EVIDENCIA' && entry.outcomeSource === 'PERSONA') continue;
         if (verdict && await repo.setOutcome(entry.id, { outcome: verdict.outcome, text: verdict.text, day: today, expectedRevision: entry.revision })) settled += 1;
       }
       return settled;
@@ -364,7 +395,16 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
      * Anota lo que la persona decidió sobre una decisión de la lectura, dicho con sus palabras («ya le escribí a Gema»,
      * «eso no», «la semana que viene»). Si no se entiende a cuál o qué decidió, no se anota y se dice por qué.
      */
-    async recordVerdict({ user, ref, veredicto, nota = null, dia = null }) {
+    async recordVerdict({ user, ref, veredicto, nota = null, dia = null, propuesta = null, sobre = null, tipo = null }) {
+      // Una propuesta hecha en conversación, fuera de la lectura (21 de noviembre de 2026): entra al mismo libro.
+      if (propuesta) {
+        const decision = talkDecision({ title: propuesta, about: sobre, kind: tipo, day: bogotaDate(now()) });
+        if (!decision) return { saved: false, motivo: 'La propuesta necesita una frase que diga qué se propuso.' };
+        const said = VERDICTS.includes(veredicto) ? veredicto : talkVerdict(veredicto, normalizeVerdict);
+        if (!said) return { saved: false, motivo: 'No me quedó claro si la aceptó, la descartó o la dejó para después.' };
+        const saved = await repo.recordDecision({ decision, dayKey: bogotaDate(now()), user: { ref: user.id, name: user.teamMember?.name || user.name || null }, verdict: said, note: nota ? String(nota).slice(0, 300) : null, decidedAt: now() });
+        return { saved: true, decision: decision.title, veredicto: saved.verdict, dia: saved.dayKey, origen: 'CONVERSACION' };
+      }
       let reading = dia ? await repo.reading(dia) : await repo.latestReading();
       if (!reading) return { saved: false, motivo: 'Todavía no hay una lectura con decisiones.' };
       ({ reading, viewer: user } = await currentView(user, reading));
@@ -378,6 +418,40 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       return { saved: true, decision: decision.title, veredicto: entry.verdict, dia: reading.day };
     },
 
+    /** Las anotaciones que esta persona puede leer: las propias; administración, las de todos. */
+    async bookFor(user, today, days = MEMORY_DAYS) {
+      if (typeof repo.recentDecisions !== 'function') return [];
+      const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
+      return repo.recentDecisions(today, { days, ...(isAdmin ? {} : { userRef: user.id }) });
+    },
+
+    /**
+     * Cómo salió algo ya anotado, contado por la persona («lo de Aristea funcionó», «eso no sirvió»). Solo se anota si
+     * se entiende a cuál anotación se refiere y qué pasó; nunca se supone.
+     */
+    async recordResult({ user, ref, resultado, nota = null }) {
+      if (typeof repo.reportOutcome !== 'function') return { saved: false, motivo: 'El libro de decisiones no está disponible.' };
+      const today = bogotaDate(now());
+      const entries = (await this.bookFor(user, today)).filter(entry => entry.kind !== 'NO_HACER');
+      const entry = resolveEntryRef(ref, entries);
+      if (!entry) return { saved: false, motivo: entries.length ? `No sé a cuál anotación te refieres: ${entries.slice(-6).map(row => row.title).join(' · ')}.` : 'No hay decisiones anotadas en los últimos 30 días.' };
+      const outcome = normalizeResult(resultado);
+      if (!outcome) return { saved: false, motivo: 'No me quedó claro si funcionó o si sigue igual.' };
+      const who = user.teamMember?.name || user.name || 'la persona';
+      const detail = String(nota || resultado || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+      const saved = await repo.reportOutcome(entry.id, { outcome, text: `Según ${who}: ${detail}`, day: today, expectedRevision: entry.revision });
+      return saved ? { saved: true, decision: entry.title, resultado: outcome } : { saved: false, motivo: 'La anotación cambió mientras tanto; vuelve a intentarlo.' };
+    },
+
+    /** El libro delante de Bria en cada conversación: lo anotado, lo que sigue sin respuesta y el marcador. */
+    async decisionMemory(user) {
+      const today = bogotaDate(now());
+      const [board, entries] = await Promise.all([this.decisionBoard(user), this.bookFor(user, today)]);
+      const noted = new Set(board.entries.filter(entry => entry.dayKey === board.reading?.day).map(entry => entry.decisionId));
+      const pending = board.decisions.filter(decision => !noted.has(decision.id) && !decision.needsContextReview && decision.kind !== 'NO_HACER');
+      return decisionMemory({ entries, pending, card: board.scorecard, today, viewerRef: user.id });
+    },
+
     /**
      * Lo que Manager necesita para su tablero de decisiones: la última lectura con el alcance de la persona, sus
      * anotaciones en el libro y su marcador. Mismo alcance que el mensaje de la mañana y que `anotar_decision`.
@@ -389,11 +463,16 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       const decisions = visibleReadingDecisions(reading, scopeFor(user, reading));
       const entries = typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30, userRef: user.id }) : [];
       const readings = [reading, ...(typeof repo.readingsBefore === 'function' ? await repo.readingsBefore(reading.day, 30) : [])];
-      const proposed = readings.reduce((sum, row) => sum + visibleReadingDecisions(row, scopeFor(user, row)).length, 0);
+      // Lo propuesto en conversación también cuenta como propuesta: sin eso el marcador anotaría más de lo propuesto.
+      const proposed = readings.reduce((sum, row) => sum + visibleReadingDecisions(row, scopeFor(user, row)).length, 0) + entries.filter(isTalkEntry).length;
       return { reading, decisions, entries, scorecard: scorecard(entries, { proposed }) };
     },
 
-    /** Deja la lectura de la mañana en un chat nuevo de la persona y la avisa. Una vez por día y persona. */
+    /**
+     * Deja la lectura de la mañana en el chat de lecturas de la persona y la avisa. Una vez por día y persona. Es un
+     * solo chat para siempre (Rodny, 20 de noviembre de 2026): cada mañana entra como un mensaje más, con su fecha en
+     * la primera frase, y lo que se converse sobre la lectura queda debajo de ella.
+     */
     async deliver(user, reading) {
       const existing = await deliveries.morningBriefDelivery(reading.day, user.id);
       if (existing) return { ...existing, already: true };
@@ -401,10 +480,24 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       let decisions = null;
       try { decisions = await this.decisionsFor(user, reading); }
       catch (error) { logger.error('[DailyReading] Sin el libro de decisiones esta vez:', error?.message || error); }
-      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions });
+      let day = null;
+      if (agendaOf) {
+        try { day = await agendaOf(user, now()); }
+        catch (error) { logger.error('[DailyReading] Sin la agenda ni el correo esta vez:', error?.message || error); }
+      }
+      // La revisión de project manager habla de la carga de todo el equipo: va solo a administración.
+      let pm = null;
+      try { pm = await pmOf()?.today(user, now()) || null; }
+      catch (error) { logger.error('[DailyReading] Sin la sesión de project manager esta vez:', error?.message || error); }
+      // El modelo de la operación entra al mensaje solo el día en que se hace; después vive delante de Bria.
+      let operation = null;
+      try { const weekly = await pmOf()?.operationModel?.(user); operation = weekly?.day === reading.day ? weekly : null; }
+      catch (error) { logger.error('[DailyReading] Sin el modelo de la operación esta vez:', error?.message || error); }
+      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions, agenda: day, pm, operation });
       const scope = scopeFor(user, reading);
       const sources = [...new Map([...dailyContextSources({ ...reading.context, accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }), ...(decisions?.sources || [])].map(source => [`${source.kind}:${source.id}`, source])).values()];
-      const chat = await chats().postAssistantNote(actorOf(user), { title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day, sources } });
+      const store = chats();
+      const chat = await (store.postThreadNote || store.postAssistantNote).call(store, actorOf(user), { title: store.postThreadNote ? MORNING_BRIEF_THREAD_TITLE : title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day, sources } });
       const delivery = await deliveries.recordMorningBriefDelivery(reading.day, user.id, chat.id);
       try { await notify({ userId: user.id, type: MORNING_BRIEF_NOTIFICATION, message: 'Bria dejó tu lectura de la mañana en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyReading] No se pudo avisar a una persona:', error?.message || error); }
@@ -422,6 +515,10 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       if (!isBusinessDay(today) || minutes < READING_FROM) return { dayKey: today, ...done };
       const reading = await this.generateReading(at);
       done.reading = reading?.source || null;
+      // La sesión de project manager, después de la lectura y antes de entregarla. Nunca frena la entrega.
+      if (reading) { const session = await pmOf()?.ensure(at); if (session) done.pm = session.risks?.length || 0; }
+      // El modelo de la operación, una vez por semana y después de la sesión, que es una de sus fuentes.
+      if (reading) { const weekly = await pmOf()?.ensureModel?.(at); if (weekly) done.operation = weekly.weekKey; }
       if (minutes < BRIEF_FROM || !reading) return { dayKey: today, ...done };
       let delivered = 0, already = 0, failed = 0;
       for (const user of await listPeople(db)) {
@@ -476,7 +573,7 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
           { opcion: 'Descartar', efecto: 'Anotar el motivo; no cancela ni borra trabajo en la plataforma.' }
         ],
         senales: visibleSignals.slice(0, 25).map((row) => ({ sobre: row.subjectName, cambio: row.direction, texto: row.text })),
-        libroDeDecisiones: scorecard(all, { proposed })
+        libroDeDecisiones: scorecard(all, { proposed: proposed + all.filter(isTalkEntry).length })
       };
       const span = Math.min(Math.max(Number(days) || 14, 3), 40);
       const latest = await repo.snapshot(reading.day);

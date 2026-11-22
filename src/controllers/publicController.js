@@ -1,6 +1,7 @@
 import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAssetById } from '../services/contentService.js';
 import { getPlatformStorage } from '../services/platformStorageService.js';
 import { driveAssetUrls, isDriveAsset } from '../lib/finalAssetShape.js';
+import { sendStoredObject } from '../lib/mediaRange.js';
 import { clientCommentProblem, normalizeClientComment } from '../lib/clientComment.js';
 
 const getAuthorizedPublicItem = async (token, itemId) => {
@@ -27,6 +28,9 @@ export const getPublicPlan = async (req, res) => {
       id: plan.id,
       month: plan.month,
       year: plan.year,
+      // El período que cubre según el día de corte del contrato: el cliente tiene que ver «noviembre–diciembre» y
+      // su rango, no solo el mes en que empieza (Rodny, 21 de noviembre de 2026). Solo nombre y fechas.
+      cycle: plan.cycle ? { label: plan.cycle.label, start: plan.cycle.start, end: plan.cycle.end, mixed: plan.cycle.mixed } : null,
       strategicObjectives: plan.strategicObjectives,
       client: {
         name: plan.client.name,
@@ -129,13 +133,10 @@ export const getPublicFinalAssetById = async (req, res) => {
     // Un enlace de Drive lo sirve Google, no nosotros: el portal lo muestra con `embedUrl`.
     if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
 
-    const object = await getPlatformStorage(asset.storageArea).getFromS3Stream(asset.storageKey);
-    res.setHeader('Content-Type', asset.mimeType || object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || 'pieza-final')}"`);
-    res.setHeader('Cache-Control', 'private, max-age=300');
-    return object.Body.pipe(res);
+    return await sendStoredObject(req, res, { storage: getPlatformStorage(asset.storageArea), key: asset.storageKey, mimeType: asset.mimeType, name: asset.name || 'pieza-final' });
   } catch (error) {
     console.error('[API] Public carousel asset error:', error.response?.data || error);
+    if (res.headersSent) return res.destroy();
     return res.status(500).json({ error: 'Failed to load final asset' });
   }
 };

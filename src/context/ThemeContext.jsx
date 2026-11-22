@@ -14,6 +14,13 @@ export const ThemeProvider = ({ children }) => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
 
+    // El enlace que ve el cliente (/compartir/…) va siempre en claro (Rodny, 21 de noviembre de 2026): quien lo abre
+    // desde un navegador donde usa la plataforma en oscuro tiene que ver lo mismo que el cliente. No toca la preferencia.
+    if (window.location.pathname.startsWith('/compartir/')) {
+      root.classList.add('light');
+      return;
+    }
+
     if (theme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'

@@ -22,6 +22,7 @@ const fakeRepository = () => {
     async touch(userId, at) { links.get(userId).lastMessageAt = at; },
     async markInbound(userId, at) { links.get(userId).lastInboundAt = at; },
     async setAlertsOff(userId, list) { links.get(userId).alertsOff = list; },
+    async setPulseUrgentOnly(userId, value) { links.get(userId).pulseUrgentOnly = value; },
     async rememberInbound(id) { if (seen.has(id)) return false; seen.add(id); return true; },
     async alertsSince(userId, since) { return [...alerts.values()].filter((row) => row.userId === userId && row.createdAt >= since).length; },
     async saveAlert(row) {
@@ -160,4 +161,26 @@ test('las preferencias: vienen encendidas y cada quien apaga las suyas; a quien 
   assert.deepEqual(repository.links.get('u-rodny').alertsOff, ['PULSE']);
   assert.deepEqual((await service.status('u-rodny', { role: 'PROJECT_MANAGER' })).alerts.map((row) => row.kind), ['DAILY', 'PULSE']);
   await assert.rejects(service.setAlert('u-rodny', 'SEMAFORO', true), { status: 400 });
+});
+
+// Reglas por persona (Rodny, 20 de noviembre de 2026: «por WhatsApp solo lo urgente»): los avisos del día siguen
+// encendidos, pero por WhatsApp solo salen los de urgencia alta. Los demás quedan encima de Bria, como siempre.
+test('«solo lo urgente»: with the rule on, only high-urgency pulse notices go out by WhatsApp; access and daily notices are untouched', async () => {
+  const { service, repository, sent } = build();
+  linkRodny(repository);
+  assert.deepEqual((await service.status('u-rodny', { role: 'ADMIN' })).alerts.map((row) => [row.kind, row.urgentOnly]), [['ACCESS', undefined], ['DAILY', undefined], ['PULSE', false]]);
+  assert.deepEqual(await service.setAlertRule('u-rodny', 'PULSE', { urgentOnly: true }), { kind: 'PULSE', on: true, urgentOnly: true });
+  assert.equal(repository.links.get('u-rodny').pulseUrgentOnly, true);
+  assert.equal((await service.status('u-rodny', { role: 'ADMIN' })).alerts.find((row) => row.kind === 'PULSE').urgentOnly, true);
+  const calm = pulseAlert({ id: 'p-media', title: 'Melissa sin nada en proceso', body: 'Desde las 10:05.', urgency: 'media', actions: [] });
+  assert.equal(calm.urgency, 'media');
+  assert.deepEqual(await service.deliverAlert({ userId: 'u-rodny', ...calm }), { outcome: 'not-urgent' });
+  assert.equal(sent.length, 0);
+  assert.equal(repository.alerts.size, 0, 'a notice that stays in the platform is not saved as a WhatsApp alert');
+  const urgent = pulseAlert({ id: 'p-alta', title: 'Aristea pidió la factura hoy', body: 'Vence a las 5.', urgency: 'alta', actions: [] });
+  assert.equal((await service.deliverAlert({ userId: 'u-rodny', ...urgent })).outcome, 'sent');
+  assert.equal((await service.deliverAlert({ userId: 'u-rodny', ...dailyAlert({ note: 'CIERRE_DIA', dayKey: '2026-10-22', text: 'Tu cierre.' }) })).outcome, 'sent');
+  await assert.rejects(service.setAlertRule('u-rodny', 'DAILY', { urgentOnly: true }), { status: 400 }, 'the rule exists only for the day’s notices');
+  await service.setAlertRule('u-rodny', 'PULSE', { urgentOnly: false });
+  assert.equal((await service.deliverAlert({ userId: 'u-rodny', ...pulseAlert({ id: 'p-baja', title: 'Otra', body: 'x', urgency: 'baja', actions: [] }) })).outcome, 'sent');
 });

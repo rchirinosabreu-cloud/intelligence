@@ -1,9 +1,10 @@
 import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
+import { PREVIEW_MAX_BYTES as BRIA_PREVIEW_MAX_BYTES } from '../lib/briaComposer.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
 import { isTaskDraftStarter } from '../lib/briaTaskDraft.js';
-import { actionReply, actionStage, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
+import { actionReply, actionStage, closeAction, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { createBriaActionService } from './briaActionService.js';
 import { normalizeRating, turnPosition } from '../lib/briaRating.js';
 import { hasCurrentApprovalReview } from '../lib/briaResponse.js';
@@ -29,6 +30,7 @@ export const lastCreatedTaskClient = (turns = []) => {
 };
 export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, actions = createBriaActionService({ taskDrafts, dispatchDrafts, deleteDrafts }), prepareAttachment = readBriaAttachment, authorizeTurn = async () => true, logger = console }) => {
   const pending = new Set();
+  const previews = new Set(); // quién tiene un adelanto de dictado en curso: uno a la vez por persona
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
   const sanitize = async (user, row) => ({ ...row, turns: await Promise.all(row.turns.map(async turn => turn.role !== 'assistant' || await permitted(user, turn) ? turn : { id: turn.id, role: 'assistant', text: 'Tu acceso a las fuentes cambió. Vuelve a consultar para ver la información disponible ahora.', sources: [], failures: [] })) });
@@ -73,6 +75,23 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         throw knowledgeError(failure.code === 'NO_SPEECH' ? 'No se reconocieron palabras. Intenta grabar de nuevo.' : 'No se pudo transcribir el dictado. Intenta nuevamente.', 503);
       }
       await resolveActor(user); return { text };
+    },
+    /**
+     * El adelanto del dictado (20 de noviembre de 2026): lo grabado hasta ahora, transcrito para mostrarlo en gris.
+     * Mismo permiso y mismo servicio que el dictado. Nunca molesta: si falla, si no hay voz o si la misma persona ya
+     * tiene un adelanto en curso, vuelve vacío. No guarda nada.
+     */
+    async previewTranscription(user, file) {
+      await authorizeInput(user);
+      if (!file?.buffer?.length || file.buffer.length > BRIA_PREVIEW_MAX_BYTES || !/^(audio\/(webm|ogg|wav|x-wav|mpeg|mp4)|video\/(webm|mp4))(;.*)?$/.test(file.mimetype || '')) return { text: '' };
+      const actor = await resolveActor(user), client = typeof ai === 'function' ? ai() : ai;
+      if (!client?.transcribe || previews.has(actor.ref)) return { text: '' };
+      previews.add(actor.ref);
+      try { return { text: String(await client.transcribe({ buffer: file.buffer, mime: file.mimetype, name: file.originalname }) || '').slice(0, 12000) }; }
+      catch (failure) {
+        if (['AI_SCOPE_REQUIRED', 'AI_AUTHORIZATION_REQUIRED', 'AI_DESTINATION_INVALID'].includes(failure.code)) throw failure;
+        return { text: '' };
+      } finally { previews.delete(actor.ref); }
     },
     async download(user, id, fileId) {
       const actor = await resolveActor(user); await read(user, id);
@@ -120,7 +139,6 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           await resolveActor(user);
           if (!await authorizeTurn(user, { pendingAction })) throw knowledgeError('Tu acceso para esta acción cambió.', 403);
         };
-        const closeAction = (action, status) => ({ ...action, status, ...(action.draft ? { draft: { ...action.draft, status } } : {}) });
         // Un sí o un no dicho con naturalidad («dale, así está bien») solo cuenta si lo último que dijo Bria es el
         // resumen de esta acción. Un borrador de pendiente sobrevive a preguntas sueltas, y un «ok, gracias» varios
         // mensajes después no puede crear nada.
@@ -151,7 +169,8 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, createdAt: file.createdAt || null, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, createdAt: file.createdAt || null, current: false }))];
           // La lectura pertenece a una fecha concreta, aunque su nota ya no quepa en los últimos diez turnos.
           // `read` saneó antes los turnos: una nota que perdió acceso no puede aportar este contexto.
-          const readingDay = chat.turns.find(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
+          // Las lecturas viven en un solo chat (20 de noviembre de 2026): se conversa sobre la más reciente.
+          const readingDay = chat.turns.findLast(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
           // Solo contexto de turnos ya saneados por permisos. Una operación terminada no vuelve a ser
           // confirmable; sigue siendo visible aunque después haya respuestas sin ninguna acción.
           const latest = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(Boolean);

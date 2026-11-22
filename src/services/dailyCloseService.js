@@ -1,6 +1,6 @@
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 // El cierre del día en el servidor (Rodny, 14 de octubre de 2026): a las 5 de la tarde de cada día hábil (Bogotá),
-// para cada persona con Bria, un chat nuevo con su cierre y un aviso en la campana. Una vez por día y persona aunque
+// para cada persona con Bria, su cierre en el chat fijo «Cierre del día» y un aviso en la campana. Una vez por día y persona aunque
 // el servidor se reinicie (`daily_close_deliveries`). Lo escribe la plataforma; no pasa por el modelo. Cuenta además
 // cómo terminaron los avisos del pulso de ese día (`pulse_messages`: desenlace, recordatorio u ocultado).
 
@@ -15,6 +15,7 @@ import { createNotification } from './notificationService.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { alertByWhatsApp } from './whatsappAlertSender.js';
 import { dailyAlert } from '../lib/whatsappAlerts.js';
+import { DAILY_CLOSE_THREAD_TITLE, leaveThreadNote } from '../lib/briaThreadNotes.js';
 
 export const DAILY_CLOSE_NOTIFICATION = 'BRIA_CIERRE_DEL_DIA';
 export const DAILY_CLOSE_HOUR = 17;
@@ -72,7 +73,7 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
       return buildDailyClose({ personName: user.teamMember.name || user.name, today: day.today, nextDay: day.nextDay, mine, team, notices });
     },
 
-    /** Deja el cierre en un chat nuevo de la persona y la avisa. Devuelve lo entregado o lo que ya existía. */
+    /** Deja el cierre en el chat fijo de cierres de la persona y la avisa. Devuelve lo entregado o lo que ya existía. */
     async deliver(user, day, { dayKey = day.today } = {}) {
       const existing = await repo.dailyCloseDelivery(dayKey, user.id);
       if (existing) return { ...existing, already: true };
@@ -82,7 +83,7 @@ db.task.findMany({ where: { status: { in: OPEN }, AND: [activeTaskSourceWhere] }
         catch (error) { logger.error('[DailyClose] Sin los avisos del día esta vez:', error?.message || error); }
       }
       const { title, text } = this.composeFor(user, day, notices);
-      const chat = await chats.postAssistantNote(actorOf(user), { title, text, metadata: { note: 'CIERRE_DIA', dayKey } });
+      const chat = await leaveThreadNote(chats, actorOf(user), { threadTitle: DAILY_CLOSE_THREAD_TITLE, title, text, metadata: { note: 'CIERRE_DIA', dayKey } });
       const delivery = await repo.recordDailyCloseDelivery(dayKey, user.id, chat.id);
       try { await notify({ userId: user.id, type: DAILY_CLOSE_NOTIFICATION, message: 'Bria dejó tu cierre del día en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyClose] No se pudo avisar a una persona:', error?.message || error); }

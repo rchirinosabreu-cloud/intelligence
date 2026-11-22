@@ -6,6 +6,19 @@ const fingerprint = actor => createHash('sha256').update(JSON.stringify({ role: 
 const summary = row => ({ id: row.id, title: row.title, revision: row.revision, updatedAt: row.updated_at });
 export const createBriaConversationRepository = ({ pool, workspace, storage, requireStorage = false }) => ({
   async list(actor) { return (await pool.query('SELECT id,title,revision,updated_at FROM bria_memory.conversations WHERE workspace=$1 AND actor_ref=$2 ORDER BY updated_at DESC LIMIT 100', [workspace, actor.ref])).rows.map(summary); },
+  /**
+   * «Esperando por ti» (20 de noviembre de 2026): los chats de la persona cuyo último mensaje de Bria dejó una acción
+   * lista (sin datos por pedir) que nadie confirmó ni canceló. Solo el último turno cuenta: es el único confirmable.
+   */
+  async waitingActions(actor, { since, limit = 5 } = {}) {
+    const { rows } = await pool.query(`SELECT c.id, c.title FROM bria_memory.conversations c
+      JOIN LATERAL (SELECT t.metadata FROM bria_memory.conversation_turns t WHERE t.conversation_id=c.id AND t.role='assistant' ORDER BY t.position DESC LIMIT 1) last ON true
+      WHERE c.workspace=$1 AND c.actor_ref=$2 AND c.updated_at >= $3 AND last.metadata->'pendingAction' IS NOT NULL
+        AND COALESCE(last.metadata->'pendingAction'->>'status', 'DRAFT') NOT IN ('DONE','CANCELLED')
+        AND jsonb_array_length(COALESCE(NULLIF(last.metadata->'pendingAction'->'missing', 'null'::jsonb), '[]'::jsonb)) = 0
+      ORDER BY c.updated_at DESC LIMIT $4`, [workspace, actor.ref, since, limit]);
+    return rows.map((row) => ({ id: row.id, title: row.title || '' }));
+  },
   async create(actor) { return { ...summary((await pool.query('INSERT INTO bria_memory.conversations(id,workspace,actor_ref) VALUES($1,$2,$3) RETURNING *', [randomUUID(), workspace, actor.ref])).rows[0]), turns: [] }; },
   async get(actor, id) {
     const row = (await pool.query('SELECT * FROM bria_memory.conversations WHERE workspace=$1 AND actor_ref=$2 AND id=$3', [workspace, actor.ref, id])).rows[0];
@@ -75,6 +88,36 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
       await db.query('BEGIN');
       await db.query('INSERT INTO bria_memory.conversations(id,workspace,actor_ref,title,revision) VALUES($1,$2,$3,$4,1)', [id, workspace, actor.ref, String(title || 'Nota de Bria').slice(0, 90)]);
       await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,1,\'assistant\',$2,$3)', [id, String(text || ''), { sources: [], failures: [], toolsUsed: [], ...metadata, accessFingerprint: fingerprint(actor) }]);
+      await db.query('COMMIT');
+    } catch (failure) { await db.query('ROLLBACK'); throw failure; } finally { db.release(); }
+    return this.get(actor, id);
+  },
+  /**
+   * Una nota que Bria deja siempre en el mismo chat de la persona (Rodny, 20 de noviembre de 2026: «la lectura de la
+   * mañana siempre es un chat nuevo, y no, yo quiero que sea un solo chat siempre»). El chat es el más reciente de la
+   * persona que ya tenga una nota de ese tipo; si no existe, se abre como `postAssistantNote`. La nota entra en la
+   * posición impar que sigue a la revisión, como cualquier respuesta de Bria, y deja libre la par (no hubo pregunta):
+   * lo que la persona escriba después cae en las dos siguientes. Sube la revisión y trae el chat al principio de la lista.
+   */
+  async postThreadNote(actor, { title, text, metadata = {} }) {
+    const note = String(metadata.note || '');
+    if (!note) return this.postAssistantNote(actor, { title, text, metadata });
+    const label = String(title || 'Nota de Bria').slice(0, 90);
+    const turn = { sources: [], failures: [], toolsUsed: [], ...metadata, accessFingerprint: fingerprint(actor) };
+    let id;
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      const row = (await db.query("SELECT c.id,c.revision FROM bria_memory.conversations c WHERE c.workspace=$1 AND c.actor_ref=$2 AND EXISTS (SELECT 1 FROM bria_memory.conversation_turns t WHERE t.conversation_id=c.id AND t.role='assistant' AND t.metadata->>'note'=$3) ORDER BY c.updated_at DESC LIMIT 1 FOR UPDATE OF c", [workspace, actor.ref, note])).rows[0];
+      if (row) {
+        id = row.id;
+        await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,$2,\'assistant\',$3,$4)', [id, row.revision * 2 + 1, String(text || ''), turn]);
+        await db.query('UPDATE bria_memory.conversations SET revision=revision+1,title=$4,updated_at=now() WHERE workspace=$1 AND actor_ref=$2 AND id=$3', [workspace, actor.ref, id, label]);
+      } else {
+        id = randomUUID();
+        await db.query('INSERT INTO bria_memory.conversations(id,workspace,actor_ref,title,revision) VALUES($1,$2,$3,$4,1)', [id, workspace, actor.ref, label]);
+        await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,1,\'assistant\',$2,$3)', [id, String(text || ''), turn]);
+      }
       await db.query('COMMIT');
     } catch (failure) { await db.query('ROLLBACK'); throw failure; } finally { db.release(); }
     return this.get(actor, id);

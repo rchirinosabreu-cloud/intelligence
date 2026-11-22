@@ -1,13 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Download, Loader2 } from '@/components/ui/icons';
-import { acquirePrivateMedia, cachedPrivateMedia, forgetPrivateMedia } from '@/lib/privateMediaCache';
+import { acquirePrivateMedia, cachedPrivateMedia, forgetPrivateMedia, savePrivateMedia } from '@/lib/privateMediaCache';
+import { clearMediaTicket, getMediaTicket, mediaStreamUrl } from '@/lib/mediaPlayback';
 
-// La tarjeta y el visor comparten los mismos bytes, y quedan en la memoria de la pestaña
-// (`privateMediaCache`): reabrir la pieza no vuelve a bajar el video. Una entrega nueva trae
-// otra dirección (`?v=`), así que nunca se muestran bytes viejos; cerrar sesión los suelta.
-export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOpenChange, triggerRef, onDownload, downloading, downloadError }) {
+// La tarjeta y el visor comparten los mismos bytes (`privateMediaCache`): reabrir la pieza no vuelve
+// a bajar el archivo. Una entrega nueva trae otra dirección (`?v=`), así que nunca se muestran bytes
+// viejos; cerrar sesión los suelta.
+//
+// Un video `streamable` (pieza final de una parrilla) tiene tres caminos (Rodny, 21 de noviembre de 2026):
+// 1. ya está guardado en el dispositivo: abre al instante, sin red;
+// 2. no está: se reproduce POR PEDAZOS con un pase en la dirección. La tarjeta solo pide el primer cuadro;
+//    el video se baja cuando la persona le da a reproducir, y en ese momento se guarda para la próxima vez;
+// 3. si el pase o la reproducción por pedazos fallan, vuelve al camino de siempre: bajarlo entero con la sesión.
+export default function FinalMediaPreview({ sourceUrl, name, isVideo, streamable = false, open, onOpenChange, triggerRef, onDownload, downloading, downloadError }) {
   const [attempt, setAttempt] = useState(0);
+  const [wholeFile, setWholeFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [decoded, setDecoded] = useState(null);
   const inlineVideo = useRef(null);
@@ -26,22 +34,33 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
     position.current = 0;
     const cached = cachedPrivateMedia(sourceUrl);
     if (cached) setPreview({ source: sourceUrl, attempt, url: cached });
-    acquirePrivateMedia(sourceUrl)
-      .then(result => {
-        if (!active) { result.release(); return; }
-        release = result.release;
-        setPreview({ source: sourceUrl, attempt, url: result.url });
-      })
-      .catch(failure => {
-        if (!active) return;
-        console.error('[Entregables] Falló la vista previa:', failure.status || failure.name);
-        setPreview({ source: sourceUrl, attempt, error: 'No pudimos cargar la vista previa. Revisa tu conexión o tu acceso e inténtalo de nuevo.' });
-      });
+    const show = result => {
+      if (!active) { result.release(); return; }
+      release = result.release;
+      setPreview({ source: sourceUrl, attempt, url: result.url });
+    };
+    const download = () => acquirePrivateMedia(sourceUrl).then(show).catch(failure => {
+      if (!active) return;
+      console.error('[Entregables] Falló la vista previa:', failure.status || failure.name);
+      setPreview({ source: sourceUrl, attempt, error: 'No pudimos cargar la vista previa. Revisa tu conexión o tu acceso e inténtalo de nuevo.' });
+    });
+    if (!isVideo || !streamable || cached || wholeFile === sourceUrl) download();
+    else {
+      acquirePrivateMedia(sourceUrl, { onlyCached: true })
+        .then(async saved => {
+          if (saved) return show(saved);
+          const ticket = await getMediaTicket();
+          if (!active) return undefined;
+          if (!ticket) return download();
+          return setPreview({ source: sourceUrl, attempt, url: mediaStreamUrl(sourceUrl, ticket), streaming: true });
+        })
+        .catch(() => { if (active) download(); });
+    }
     return () => {
       active = false;
       release?.();
     };
-  }, [sourceUrl, attempt]);
+  }, [sourceUrl, attempt, isVideo, streamable, wholeFile]);
 
   useEffect(() => {
     if (open && inlineVideo.current) {
@@ -59,7 +78,15 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
     onOpenChange(false);
   };
   const ready = () => setDecoded({ url });
+  // Al reproducir un video que llega por pedazos, se guarda en el dispositivo para la próxima vez.
+  const playing = () => { if (current?.streaming) savePrivateMedia(sourceUrl); };
   const failed = event => {
+    if (current?.streaming) {
+      console.error('[Entregables] La reproducción por pedazos falló; se baja el archivo completo:', event.currentTarget.error?.code || 'MEDIA_ERROR');
+      clearMediaTicket();
+      setWholeFile(sourceUrl);
+      return;
+    }
     console.error('[Entregables] No se pudo mostrar el archivo:', event.currentTarget.error?.code || 'MEDIA_ERROR');
     setDecoded({ url, error: isVideo
       ? 'El navegador no pudo reproducir este vídeo. Puedes reintentar o descargarlo para abrirlo en tu dispositivo.'
@@ -74,7 +101,7 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
   return <>
     <div className="relative flex h-full w-full items-center justify-center" aria-busy={loading}>
       {url && !error && (isVideo
-        ? <video key={url} ref={inlineVideo} src={url} aria-label={name} className="h-full w-full object-contain" controls controlsList="nodownload" playsInline preload="metadata" onLoadedData={ready} onError={failed} />
+        ? <video key={url} ref={inlineVideo} src={url} aria-label={name} className="h-full w-full object-contain" controls controlsList="nodownload" playsInline preload="metadata" onLoadedMetadata={ready} onLoadedData={ready} onPlaying={playing} onError={failed} />
         : <img key={url} src={url} alt={name} draggable={false} className="h-full w-full object-contain" onLoad={ready} onError={failed} />)}
       {feedback}
     </div>
@@ -86,8 +113,8 @@ export default function FinalMediaPreview({ sourceUrl, name, isVideo, open, onOp
         <DialogDescription className="sr-only">Vista completa del archivo, conservando sus proporciones originales.</DialogDescription>
         <div className="relative flex min-h-36 min-w-0 items-center justify-center overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950" aria-busy={loading}>
           {url && !error && (isVideo
-            ? <video key={url} ref={largeVideo} src={url} aria-label={name} className="h-auto max-h-[calc(100dvh-13rem)] w-auto max-w-full object-contain" controls controlsList="nodownload" playsInline preload="metadata" onLoadedData={ready} onError={failed}
-              onLoadedMetadata={event => { const video = event.currentTarget; if (Number.isFinite(position.current) && position.current > 0 && Number.isFinite(video.duration)) video.currentTime = Math.min(position.current, video.duration); }} />
+            ? <video key={url} ref={largeVideo} src={url} aria-label={name} className="h-auto max-h-[calc(100dvh-13rem)] w-auto max-w-full object-contain" controls controlsList="nodownload" playsInline preload="metadata" onLoadedData={ready} onPlaying={playing} onError={failed}
+              onLoadedMetadata={event => { ready(); const video = event.currentTarget; if (Number.isFinite(position.current) && position.current > 0 && Number.isFinite(video.duration)) video.currentTime = Math.min(position.current, video.duration); }} />
             : <img key={url} src={url} alt={name} draggable={false} className="h-auto max-h-[calc(100dvh-13rem)] w-auto max-w-full object-contain" onLoad={ready} onError={failed} />)}
           {feedback}
         </div>

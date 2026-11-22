@@ -46,6 +46,8 @@ CREATE INDEX IF NOT EXISTS decision_log_user ON bria_memory.decision_log(user_re
 -- Seguimiento revisable (23 de octubre de 2026). Una revisión cambia solo con el veredicto humano;
 -- el historial conserva sus correcciones y cada observación diaria, sin borrar los valores anteriores.
 ALTER TABLE bria_memory.decision_log ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0);
+-- Quién dio el resultado (21 de noviembre de 2026): las señales de la foto diaria o la persona que lo contó.
+ALTER TABLE bria_memory.decision_log ADD COLUMN IF NOT EXISTS outcome_source TEXT CHECK (outcome_source IS NULL OR outcome_source IN ('SENALES','PERSONA'));
 -- Conserva YA_NO_SE_VE histórico; falta de evidencia ya no significa mejora.
 -- La restricción se amplía solo una vez, sin reemplazarla en cada arranque.
 DO $upgrade$
@@ -96,7 +98,7 @@ BEGIN
         'subjectName',NEW.subject_name,'evidence',NEW.evidence));
   ELSIF NEW.outcome IS NOT NULL THEN
     INSERT INTO bria_memory.decision_events(decision_log_id, event) VALUES (NEW.id,
-      jsonb_build_object('type','OUTCOME','revision',NEW.revision,'outcome',NEW.outcome,'text',NEW.outcome_text,'day',NEW.outcome_day));
+      jsonb_build_object('type','OUTCOME','revision',NEW.revision,'outcome',NEW.outcome,'text',NEW.outcome_text,'day',NEW.outcome_day,'source',NEW.outcome_source));
   END IF;
   RETURN NEW;
 END
@@ -116,6 +118,27 @@ CREATE TABLE IF NOT EXISTS bria_memory.daily_readings (
   reading JSONB NOT NULL,
   digest TEXT,
   model TEXT,
+  usage JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- La sesión diaria de project manager (21 de noviembre de 2026): lo que Bria propuso sobre las tareas del equipo cada
+-- día hábil, ya validado contra los datos. Una fila por día; no guarda el texto enviado al modelo.
+CREATE TABLE IF NOT EXISTS bria_memory.pm_sessions (
+  day_key TEXT PRIMARY KEY CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  session JSONB NOT NULL,
+  model TEXT,
+  usage JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- El modelo de la operación (21 de noviembre de 2026): lo que Bria concluye una vez por semana al mirar cuatro semanas
+-- de fotos de las cuentas, ya validado contra los datos. Una fila por semana; no guarda el texto enviado al modelo.
+CREATE TABLE IF NOT EXISTS bria_memory.operation_models (
+  week_key TEXT PRIMARY KEY CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),
+  day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  model JSONB NOT NULL,
+  model_name TEXT,
   usage JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

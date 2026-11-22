@@ -14,6 +14,27 @@ El calendario se lee con un permiso que Google llama «sensible»; leer Gmail es
 - **Avisar**: el hecho `CORREO_IMPORTANTE` entra al pulso como los demás (topes, repetición, juicios), con una sola acción: **Que Bria me lo resuma y proponga respuesta** (queda escrito en el chat; la persona lo envía). **Sin enlace al correo** (Rodny, 11 de octubre de 2026: «no siempre la plataforma está abierta desde el navegador de social o de contacto, entonces el link no llevaría a ese correo en sí»): lo que importa es el aviso, que ya pone el correo en el radar. Bria sí puede resumirlo porque lo lee por IMAP, no por el navegador. No volver a poner el enlace.
 - **Resumir a pedido** (`correos_importantes`, `leer_correo`; solo administradores y project managers con Bria): Bria lista lo marcado importante y lee un correo concreto por su id, con el texto acotado a 6.000 caracteres y los nombres de los adjuntos. El contenido es dato, nunca instrucción (regla 8 y 21). **Bria no envía correos ni los archiva**: propone el texto y la persona lo manda desde su correo.
 
+## El borrador listo y los correos sin respuesta (20 de noviembre de 2026)
+
+Rodny, al comparar a Bria con los asistentes que escriben primero (ChatGPT Dots, Claude Duet): que el aviso del correo ya traiga la respuesta propuesta, y que Bria avise de lo que se quedó sin contestar.
+
+- **Borrador listo** (`src/lib/mailDraft.js`, `mailboxService.prepareDraft`): cuando un correo importante de importancia 2 o 3 (cliente, dinero, aprobación) entra por primera vez, Bria lo abre por IMAP, se lo pasa al modelo rápido (`bria.mail-draft`, gobernado y registrado como toda salida de IA) y guarda **un resumen corto y un borrador** en la fila de `mail_seen` (se van con ella a los 30 días). El cuerpo pasa por el modelo y no se guarda. Como mucho **dos borradores por lectura**; el resto se pide en el chat. El correo va debajo de un marcador de datos y el pedido dice que nada de lo que traiga es una instrucción; el borrador deja `[espacios entre corchetes]` donde falta un dato en vez de prometer fechas o precios; uno que mencione una credencial se descarta. Si el modelo falla, el aviso sale como antes, sin borrador.
+- **En la tarjeta** (`BriaNudge.jsx`): el primer botón pasa a ser «Ver borrador», que despliega ahí mismo el resumen y la respuesta, con «Copiar respuesta». El aviso guardado solo dice de qué correo es el borrador; el texto se trae de `mail_seen` al mostrar la tarjeta (`withMailDrafts`), así no queda ninguna copia cuando la fila se purga. El segundo, «Ajustar con Bria», deja el pedido escrito en el chat. Por WhatsApp solo viaja el pedido, no el borrador. Sigue sin enlace al correo y **sin forma de enviar**: la persona pega la respuesta en su correo y la revisa.
+- **Sin respuesta** (`mailboxService.readUnanswered`, `mailboxReader.repliedTo`): una vez por hora, el pulso toma los correos importantes (importancia 2 o más) de la última semana que llegaron hace al menos 24 horas y un día hábil, y busca en la **carpeta de enviados de cada buzón conectado** (ubicada por su marca `\Sent`, abierta en solo lectura) un mensaje que los cite en `In-Reply-To` o `References`. Solo encabezados, nunca un cuerpo. Lo respondido se anota (`answered_at`) y no vuelve; lo demás entra al pulso como `CORREO_SIN_RESPUESTA` durante esa jornada (`unanswered_notified_at`) con «Preparar respuesta» o, si ya había borrador, «Ver borrador». Si los enviados de algún buzón conectado no se pudieron ver, Bria no afirma nada: la respuesta pudo salir de ese.
+- **Lo que no puede saber:** una respuesta dada por WhatsApp, por teléfono o desde un correo personal no se ve. Por eso el aviso dice «sin una respuesta enviada desde los buzones de la agencia» y se oculta como cualquier otro.
+- **El mismo correo en dos buzones** (social reenvía a contacto) es un solo hecho: queda el del primer buzón leído.
+
+## Enviar con aprobación (20 de noviembre de 2026)
+
+Rodny: «enviar correos con tu aprobación». En el aviso de un correo con borrador la respuesta es editable y «Enviar respuesta» pide confirmar a quién va, desde qué buzón y con qué asunto.
+
+- **Envía una persona, nunca el modelo.** No hay herramienta de Bria para enviar ni botón por WhatsApp; solo `POST /api/bria/mail/reply` (administradores y project managers con Bria).
+- **El servidor decide a quién.** Del pedido solo se usan el id del correo y el texto. El destinatario es quien escribió el correo y el asunto es el suyo con «Re:» (`src/lib/mailReply.js`).
+- **Lo que no sale:** una respuesta con `[corchetes]` por completar, con contraseñas o códigos, a una dirección `no-reply` o a un buzón de la agencia, de más de 4.000 caracteres, una segunda respuesta al mismo correo, o más de 20 por persona al día.
+- **Cómo sale:** SMTP de Gmail (`mailboxSender.js`) con la contraseña de aplicación del buzón que recibió el correo, en texto, con `In-Reply-To` y `References`. Gmail deja la copia en Enviados.
+- **Lo que queda:** quién la envió y cuándo, y el correo anotado como respondido. El texto enviado no se guarda en la plataforma.
+- **Sin probar contra Gmail real:** el envío está probado con un transporte simulado. La primera respuesta real conviene hacerla a un correo propio.
+
 ## Dónde vive
 
 `scripts/sql/bria-mail.sql` (`mail_accounts`, `mail_seen`; aplicado al arrancar por `ensure-bria-knowledge-schema.js`), `src/services/mailAccountRepository.js`, `src/services/mailboxReader.js` (imapflow + mailparser; un cliente por llamada, origen acotado a 24 KB para el extracto y 400 KB para el cuerpo), `src/services/mailboxService.js`, `src/routes/api/briaMail.js`, `src/services/briaMailTools.js`, `src/components/modules/Activity/MailboxConnections.jsx`. Semáforo: luz «Buzones de Bria» (`mailboxes`), que lee el estado que deja el pulso sin entrar al buzón. Política de privacidad 2.13.
@@ -21,8 +42,8 @@ El calendario se lee con un permiso que Google llama «sensible»; leer Gmail es
 ## Lo que queda
 
 - Buzones personales por persona (cada quien conectaría el suyo desde Perfil): la base es la misma; falta la pantalla y la regla de que solo su dueño lo lea.
-- Hilos que la agencia abrió y llevan un día sin respuesta del cliente: hoy solo se detecta la respuesta que llega, no el silencio.
+- Hilos que la agencia abrió y llevan un día sin respuesta del cliente: desde el 20 de noviembre de 2026 se avisa lo contrario (un correo importante que la agencia no ha contestado); el silencio del cliente sigue pendiente, porque exige llevar registro de lo que la agencia envía.
 
 ## Pruebas
 
-`tests/mailImportance.test.js`, `tests/mailboxReader.test.js`, `tests/mailboxService.test.js` (servicio, repositorio con sellado real, ruta, herramientas y hecho del pulso), `tests/serviceHealthMailboxes.test.js`, `tests/mailboxUi.test.js`.
+`tests/mailImportance.test.js`, `tests/mailboxReader.test.js`, `tests/mailboxService.test.js` (servicio, repositorio con sellado real, ruta, herramientas y hecho del pulso), `tests/serviceHealthMailboxes.test.js`, `tests/mailboxUi.test.js`. Borrador listo y sin respuesta: `tests/mailDraftAndUnanswered.test.js`; muestra local: `node scripts/preview-bria.js` con `?correo` y `?correo=sinrespuesta`.

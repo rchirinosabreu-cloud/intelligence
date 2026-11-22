@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
 import { requestNudge, answerNudge, decisionMessage } from '../src/lib/vaultAccessRequests.js';
+import { nudgeActions, withMailDrafts } from '../src/lib/briaNudges.js';
 import { permissionRequestNudge, permissionAnswerNudge, permissionDecisionMessage } from '../src/lib/modulePermissionRequests.js';
 import { readSignals } from '../src/lib/agencySnapshot.js';
 import { validateDailyReading, composeReading, buildMorningBrief } from '../src/lib/dailyReading.js';
@@ -101,6 +102,9 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     chats.set(row.id, row); res.status(201).json(row);
   });
   const media = multer({ storage: multer.memoryStorage() });
+  // El adelanto del dictado, de muestra: el texto crece con cada tramo, como cuando la persona sigue hablando.
+  let previewStep = 0; const previewText = 'Bria, recuérdame mañana revisar la parrilla de Aristea y confirmar con Melissa las piezas que faltan'.split(' ');
+  api.post('/api/bria/conversations/dictation/preview', media.single('audio'), (_req, res) => { previewStep += 1; res.json({ text: previewText.slice(0, Math.min(previewText.length, previewStep * 6)).join(' ') }); });
   api.post('/api/bria/conversations/dictation', media.single('audio'), (_req, res) => res.json({ text: 'Este es un dictado de prueba.' }));
   api.get('/api/bria/conversations/:id', (req, res) => chats.has(req.params.id) ? res.json(chats.get(req.params.id)) : res.status(404).json({ message: 'Conversación no encontrada.' }));
   api.delete('/api/bria/conversations/:id', (req, res) => {
@@ -119,7 +123,14 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     const found = ANSWERS.find(entry => entry.match.test(question)) || DEFAULT_ANSWER;
     row.turns.push({ id: `${row.id}:${row.revision * 2}`, role: 'user', text: question, attachments: (req.files || []).map(file => ({ id: randomUUID(), name: file.originalname, size: file.size, status: 'READ' })) }, { id: `${row.id}:${row.revision * 2 + 1}`, role: 'assistant', text: found.answer, sources: found.sources || [], failures: found.failures || [] });
     if (!row.revision) row.title = question.slice(0, 90);
-    row.revision++; row.updatedAt = new Date().toISOString(); res.json(row);
+    row.revision++; row.updatedAt = new Date().toISOString();
+    // En la muestra de voz la respuesta llega en vivo, palabra por palabra, para ver a Bria hablar mientras escribe.
+    if (/[?&]voz/.test(String(req.headers.referer || '')) && String(req.headers.accept || '').includes('text/event-stream')) {
+      res.status(200).setHeader('Content-Type', 'text/event-stream; charset=utf-8'); res.flushHeaders?.();
+      for (const word of found.answer.split(/(?<=\s)/)) { res.write(`data: ${JSON.stringify({ type: 'delta', text: word })}\n\n`); await wait(45); }
+      res.write(`data: ${JSON.stringify({ type: 'done', chat: row })}\n\n`); return res.end();
+    }
+    res.json(row);
   });
   // Que Bria se mida (14 de octubre de 2026): el pulgar se guarda en el turno de Bria y vuelve el chat entero.
   api.post('/api/bria/conversations/:id/rating', async (req, res) => {
@@ -147,6 +158,18 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // La liga del buen uso (27 de octubre de 2026): a las 3 de la tarde, una vez al día, el puntaje del mes encima de la mascota. `?liga`.
   const leagueNudge = { key: 'LIGA_DIA:2026-11-02', kind: 'LIGA_DIA', title: 'Llevas 3 de 5 hoy en la liga de noviembre.', body: 'Te falta documentar la tarea que cerraste y pausar el reloj antes de salir. Vas 60 puntos en el mes.', url: '/dashboard?carrera', taskIds: [], progress: { score: 60, position: 'Vas 6.º de 13', detail: 'Hoy 3 de 5 hábitos', delta: 15 }, actions: [{ label: 'Ver la carrera', to: '/dashboard?carrera' }, { label: 'Que Bria me diga qué mejorar', ask: '¿Qué me falta para subir en la liga de noviembre?' }] };
   const morningNudge = { key: 'LECTURA_DIA:2026-10-20', kind: 'LECTURA_DIA', title: 'Bria dejó tu lectura de la mañana.', body: 'Cómo amanecieron las cuentas y el equipo, lo que haría hoy y lo que no haría.', url: null, conversationId: morningChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: morningChat.id }] };
+  // El borrador listo de un correo (20 de noviembre de 2026), con los botones que arma el mismo código de producción
+  // y datos ficticios. `?correo` muestra el aviso; `?correo=sinrespuesta`, el de un correo que sigue sin contestar.
+  const mailDraft = { summary: 'María confirma el pago de la primera cuota y pide el contrato firmado y la fecha de inicio de la campaña.', reply: 'Hola, María:\n\nGracias por compartir el soporte de pago; ya lo registramos. Adjuntamos el contrato firmado por nuestra parte para tu archivo.\n\nLa campaña inicia el [fecha de inicio]. Te confirmamos el cronograma completo en cuanto lo validemos con el equipo.\n\nQuedamos atentos.\n\nUn saludo,\nBrain Studio', to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota', canSend: true };
+  const mailNudges = (referer) => {
+    if (!/[?&]correo/.test(referer)) return null;
+    const unanswered = /correo=sinrespuesta/.test(referer);
+    const drafts = new Map([['<demo@aristea>', mailDraft]]);
+    const about = { clientName: 'Aristea', title: 'Contrato y primera cuota', messageId: '<demo@aristea>', personName: 'María Pérez', draft: mailDraft };
+    return [unanswered
+      ? { key: 'PULSO:demo-correo-2', kind: 'CORREO_SIN_RESPUESTA', title: 'Aristea · el correo de María Pérez sobre el contrato lleva un día hábil sin respuesta.', body: 'Conviene contestarle hoy; dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: withMailDrafts(nudgeActions({ kind: 'CORREO_SIN_RESPUESTA', ...about }), drafts) }
+      : { key: 'PULSO:demo-correo-1', kind: 'CORREO_IMPORTANTE', title: 'Aristea escribió sobre el contrato y la primera cuota.', body: 'María Pérez envió el soporte de pago y pide el contrato firmado. Dejé una respuesta lista para revisar.', url: null, taskIds: [], urgency: 'media', actions: withMailDrafts(nudgeActions({ kind: 'CORREO_IMPORTANTE', ...about }), drafts) }];
+  };
   let nudges = [
     { key: 'CIERRE_DIA:2026-10-13', kind: 'CIERRE_DIA', title: 'Bria dejó tu cierre del día.', body: 'Lo que cerraste, lo que queda en proceso, lo que vence mañana y cómo terminaron los avisos de hoy.', url: null, conversationId: closeChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: closeChat.id }] },
     { key: 'FOCO_SEMANAL:2026-W42', kind: 'FOCO_SEMANAL', title: 'Bria dejó tu foco de la semana.', body: 'Lo que vence, lo que está en proceso y cómo viene el equipo, en un solo lugar.', url: null, conversationId: focusChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: focusChat.id }] },
@@ -185,9 +208,26 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     res.json({ decided: true, request: permissionDecided, message: permissionDecisionMessage(permissionDecided) });
   });
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
+  // Enviar con aprobación, de muestra: nada sale de aquí; responde como el servidor cuando el correo se envía.
+  api.post('/api/bria/mail/reply', (req, res) => (/\[[^\]]+\]/.test(String(req.body?.text || '')) ? res.status(400).json({ message: 'Completa lo que quedó entre corchetes antes de enviarla.' }) : res.json({ sent: true, to: 'maria.perez@aristea.example', from: 'contacto@agencia.example', subject: 'Re: Contrato y primera cuota' })));
+  // La voz de Bria, de muestra (`?voz`): nada sale a ElevenLabs; el «audio» es un segundo y medio de tono suave.
+  api.get('/api/bria/voice', (req, res) => res.json(/[?&]voz/.test(String(req.headers.referer || '')) ? { enabled: true, remaining: 20000, ...(/[?&]voz=muda/.test(String(req.headers.referer || '')) ? { silent: true } : {}) } : { enabled: false }));
+  api.post('/api/bria/voice/speak', (_req, res) => {
+    const rate = 8000, samples = rate * 1.5, data = Buffer.alloc(samples * 2), header = Buffer.alloc(44);
+    for (let i = 0; i < samples; i += 1) data.writeInt16LE(Math.round(Math.sin(i / rate * 2 * Math.PI * 330) * 2500 * Math.min(1, (samples - i) / 2000)), i * 2);
+    header.write('RIFF', 0); header.writeUInt32LE(36 + data.length, 4); header.write('WAVEfmt ', 8); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
+    header.writeUInt32LE(rate, 24); header.writeUInt32LE(rate * 2, 28); header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34); header.write('data', 36); header.writeUInt32LE(data.length, 40);
+    res.type('audio/wav').send(Buffer.concat([header, data]));
+  });
+  // «Esperando por ti», de muestra (`?esperando`): la lista que arma el mismo código de producción con conteos ficticios.
+  api.get('/api/bria/waiting', async (req, res) => {
+    if (!/[?&]esperando/.test(String(req.headers.referer || ''))) return res.json({ items: [], failed: [] });
+    const { buildWaiting } = await import('../src/lib/briaWaiting.js');
+    return res.json({ items: buildWaiting({ decisions: 6, meetings: 2, mail: 1, actions: [{ id: 'da11e000-0000-4000-8000-000000000003', title: 'Pendiente para Aristea' }] }), failed: [] });
+  });
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
-    res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
+    res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (mailNudges(referer) ?? accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
   });
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.

@@ -68,3 +68,14 @@ test('aprobar y comentar siguen confirmándose contra el servidor', async () => 
   assert.match(portal, /Historial de [Ff]eedback|Lo que pediste/, 'el historial de comentarios se conserva');
   assert.match(portal, /strategicObjectives/, 'los objetivos estratégicos siguen visibles');
 });
+
+test('el enlace del cliente dice el período del contrato, va en claro y su cabecera no tiene alto fijo', async () => {
+  const { readFile: read } = await import('node:fs/promises');
+  const controller = await read(new URL('../src/controllers/publicController.js', import.meta.url), 'utf8');
+  const theme = await read(new URL('../src/context/ThemeContext.jsx', import.meta.url), 'utf8');
+  const portal = await read(new URL('../src/components/public/SharedContentPlan.jsx', import.meta.url), 'utf8');
+  // Sin `cycle` el portal decía «Parrilla de noviembre» de una parrilla del 15 de noviembre al 14 de diciembre.
+  assert.match(controller, /cycle: plan\.cycle \? \{ label: plan\.cycle\.label, start: plan\.cycle\.start, end: plan\.cycle\.end, mixed: plan\.cycle\.mixed \}/);
+  assert.match(theme, /pathname\.startsWith\('\/compartir\/'\)/);
+  assert.doesNotMatch(portal, /flex h-24 max-w-6xl/);
+});

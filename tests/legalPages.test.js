@@ -30,7 +30,13 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.20 · 2026-10-22$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.26 · 2026-11-21$/);
+    // 21 de noviembre de 2026: la respuesta rápida de Bria en voz nombra a Anthropic como encargado.
+    assert.match(page, /Anthropic, PBC/); assert.match(page, /primera respuesta rápida puede venir de un modelo de Anthropic/);
+    // 20 de noviembre de 2026: el borrador listo de un correo importante y el aviso de los que siguen sin respuesta.
+    assert.match(page, /un resumen corto y un borrador de respuesta para que lo revisen y lo envíen desde su correo/);
+    assert.match(page, /revisa solo los encabezados de la carpeta de enviados, nunca su contenido/);
+    assert.match(page, /ese resumen y ese borrador, durante 30 días/);
     assert.match(page, /nunca por persona, así que del resultado no se deduce el salario de nadie/);
     assert.match(page, /se guardan donde ella confirma, por la misma pantalla de siempre/);
     // 22 de octubre de 2026: por WhatsApp entran fotos, videos, documentos y notas de voz; un video es la pieza final solo si se confirma.
@@ -44,7 +50,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     assert.match(page, /WhatsApp de la agencia/);
     assert.match(page, /vincula su número desde su perfil/);
     assert.match(page, /ninguna contraseña se envía por WhatsApp/);
-    // 11 de octubre de 2026: Bria lee los buzones compartidos que un administrador conecta; no envía correos.
+    // 11 de octubre de 2026: Bria lee los buzones compartidos que un administrador conecta; no envía correos por su cuenta (desde el 20 de noviembre de 2026, solo con la aprobación de una persona).
     assert.match(page, /buzones compartidos/);
     assert.match(page, /no envía correos/);
     assert.match(page, /no guarda el cuerpo de los mensajes/);

@@ -87,6 +87,7 @@ export const pulseAlert = (message, { origin = WHATSAPP_PLATFORM_ORIGIN } = {}) 
   const head = [`*${String(message.title || '').trim()}*`, String(message.body || '').trim()].filter((part) => part && part !== '**').join('\n');
   return {
     kind: 'PULSE',
+    urgency: message.urgency || null,
     sourceRef: `pulse:${message.id}`,
     topic: 'el trabajo de hoy',
     text: link ? `${head}\n\n${link.label}: ${absolute(link.to, origin)}` : head,

@@ -34,6 +34,8 @@ CREATE INDEX IF NOT EXISTS whatsapp_inbound_recent ON bria_memory.whatsapp_inbou
 -- Avisos por WhatsApp (22 de octubre de 2026). `alerts_off` son los tipos que la persona apagó (vienen encendidos);
 -- `last_inbound_at` es su último mensaje, que abre la ventana de 24 horas en la que Bria escribe libre.
 ALTER TABLE bria_memory.whatsapp_links ADD COLUMN IF NOT EXISTS alerts_off TEXT[] NOT NULL DEFAULT '{}';
+-- Reglas por persona (20 de noviembre de 2026): «por WhatsApp solo lo urgente». De los avisos del día, solo los de urgencia alta.
+ALTER TABLE bria_memory.whatsapp_links ADD COLUMN IF NOT EXISTS pulse_urgent_only BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE bria_memory.whatsapp_links ADD COLUMN IF NOT EXISTS last_inbound_at TIMESTAMPTZ;
 -- Cada aviso que salió o se intentó, con su texto y sus botones: fuera de la ventana sale solo la plantilla y el
 -- aviso entero llega cuando la persona toca «Ver aviso». Es texto de la plataforma (lo mismo que la campana), nunca

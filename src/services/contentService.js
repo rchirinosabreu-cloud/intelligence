@@ -21,7 +21,7 @@ import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 import { publicationDate, lockPublicationSchedule, syncPublicationSchedule, transferContentPeriod } from './contentPeriodTransferService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
-import { planCycle as cycleOfPlan, periodMovePreview } from '../lib/publicationPeriod.js';
+import { planCycle as cycleOfPlan, periodMovePreview, outOfPeriodItems } from '../lib/publicationPeriod.js';
 import { communityOf, movePublicationTasks } from './planOwnerService.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 import { mutateContentDelivery, discardContentDeliveryObjects, CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES } from './contentDeliveryService.js';
@@ -224,6 +224,9 @@ const withCycles = async (plans) => {
 };
 const withCycle = async (plan) => (plan ? (await withCycles([plan]))[0] : plan);
 
+// Las piezas de la parrilla cuya fecha pertenece a otra, según el corte del contrato: la pantalla ofrece llevarlas.
+const misplacedOf = async (plan, items) => outOfPeriodItems(plan, items, (await contractsByClient([plan.clientId])).get(plan.clientId) || []);
+
 /** Qué pasaría si una pieza de `planId` queda con fecha `date`: si cambia de parrilla y si se sale del contrato. */
 export const previewPeriodMove = async ({ planId, date }) => {
   const key = publicationDate(date).toISOString().slice(0, 10);
@@ -297,6 +300,7 @@ export const getContentPlanById = async (id) => {
       ...normalizeContentPlan(await withCycle(plan)),
       contentItems: items,
       items,
+      misplacedItems: await misplacedOf(plan, items),
       // Por qué esta parrilla está congelada por una suspensión de cartera, o null. La pantalla lo dice arriba en vez
       // de dejar que la persona escriba media parrilla y se encuentre el 409 al guardar.
       suspendedReason: (await suspensionBlock(prisma, {
@@ -338,7 +342,8 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
     return {
       ...normalizeContentPlan(await withCycle(plan)),
       contentItems: items,
-      items
+      items,
+      misplacedItems: await misplacedOf(plan, items)
     };
   }
 
@@ -664,6 +669,54 @@ export const createContentItem = async (data, { actorId = null } = {}) => {
     return periodTransfer ? { ...await tx.contentItem.findUnique({ where: { id: created.id }, select }), periodTransfer } : created;
   });
   return normalizeContentItem(item);
+};
+
+/**
+ * Lleva a su parrilla las piezas de `planId` cuya fecha es de otra. Cada una pasa por el mismo camino que un cambio de
+ * fecha —tareas, Drive, cola de publicación, historial—, guardando otra vez la fecha que ya tiene. Una que no se pueda
+ * mover (se está publicando, parrilla congelada) no frena a las demás: se devuelve con su motivo.
+ */
+export const realignContentPlan = async (planId, { actorId = null, onlyIds = null } = {}) => {
+  const plan = await prisma.contentPlan.findFirst({ where: { id: planId, deletedAt: null },
+    select: { id: true, clientId: true, year: true, month: true,
+      contentItems: { where: { deletedAt: null }, select: { id: true, objective: true, publishDate: true } } } });
+  if (!plan) throw Object.assign(new Error('La parrilla ya no está disponible.'), { status: 404 });
+  const moved = [], failed = [];
+  for (const row of await misplacedOf(plan, plan.contentItems)) {
+    if (onlyIds && !onlyIds.includes(row.id)) continue;
+    try {
+      // El instante que ya tiene, no solo su día: así los plazos de sus tareas en Gestión no se corren.
+      const item = await updateContentItem(row.id, { publishDate: row.publishDate, expectedPlanId: plan.id }, { actorId });
+      if (item?.periodTransfer) moved.push({ id: row.id, toPlan: item.periodTransfer.toPlan });
+    } catch (error) {
+      failed.push({ id: row.id, objective: plan.contentItems.find(item => item.id === row.id)?.objective || '',
+        error: error.status ? error.message : 'No se pudo mover.' });
+    }
+  }
+  return { moved, failed };
+};
+
+/**
+ * Al arrancar (Rodny, 20 de noviembre de 2026: «la idea es que se arregle todo al desplegar»): lleva a su parrilla las
+ * piezas que quedaron en otra por el mes calendario. Solo las que todavía no se publicaron: lo publicado es historia y
+ * se mueve desde la parrilla, con el botón. Una vez hecho no encuentra nada, así que repetirlo en cada arranque no pesa.
+ */
+export const realignPendingContentItems = async ({ db = prisma, realign = realignContentPlan } = {}) => {
+  const plans = await db.contentPlan.findMany({ where: { deletedAt: null, contentItems: { some: { deletedAt: null, status: { not: 'PUBLICADO' } } } },
+    select: { id: true, clientId: true, year: true, month: true,
+      contentItems: { where: { deletedAt: null, status: { not: 'PUBLICADO' } }, select: { id: true, publishDate: true } } } });
+  const contracts = await contractsByClient(plans.map(plan => plan.clientId), db);
+  const summary = { moved: 0, failed: [] };
+  for (const plan of plans) {
+    const ids = outOfPeriodItems(plan, plan.contentItems, contracts.get(plan.clientId) || []).map(row => row.id);
+    if (!ids.length) continue;
+    try {
+      const result = await realign(plan.id, { onlyIds: ids });
+      summary.moved += result.moved.length;
+      summary.failed.push(...result.failed.map(row => ({ planId: plan.id, ...row })));
+    } catch (error) { summary.failed.push({ planId: plan.id, error: error.message }); }
+  }
+  return summary;
 };
 
 export const updateContentItem = async (id, data, { fromClientReview = false, actorId = null } = {}) => {
