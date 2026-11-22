@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { canUseLeague } from '@/lib/leagueVisibility';
+import { GUIDE_VERSIONS } from '@/lib/guideVersions';
 import WelcomeDialog from './WelcomeDialog';
 import QuotationGuide from './QuotationGuide';
 
@@ -66,7 +67,7 @@ export function OnboardingProvider({ userId, pathname, blocked = false, onBlocki
     saving.current = true;
     setBusy(true); setError('');
     try {
-      const result = await requestProgress({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guideId, version: 1, status }) });
+      const result = await requestProgress({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guideId, version: GUIDE_VERSIONS[guideId], status }) });
       if (!alive.current) return;
       if (guideId === 'welcome') setWelcomeDismissedPath(pathname);
       else setManualGuide(false);

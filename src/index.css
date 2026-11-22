@@ -584,6 +584,22 @@
 .league-sprite-wave {
   animation: league-sprite-wave 1.7s step-end 1 both;
 }
+/* Recorrido de la primera vez (Rodny, 21 de noviembre de 2026: «breve y dinámico»): cada paso entra de lado y sus
+   renglones aparecen uno tras otro. Con movimiento reducido todo queda quieto. */
+@keyframes league-tour-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes league-tour-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.league-tour-in {
+  animation: league-tour-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.league-tour-pop {
+  animation: league-tour-pop 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 .league-sprite-celebrate {
   animation: league-sprite-celebrate 2.1s step-end 1 both;
 }
@@ -599,6 +615,10 @@
     transform: translateX(var(--league-still, 0));
   }
   .league-trophy-hello {
+    animation: none;
+  }
+  .league-tour-in,
+  .league-tour-pop {
     animation: none;
   }
 }

@@ -72,7 +72,7 @@ export default function LeagueDock({ enabled = true, userId, welcome }) {
       </button>
       <LeaguePoseContext.Provider value={pose}>
         <RaceOfTheMonth open={open} onOpenChange={changeOpen} league={league || null} error={error} onRetry={refetch} returnFocusRef={dockRef}
-          introduction={introduction ? { busy: welcome.busy, error: welcome.error, onFinish: finishIntroduction } : null}
+          introduction={introduction ? { busy: welcome.busy, error: welcome.error, onFinish: finishIntroduction, interactive: Boolean(welcome.pending) } : null}
           onShowIntroduction={welcome ? () => setReplay(true) : undefined} />
       </LeaguePoseContext.Provider>
     </>

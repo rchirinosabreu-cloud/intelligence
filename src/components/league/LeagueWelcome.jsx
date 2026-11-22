@@ -1,56 +1,62 @@
 import React, { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Award, CalendarDays, Check, Hand, Sun, Users } from '@/components/ui/icons';
+import { ArrowRight, Check, Clock, Layers, Video, Zap } from '@/components/ui/icons';
 import { pixelAvatars } from './pixelAvatars';
-import { HABIT_POINTS, EXTRA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, RECOGNITION_POINTS } from '@/lib/platformLeague';
+import LeagueTour from './LeagueTour';
+import { CAMERA_POINTS, HABIT_POINTS, EXTRA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, RECOGNITION_POINTS } from '@/lib/platformLeague';
 
+// Presentación breve de las reglas del lunes 23 de noviembre de 2026 (Rodny, 21 de noviembre: «sería genial tener una
+// presentación breve»). La primera vez (`interactive`) es el recorrido animado de `LeagueTour`; después, «Ver bienvenida»
+// enseña este resumen fijo de una sola página: primero lo que cambia, después lo que sigue igual.
 const team = [['elisa', 'Elisa'], ['jesu', 'Jesu'], ['rodny', 'Rodny'], ['helen', 'Helen'], ['melissa', 'Melissa']];
-const waysToScore = [
-  { title: 'Cuida los hábitos', detail: 'Por cada hábito cumplido en un día hábil, también el trabajo registrado en cualquier módulo.', points: HABIT_POINTS, icon: Check },
-  { title: 'Registra la primera actividad', detail: 'Desde las 8:00 a. m., en horario de Bogotá.', points: EXTRA_POINTS, icon: Sun },
-  { title: 'Llega primero a tráfico', detail: 'Un administrador registra a las dos primeras personas en llegar.', points: MEETING_POINTS, icon: Users },
-  { title: 'Consigue logros', detail: 'Cada insignia obtenida también suma.', points: RECOGNITION_POINTS, icon: Award },
+const changes = [
+  { title: 'Tu área también suma', detail: 'Los registros de Financiero, las gestiones del CRM y las jornadas de producción con evidencia ya cuentan como esfuerzo.', icon: Layers },
+  { title: 'Cada hábito, con tu trabajo', detail: 'Los hábitos se miden con lo que hace tu área. El que no te aplica no juega en tu día.', icon: Check },
+  { title: 'Al día cierra a las 5:00 p. m.', detail: 'Lo ganas si a esa hora no tienes nada vencido, sin mover fechas.', icon: Clock },
+  { title: 'Cámara encendida en tráfico', detail: 'Un administrador la marca después de la reunión.', points: `+${CAMERA_POINTS}`, icon: Video },
+  { title: 'Entrega anticipada', detail: '5 puntos la primera del día y 2 la segunda.', points: 'hasta 7', icon: Zap },
+];
+const same = [
+  ['Cada hábito cumplido', HABIT_POINTS], ['Primera actividad desde las 8:00 a. m.', EXTRA_POINTS], ['Llegar primero a tráfico', MEETING_POINTS],
+  ['Cada logro', RECOGNITION_POINTS], ['Regalo semanal a un compañero', KUDOS_WEEKLY],
 ];
 
-export default function LeagueWelcome({ busy, error, onFinish }) {
+export default function LeagueWelcome({ interactive, ...props }) {
+  return interactive ? <LeagueTour {...props} /> : <LeagueSummary {...props} />;
+}
+
+function LeagueSummary({ busy, error, onFinish }) {
   const heading = useRef(null);
   useEffect(() => { heading.current?.focus(); }, []);
   return <section data-league-welcome className="flex min-h-0 flex-1 flex-col px-5 pb-5">
     <div data-welcome-content className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-5 custom-scrollbar">
-      <p className="mt-2 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">La liga del mes</p>
+      <p className="mt-2 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">Novedades · desde el lunes 23 de noviembre</p>
       <h2 ref={heading} tabIndex={-1} className="mt-2 text-3xl font-bold leading-tight text-zinc-900 outline-none dark:text-zinc-100">El buen trabajo suma</h2>
-      <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Los buenos hábitos merecen reconocimiento. Aquí cuentan los pendientes bien gestionados, los logros y la ayuda entre compañeros.</p>
-      <div data-welcome-team className="mt-5 flex h-32 items-end justify-center gap-2 overflow-hidden rounded-3xl bg-brand-cyan/10 px-3 pt-5 dark:bg-brand-cyan/10" aria-label="El equipo al frente">
-        {team.map(([key, name]) => <img key={key} src={pixelAvatars[key]} alt={name} draggable={false} className={`max-w-[18%] shrink-0 object-contain [image-rendering:pixelated] ${key === 'rodny' ? 'h-24' : 'h-20'}`} />)}
+      <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Ajustamos las reglas para que todas las áreas tengan la misma oportunidad de sumar.</p>
+      <div data-welcome-team className="mt-5 flex h-28 items-end justify-center gap-2 overflow-hidden rounded-3xl bg-brand-cyan/10 px-3 pt-4 dark:bg-brand-cyan/10" aria-label="El equipo al frente">
+        {team.map(([key, name]) => <img key={key} src={pixelAvatars[key]} alt={name} draggable={false} className={`max-w-[18%] shrink-0 object-contain [image-rendering:pixelated] ${key === 'rodny' ? 'h-20' : 'h-16'}`} />)}
       </div>
-      <h3 className="mb-1 mt-6 text-base font-bold text-zinc-900 dark:text-zinc-100">Así sumamos puntos</h3>
-      <ul className="divide-y divide-zinc-200 dark:divide-white/10">
-        {waysToScore.map(({ title, detail, points, icon: Icon }) => <li key={title} className="flex items-center gap-3 py-3.5">
+      <h3 className="mb-1 mt-6 text-base font-bold text-zinc-900 dark:text-zinc-100">Lo que cambia</h3>
+      <ul data-welcome-changes className="divide-y divide-zinc-200 dark:divide-white/10">
+        {changes.map(({ title, detail, points, icon: Icon }) => <li key={title} className="flex items-start gap-3 py-3.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-brand-cyan-deep dark:bg-zinc-900 dark:text-brand-cyan"><Icon aria-hidden="true" className="h-4 w-4" /></span>
           <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</p><p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{detail}</p></div>
-          <span className="shrink-0 text-base font-bold text-brand-green-deep dark:text-brand-green">+{points} <span className="text-xs font-normal">pts</span></span>
+          {points && <span className="shrink-0 whitespace-nowrap pt-0.5 text-sm font-bold text-brand-green-deep dark:text-brand-green">{points} <span className="text-xs font-normal">pts</span></span>}
         </li>)}
       </ul>
-      <section data-welcome-gift className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-        <h3 className="flex items-center gap-2 text-base font-bold text-zinc-900 dark:text-zinc-100"><Hand aria-hidden="true" className="h-4 w-4 text-brand-cyan-deep dark:text-brand-cyan" />La ayuda también cuenta</h3>
-        <p className="mt-3 text-sm leading-5 text-zinc-600 dark:text-zinc-300">Cada semana puedes regalar cinco puntos a una persona para agradecerle una ayuda o reconocer su trabajo.</p>
-        <div className="mt-4 flex items-center gap-3">
-          <img src={pixelAvatars.mariceth} alt="Mariceth" draggable={false} className="h-16 w-10 shrink-0 object-contain [image-rendering:pixelated]" />
-          <span className="rounded-xl bg-brand-magenta/10 px-3 py-2 text-xl font-bold text-brand-magenta-deep dark:bg-brand-magenta/15 dark:text-brand-coral">+{KUDOS_WEEKLY}</span>
-          <img src={pixelAvatars.elisa} alt="Elisa" draggable={false} className="h-16 w-10 shrink-0 object-contain [image-rendering:pixelated]" />
-          <p className="min-w-0 text-xs leading-5 text-zinc-500 dark:text-zinc-400">No salen de tu puntaje. El cupo se renueva cada lunes.</p>
-        </div>
+      <section data-welcome-same className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+        <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Lo que sigue igual</h3>
+        <ul className="mt-2">
+          {same.map(([label, points]) => <li key={label} className="flex items-baseline justify-between gap-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300">
+            <span className="min-w-0">{label}</span><span className="shrink-0 font-bold text-brand-green-deep dark:text-brand-green">+{points}</span>
+          </li>)}
+        </ul>
+        <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">La liga empieza de cero cada mes. Los días anteriores al lunes 23 quedan como se jugaron.</p>
       </section>
-      <div className="mt-4 flex items-center gap-3 rounded-2xl bg-brand-yellow/10 p-3.5 dark:bg-brand-yellow/5"><CalendarDays aria-hidden="true" className="h-4 w-4 shrink-0 text-brand-yellow-deep dark:text-brand-yellow" /><div><p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Un nuevo comienzo cada mes</p><p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Los puntos vuelven a cero y el resultado se valida al cierre.</p></div></div>
-      <div className="mt-5 grid grid-cols-3 gap-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-        <p><strong className="block text-zinc-900 dark:text-zinc-100">Mi mes</strong>Puntos y hábitos</p>
-        <p><strong className="block text-zinc-900 dark:text-zinc-100">Logros</strong>Insignias obtenidas</p>
-        <p><strong className="block text-zinc-900 dark:text-zinc-100">Equipo</strong>Posiciones y regalos</p>
-      </div>
     </div>
     <div className="shrink-0 border-t border-zinc-200 pt-3 dark:border-white/10">
       {error && <p role="alert" className="mb-3 text-sm text-destructive">{error}</p>}
-      <Button className="w-full rounded-xl" disabled={busy} onClick={() => onFinish('COMPLETED')}>{busy ? 'Guardando…' : 'Conocer la liga'}<ArrowRight className="h-4 w-4" /></Button>
+      <Button className="w-full rounded-xl" disabled={busy} onClick={() => onFinish('COMPLETED')}>{busy ? 'Guardando…' : 'Entendido'}<ArrowRight className="h-4 w-4" /></Button>
     </div>
   </section>;
 }

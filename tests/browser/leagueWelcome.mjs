@@ -15,7 +15,7 @@ let allowed = false, progress = {}, rejectSave = true, writes = 0, reads = 0;
 await page.route('**/api/user/onboarding', async route => {
   if (route.request().method() === 'POST') {
     const input = route.request().postDataJSON();
-    assert.equal(input.guideId, 'liga'); assert.equal(input.version, 1);
+    assert.equal(input.guideId, 'liga'); assert.equal(input.version, 2);
     writes++;
     if (rejectSave) { rejectSave = false; return route.fulfill({ status: 500, json: { error: 'No pudimos guardar tu bienvenida.' } }); }
     progress = { liga: input.status };
@@ -41,18 +41,26 @@ try {
   assert.equal(await page.locator('[data-league-panel]').count(), 0, 'invitation does not automatically open a window');
   await page.screenshot({ path: `${output}/bienvenida-invitacion.png` });
   await bubble.getByRole('button', { name: /Hey/ }).click();
-  await guide.getByRole('heading', { name: /El buen trabajo/ }).waitFor();
+  // La primera vez es el recorrido animado: seis pasos, avatares con gesto y el cierre guarda el avance.
+  await guide.getByRole('heading', { name: 'El buen trabajo suma' }).waitFor();
+  assert.equal(await guide.getAttribute('data-tour-step'), 'inicio');
+  assert.match(await guide.innerText(), /última semana de noviembre/);
+  assert.equal(await guide.locator('[data-tour-stage] [data-runner-avatar]').count(), 5);
   await guide.screenshot({ path: `${output}/bienvenida-1.png` });
-  assert.equal(await guide.getByRole('button', { name: 'Siguiente' }).count(), 0);
-  assert.equal(await guide.locator('[data-welcome-team] img').count(), 5);
-  assert.equal(await guide.locator('[data-welcome-gift] img').count(), 2);
-  assert.equal(await guide.getByRole('heading', { name: 'La ayuda también cuenta' }).count(), 1);
-  assert.equal(await guide.locator('li').count(), 4, 'gift has its own explanation instead of a repeated row');
-  assert.doesNotMatch(await guide.innerText(), /Tu avatar te acompaña|1 de 3|Tu buen trabajo|Tu liga del mes/);
-  await guide.getByRole('button', { name: 'Conocer la liga' }).click();
+  await guide.getByRole('button', { name: 'Ver lo nuevo' }).click();
+  for (const step of ['area', 'cierre', 'camara', 'anticipada']) {
+    assert.equal(await guide.getAttribute('data-tour-step'), step);
+    assert.equal(await guide.locator('[data-welcome-content]').evaluate(el => el.scrollWidth <= el.clientWidth), true);
+    await guide.getByRole('button', { name: 'Siguiente' }).click();
+  }
+  assert.equal(await guide.getAttribute('data-tour-step'), 'final');
+  await guide.getByRole('button', { name: 'Paso anterior' }).click();
+  assert.equal(await guide.getAttribute('data-tour-step'), 'anticipada');
+  await guide.getByRole('button', { name: 'Siguiente' }).click();
+  await guide.getByRole('button', { name: '¡A darla toda!' }).click();
   await guide.getByRole('alert').waitFor();
   assert.equal(writes, 1); assert.deepEqual(progress, {});
-  await guide.getByRole('button', { name: 'Conocer la liga' }).click();
+  await guide.getByRole('button', { name: '¡A darla toda!' }).click();
   await guide.waitFor({ state: 'hidden' });
   assert.deepEqual(progress, { liga: 'COMPLETED' });
   await page.reload();
@@ -60,9 +68,14 @@ try {
   assert.equal(await bubble.count(), 0, 'completion survives reload through server progress');
   await dock.click();
   assert.equal(await guide.count(), 0);
+  // Después, «Ver bienvenida» enseña el resumen fijo de una sola página.
   await page.getByRole('button', { name: 'Ver bienvenida' }).click();
   await guide.waitFor();
-  await guide.getByRole('button', { name: 'Conocer la liga' }).click();
+  assert.equal(await guide.getAttribute('data-league-tour'), null);
+  assert.equal(await guide.getByRole('button', { name: 'Siguiente' }).count(), 0);
+  assert.equal(await guide.locator('[data-welcome-changes] li').count(), 5);
+  assert.equal(await guide.locator('[data-welcome-same] li').count(), 5);
+  await guide.getByRole('button', { name: 'Entendido' }).click();
   await guide.waitFor({ state: 'hidden' });
   assert.equal(writes, 2, 'replaying the guide does not overwrite completion');
 
@@ -77,9 +90,7 @@ try {
   await guide.waitFor();
   await guide.screenshot({ path: `${output}/bienvenida-movil-oscuro.png` });
   assert.equal(await guide.evaluate(el => el.scrollWidth <= el.clientWidth), true);
-  assert.equal(await guide.getByRole('button', { name: 'Conocer la liga' }).evaluate(el => { const box = el.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; }), true, 'entry stays visible while the single-page explanation scrolls');
-  await guide.locator('[data-welcome-gift]').scrollIntoViewIfNeeded();
-  await guide.screenshot({ path: `${output}/bienvenida-equipo-regalo-movil.png` });
+  assert.equal(await guide.getByRole('button', { name: 'Ver lo nuevo' }).evaluate(el => { const box = el.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; }), true, 'the next step stays visible');
   allowed = false;
   await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
   await dock.waitFor({ state: 'hidden' });
