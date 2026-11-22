@@ -44,6 +44,18 @@ const steps = [
 export default function LeagueTour({ busy, error, onFinish }) {
   const [index, setIndex] = useState(0);
   const heading = useRef(null);
+  // El escenario ocupa el alto que sobra (Rodny, 21 de noviembre de 2026: «queda demasiado espacio debajo») y los
+  // avatares crecen con él, para que el paso llene el panel en pantallas altas sin cortarse en las bajas.
+  const stage = useRef(null);
+  const [stageBox, setStageBox] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const node = stage.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => setStageBox({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) }));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [index]);
+
   const step = steps[index], last = index === steps.length - 1;
   useEffect(() => { heading.current?.focus(); }, [index]);
   const go = delta => setIndex(value => Math.min(steps.length - 1, Math.max(0, value + delta)));
@@ -53,15 +65,23 @@ export default function LeagueTour({ busy, error, onFinish }) {
     if (event.key === 'ArrowLeft') go(-1);
   };
   const Badge = step.badge?.icon;
+  // El alto manda, pero el reparto entero tiene que caber a lo ancho: cada avatar ocupa unos tres cuartos de su alto.
+  const lowStage = stageBox.height < 150;
+  const room = (stageBox.width - 24 - (step.badge && lowStage ? 84 : 0) - 12 * (step.cast.length - 1)) / step.cast.length / 0.78;
+  const avatarSize = Math.round(Math.max(44, Math.min(132, stageBox.height * 0.62, room || 132)));
   return <section data-league-welcome data-league-tour data-tour-step={step.id} onKeyDown={onKeyDown} className="flex min-h-0 flex-1 flex-col px-5 pb-5">
     <div data-welcome-content className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-4 custom-scrollbar">
-      <div key={step.id} className="league-tour-in">
-        <div data-tour-stage className={cn('relative mt-2 flex h-20 items-end justify-center gap-3 overflow-hidden rounded-3xl px-3 pt-4 [@media(min-height:660px)]:h-24 [@media(min-height:700px)]:h-32 [@media(min-height:820px)]:h-40', step.badge && 'pr-28', step.tone)}>
-          <LeaguePoseContext.Provider value={step.pose}>
-            {step.cast.map((person, order) => <RunnerAvatar key={person.pixelAvatarKey} person={person} size={56} phase={order} title={person.name} className="mb-1" />)}
-          </LeaguePoseContext.Provider>
+      <div key={step.id} className="league-tour-in flex min-h-full flex-col">
+        <div ref={stage} data-tour-stage className={cn('relative mt-2 min-h-20 flex-1 basis-0 overflow-hidden rounded-3xl', step.tone)}>
+          {/* El reparto va fuera del flujo: así el alto del escenario es solo el espacio que sobra y no depende del avatar. */}
+          <div className={cn('absolute inset-0 flex items-end justify-center gap-3 px-3', step.badge && lowStage && 'pr-24')}>
+            <LeaguePoseContext.Provider value={step.pose}>
+              {stageBox.height > 0 && step.cast.map((person, order) => <RunnerAvatar key={person.pixelAvatarKey} person={person} size={avatarSize} phase={order} title={person.name} className="mb-2" />)}
+            </LeaguePoseContext.Provider>
+          </div>
           {step.badge && <span className="league-tour-pop absolute right-3 top-3 flex items-center gap-1.5 rounded-xl bg-white px-2.5 py-1.5 text-sm font-bold text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100"><Badge aria-hidden="true" className="h-4 w-4 text-brand-cyan-deep dark:text-brand-cyan" />{step.badge.label}</span>}
         </div>
+        <div className="shrink-0">
         <p className="mt-4 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{step.eyebrow}</p>
         <h2 ref={heading} tabIndex={-1} className="mt-1 text-2xl font-bold leading-tight text-zinc-900 outline-none dark:text-zinc-100">{step.title}</h2>
         {step.lead && <p className="mt-3 text-base font-semibold leading-6 text-zinc-900 dark:text-zinc-100">{step.lead}</p>}
@@ -72,6 +92,7 @@ export default function LeagueTour({ busy, error, onFinish }) {
           </li>)}
         </ul>}
         {step.note && <p className="mt-3 rounded-xl bg-zinc-200/60 px-3 py-2 text-xs leading-5 text-zinc-600 dark:bg-white/5 dark:text-zinc-300">{step.note}</p>}
+        </div>
       </div>
     </div>
     <div className="shrink-0 border-t border-zinc-200 pt-3 dark:border-white/10">
