@@ -2,16 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from '@/components/ui/icons';
-import { Bria3D, BriaIsotipo } from '@/components/bria/BriaBrand';
+import { BriaIsotipo } from '@/components/bria/BriaBrand';
+import { RecognitionMedal } from '@/components/league/RecognitionCollection';
 import { recognitionLabels, recognitionMotion, recognitionParagraphs } from '@/lib/recognitionPresentation';
 import { RECOGNITION_POINTS } from '@/lib/platformLeague';
 import { cn } from '@/lib/utils';
 
-// El aviso de un logro con la marca de Bria (Rodny, 18 de noviembre de 2026: «aparecería siempre como la variante
-// compacta … si le doy clic, se abre el logro desbloqueado … que no sea tan grande, tan invasiva»). Llega como una
-// píldora con el isotipo, el nombre y los puntos; tocarla abre la tarjeta, baja, con Bria celebrando desde la esquina.
-// Sobre el degradado el texto va en azul noche: el blanco no se lee sobre la menta. Se va sola, y el tiempo se detiene
-// mientras el cursor o el foco están encima. `leagueEnabled` decide si se nombran los puntos y la liga.
+// El aviso de un logro (Rodny, 18 de noviembre de 2026: «aparecería siempre como la variante compacta … si le doy clic,
+// se abre el logro desbloqueado … que no sea tan grande, tan invasiva»). Llega como una píldora; tocarla abre la tarjeta.
+// La medalla al frente (Rodny, 21 de noviembre de 2026, opción 1 de tres): cada logro enseña su propia medalla, la misma
+// de la colección de la liga (`RecognitionMedal`), en la píldora y arriba de la tarjeta, que es blanca y centrada, sin
+// franja de degradado; el isotipo de Bria firma abajo. Se va sola, y el tiempo se detiene mientras el cursor o el foco
+// están encima. `leagueEnabled` decide si se nombran los puntos y la liga.
 
 export const OPEN_LEAGUE_EVENT = 'brain:league:open';
 export const openLeague = () => window.dispatchEvent(new CustomEvent(OPEN_LEAGUE_EVENT));
@@ -27,7 +29,7 @@ function Particles({ count }) {
     import('canvas-confetti').then(({ default: confetti }) => {
       if (cancelled || !canvas.current) return;
       burst = confetti.create(canvas.current, { resize: true, disableForReducedMotion: true });
-      burst({ particleCount: count, spread: 70, startVelocity: 16, gravity: 0.7, ticks: 65, scalar: 0.65, origin: { x: 0.16, y: 0.4 }, colors: ['#72DD9B', '#2BC1AF', '#14AEBC', '#FBC219'], disableForReducedMotion: true });
+      burst({ particleCount: count, spread: 70, startVelocity: 16, gravity: 0.7, ticks: 65, scalar: 0.65, origin: { x: 0.5, y: 0.22 }, colors: ['#72DD9B', '#2BC1AF', '#14AEBC', '#FBC219'], disableForReducedMotion: true });
     }).catch(error => console.error('[Recognition] Optional animation unavailable:', error));
     return () => { cancelled = true; burst?.reset(); };
   }, [count]);
@@ -62,7 +64,7 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
   const message = event.personalMessage || event.description;
   const paragraphs = recognitionParagraphs(message);
   const firstLine = paragraphs[0] || '';
-  const close = <button type="button" onClick={onDismiss} aria-label="Cerrar reconocimiento" className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan', open ? 'text-bria-night hover:bg-white/30' : 'text-bria-muted hover:bg-bria-night/5 dark:text-zinc-300 dark:hover:bg-white/10')}><X className="h-4 w-4" aria-hidden="true" /></button>;
+  const close = <button type="button" onClick={onDismiss} aria-label="Cerrar reconocimiento" className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan', 'text-bria-muted hover:bg-bria-night/5 dark:text-zinc-300 dark:hover:bg-white/10')}><X className="h-4 w-4" aria-hidden="true" /></button>;
   return (
     <motion.aside
       data-recognition-notice data-recognition-state={open ? 'open' : 'pill'} role="status" aria-label="Reconocimiento personal" aria-live="polite" aria-atomic="true"
@@ -71,13 +73,13 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       onFocusCapture={() => setFocused(true)} onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
       className={cn('pointer-events-auto relative w-full border text-bria-night dark:text-white',
-        open ? 'mt-9 rounded-[20px] border-bria-night/5 bg-white shadow-[0_22px_44px_-20px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:shadow-[0_22px_44px_-18px_rgba(0,0,0,0.7)]'
+        open ? 'mt-12 rounded-[20px] border-bria-night/5 bg-white shadow-[0_22px_44px_-20px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:shadow-[0_22px_44px_-18px_rgba(0,0,0,0.7)]'
           : 'rounded-full border-bria-night/5 bg-white p-1.5 pl-2 shadow-[0_12px_28px_-16px_rgba(9,32,56,0.45)] dark:border-white/10 dark:bg-bria-night dark:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.6)]')}
     >
       {!open ? <div className="flex items-center gap-1">
         <button type="button" onClick={() => setOpen(true)} aria-expanded="false" aria-label={`Abrir el logro ${title}`}
           className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full pl-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan">
-          <BriaIsotipo className="h-9 shrink-0" />
+          <RecognitionMedal kind={event.kind} small />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate font-bria text-base font-bold leading-5">{title}</span>
             <span className="truncate text-sm leading-5 text-bria-muted dark:text-zinc-300">{firstLine}</span>
@@ -86,23 +88,23 @@ function Notice({ event, style, onDismiss, durationMs, leagueEnabled }) {
         </button>
         {close}
       </div> : <>
-        <div className="relative h-[70px] overflow-hidden rounded-t-[20px] bg-bria pl-[100px] pr-12 pt-3">
-          <p className="text-sm font-medium leading-5 text-bria-night/90">Logro desbloqueado</p>
-          <p className="truncate font-bria text-xl font-bold leading-7 text-bria-night">{title}</p>
-          <svg aria-hidden="true" viewBox="0 0 360 30" preserveAspectRatio="none" className="absolute inset-x-0 -bottom-px h-4 w-full fill-white dark:fill-bria-night"><path d="M0 30 L0 16 C70 2 130 28 205 15 C262 5 312 7 360 19 L360 30 Z" /></svg>
-        </div>
-        <motion.span aria-hidden="true" className="pointer-events-none absolute -top-[34px] left-1.5 w-[88px]"
-          initial={animation.duration ? { y: 12, rotate: -6 } : false} animate={{ y: 0, rotate: 0 }} transition={{ duration: animation.duration ? 0.45 : 0, ease: [0.22, 1, 0.36, 1] }}>
-          <Bria3D mood="celebra" className="w-full" />
+        <motion.span aria-hidden="true" className="pointer-events-none absolute -top-11 left-1/2 -ml-[46px] rounded-full bg-white p-1.5 dark:bg-bria-night"
+          initial={animation.duration ? { y: 10, scale: 0.9 } : false} animate={{ y: 0, scale: 1 }} transition={{ duration: animation.duration ? 0.4 : 0, ease: [0.22, 1, 0.36, 1] }}>
+          <RecognitionMedal kind={event.kind} />
         </motion.span>
         <div className="absolute right-0.5 top-0.5">{close}</div>
-        <div className="flex flex-col gap-3 px-[18px] pb-4 pt-1.5">
+        <div className="flex flex-col items-center gap-2 px-5 pb-4 pt-14 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-bria-muted dark:text-zinc-400">Logro desbloqueado</p>
+          <p className="max-w-full text-balance font-bria text-xl font-bold leading-7">{title}</p>
           {paragraphs.map((text, index) => <p key={index} className="text-pretty text-base leading-6 text-bria-ink dark:text-zinc-200">{text}</p>)}
           {event.demo && <p className="text-xs text-bria-muted dark:text-zinc-400">Ejemplo local · No se otorgan premios reales</p>}
-          {leagueEnabled && <div className="flex items-center gap-2">
-            <span className={POINTS_CHIP}>{STAR}+{event.points ?? RECOGNITION_POINTS} puntos</span>
-            <button type="button" onClick={() => { openLeague(); onDismiss(); }} className="ml-auto flex h-11 items-center rounded-xl bg-bria-night px-3.5 text-sm font-semibold text-white hover:bg-bria-night/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:bg-white dark:text-bria-night dark:hover:bg-white/90">Ver la liga</button>
-          </div>}
+          <div className="mt-1 flex w-full items-center gap-2 border-t border-bria-night/5 pt-3 dark:border-white/10">
+            <BriaIsotipo className="h-7 shrink-0" />
+            {leagueEnabled ? <>
+              <span className={POINTS_CHIP}>{STAR}+{event.points ?? RECOGNITION_POINTS} puntos</span>
+              <button type="button" onClick={() => { openLeague(); onDismiss(); }} className="ml-auto flex h-11 items-center rounded-xl bg-bria-night px-3.5 text-sm font-semibold text-white hover:bg-bria-night/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bria-cyan dark:bg-white dark:text-bria-night dark:hover:bg-white/90">Ver la liga</button>
+            </> : <span className="text-sm text-bria-muted dark:text-zinc-400">Bria</span>}
+          </div>
         </div>
       </>}
       {animation.particles > 0 && open && <Particles count={animation.particles} />}
