@@ -8,7 +8,7 @@ export const DAILY_HABITS = [
   { key: 'RELOJ', label: 'Reloj', hint: 'En las tareas que trabajaste con reloj llegaste a 10 minutos, sin relojes olvidados. Lo que pasa directo a realizado no aplica.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
   // Al día, A tiempo y Documentado también se leen de la fuente de cada área (Rodny, 12 de noviembre de 2026: «Sí,
   // hábitos por área»): Parrillas, el CRM, Pautas y Financiero, además de las tareas. Ver `leagueAreaChecks.js`.
-  { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido a las 5:00 pm: tareas, piezas sin publicar, seguimientos del CRM, el gasto final de tus pautas, cuentas por pagar ni jornadas sin evidencia.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },
+  { key: 'AL_DIA', label: 'Al día', hint: 'Nada tuyo quedó vencido a las 5:00 pm: tareas, piezas sin publicar, seguimientos del CRM, el gasto final de tus pautas ni jornadas sin evidencia.', step: 'Saca lo vencido: cierra o reprograma tus tareas, publica lo atrasado y pon al día tus seguimientos.' },
   { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Entregaste a tiempo: tus pendientes antes de su fecha, las piezas de hoy publicadas o programadas, tus pagos en su fecha y la evidencia de la jornada el mismo día.', step: 'Cierra hoy lo que vence hoy y deja publicadas o programadas las piezas del día.' },
   // Contexto real (Rodny, 12 de noviembre de 2026): veinte letras, un archivo o un enlace, y solo en lo que se delega.
   { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Lo que delegas lleva contexto real: un comentario de al menos 20 letras, un archivo o un enlace. También cuentan tus gestiones del CRM con nota y tus movimientos con soporte.', step: 'Dale contexto a lo que delegaste hoy: un comentario de al menos 20 letras, un archivo o un enlace.' },
@@ -83,7 +83,8 @@ export const PROPORTION_KEY = 'PROPORCION';
 /** Los puntos de esfuerzo de un día: un punto por tarea cerrada con reloj, con techo. */
 export function effortPoints(entry) {
   const tasks = Number(entry?.extras?.[EFFORT_KEY]);
-  return Number.isFinite(tasks) && tasks > 0 ? Math.min(tasks, EFFORT_DAILY_CAP) * EFFORT_POINTS_PER_TASK : 0;
+  // Los registros de Financiero sin soporte valen medio punto: el día se redondea al punto para que el puntaje siga entero.
+  return Number.isFinite(tasks) && tasks > 0 ? Math.round(Math.min(tasks, EFFORT_DAILY_CAP) * EFFORT_POINTS_PER_TASK) : 0;
 }
 
 /**

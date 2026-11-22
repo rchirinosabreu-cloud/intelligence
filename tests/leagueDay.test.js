@@ -3,6 +3,7 @@
 // devolvieron. Un hábito que no se jugó es `null` y nunca resta; un juicio nunca aparece en la evidencia.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { effortPoints } from '../src/lib/platformLeague.js';
 import { evaluateLeagueDay, isoWeekKey, isoWeekRange, previousWeekRange, openWindowOf, bogotaTimeOf, isProductionWork, workRecordFromTrace, MIN_MEASURED_MS, FORGOTTEN_SESSION_MS } from '../src/lib/leagueDay.js';
 
 const DAY = '2026-11-03';
@@ -224,12 +225,13 @@ test('a project manager only plays Sin devolución the day more than five tasks 
 
 test('Elisa’s good day: her area sources play Al día, A tiempo and Sin devolución, and her records count as effort', () => {
   const NEW = '2026-11-23';
-  const areaChecks = { AL_DIA: [{ source: 'Cuentas por pagar', ok: true, text: 'Ninguna cuenta por pagar vencida.' }], A_TIEMPO: [{ source: 'Financiero', ok: true, text: '2 de 2 pagos hechos en su fecha.' }],
+  const areaChecks = { AL_DIA: [], A_TIEMPO: [{ source: 'Financiero', ok: true, text: '2 de 2 pagos hechos en su fecha.' }],
     DOCUMENTADO: [{ source: 'Financiero', ok: true, text: '6 de 6 registros con soporte o nota.' }], SIN_DEVOLUCION: [{ source: 'Financiero', ok: true, text: 'Ningún registro anulado por otra persona.' }] };
-  Object.defineProperty(areaChecks, 'effort', { value: [{ source: 'Financiero', units: 6, text: '6 registros en Financiero' }], enumerable: false });
+  Object.defineProperty(areaChecks, 'effort', { value: [{ source: 'Financiero', units: 4.5, text: '6 registros en Financiero, 3 con soporte' }], enumerable: false });
   const day = evaluateLeagueDay({ day: NEW, workRecords: ['Financiero'], presence: true, returnedToday: 0, areaChecks, areas: ['ADMINISTRATIVA'] });
-  assert.deepEqual(day.habits, { RELOJ: null, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.equal(day.extras.ESFUERZO, 6);
-  assert.equal(day.evidence.ESFUERZO, '6 registros en Financiero.');
+  assert.deepEqual(day.habits, { RELOJ: null, AL_DIA: null, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
+  assert.equal(day.extras.ESFUERZO, 4.5);
+  assert.equal(effortPoints(day), 5, 'the day rounds to the point so scores stay whole');
+  assert.equal(day.evidence.ESFUERZO, '6 registros en Financiero, 3 con soporte.');
   assert.equal(day.evidence.SIN_DEVOLUCION, 'Financiero: Ningún registro anulado por otra persona.');
 });

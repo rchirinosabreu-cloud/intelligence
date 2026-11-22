@@ -111,13 +111,16 @@ test('from 23 November: Elisa plays Al día, A tiempo and Sin devolución with F
   db.crmActivity.findMany = async () => [{ authorId: 'u-francys', note: 'Pidió la propuesta en PDF para el lunes', result: null, requestId: null }];
   db.contentItem.findMany = async () => [{ status: 'PUBLICADO', plan: { clientId: 'c-verona' } }, { status: 'APROBADO', plan: { clientId: 'c-verona' } }, { status: 'PROGRAMADO', plan: { clientId: 'c-endova' } }];
   db.accountsPayable.findMany = async ({ where }) => {
-    if (where.status) return [{ dueDate: new Date('2026-11-20T00:00:00Z') }, { dueDate: new Date('2026-11-30T00:00:00Z') }, { dueDate: null }];
+    assert.equal(where.status, undefined, 'overdue payables are never read: they are not her fault');
     if (where.voidedAt?.gte) return [{ createdById: 'u-elisa', voidedById: 'u-elisa' }, { createdById: 'u-elisa', voidedById: 'u-rodny' }];
     return [{ createdById: 'u-elisa', notes: 'Arriendo', documentNumber: null, documents: [] }];
   };
   db.payablePayment = { findMany: async ({ where }) => where.reversedAt?.gte ? [] : [
     { createdById: 'u-elisa', paidAt: new Date('2026-11-23T12:00:00Z'), financialRecordId: 'r1', payable: { dueDate: new Date('2026-11-25T00:00:00Z') } },
     { createdById: 'u-elisa', paidAt: new Date('2026-11-23T12:00:00Z'), financialRecordId: null, payable: { dueDate: new Date('2026-11-20T00:00:00Z') } }] };
+  db.financialRecordDocument = { findMany: async ({ where }) => { assert.deepEqual(where.record.createdAt, { lt: from });
+    return [{ recordId: 'old-1', record: { createdById: 'u-elisa', documents: [] } }, { recordId: 'old-1', record: { createdById: 'u-elisa', documents: [] } }, { recordId: 'old-2', record: { createdById: 'u-elisa', documents: [{ id: 'd0' }] } }]; } };
+  db.accountsPayableDocument = { findMany: async () => [] };
   db.receivablePayment = { findMany: async ({ where }) => { assert.deepEqual(where.createdById, { in: ['u-elisa'] }, 'only Administrativa is read'); return []; } };
   db.productionDay = { findMany: async ({ where }) => where.evidenceAt
     ? (assert.equal(where.evidenceAt.gte.toISOString(), '2026-11-20T23:05:00.000Z', 'from the close of the previous business day, so a weekend upload counts on Monday'),
@@ -126,10 +129,11 @@ test('from 23 November: Elisa plays Al día, A tiempo and Sin devolución with F
   const sources = createLeagueAreaSources({ db, listOverduePlans: plans, describeBudget: describe, now: () => new Date(`${NEW}T20:00:00Z`) });
   const checks = await sources.read({ dayKey: NEW, isToday: true, start: from, end: to, members: team });
   const elisa = checks.get('m-elisa');
-  assert.deepEqual(elisa.AL_DIA, [{ source: 'Cuentas por pagar', ok: false, text: '1 cuenta por pagar vencida sin pagar.' }]);
+  assert.deepEqual(elisa.AL_DIA, [], 'overdue payables do not play');
   assert.deepEqual(elisa.A_TIEMPO, [{ source: 'Financiero', ok: false, text: '1 de 2 pagos hechos en su fecha.' }]);
   assert.deepEqual(elisa.SIN_DEVOLUCION, [{ source: 'Financiero', ok: false, text: '1 registro anulado por otra persona.' }], 'correcting her own record does not count');
-  assert.deepEqual(elisa.effort, [{ source: 'Financiero', units: 4, text: '4 registros en Financiero' }], 'two movements, one payable and the payment without its own movement');
+  assert.deepEqual(elisa.effort, [{ source: 'Financiero', units: 3.5, text: '4 registros en Financiero, 2 con soporte y 1 soporte agregado a un registro anterior' }],
+    'with support: one movement and the payment without its own movement (1 each); without: one movement and one payable (half each); plus half for the support added to an older record');
   assert.deepEqual(Object.keys(elisa), ['AL_DIA', 'A_TIEMPO', 'DOCUMENTADO', 'SIN_DEVOLUCION'], 'effort travels apart from the habits');
   const brayan = checks.get('m-brayan');
   assert.deepEqual(brayan.A_TIEMPO, [{ source: 'Jornadas', ok: true, text: '1 de 1 evidencia subida el mismo día de la jornada.' }]);
@@ -138,5 +142,4 @@ test('from 23 November: Elisa plays Al día, A tiempo and Sin devolución with F
   assert.deepEqual(checks.get('m-rodny').A_TIEMPO, [], 'the project manager no longer plays today\'s pieces');
   assert.equal(checks.get('m-rodny').AL_DIA.length, 1, 'but still answers for overdue pieces of the account');
   assert.equal(checks.get('m-kamila').A_TIEMPO.length, 1);
-  assert.equal(checks.get('m-kamila').AL_DIA.some((check) => check.source === 'Cuentas por pagar'), false);
 });

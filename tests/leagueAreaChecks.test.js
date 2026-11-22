@@ -82,20 +82,21 @@ test('merge: a source plays even without tasks, and the habit is won only if eve
 });
 
 // Liga más pareja (Rodny, 21 de noviembre de 2026): las fuentes de Administrativa y de Producción audiovisual.
-test('Administrativa: overdue payables lose Al día; payments play A tiempo against the due date; only what someone else voided loses Sin devolución', async () => {
-  const { payablesOverdueCheck, financialOnTimeCheck, financialVoidCheck, areaEquityActive, AREA_EQUITY_FROM } = await import('../src/lib/leagueAreaChecks.js');
+test('Administrativa: payments play A tiempo against the due date; only what someone else voided loses Sin devolución; a record is worth half a point and a full one with its support', async () => {
+  const checks = await import('../src/lib/leagueAreaChecks.js');
+  const { financialOnTimeCheck, financialVoidCheck, financeEffort, areaEquityActive, AREA_EQUITY_FROM } = checks;
   assert.equal(AREA_EQUITY_FROM, '2026-11-23');
   assert.equal(areaEquityActive('2026-11-20'), false);
   assert.equal(areaEquityActive('2026-11-23'), true);
-  assert.equal(payablesOverdueCheck(null), null);
-  assert.equal(payablesOverdueCheck({ open: 0, overdue: 0 }), null, 'nothing open: not played');
-  assert.deepEqual(payablesOverdueCheck({ open: 4, overdue: 0 }), { source: 'Cuentas por pagar', ok: true, text: 'Ninguna cuenta por pagar vencida.' });
-  assert.deepEqual(payablesOverdueCheck({ open: 4, overdue: 2 }), { source: 'Cuentas por pagar', ok: false, text: '2 cuentas por pagar vencidas sin pagar.' });
+  assert.equal(checks.payablesOverdueCheck, undefined, 'overdue payables are not her fault: they never play Al día');
   assert.equal(financialOnTimeCheck([{ doneOn: '2026-11-23', dueOn: null }]), null, 'without a due date it does not play');
   assert.deepEqual(financialOnTimeCheck([{ doneOn: '2026-11-23', dueOn: '2026-11-25' }, { doneOn: '2026-11-23', dueOn: '2026-11-20' }]), { source: 'Financiero', ok: false, text: '1 de 2 pagos hechos en su fecha.' });
   assert.equal(financialVoidCheck({ registered: 0, voidedByOthers: 0 }), null);
   assert.equal(financialVoidCheck({ registered: 3, voidedByOthers: 0 }).ok, true);
   assert.deepEqual(financialVoidCheck({ registered: 0, voidedByOthers: 1 }), { source: 'Financiero', ok: false, text: '1 registro anulado por otra persona.' });
+  assert.equal(financeEffort({}), null);
+  assert.deepEqual(financeEffort({ withSupport: 2, withoutSupport: 3 }), { source: 'Financiero', units: 3.5, text: '5 registros en Financiero, 2 con soporte' });
+  assert.deepEqual(financeEffort({ lateSupport: 1 }), { source: 'Financiero', units: 0.5, text: '1 soporte agregado a un registro anterior' });
 });
 
 test('Producción audiovisual: a past production day without evidence loses Al día and names it; evidence the same day is on time', async () => {

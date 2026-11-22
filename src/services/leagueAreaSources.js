@@ -10,7 +10,7 @@
 // pruebas) no lee nada, y las parrillas solo se leen si quien crea el servicio pasa con qué: nunca se cae por defecto a la
 // base real.
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
-import { adBudgetsCheck, AREA_EQUITY_FROM, PRODUCTION_DAY_EFFORT, areaEquityActive, crmFollowUpCheck, crmNotesCheck, financialDay, financialOnTimeCheck, financialSupportCheck, financialVoidCheck, payablesOverdueCheck, piecesOnTimeCheck, plansOverdueCheck, productionEvidenceOnTimeCheck, productionEvidencePendingCheck } from '../lib/leagueAreaChecks.js';
+import { adBudgetsCheck, AREA_EQUITY_FROM, PRODUCTION_DAY_EFFORT, areaEquityActive, crmFollowUpCheck, crmNotesCheck, financialDay, financialOnTimeCheck, financialSupportCheck, financialVoidCheck, financeEffort, piecesOnTimeCheck, plansOverdueCheck, productionEvidenceOnTimeCheck, productionEvidencePendingCheck } from '../lib/leagueAreaChecks.js';
 import { memberHasArea } from '../lib/teamAreas.js';
 import { isBusinessDay } from '../lib/colombiaBusinessDays.js';
 
@@ -19,7 +19,6 @@ const CONTACT_TYPES = CRM_ACTIVITY_TYPES.filter((type) => type.contact).map((typ
 export const AREA_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 const can = (model) => typeof model?.findMany === 'function';
 const emptyChecks = () => ({ AL_DIA: [], A_TIEMPO: [], DOCUMENTADO: [], SIN_DEVOLUCION: [] });
-const OPEN_PAYABLE = ['POR_PAGAR', 'PARCIAL'];
 const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
 /** El cierre de la liga de un día: las 18:05 de Bogotá. Lo que se sube después cuenta en la jornada siguiente. */
 const closeOf = (dayKey) => new Date(`${dayKey}T23:05:00.000Z`);
@@ -80,13 +79,25 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
     };
   };
 
-  /** Administrativa, la foto de hoy: cuántas cuentas por pagar siguen abiertas y cuántas ya vencieron. */
-  const readPayables = async ({ dayKey }) => {
-    if (!can(db.accountsPayable)) return null;
-    return attempt('las cuentas por pagar vencidas', async () => {
-      const rows = await db.accountsPayable.findMany({ where: { status: { in: OPEN_PAYABLE }, voidedAt: null }, select: { dueDate: true } });
-      return { open: rows.length, overdue: rows.filter((row) => row.dueDate && financialDay(row.dueDate) < dayKey).length };
-    }, null);
+  /**
+   * El soporte que llega después (Rodny, 21 de noviembre de 2026: «si después le pone la evidencia, le suma su otro
+   * medio punto»): registros de días anteriores que recibieron ese día su primer soporte. Devuelve a quién le suma.
+   */
+  const readLateSupport = async ({ start, end, userIds }) => {
+    if (!userIds.length) return [];
+    const uploaded = { gte: start, lt: end }, earlier = { where: { voidedAt: null, uploadedAt: { lt: start } }, select: { id: true }, take: 1 };
+    const [records, payables] = await Promise.all([
+      can(db.financialRecordDocument) ? attempt('los soportes de movimientos', () => db.financialRecordDocument.findMany({
+        where: { uploadedAt: uploaded, voidedAt: null, record: { createdById: { in: userIds }, createdAt: { lt: start }, voidedAt: null, attachmentUrl: null } },
+        select: { recordId: true, record: { select: { createdById: true, documents: earlier } } } }), []) : [],
+      can(db.accountsPayableDocument) ? attempt('los soportes de cuentas por pagar', () => db.accountsPayableDocument.findMany({
+        where: { uploadedAt: uploaded, voidedAt: null, payable: { createdById: { in: userIds }, createdAt: { lt: start }, voidedAt: null } },
+        select: { payableId: true, payable: { select: { createdById: true, documents: earlier } } } }), []) : []
+    ]);
+    const firstOnes = new Map();
+    for (const row of records) if (!(row.record?.documents || []).length) firstOnes.set(`r:${row.recordId}`, row.record?.createdById);
+    for (const row of payables) if (!(row.payable?.documents || []).length) firstOnes.set(`p:${row.payableId}`, row.payable?.createdById);
+    return [...firstOnes.values()];
   };
 
   /**
@@ -134,8 +145,9 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
       const finance = equity ? inArea('ADMINISTRATIVA') : [];
       const producers = equity ? inArea('AUDIOVISUAL') : [];
       const financeUserIds = finance.map((member) => member.user?.id).filter(Boolean);
-      const [money, production] = await Promise.all([
+      const [money, lateSupport, production] = await Promise.all([
         readFinance({ start, end, userIds: financeUserIds }),
+        readLateSupport({ start, end, userIds: financeUserIds }),
         producers.length ? readProduction({ dayKey, isToday, evidenceFrom: closeOf(previousBusinessDay(dayKey)), evidenceTo: new Date(Math.min(end.getTime(), closeOf(dayKey).getTime())) }) : { pending: [], uploaded: [] }
       ]);
       let today = null;
@@ -144,7 +156,6 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
         if (cache && cache.dayKey === dayKey && at - cache.at < AREA_SNAPSHOT_TTL_MS) today = cache.value;
         else {
           today = await readToday({ dayKey, memberIds });
-          today.payables = finance.length ? await readPayables({ dayKey }) : null;
           cache = { dayKey, at, value: today };
         }
       }
@@ -164,8 +175,14 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
         );
         const effort = [];
         if (finance.includes(member)) {
-          const registered = myRecords.length + myPayables.length + money.registered.filter((id) => id === userId).length;
-          if (registered) effort.push({ source: 'Financiero', units: registered, text: `${registered} ${registered === 1 ? 'registro' : 'registros'} en Financiero` });
+          // Un registro vale medio punto y uno entero con su soporte; el pago o el abono sin movimiento propio no admite soporte y vale uno.
+          const supported = [...myRecords.map((row) => Boolean(row.attachmentUrl) || (row.documents || []).length > 0), ...myPayables.map((row) => (row.documents || []).length > 0)];
+          const worked = financeEffort({
+            withSupport: supported.filter(Boolean).length + money.registered.filter((id) => id === userId).length,
+            withoutSupport: supported.filter((value) => !value).length,
+            lateSupport: lateSupport.filter((id) => id === userId).length
+          });
+          if (worked) effort.push(worked);
           checks.A_TIEMPO.push(financialOnTimeCheck(money.payments.filter((row) => row.createdById === userId)
             .map((row) => ({ doneOn: financialDay(row.paidAt), dueOn: row.payable?.dueDate ? financialDay(row.payable.dueDate) : null }))));
           checks.SIN_DEVOLUCION.push(financialVoidCheck({
@@ -194,8 +211,7 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
           checks.AL_DIA.push(
             plansOverdueCheck(carried),
             crmFollowUpCheck(today.leads.filter((lead) => lead.ownerId === member.id), now()),
-            adBudgetsCheck(today.budgets.filter((budget) => budget.responsibleId === member.id)),
-            finance.includes(member) ? payablesOverdueCheck(today.payables) : null
+            adBudgetsCheck(today.budgets.filter((budget) => budget.responsibleId === member.id))
           );
           checks.A_TIEMPO.push(piecesOnTimeCheck(today.pieces.filter((piece) => publishIds.has(piece.plan?.clientId))));
         }

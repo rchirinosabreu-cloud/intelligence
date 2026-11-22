@@ -94,12 +94,21 @@ export const PRODUCTION_DAY_EFFORT = 5;
 /** «Sin devolución» de un project manager solo se juega el día en que creó más de cinco pendientes (Rodny, 21 de noviembre de 2026). */
 export const PM_RETURN_MIN_CREATED = 5;
 
-/** Al día · Financiero (Administrativa): ninguna cuenta por pagar vencida sin pagar. */
-export function payablesOverdueCheck(payables = null) {
-  if (!payables) return null;
-  const overdue = payables.overdue || 0;
-  if (!payables.open && !overdue) return null;
-  return { source: 'Cuentas por pagar', ok: overdue === 0, text: overdue ? `${plural(overdue, 'cuenta por pagar vencida', 'cuentas por pagar vencidas')} sin pagar.` : 'Ninguna cuenta por pagar vencida.' };
+/**
+ * Esfuerzo de Administrativa (Rodny, 21 de noviembre de 2026: «medio punto por registro y punto completo cuando el
+ * registro tiene evidencia … si después le pone la evidencia, le suma su otro medio punto»). Un registro sin soporte
+ * vale medio punto; con soporte, uno; y el soporte que llega otro día suma el medio que faltaba, ese día.
+ * Las cuentas por pagar vencidas NO juegan Al día: «no debería contar si no es por culpa de Elisa».
+ */
+export const FINANCE_RECORD_EFFORT = 0.5;
+export function financeEffort({ withSupport = 0, withoutSupport = 0, lateSupport = 0 } = {}) {
+  const units = withSupport + (withoutSupport + lateSupport) * FINANCE_RECORD_EFFORT;
+  if (!units) return null;
+  const parts = [];
+  const total = withSupport + withoutSupport;
+  if (total) parts.push(`${plural(total, 'registro', 'registros')} en Financiero, ${withSupport} con soporte`);
+  if (lateSupport) parts.push(plural(lateSupport, 'soporte agregado a un registro anterior', 'soportes agregados a registros anteriores'));
+  return { source: 'Financiero', units, text: parts.join(' y ') };
 }
 
 const dayOf = (value) => { const time = value instanceof Date ? value.getTime() : Date.parse(value); return Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : null; };
