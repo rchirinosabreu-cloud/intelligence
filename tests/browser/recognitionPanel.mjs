@@ -40,7 +40,7 @@ try {
   assert.equal(await panel.locator('[data-race-track]').count(), 0);
   const avatar = panel.locator('[data-race-hero] [data-runner-avatar="pixel"]');
   await avatar.waitFor();
-  assert.match(await avatar.locator('img').getAttribute('src'), /assets\/team-pixel\/poses\/rodny/);
+  assert.match(await avatar.locator('img').getAttribute('src'), /assets\/team-pixel\/anim\/rodny/);
   const firstPose = await avatar.getAttribute('data-avatar-pose');
   await page.waitForFunction(() => [...document.querySelectorAll('[data-league-panel] img')].every(img => img.complete && img.naturalWidth > 0));
   assert.ok((await panel.boundingBox()).width <= 400);

@@ -1,0 +1,20 @@
+{
+  "frameWidth": 88,
+  "frameHeight": 110,
+  "frames": 8,
+  "people": {
+    "brayan": { "top": 21, "height": 87 },
+    "david": { "top": 20, "height": 88 },
+    "elisa": { "top": 17, "height": 91 },
+    "francisco": { "top": 19, "height": 89 },
+    "francys": { "top": 13, "height": 95 },
+    "helen": { "top": 17, "height": 91 },
+    "jesu": { "top": 19, "height": 89 },
+    "kamila": { "top": 14, "height": 94 },
+    "keila": { "top": 20, "height": 88 },
+    "mariceth": { "top": 17, "height": 91 },
+    "melissa": { "top": 17, "height": 91 },
+    "rodny": { "top": 20, "height": 88 },
+    "sara": { "top": 18, "height": 90 }
+  }
+}
