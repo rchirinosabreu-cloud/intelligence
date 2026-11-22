@@ -64,7 +64,7 @@ export default function RecognitionCollection({ data }) {
         </details>;
       })}
     </div>
-    <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">Cada reconocimiento obtenido suma {RECOGNITION_POINTS} puntos al mes; desde la segunda entrega anticipada del mismo día, cada una suma {EARLY_DELIVERY_EXTRA_POINTS}. Volver a ver una insignia no vuelve a sumar.</p>
+    <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">Cada reconocimiento obtenido suma {RECOGNITION_POINTS} puntos al mes; la segunda entrega anticipada del mismo día suma {EARLY_DELIVERY_EXTRA_POINTS} y las siguientes ya no suman. Volver a ver una insignia no vuelve a sumar.</p>
     <section><h3 className="text-sm font-semibold">Tus últimos logros</h3><RecognitionHistory data={data} /></section>
   </>;
 }

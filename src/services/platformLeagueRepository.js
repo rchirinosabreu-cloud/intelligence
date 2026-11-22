@@ -79,6 +79,25 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
       RETURNING id`, [LEAGUE_RUN_ID, week_key, day_key, member_id, awarded_by, limit]);
     return rows[0] || null;
   },
+  async camerasOfWeek(weekKey) {
+    const { rows } = await pool.query(`SELECT id, week_key, day_key, member_id, awarded_by FROM bria_memory.league_camera_awards
+      WHERE run_id=$1 AND week_key=$2 ORDER BY day_key, created_at`, [LEAGUE_RUN_ID, weekKey]);
+    return rows;
+  },
+  async camerasOfMonth(monthKey) {
+    const { rows } = await pool.query(`SELECT id, week_key, day_key, member_id, awarded_by FROM bria_memory.league_camera_awards
+      WHERE run_id=$1 AND day_key LIKE $2 ORDER BY day_key, created_at`, [LEAGUE_RUN_ID, `${monthKey}-%`]);
+    return rows;
+  },
+  /** Cámara encendida: una fila por persona y semana. Quien ya la tenía esa semana se queda como estaba; devuelve las nuevas. */
+  async awardCameras({ week_key, day_key, member_ids, awarded_by }) {
+    if (!member_ids.length) return [];
+    const { rows } = await pool.query(`INSERT INTO bria_memory.league_camera_awards(run_id,week_key,day_key,member_id,awarded_by)
+      SELECT $1,$2,$3,x,$5 FROM unnest($4::text[]) AS x
+      ON CONFLICT ON CONSTRAINT league_camera_awards_week_member_key DO NOTHING
+      RETURNING member_id`, [LEAGUE_RUN_ID, week_key, day_key, member_ids, awarded_by]);
+    return rows.map((row) => row.member_id);
+  },
   /** Un regalo de cinco puntos por semana de Bogotá; la base rechaza el segundo (23505). */
   async giveKudos({ giver_member_id, receiver_member_id, note, created_at = new Date() }) {
     const { rows } = await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id, week_key, giver_member_id, receiver_member_id, note, created_at)

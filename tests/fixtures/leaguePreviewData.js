@@ -73,7 +73,8 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
       DOCUMENTADO: 'Sin tareas creadas ese día.'
     } },
     recognitionPoints: 20,
-    meetings: { canManage: true, minDate: "2026-11-03", maxDate: "2026-11-04", entries: [] },
+    meetings: { canManage: true, minDate: "2026-11-03", maxDate: "2026-11-04", entries: [], cameraPoints: 2,
+      cameras: lanes.slice(0, 7).map((lane) => ({ date: "2026-11-03", weekKey: "2026-W45", memberId: lane.id, name: lane.name, points: 2 })) },
     nextStep: leagueNextStep(allDays),
     streak: { days: summarizeDays(allDays).fullDays, label: 'con todos los hábitos' },
     kudos: { ...kudos, score: kudosScore(kudos.received) },

@@ -12,7 +12,7 @@ import MeetingAward from './MeetingAward';
 import RecognitionCollection, { RecognitionHistory, RecognitionStatus } from './RecognitionCollection';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, EARLY_DELIVERY_EXTRA_POINTS, KUDOS_WEEKLY, CAUGHT_UP_MIN_CLOSED, EFFORT_DAILY_CAP, EFFORT_KEY, effortPoints, habitPoints, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
+import { CAMERA_POINTS, DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, EARLY_DELIVERY_EXTRA_POINTS, KUDOS_WEEKLY, CAUGHT_UP_MIN_CLOSED, EFFORT_DAILY_CAP, EFFORT_KEY, effortPoints, habitPoints, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
 
 // El nombre de archivo conserva compatibilidad con el dock y ?carrera.
 // Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
@@ -138,18 +138,20 @@ function Rules() {
     <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Cómo se cuentan los puntos<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
     <ul className={cn(surface, 'mt-2 list-disc space-y-2 p-4 pl-8 leading-5', muted)}>
       <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Si lo cumples en parte, sumas esa parte: 3 de 4 tareas a tiempo son 4 puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
-      <li>Esfuerzo: cada tarea que cierras suma 1 punto, hasta {EFFORT_DAILY_CAP} al día. Las de publicar no suman.</li>
+      <li>Esfuerzo: cada tarea que cierras suma 1 punto, hasta {EFFORT_DAILY_CAP} al día. Las de publicar no suman. También suma el trabajo de tu área: cada registro de Financiero, cada gestión del CRM y, con su evidencia, cada jornada de producción, que vale 5.</li>
       <li>Reloj mira solo las tareas en que usaste el reloj: cuenta si llegó a 10 minutos. Lo que pasa directo a realizado y las de publicar no aplican.</li>
-      <li>Al día mira cómo terminas la jornada a las 6:00 pm, no cómo amaneces: si cierras lo vencido durante el día, lo ganas. Si te queda algo, la plataforma te dice qué.</li>
+      <li>Al día mira cómo terminas la jornada a las 5:00 pm, no cómo amaneces: si cierras lo vencido durante el día, lo ganas. Mover la fecha de algo vencido ese mismo día no lo saca de la cuenta. Si te queda algo, la plataforma te dice qué.</li>
       <li>Al día y Sin devolución se juegan los días en que cierras algo: sin entregas no suman ni restan.</li>
-      <li>Al día, A tiempo y Documentado también se leen de tu área: las parrillas de tus cuentas, tus seguimientos del CRM, tus pautas y tus registros de Financiero. Ganas el hábito si todo lo que jugaste ese día salió bien.</li>
+      <li>Al día, A tiempo, Documentado y Sin devolución también se leen de tu área: las parrillas de tus cuentas, tus seguimientos del CRM, tus pautas, tus registros y pagos de Financiero y las evidencias de tus jornadas de producción. Ganas el hábito si todo lo que jugaste ese día salió bien.</li>
+      <li>Las piezas de hoy cuentan para quien lleva la cuenta como community. A un project manager, Sin devolución se le juega el día en que crea más de 5 pendientes.</li>
       <li>Documentado mira lo que le pasas a otra persona: un comentario de al menos 20 letras, un archivo o un enlace. Tus recordatorios propios y las tareas que salen de una pieza no cuentan.</li>
       <li>Una jornada de producción vale para Reloj con el tiempo declarado al cerrar el pendiente.</li>
       <li>La semana arranca en cero cada lunes; el mes sigue sumando para la premiación mensual.</li>
       <li>La primera actividad registrada desde las 8:00 am suma {EXTRA_POINTS} puntos.</li>
       <li>Si estás entre las dos primeras personas en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
+      <li>Tener la cámara encendida en la reunión de tráfico suma {CAMERA_POINTS} puntos. Un administrador lo marca después de la reunión.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
-      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos; desde la segunda entrega anticipada del mismo día, cada una suma {EARLY_DELIVERY_EXTRA_POINTS}. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 6:00 pm sin dejar nada vencido.</li>
+      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos; la segunda entrega anticipada del mismo día suma {EARLY_DELIVERY_EXTRA_POINTS} y las siguientes ya no suman: el tope es de {RECOGNITION_POINTS + EARLY_DELIVERY_EXTRA_POINTS} al día. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 5:00 pm sin dejar nada vencido y sin mover fechas.</li>
     </ul>
   </details>;
 }

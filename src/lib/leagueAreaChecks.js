@@ -80,6 +80,72 @@ export function financialSupportCheck(records = [], payables = []) {
 }
 
 /**
+ * Liga más pareja (Rodny, 21 de noviembre de 2026: «equivalentes por área … lo que más me preocupaba era buscar la
+ * equidad para personas como Elisa»). Desde este día de Bogotá, Administrativa y Producción audiovisual leen sus
+ * propias fuentes, Project management cambia dos reglas y la jornada cierra a las 5:00 p. m. Rodny pidió ese mismo
+ * día que «las nuevas reglas deben comenzar este lunes 23»; los días anteriores se evalúan como se jugaron.
+ */
+export const AREA_EQUITY_FROM = '2026-11-23';
+export const areaEquityActive = (dayKey) => String(dayKey || '') >= AREA_EQUITY_FROM;
+
+/** Una jornada de producción con su evidencia vale cinco unidades de esfuerzo: ocupa el día (Rodny, 21 de noviembre de 2026: «sí, dale 5»). */
+export const PRODUCTION_DAY_EFFORT = 5;
+
+/** «Sin devolución» de un project manager solo se juega el día en que creó más de cinco pendientes (Rodny, 21 de noviembre de 2026). */
+export const PM_RETURN_MIN_CREATED = 5;
+
+/** Al día · Financiero (Administrativa): ninguna cuenta por pagar vencida sin pagar. */
+export function payablesOverdueCheck(payables = null) {
+  if (!payables) return null;
+  const overdue = payables.overdue || 0;
+  if (!payables.open && !overdue) return null;
+  return { source: 'Cuentas por pagar', ok: overdue === 0, text: overdue ? `${plural(overdue, 'cuenta por pagar vencida', 'cuentas por pagar vencidas')} sin pagar.` : 'Ninguna cuenta por pagar vencida.' };
+}
+
+const dayOf = (value) => { const time = value instanceof Date ? value.getTime() : Date.parse(value); return Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : null; };
+
+/**
+ * A tiempo · Financiero (Administrativa): los pagos de cuentas por pagar que la persona registró ese día salieron en
+ * su fecha o antes. Cada fila es `{ doneOn, dueOn }` (días AAAA-MM-DD); lo que no tiene fecha de vencimiento no juega.
+ * Las cuentas de cobro quedan fuera hasta que Rodny diga qué fecha las hace «a tiempo»: su `dueDate` es el plazo del
+ * cliente para pagar, no el de emitirlas.
+ */
+export function financialOnTimeCheck(items = []) {
+  const dated = items.filter((item) => item?.doneOn && item?.dueOn);
+  if (!dated.length) return null;
+  const onTime = dated.filter((item) => item.doneOn <= item.dueOn).length;
+  return { source: 'Financiero', ok: onTime === dated.length, text: `${onTime} de ${plural(dated.length, 'pago hecho en su fecha', 'pagos hechos en su fecha')}.` };
+}
+export const financialDay = dayOf;
+
+/**
+ * Sin devolución · Financiero (Administrativa): de lo que la persona registró, nada fue anulado o revertido ese día por
+ * otra persona. Corregir lo propio no cuenta: no se castiga a quien arregla su registro. Se juega si ese día registró
+ * algo o si le anularon algo.
+ */
+export function financialVoidCheck({ registered = 0, voidedByOthers = 0 } = {}) {
+  if (!registered && !voidedByOthers) return null;
+  return { source: 'Financiero', ok: voidedByOthers === 0, text: voidedByOthers ? `${plural(voidedByOthers, 'registro anulado por otra persona', 'registros anulados por otra persona')}.` : 'Ningún registro anulado por otra persona.' };
+}
+
+/** Al día · Jornadas (Producción audiovisual): ninguna jornada pasada en que participó sigue sin evidencia. */
+export function productionEvidencePendingCheck(days = []) {
+  if (!days.length) return null;
+  const missing = days.filter((day) => !day.hasEvidence);
+  if (!missing.length) return { source: 'Jornadas', ok: true, text: `${plural(days.length, 'jornada pasada con su evidencia', 'jornadas pasadas con su evidencia')}.` };
+  const names = missing.slice(0, 2).map((day) => `«${day.title}»`);
+  const rest = missing.length - names.length;
+  return { source: 'Jornadas', ok: false, text: `Falta la evidencia de ${rest > 0 ? `${names.join(', ')} y ${rest} más` : names.join(' y ')}.` };
+}
+
+/** A tiempo · Jornadas (Producción audiovisual): la evidencia que se subió en esta jornada de trabajo llegó el mismo día de la grabación. */
+export function productionEvidenceOnTimeCheck(days = []) {
+  if (!days.length) return null;
+  const sameDay = days.filter((day) => day.evidenceDay && day.evidenceDay === day.date).length;
+  return { source: 'Jornadas', ok: sameDay === days.length, text: `${sameDay} de ${plural(days.length, 'evidencia subida el mismo día de la jornada', 'evidencias subidas el mismo día de la jornada')}.` };
+}
+
+/**
  * Suma los chequeos de área a los hábitos que ya dio el día. El hábito queda jugado si se jugó con tareas o con alguna
  * fuente, y ganado solo si todo lo jugado salió bien. La evidencia nombra cada fuente; lo de tareas solo se repite si se jugó.
  */

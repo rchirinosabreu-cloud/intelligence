@@ -27,5 +27,6 @@ export function createPlatformLeagueRouter({ service = getPlatformLeagueService 
   router.get('/recognitions', handle('No pudimos cargar tus logros.', (req) => svc().recognitionsFor({ userId: req.user.userId })));
   router.post('/kudos', handle('No pudimos registrar el regalo.', (req) => svc().giveKudos({ userId: req.user.userId, memberId: req.body?.memberId, note: req.body?.note })));
   router.post('/meetings', handle('No pudimos registrar la reunión.', (req) => svc().awardMeeting({ userId: req.user.userId, memberId: req.body?.memberId, day: req.body?.day })));
+  router.post('/meetings/cameras', handle('No pudimos registrar la cámara encendida.', (req) => svc().awardCameras({ userId: req.user.userId, memberIds: req.body?.memberIds, day: req.body?.day })));
   return router;
 }

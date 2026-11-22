@@ -10,7 +10,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace } from '../lib/leagueDay.js';
-import { KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
+import { CAMERA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
 import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
@@ -19,8 +19,9 @@ import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 import { createLeagueAreaSources } from './leagueAreaSources.js';
 import { closeViewsFor } from './caughtUpAtCloseService.js';
-import { caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
+import { caughtUpAtClose, dayCloseCutoff, dayCloseLabel } from './recognitionRules.js';
 import { hasRealContext } from '../lib/leagueAreaChecks.js';
+import { memberAreas } from '../lib/teamAreas.js';
 import { AD_BUDGET_INCLUDE, describeBudget } from './adBudgetService.js';
 import { snapshotOverdueCount } from '../lib/taskDeadlines.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
@@ -71,7 +72,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
   // El orden de los carriles es fijo, por nombre, nunca por puntaje: se ordena aquí y no se le fía a la consulta.
   const activeMembers = async () => (await db.teamMember.findMany({
     where: { isActive: true, user: { is: { isActive: true } } },
-    select: { id: true, name: true, avatarUrl: true, user: { select: { id: true, role: true, isActive: true } } }
+    select: { id: true, name: true, role: true, areas: true, avatarUrl: true, user: { select: { id: true, role: true, isActive: true } } }
   })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
 
   const service = {
@@ -123,7 +124,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, snapshotOverdueCount(person.metrics, dayKey)]));
       const byMember = new Map(members.map((member) => [member.id, { memberId: member.id, closedTasks: [], createdTasks: [], sessions: [], overdueAtDawn: overdueAtDawn.get(member.id) ?? null,
         dawnEvidenceReason: overdueAtDawn.has(member.id) && overdueAtDawn.get(member.id) === null ? 'La foto de la mañana no permite comprobar las fechas de entrega. Este hábito queda sin evaluar.' : null,
-        returnedToday: 0, firstOpener: opener, workRecords: [], presence: traces === null ? undefined : false, productionDays: [] }]));
+        returnedToday: 0, firstOpener: opener, workRecords: [], presence: traces === null ? undefined : false, productionDays: [], areas: memberAreas(member) }]));
       for (const trace of traces || []) {
         const bucket = byMember.get(memberOfUser.get(trace.actorId)?.id);
         if (!bucket) continue;
@@ -178,7 +179,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const dayOpen = now() < dayCloseCutoff(dayKey);
       if (views) for (const [memberId, bucket] of byMember) {
         const { closed, pending, pendingTasks } = caughtUpAtClose({ day: dayKey, views: views.get(memberId) || [] });
-        bucket.closeState = { closed, pending, pendingTasks, open: dayOpen };
+        bucket.closeState = { closed, pending, pendingTasks, open: dayOpen, closeLabel: dayCloseLabel(dayKey) };
       }
       return { dayKey, members, byMember };
     },
@@ -228,11 +229,14 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const monthStart = new Date(Math.max(Date.parse(`${monthKey}-01T05:00:00Z`), startedAt.getTime())), monthEnd = new Date(Date.UTC(year, monthNumber, 1, 5));
       const awardsFrom = new Date(Math.min(monthStart.getTime(), Math.max(dayWindow(lastWeek.from).start.getTime(), startedAt.getTime())));
       const awardsTo = new Date(Math.max(monthEnd.getTime(), dayWindow(week.to).end.getTime()));
-      const [{ members, byMember }, saved, gifts, given, meetings, awards, weekSaved, weekGifts, weekMeetings, lastWeekSaved, lastWeekGifts, lastWeekMeetings] = await Promise.all([
+      // Cámara encendida: un repositorio sin esa lectura (los dobles de pruebas anteriores) no suma nada.
+      const cameraRows = (read, key) => (typeof repo[read] === 'function' ? repo[read](key) : []);
+      const [{ members, byMember }, saved, gifts, given, meetings, awards, weekSaved, weekGifts, weekMeetings, lastWeekSaved, lastWeekGifts, lastWeekMeetings, cameras, weekCameras, lastWeekCameras] = await Promise.all([
         this.readDay(today), repo.daysOfMonth(monthKey, { before }), repo.kudosOfMonth(monthKey), repo.givenInWeek(me.id, weekKey), repo.meetingsOfMonth(monthKey),
         db.recognitionAward.findMany({ where: { kind: { in: LEAGUE_RECOGNITION_KINDS }, occurredAt: { gte: awardsFrom, lt: awardsTo } }, select: { id: true, kind: true, recipientId: true, occurredAt: true } }),
         repo.daysInRange(week.from, week.to, { before }), repo.kudosOfWeek(week.weekKey), repo.meetingsOfWeek(week.weekKey),
-        repo.daysInRange(lastWeek.from, lastWeek.to, { before }), repo.kudosOfWeek(lastWeek.weekKey), repo.meetingsOfWeek(lastWeek.weekKey)
+        repo.daysInRange(lastWeek.from, lastWeek.to, { before }), repo.kudosOfWeek(lastWeek.weekKey), repo.meetingsOfWeek(lastWeek.weekKey),
+        cameraRows('camerasOfMonth', monthKey), cameraRows('camerasOfWeek', week.weekKey), cameraRows('camerasOfWeek', lastWeek.weekKey)
       ]);
       const nameOf = new Map(members.map((member) => [member.id, member.name]));
       const daysByMember = new Map(members.map((member) => [member.id, []]));
@@ -255,7 +259,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const inMonth = award => new Date(award.occurredAt) >= monthStart && new Date(award.occurredAt) < monthEnd;
       const awardsOf = memberId => awards.filter(award => inMonth(award) && award.recipientId === userOfMember.get(memberId));
       const scoreOf = (memberId) => leagueScore({ days: daysByMember.get(memberId) || [], kudos: receivedBy.get(memberId) || [],
-        meetings: meetings.filter(meeting => meeting.member_id === memberId).length, recognitionPoints: recognitionPoints(awardsOf(memberId)) }) ?? 0;
+        meetings: meetings.filter(meeting => meeting.member_id === memberId).length, cameras: cameras.filter(camera => camera.member_id === memberId).length,
+        recognitionPoints: recognitionPoints(awardsOf(memberId)) }) ?? 0;
       const avatarKeys = resolveLeagueAvatarKeys(members);
       // El puntaje de una semana: sus días guardados (más hoy en vivo si cae en ella), sus regalos, su tráfico y sus reconocimientos.
       const weekScores = ({ range, rows, kudos, awardsWeek, withToday }) => {
@@ -265,11 +270,12 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const inWeek = value => { const day = bogotaDate(value); return day >= range.from && day <= range.to; };
         return members.map(member => ({ id: member.id, name: firstName(member.name), fullName: member.name, avatarUrl: member.avatarUrl || null, pixelAvatarKey: avatarKeys[member.id] || null, isSelf: member.id === me.id,
           score: leagueScore({ days: days.get(member.id), kudos: kudos.filter(gift => gift.receiver_member_id === member.id), meetings: awardsWeek.meetings.filter(meeting => meeting.member_id === member.id).length,
+            cameras: awardsWeek.cameras.filter(camera => camera.member_id === member.id).length,
             recognitionPoints: recognitionPoints(awards.filter(award => award.recipientId === member.user.id && inWeek(award.occurredAt))) }) ?? 0 }));
       };
-      const weekLanes = weekScores({ range: week, rows: weekSaved, kudos: weekGifts, awardsWeek: { meetings: weekMeetings }, withToday: true });
+      const weekLanes = weekScores({ range: week, rows: weekSaved, kudos: weekGifts, awardsWeek: { meetings: weekMeetings, cameras: weekCameras }, withToday: true });
       const weekRanked = weekLanes.filter(lane => lane.score > 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));
-      const lastWeekLanes = lastWeek.to >= bogotaDate(startedAt) ? weekScores({ range: lastWeek, rows: lastWeekSaved, kudos: lastWeekGifts, awardsWeek: { meetings: lastWeekMeetings }, withToday: false }) : [];
+      const lastWeekLanes = lastWeek.to >= bogotaDate(startedAt) ? weekScores({ range: lastWeek, rows: lastWeekSaved, kudos: lastWeekGifts, awardsWeek: { meetings: lastWeekMeetings, cameras: lastWeekCameras }, withToday: false }) : [];
       const lastWeekLeaders = leaguePodiumGroups(lastWeekLanes).find(group => group.rank === 1);
       const lanes = members.map((member) => {
         const score = scoreOf(member.id);
@@ -316,7 +322,9 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         today: myToday ? { ...myToday, ...todaySummary, points: todaySummary.points + todayAwardPoints + todayGiftPoints } : null,
         recognitionPoints: recognitionPoints(awardsOf(me.id)),
         meetings: { canManage: me.user.role === 'ADMIN', minDate: [bogotaDate(startedAt), `${monthKey}-01`].sort().at(-1), maxDate: today,
-          entries: meetings.map(meeting => ({ date: meeting.day_key, weekKey: meeting.week_key, memberId: meeting.member_id, name: firstName(nameOf.get(meeting.member_id) || 'Alguien del equipo'), points: MEETING_POINTS })) },
+          entries: meetings.map(meeting => ({ date: meeting.day_key, weekKey: meeting.week_key, memberId: meeting.member_id, name: firstName(nameOf.get(meeting.member_id) || 'Alguien del equipo'), points: MEETING_POINTS })),
+          cameraPoints: CAMERA_POINTS,
+          cameras: cameras.map(camera => ({ date: camera.day_key, weekKey: camera.week_key, memberId: camera.member_id, name: firstName(nameOf.get(camera.member_id) || 'Alguien del equipo'), points: CAMERA_POINTS })) },
         nextStep: leagueNextStep(myDays),
         streak: { days: summarizeDays(myDays).fullDays, label: 'con todos los hábitos' },
         kudos: { received, score: kudosScore(received), weekKey, givenThisWeek: given ? { id: given.receiver_member_id, name: firstName(nameOf.get(given.receiver_member_id) || 'Alguien del equipo'), note: given.note } : null, weeklyBudget: KUDOS_WEEKLY },
@@ -377,6 +385,25 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         if (error?.code === '23505') throw fail(409, 'Esta semana ya regalaste tus puntos. El lunes tendrás cinco más.', 'LEAGUE_KUDOS_ALREADY');
         throw error;
       }
+    },
+    /** Cámara encendida en la reunión de tráfico: un administrador marca, después de la reunión, a quienes la tuvieron encendida. */
+    async awardCameras({ userId, memberIds, day }) {
+      const actor = await memberAllowed(userId);
+      if (actor.user.role !== 'ADMIN') throw fail(403, 'Solo un administrador puede registrar la cámara encendida.');
+      const today = bogotaDate(now());
+      const start = bogotaDate(await repo.startedAt());
+      if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(`${day}T12:00:00Z`)) || new Date(`${day}T12:00:00Z`).toISOString().slice(0,10) !== day || day > today || day < start || monthOf(day) !== monthOf(today)) throw fail(400, 'Elige una fecha transcurrida de este mes, desde el inicio de la liga.');
+      const chosen = [...new Set(Array.isArray(memberIds) ? memberIds.filter(id => typeof id === 'string' && id) : [])];
+      if (!chosen.length) throw fail(400, 'Marca al menos a una persona.');
+      const active = await activeMembers();
+      if (chosen.some(id => !active.some(member => member.id === id))) throw fail(404, 'Alguna de esas personas no está en el equipo activo.');
+      const weekKey = isoWeekKey(day);
+      // La cámara es de la misma reunión de tráfico: si la semana ya tiene fecha, por la reunión o por otra cámara, se usa esa.
+      const [meetingsWeek, camerasWeek] = await Promise.all([repo.meetingsOfWeek(weekKey), repo.camerasOfWeek(weekKey)]);
+      const other = [...meetingsWeek, ...camerasWeek].find(row => row.day_key !== day);
+      if (other) throw fail(400, `La reunión de esa semana se registró el ${weekdayLabel(other.day_key)}: usa esa fecha.`, 'LEAGUE_MEETING_OTHER_DAY');
+      const added = await repo.awardCameras({ week_key: weekKey, day_key: day, member_ids: chosen, awarded_by: userId });
+      return { added: added.length, already: chosen.length - added.length, points: CAMERA_POINTS };
     },
     async awardMeeting({ userId, memberId, day }) {
       const actor = await memberAllowed(userId);

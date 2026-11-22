@@ -11,7 +11,7 @@ const at = (iso) => new Date(iso);
 
 test('the day closes at 18:00 of Bogotá', () => {
   assert.equal(dayCloseCutoff(DAY).toISOString(), '2026-11-11T23:00:00.000Z');
-  assert.equal(CAUGHT_UP_POLICY, 'cierre-del-dia-v3');
+  assert.equal(CAUGHT_UP_POLICY, 'cierre-del-dia-v4');
 });
 
 test('Rodny on the 11th: closed what was due that day before 18:00 and left nothing overdue', () => {
@@ -108,7 +108,7 @@ test('at the close of a business day only who ended clean receives it, once, and
   assert.equal(award.kind, 'CAUGHT_UP');
   assert.equal(award.recipientId, 'u-rodny');
   assert.equal(award.dayKey, DAY);
-  assert.equal(award.ruleVersion, 3);
+  assert.equal(award.ruleVersion, 4);
   assert.equal(award.dedupeKey, `v1:CAUGHT_UP:u-rodny:${DAY}`, 'one Al día per person and day, old or new');
   assert.deepEqual(award.evidence, { policy: CAUGHT_UP_POLICY, closedToday: 2, cutoff: '2026-11-11T23:00:00.000Z' });
   assert.equal(db.traces[0].eventType, 'RECOGNITION_GRANTED');
@@ -132,4 +132,30 @@ test('before 18:00, on a weekend or after the day ended, nothing is granted', as
   assert.equal((await awardCaughtUpAtClose(db, { now: at(`${DAY}T22:30:00Z`) })).skipped, 'ANTES_DEL_CIERRE');
   assert.equal((await awardCaughtUpAtClose(db, { now: at('2026-11-14T23:30:00Z') })).skipped, 'DIA_NO_HABIL');
   assert.equal(db.awards.length, 0);
+});
+
+// Rodny, 21 de noviembre de 2026: «que se cierre a las 5pm, o sea si a esa hora la persona quedó con sus tareas al día,
+// sin nada vencido sin tener que mover fechas, lo gana … las nuevas reglas deben comenzar este lunes 23».
+test('from Monday 23 November the day closes at 17:00; earlier days keep their 18:00', () => {
+  assert.equal(dayCloseCutoff('2026-11-20').toISOString(), '2026-11-20T23:00:00.000Z');
+  assert.equal(dayCloseCutoff('2026-11-23').toISOString(), '2026-11-23T22:00:00.000Z');
+  const closedAt1730 = [
+    { status: 'REALIZADA', completedAt: at('2026-11-23T15:00:00Z'), dueDate: at('2026-11-23T12:00:00Z') },
+    { status: 'REALIZADA', completedAt: at('2026-11-23T16:00:00Z'), dueDate: at('2026-11-23T12:00:00Z') },
+    { status: 'REALIZADA', completedAt: at('2026-11-23T22:30:00Z'), dueDate: at('2026-11-23T12:00:00Z'), title: 'Reel' }
+  ];
+  assert.equal(caughtUpAtClose({ day: '2026-11-23', views: closedAt1730 }).eligible, false, 'closed at 17:30: it was open at 17:00');
+});
+
+test('moving the date of something due that day does not take it out of the count', () => {
+  const closed = [
+    { status: 'REALIZADA', completedAt: at('2026-11-23T15:00:00Z'), dueDate: at('2026-11-23T12:00:00Z') },
+    { status: 'REALIZADA', completedAt: at('2026-11-23T16:00:00Z'), dueDate: at('2026-11-23T12:00:00Z') }
+  ];
+  const moved = { status: 'PENDIENTE', completedAt: null, dueDate: at('2026-11-27T12:00:00Z'), title: 'Carrusel', movedFrom: '2026-11-23' };
+  const result = caughtUpAtClose({ day: '2026-11-23', views: [...closed, moved] });
+  assert.equal(result.eligible, false);
+  assert.deepEqual(result.pendingTasks, [{ title: 'Carrusel', dueDate: at('2026-11-23T12:00:00.000Z'), moved: true }]);
+  assert.equal(caughtUpAtClose({ day: '2026-11-23', views: [...closed, { ...moved, movedFrom: undefined }] }).eligible, true, 'a task that was never due that day does not count');
+  assert.equal(caughtUpAtClose({ day: '2026-11-23', views: [...closed, { ...moved, status: 'REALIZADA', completedAt: at('2026-11-23T20:00:00Z') }] }).eligible, true, 'moved and then closed before 17:00 is done');
 });
