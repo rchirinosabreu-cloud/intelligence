@@ -1,8 +1,9 @@
 import prisma from '../lib/prisma.js';
 import { isActiveTeamUser } from './teamRosterService.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
+import { GUIDE_VERSIONS as versions } from '../lib/guideVersions.js';
 
-const versions = { welcome: 1, cotizaciones: 1, liga: 1 };
+
 const fail = (message, statusCode) => { throw Object.assign(new Error(message), { statusCode }); };
 async function currentUser(userId, db) {
   const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, name: true, role: true, modulePermissions: true, isActive: true, mustChangePassword: true, onboardingEligible: true, teamMember: { select: { isActive: true, name: true } } } });

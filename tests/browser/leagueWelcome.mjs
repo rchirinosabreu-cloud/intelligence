@@ -15,7 +15,7 @@ let allowed = false, progress = {}, rejectSave = true, writes = 0, reads = 0;
 await page.route('**/api/user/onboarding', async route => {
   if (route.request().method() === 'POST') {
     const input = route.request().postDataJSON();
-    assert.equal(input.guideId, 'liga'); assert.equal(input.version, 1);
+    assert.equal(input.guideId, 'liga'); assert.equal(input.version, 2);
     writes++;
     if (rejectSave) { rejectSave = false; return route.fulfill({ status: 500, json: { error: 'No pudimos guardar tu bienvenida.' } }); }
     progress = { liga: input.status };
@@ -41,18 +41,17 @@ try {
   assert.equal(await page.locator('[data-league-panel]').count(), 0, 'invitation does not automatically open a window');
   await page.screenshot({ path: `${output}/bienvenida-invitacion.png` });
   await bubble.getByRole('button', { name: /Hey/ }).click();
-  await guide.getByRole('heading', { name: /El buen trabajo/ }).waitFor();
+  await guide.getByRole('heading', { name: /Una liga más pareja/ }).waitFor();
   await guide.screenshot({ path: `${output}/bienvenida-1.png` });
   assert.equal(await guide.getByRole('button', { name: 'Siguiente' }).count(), 0);
   assert.equal(await guide.locator('[data-welcome-team] img').count(), 5);
-  assert.equal(await guide.locator('[data-welcome-gift] img').count(), 2);
-  assert.equal(await guide.getByRole('heading', { name: 'La ayuda también cuenta' }).count(), 1);
-  assert.equal(await guide.locator('li').count(), 4, 'gift has its own explanation instead of a repeated row');
+  assert.equal(await guide.locator('[data-welcome-changes] li').count(), 5, 'five short changes, one line each');
+  assert.equal(await guide.locator('[data-welcome-same] li').count(), 5);
   assert.doesNotMatch(await guide.innerText(), /Tu avatar te acompaña|1 de 3|Tu buen trabajo|Tu liga del mes/);
-  await guide.getByRole('button', { name: 'Conocer la liga' }).click();
+  await guide.getByRole('button', { name: 'Entendido' }).click();
   await guide.getByRole('alert').waitFor();
   assert.equal(writes, 1); assert.deepEqual(progress, {});
-  await guide.getByRole('button', { name: 'Conocer la liga' }).click();
+  await guide.getByRole('button', { name: 'Entendido' }).click();
   await guide.waitFor({ state: 'hidden' });
   assert.deepEqual(progress, { liga: 'COMPLETED' });
   await page.reload();
@@ -62,7 +61,7 @@ try {
   assert.equal(await guide.count(), 0);
   await page.getByRole('button', { name: 'Ver bienvenida' }).click();
   await guide.waitFor();
-  await guide.getByRole('button', { name: 'Conocer la liga' }).click();
+  await guide.getByRole('button', { name: 'Entendido' }).click();
   await guide.waitFor({ state: 'hidden' });
   assert.equal(writes, 2, 'replaying the guide does not overwrite completion');
 
@@ -77,8 +76,8 @@ try {
   await guide.waitFor();
   await guide.screenshot({ path: `${output}/bienvenida-movil-oscuro.png` });
   assert.equal(await guide.evaluate(el => el.scrollWidth <= el.clientWidth), true);
-  assert.equal(await guide.getByRole('button', { name: 'Conocer la liga' }).evaluate(el => { const box = el.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; }), true, 'entry stays visible while the single-page explanation scrolls');
-  await guide.locator('[data-welcome-gift]').scrollIntoViewIfNeeded();
+  assert.equal(await guide.getByRole('button', { name: 'Entendido' }).evaluate(el => { const box = el.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; }), true, 'entry stays visible while the single-page explanation scrolls');
+  await guide.locator('[data-welcome-same]').scrollIntoViewIfNeeded();
   await guide.screenshot({ path: `${output}/bienvenida-equipo-regalo-movil.png` });
   allowed = false;
   await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
