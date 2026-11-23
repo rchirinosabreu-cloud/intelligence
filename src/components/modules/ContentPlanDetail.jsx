@@ -20,7 +20,7 @@ import { kindAcceptsCover } from '@/lib/videoCover';
 import {
   ChevronLeft, ChevronRight, Plus, Send, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
-  Calendar, User, LayoutGrid, Instagram, Facebook, Video,
+  Calendar, User, LayoutGrid, Video,
   Edit2, Check, AlertCircle, Sparkles, StickyNote, ChevronUp, Share,
   MessageSquare, Table2, UploadCloud, Link2, Eye
 } from '@/components/ui/icons';

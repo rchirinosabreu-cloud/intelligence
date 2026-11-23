@@ -265,7 +265,7 @@ export const createServiceHealthProbes = ({
         }
         return fail(classifyHttpFailure(response.status || 500));
       }
-      const disconnected = await safe(() => db.clientSocialAccount.count({ where: { isActive: false, lastError: { not: null } } }));
+      const disconnected = await safe(() => db.clientSocialAccount.count({ where: { platform: { in: ['INSTAGRAM', 'FACEBOOK'] }, isActive: false, lastError: { not: null } } }));
       if (disconnected > 0) {
         return result('WARN', `${plural(disconnected, 'cuenta de cliente pide', 'cuentas de clientes piden')} volver a conectarse.`, { latencyMs });
       }

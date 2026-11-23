@@ -24,7 +24,7 @@ test('the publishing band only offers «Programar» explicitly and explains itse
   assert.match(panel, /Programar\s*<\/button>/);
   assert.match(panel, /Cancelar/);
   assert.match(panel, /Reintentar/);
-  assert.match(panel, /no tiene Instagram ni Facebook conectados/);
+  assert.match(panel, /no tiene redes conectadas/);
   assert.doesNotMatch(panel, /encryptedToken|access_token/);
   assert.match(panel, /dark:/, 'dual theme');
 });
@@ -91,4 +91,15 @@ test('notifications about a publication open the piece in its plan', () => {
 
 test('the environment example documents the Meta system user token', () => {
   assert.match(read('.env.example'), /META_SYSTEM_USER_TOKEN=/);
+});
+
+test('a network is always shown with its official logo, never the generic stroke icon', async () => {
+  const { readFile: read } = await import('node:fs/promises');
+  const icons = await read(new URL('../src/components/ui/icons.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(icons, /export const (Facebook|Instagram|Linkedin)\b/, 'the generic icons are gone so nobody reaches for them');
+  const logos = await read(new URL('../src/components/ui/SocialBrandLogos.jsx', import.meta.url), 'utf8');
+  for (const color of ['#0866FF', '#0A66C2', 'radialGradient']) assert.ok(logos.includes(color), `${color} is part of the brand`);
+  for (const file of ['modules/ContentPlan/SocialPublishingPanel.jsx', 'modules/SocialAccountsWidget.jsx', 'modules/LinkedInCallback.jsx', 'modules/Clients/operations/ClientOperationPage.jsx', 'reports/ReportMetaSources.jsx']) {
+    assert.match(await read(new URL(`../src/components/${file}`, import.meta.url), 'utf8'), /ui\/SocialBrandLogos'/, `${file} uses the official logos`);
+  }
 });

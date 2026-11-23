@@ -285,6 +285,10 @@ export const PLATFORM_OPERATIONS = {
   'GET /social/accounts/available': { que: 'Las páginas de Meta que se pueden conectar.' },
   'POST /social/accounts/link': { que: 'Conecta una página de Meta a un cliente.', campos: 'clientId, pageId' },
   'DELETE /social/accounts/:accountId': { que: 'Desconecta una cuenta de redes.' },
+  'GET /social/linkedin/status': { que: 'Si la conexión con LinkedIn está configurada en el servidor.' },
+  'POST /social/linkedin/start': { que: 'Empieza a conectar la página de LinkedIn de un cliente: devuelve la dirección de LinkedIn donde su administrador autoriza.', campos: 'clientId' },
+  'POST /social/linkedin/exchange': { que: 'Recibe el código con el que LinkedIn devuelve a la persona y lista las páginas donde puede publicar.', campos: 'code, state' },
+  'POST /social/linkedin/link': { que: 'Conecta al cliente la página de LinkedIn elegida.', campos: 'pending, organizationId' },
   // Actividad y calendario
   'GET /activity/status': { que: 'Estado actual registrado de las personas del equipo en Actividad: reunión, ausencia, producción, foco o trabajo, con tarea y evento actuales. Combina tareas en curso y eventos vigentes del calendario. Describe lo registrado ahora, no certifica presencia física ni atención; una lista de pendientes o tiempos históricos no lo sustituye.' },
   'GET /activity/events': { que: 'Los eventos de Actividad en un rango.', campos: 'from, to (consulta)' },

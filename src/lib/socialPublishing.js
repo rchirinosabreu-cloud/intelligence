@@ -7,11 +7,18 @@
  * no toca la base ni la red.
  */
 import { isDriveAsset } from './finalAssetShape.js';
+import { LINKEDIN_TEXT_MAX_CHARS, linkedinMedia } from './linkedinPublishing.js';
 
 const MB = 1024 * 1024;
 
-export const SOCIAL_PLATFORMS = Object.freeze(['INSTAGRAM', 'FACEBOOK']);
-export const SOCIAL_PLATFORM_LABELS = Object.freeze({ INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook' });
+/** Las redes de Meta: una página de Facebook con su Instagram forma una «cuenta» (`socialPagesOf`). */
+export const META_PLATFORMS = Object.freeze(['INSTAGRAM', 'FACEBOOK']);
+/**
+ * LinkedIn llegó el 23 de noviembre de 2026. No forma parte de ninguna «cuenta» de Meta: cada página de
+ * LinkedIn conectada es un destino suelto que toda pieza del cliente puede marcar (`standaloneAccountsOf`).
+ */
+export const SOCIAL_PLATFORMS = Object.freeze([...META_PLATFORMS, 'LINKEDIN']);
+export const SOCIAL_PLATFORM_LABELS = Object.freeze({ INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook', LINKEDIN: 'LinkedIn' });
 
 export const PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'CANCELLED']);
 export const ACTIVE_PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHING']);
@@ -284,13 +291,23 @@ export const facebookMedia = ({ kind, assets = [] }) => {
 export const schedulingNotices = ({ item, assets = [], platforms = [] }) => {
   const notices = [];
   const wanted = (platforms || []).map((platform) => String(platform || '').toUpperCase());
-  if (!wanted.includes('FACEBOOK')) return notices;
+  if (!wanted.includes('FACEBOOK') && !wanted.includes('LINKEDIN')) return notices;
   const media = describeMetaMedia({ format: item?.format, assets });
   if (media.problem) return notices;
-  const facebook = facebookMedia({ kind: media.kind, assets });
-  if (facebook.droppedVideos.length && !facebook.problem) {
-    const names = facebook.droppedVideos.map((asset) => `«${asset.name || 'video'}»`).join(', ');
-    notices.push(`En Facebook sale sin ${facebook.droppedVideos.length > 1 ? 'los videos' : 'el video'} ${names}: Facebook no admite video dentro de una publicación de varias fotos. En Instagram sale completo.`);
+  const namesOf = (dropped) => dropped.map((asset) => `«${asset.name || 'video'}»`).join(', ');
+  if (wanted.includes('FACEBOOK')) {
+    const facebook = facebookMedia({ kind: media.kind, assets });
+    if (facebook.droppedVideos.length && !facebook.problem) {
+      notices.push(`En Facebook sale sin ${facebook.droppedVideos.length > 1 ? 'los videos' : 'el video'} ${namesOf(facebook.droppedVideos)}: Facebook no admite video dentro de una publicación de varias fotos. En Instagram sale completo.`);
+    }
+  }
+  if (wanted.includes('LINKEDIN')) {
+    const linkedin = linkedinMedia({ kind: media.kind, assets });
+    if (linkedin.droppedVideos.length && !linkedin.problem) {
+      notices.push(`En LinkedIn sale sin ${linkedin.droppedVideos.length > 1 ? 'los videos' : 'el video'} ${namesOf(linkedin.droppedVideos)}: LinkedIn no admite video dentro de una publicación de varias imágenes.`);
+    }
+    if (media.kind === 'REELS' && (item?.coverKey || item?.coverName)) notices.push('En LinkedIn el video sale sin la portada de la pieza: LinkedIn elige el fotograma.');
+    if (/(^|\s)@[\p{L}\p{N}_.]+/u.test(String(item?.captionText || ''))) notices.push('En LinkedIn las menciones (@) salen como texto, sin enlace al perfil.');
   }
   return notices;
 };
@@ -309,7 +326,7 @@ const platformLabel = (platform) => SOCIAL_PLATFORM_LABELS[platform] || platform
 export const socialPagesOf = (accounts = []) => {
   const groups = new Map();
   for (const account of Array.isArray(accounts) ? accounts : []) {
-    if (!account || !SOCIAL_PLATFORMS.includes(account.platform)) continue;
+    if (!account || !META_PLATFORMS.includes(account.platform)) continue;
     const pageId = String(account.pageId || 'sin-pagina');
     const group = groups.get(pageId) || { pageId, rows: [] };
     group.rows.push(account);
@@ -355,10 +372,22 @@ export const pieceNeedsAccountChoice = (item, accounts = []) => (
 );
 export const CHOOSE_ACCOUNT_FIRST = 'Elige primero a qué cuenta va esta pieza.';
 
-/** Las filas (Facebook e Instagram) de las cuentas a las que va la pieza. */
+/**
+ * Los destinos que no son una «cuenta» de Meta: hoy, las páginas de LinkedIn del cliente. Están
+ * disponibles para toda pieza —no se eligen por página como Facebook e Instagram— y **ninguna viene
+ * marcada**: en la banda se marca pieza por pieza, porque no todo lo que va a Instagram va a LinkedIn.
+ */
+export const standaloneAccountsOf = (accounts = []) => (Array.isArray(accounts) ? accounts : [])
+  .filter((account) => account && SOCIAL_PLATFORMS.includes(account.platform) && !META_PLATFORMS.includes(account.platform))
+  .sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || ''), 'es', { sensitivity: 'base' }));
+
+/** Las filas donde la pieza puede salir: Facebook e Instagram de sus cuentas, más las páginas de LinkedIn del cliente. */
 export const pieceTargetAccounts = (item, accounts = []) => {
   const chosen = new Set(pieceSocialPageIds(item, accounts));
-  return socialPagesOf(accounts).filter((page) => chosen.has(page.pageId)).flatMap((page) => page.accounts);
+  return [
+    ...socialPagesOf(accounts).filter((page) => chosen.has(page.pageId)).flatMap((page) => page.accounts),
+    ...standaloneAccountsOf(accounts)
+  ];
 };
 
 /**
@@ -419,10 +448,17 @@ export const schedulingProblems = ({ item, assets = [], accounts = [], platforms
       const facebook = facebookMedia({ kind: media.kind, assets });
       if (facebook.problem) problems.push(facebook.problem);
     }
+    if (!media.problem && wanted.includes('LINKEDIN')) {
+      const linkedin = linkedinMedia({ kind: media.kind, assets });
+      if (linkedin.problem) problems.push(linkedin.problem);
+    }
   }
 
-  if (String(item?.captionText || '').length > CAPTION_MAX_CHARS) {
-    problems.push(`El texto de la publicación tiene ${item.captionText.length} caracteres; Meta acepta hasta 2.200.`);
+  const captionLength = String(item?.captionText || '').length;
+  if (wanted.some((platform) => META_PLATFORMS.includes(platform)) || !wanted.length) {
+    if (captionLength > CAPTION_MAX_CHARS) problems.push(`El texto de la publicación tiene ${captionLength} caracteres; Meta acepta hasta 2.200.`);
+  } else if (captionLength > LINKEDIN_TEXT_MAX_CHARS) {
+    problems.push(`El texto de la publicación tiene ${captionLength} caracteres; LinkedIn acepta hasta 3.000.`);
   }
   return problems;
 };

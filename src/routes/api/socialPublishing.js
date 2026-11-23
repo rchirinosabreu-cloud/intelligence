@@ -2,6 +2,7 @@ import express from 'express';
 import { isManagerRole } from '../../config/security.js';
 import { socialPublishingService } from '../../services/socialPublishingService.js';
 import { socialAccountService } from '../../services/socialAccountService.js';
+import { linkedinAccountService } from '../../services/linkedinAccountService.js';
 
 // Publicación automática en Instagram y Facebook (29 de septiembre de 2026). Todo bajo el permiso de
 // parrillas; conectar o desconectar cuentas es de administradores y project managers.
@@ -26,6 +27,7 @@ const reply = (res, error, logger) => {
 export const createSocialPublishingRouter = ({
   publishing = socialPublishingService,
   accounts = socialAccountService,
+  linkedinAccounts = linkedinAccountService,
   logger = console
 } = {}) => {
   const router = express.Router();
@@ -115,6 +117,43 @@ export const createSocialPublishingRouter = ({
       if (!clientId || !pageId) return res.status(400).json({ error: 'Faltan clientId y pageId.' });
       const rows = await accounts.linkPage({ clientId, pageId, actorUserId: req.user.userId });
       return res.status(201).json(rows);
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  // LinkedIn (23 de noviembre de 2026): un administrador de la página del cliente inicia sesión en LinkedIn
+  // y autoriza. `start` da la dirección a la que ir; `exchange` recibe el código con el que LinkedIn
+  // devuelve a la persona y lista sus páginas; `link` guarda la elegida.
+  router.get('/linkedin/status', requireManager, (_req, res) => res.json({ configured: linkedinAccounts.isConfigured() }));
+
+  router.post('/linkedin/start', requireManager, async (req, res) => {
+    try {
+      const clientId = String(req.body?.clientId || '').trim();
+      if (!clientId) return res.status(400).json({ error: 'Falta clientId.' });
+      return res.json(await linkedinAccounts.start({ clientId, actorUserId: req.user.userId }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  router.post('/linkedin/exchange', requireManager, async (req, res) => {
+    try {
+      const code = String(req.body?.code || '').trim();
+      const state = String(req.body?.state || '').trim();
+      if (!code || !state) return res.status(400).json({ error: 'LinkedIn no devolvió un código de autorización.' });
+      return res.json(await linkedinAccounts.exchange({ code, state, actorUserId: req.user.userId }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  router.post('/linkedin/link', requireManager, async (req, res) => {
+    try {
+      const pending = String(req.body?.pending || '').trim();
+      const organizationId = String(req.body?.organizationId || '').trim();
+      if (!pending || !organizationId) return res.status(400).json({ error: 'Faltan la conexión y la página elegida.' });
+      return res.status(201).json(await linkedinAccounts.link({ pending, organizationId, actorUserId: req.user.userId }));
     } catch (error) {
       return reply(res, error, logger);
     }

@@ -14,6 +14,9 @@ import prisma from '../lib/prisma.js';
 import { decrypt } from '../utils/encryption.js';
 import { createNotification } from './notificationService.js';
 import { createMetaGraphClient } from './metaGraphService.js';
+import { createLinkedInClient } from './linkedinService.js';
+import { linkedinTokenService } from './linkedinTokenService.js';
+import { humanizeLinkedInError, linkedinMedia } from '../lib/linkedinPublishing.js';
 import { createSignedDownload, getS3ObjectBuffer } from './s3Service.js';
 import { getPlatformStorage } from './platformStorageService.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
@@ -29,6 +32,9 @@ import {
   pieceNeedsAccountChoice, pieceTargetAccounts, publishAtIso, schedulingProblems, socialPagesOf
 } from '../lib/socialPublishing.js';
 const AMBIGUOUS_PUBLISH_MESSAGE = 'Meta recibió la orden de publicar pero no confirmó el resultado. Revisa la cuenta antes de reintentar: si la pieza ya salió, no la vuelvas a programar.';
+const AMBIGUOUS_LINKEDIN_MESSAGE = 'LinkedIn recibió la orden de publicar pero no confirmó el resultado. Revisa la página antes de reintentar: si la pieza ya salió, no la vuelvas a programar.';
+/** A quién se le pidió publicar, para decirlo en los avisos: «No se envió a LinkedIn: …». */
+const networkOf = (platform) => (platform === 'LINKEDIN' ? 'LinkedIn' : 'Meta');
 
 const MAX_DIAGNOSTICS = 5;
 /** Meta descarga el archivo al crear el contenedor; una hora cubre con holgura un reel de 300 MB. */
@@ -73,7 +79,15 @@ export const publicSocialAccount = (account) => account && ({
   isActive: account.isActive,
   isPrimary: Boolean(account.isPrimary),
   connectedAt: account.connectedAt,
-  lastError: account.lastError
+  lastError: account.lastError,
+  // LinkedIn: cuándo hay que volver a autorizar la página. Nunca los tokens, que viven cifrados.
+  ...(account.platform === 'LINKEDIN' ? {
+    authorization: {
+      expiresAt: account.metadata?.expiresAt || null,
+      refreshExpiresAt: account.metadata?.refreshExpiresAt || null,
+      canRefresh: Boolean(account.metadata?.canRefresh)
+    }
+  } : {})
 });
 
 /**
@@ -91,6 +105,9 @@ export const finalAssetPublicationUrl = async (asset, { platform, kind, storageF
 export const createSocialPublishingService = ({
   db = prisma,
   meta = createMetaGraphClient(),
+  // LinkedIn (23 de noviembre de 2026): su cliente y la llave vigente de cada página, renovada si hace falta.
+  linkedin = createLinkedInClient(),
+  linkedinToken = (account) => linkedinTokenService.freshToken(account),
   decrypt: decryptToken = decrypt,
   mediaUrlFor = finalAssetPublicationUrl,
   now = () => new Date(),
@@ -178,7 +195,9 @@ export const createSocialPublishingService = ({
     await assertNotSuspended(db, { clientId: item.plan?.clientId, year: item.plan?.year, month: item.plan?.month, clientName: item.plan?.client?.name });
     const pool = pieceTargetAccounts(item, accountsOf(item));
     // Con varias cuentas y ninguna marcada no hay dónde programar: se pide elegir, nunca se asume una.
-    if (pieceNeedsAccountChoice(item, accountsOf(item))) {
+    // (Las páginas de LinkedIn no dependen de esa elección: se pueden programar aunque falte marcar la cuenta de Meta.)
+    const asksOnlyStandalone = Array.isArray(accountIds) && accountIds.length > 0 && accountIds.every((id) => pool.some((account) => account.id === String(id)));
+    if (!asksOnlyStandalone && pieceNeedsAccountChoice(item, accountsOf(item))) {
       throw httpError(422, CHOOSE_ACCOUNT_FIRST, { code: 'SOCIAL_PUBLICATION_INVALID', problems: [CHOOSE_ACCOUNT_FIRST] });
     }
     let targets;
@@ -371,10 +390,13 @@ export const createSocialPublishingService = ({
     const attempts = Number(row.attempts || 0) + 1;
     // Si la orden de publicar ya salió y la respuesta se perdió (red, tiempo de espera, 5xx), no se sabe si
     // Meta publicó: repetirlo solo podría duplicar el post. Queda en manos de una persona.
+    const isLinkedIn = row.platform === 'LINKEDIN';
     const ambiguous = publishRequested && isRetryableMetaError(error) && !error.permanent;
     const retryable = !ambiguous && isRetryableMetaError(error) && !error.permanent;
     const nextAttemptAt = retryable ? nextPublicationRetryAt(attempts, now()) : null;
-    const humanError = ambiguous ? AMBIGUOUS_PUBLISH_MESSAGE : error.permanent ? error.message : humanizeMetaError(error);
+    const humanError = ambiguous ? (isLinkedIn ? AMBIGUOUS_LINKEDIN_MESSAGE : AMBIGUOUS_PUBLISH_MESSAGE)
+      : error.permanent ? error.message
+        : isLinkedIn ? humanizeLinkedInError(error) : humanizeMetaError(error);
     const diagnostic = {
       at: now().toISOString(), code: error.code ?? null, subcode: error.subcode ?? null, status: error.status ?? null,
       fbtraceId: error.fbtraceId ?? null, message: String(error.message || '').slice(0, 300), willRetry: Boolean(nextAttemptAt), ambiguous
@@ -385,7 +407,7 @@ export const createSocialPublishingService = ({
       where: { id: row.id, leaseToken },
       data: { status, attempts, nextAttemptAt, error: humanError, diagnostics, leaseToken: null, leaseAt: null }
     });
-    if (error.code === 190 || error.code === 102) {
+    if (error.code === 190 || error.code === 102 || (isLinkedIn && Number(error.status) === 401)) {
       await db.clientSocialAccount.update({ where: { id: row.socialAccountId }, data: { isActive: false, lastError: humanError, lastCheckedAt: now() } }).catch(() => {});
     }
     // Un fallo definitivo deja la cola sin nada vivo: la pieza deja de estar «Programada» y vuelve al
@@ -449,19 +471,38 @@ export const createSocialPublishingService = ({
       if (!item || item.deletedAt) throw Object.assign(new Error('La pieza ya no existe.'), { permanent: true });
       // Un cliente archivado salió de la operación: lo que quedó programado no sale solo.
       // Se dice el motivo y se puede reintentar tras reactivarlo en Directorio.
-      if (item.plan?.client?.isArchived) throw Object.assign(new Error('No se envió a Meta: el cliente está archivado. Reactívalo en Clientes → Directorio para publicarla.'), { permanent: true, code: 'CLIENT_ARCHIVED' });
+      if (item.plan?.client?.isArchived) throw Object.assign(new Error(`No se envió a ${networkOf(full.platform)}: el cliente está archivado. Reactívalo en Clientes → Directorio para publicarla.`), { permanent: true, code: 'CLIENT_ARCHIVED' });
       if (full.publishRequestedAt && row.status === 'PUBLISHING') {
         // Una fila recogida con lease vencido **después** de haber mandado publicar: no se repite la orden.
-        throw Object.assign(new Error(AMBIGUOUS_PUBLISH_MESSAGE), { permanent: true, code: 'PUBLISH_AMBIGUOUS' });
+        throw Object.assign(new Error(full.platform === 'LINKEDIN' ? AMBIGUOUS_LINKEDIN_MESSAGE : AMBIGUOUS_PUBLISH_MESSAGE), { permanent: true, code: 'PUBLISH_AMBIGUOUS' });
       }
       // Se vuelve a comprobar todo en el momento de salir: la pieza pudo perder la aprobación o el archivo.
       const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: account ? [account] : [], platforms: [full.platform], now: new Date(0) });
       // «Esta pieza ya está publicada» dicho a la hora de salir señalaba justo lo contrario de lo que
       // pasaba: la pieza no había salido (15 de octubre de 2026). Lo que se dice aquí es que **no se
       // envió**, y después el motivo.
-      if (problems.length) throw Object.assign(new Error(`No se envió a Meta: ${problems[0].charAt(0).toLowerCase()}${problems[0].slice(1)}`), { permanent: true });
+      if (problems.length) throw Object.assign(new Error(`No se envió a ${networkOf(full.platform)}: ${problems[0].charAt(0).toLowerCase()}${problems[0].slice(1)}`), { permanent: true });
 
       const described = describeMetaMedia({ format: item.format, assets: item.finalAssets });
+      if (full.platform === 'LINKEDIN') {
+        // LinkedIn recibe los bytes (no una URL que descargar) y solo imágenes cuando son varias.
+        const post = linkedinMedia({ kind: described.kind, assets: described.assets });
+        const uploads = [];
+        for (const asset of post.assets) {
+          uploads.push({ url: await mediaUrlFor(asset, { platform: 'LINKEDIN', kind: post.kind }), isVideo: isVideoAsset(asset), size: Number(asset.size || 0), name: asset.name || null });
+        }
+        const published = await linkedin.publishToLinkedIn({
+          organizationId: account.externalId, token: await linkedinToken(account), kind: post.kind,
+          text: String(item.captionText || ''), media: uploads, title: item.objective || '', beforePublish
+        });
+        await db.socialPublication.updateMany({
+          where: { id: row.id, leaseToken },
+          data: { status: 'PUBLISHED', publishedAt: now(), externalMediaId: published.mediaId || null, permalink: published.permalink || null, error: null, leaseToken: null, leaseAt: null }
+        });
+        await syncItemStatusWithQueue(item.id);
+        await notifyRequester(full, item, { type: 'SOCIAL_PUBLICATION_PUBLISHED', message: `«${item.objective || item.format}» ya está publicado en ${whereLabel(account)}.` });
+        return { id: row.id, status: 'PUBLISHED', permalink: published.permalink || null };
+      }
       // Facebook recibe el carrusel sin sus videos (su API no los admite entre varias fotos).
       const media = full.platform === 'FACEBOOK' ? facebookMedia({ kind: described.kind, assets: described.assets }) : described;
       const files = [];

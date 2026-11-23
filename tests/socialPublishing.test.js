@@ -94,7 +94,7 @@ test('scheduling a piece names every reason it cannot go out, in plain Spanish',
   assert.match(schedulingProblems({ item: { ...approved, captionText: 'x'.repeat(2201) }, assets: [image], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /2\.?200/);
   assert.match(schedulingProblems({ item: approved, assets: [], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /pieza final/i);
   assert.match(schedulingProblems({ item: { ...approved, format: 'Historia' }, assets: [image], accounts: [fbAccount], platforms: ['FACEBOOK'], now })[0], /historia.*Facebook/i, 'stories go to Instagram only');
-  assert.deepEqual(SOCIAL_PLATFORMS, ['INSTAGRAM', 'FACEBOOK']);
+  assert.deepEqual(SOCIAL_PLATFORMS, ['INSTAGRAM', 'FACEBOOK', 'LINKEDIN']);
 });
 
 test('a failed publication retries a few times with a growing wait, then stops', () => {

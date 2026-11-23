@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useState } from 'react';
-import { CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, RotateCcw } from '@/components/ui/icons';
+import { CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, LayoutGrid, Plus, RotateCcw } from '@/components/ui/icons';
+import { InstagramLogo } from '@/components/ui/SocialBrandLogos';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
@@ -374,7 +375,7 @@ function Profile({ client, evaluation, canManage, onEdit, today, onAuthorizeWork
       {client.description && <p className="mb-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{client.description}</p>}
       {client.instagramUrl && (
         <a href={client.instagramUrl} target="_blank" rel="noreferrer" className="mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">
-          <Instagram className="h-4 w-4" />{client.instagramUrl.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')}
+          <InstagramLogo className="h-4 w-4" aria-hidden="true" />{client.instagramUrl.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')}
         </a>
       )}
       <div className="grid grid-cols-2 gap-3">

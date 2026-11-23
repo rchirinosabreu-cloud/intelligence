@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock, ExternalLink, Facebook, Info, Instagram, Loader2, Send } from '@/components/ui/icons';
+import { AlertCircle, CheckCircle2, Clock, ExternalLink, Info, Loader2, Send } from '@/components/ui/icons';
+import { SOCIAL_BRAND_LOGOS } from '@/components/ui/SocialBrandLogos';
 import {
-  SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS, pieceSocialPageIds, publishAtIso, schedulingNotices, schedulingProblems, socialPagesOf
+  SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS, pieceSocialPageIds, publishAtIso, schedulingNotices, schedulingProblems, socialPagesOf, standaloneAccountsOf
 } from '@/lib/socialPublishing';
 
 /**
@@ -16,8 +17,11 @@ import {
  * parrilla). Entonces la banda pregunta primero **a qué cuentas va esta pieza** —una, varias o
  * ninguna: nada viene marcado y todo se puede desmarcar— y debajo muestra el Facebook y el Instagram
  * de las marcadas. Con una sola cuenta esa pregunta no aparece y todo se ve como siempre.
+ *
+ * LinkedIn (23 de noviembre de 2026) va en su propia fila debajo, **sin marcar**: no todo lo que va a
+ * Instagram va a LinkedIn, así que cada pieza lo pide marcando su casilla antes de «Programar».
  */
-const PLATFORM_ICON = { INSTAGRAM: Instagram, FACEBOOK: Facebook };
+const PLATFORM_ICON = SOCIAL_BRAND_LOGOS;
 
 const bogotaStamp = (value) => {
   if (!value) return '';
@@ -59,9 +63,14 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   const rowFor = (account) => publications.find((row) => row.socialAccountId === account.id)
     || publications.find((row) => !row.socialAccountId && row.platform === account.platform)
     || null;
-  const ofThisPiece = new Set(pages.filter((page) => chosenPageIds.includes(page.pageId)).flatMap((page) => page.accounts.map((account) => account.id)));
+  // Las páginas de LinkedIn del cliente: destinos sueltos, disponibles para toda pieza.
+  const standalone = useMemo(() => standaloneAccountsOf(connected), [connected]);
+  const ofThisPiece = new Set([
+    ...pages.filter((page) => chosenPageIds.includes(page.pageId)).flatMap((page) => page.accounts.map((account) => account.id)),
+    ...standalone.map((account) => account.id)
+  ]);
   // Las cuentas de esta pieza, más las que conservan algo publicado o en cola aunque la pieza ya no vaya ahí.
-  const shown = pages.flatMap((page) => page.accounts)
+  const shown = [...pages.flatMap((page) => page.accounts), ...standalone]
     .filter((account) => ofThisPiece.has(account.id) || KEPT_STATUSES.includes(rowFor(account)?.status));
   // Lo fallido se vuelve a intentar con «Reintentar», no con «Programar»: dos caminos para lo mismo confunden.
   const selectable = shown.filter((account) => (
@@ -70,7 +79,15 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   // Se recuerda lo que la persona desmarcó, no lo marcado: así una red que vuelve a estar disponible
   // (cancelada, o reabierta para publicar de nuevo) aparece marcada sin tener que acordarse de hacerlo.
   const [excluded, setExcluded] = useState(() => new Set());
-  const targets = selectable.filter((account) => !excluded.has(account.id));
+  // LinkedIn al revés: se recuerda lo que la persona marcó, porque no viene marcado.
+  const [included, setIncluded] = useState(() => new Set());
+  const optIn = (account) => account.platform === 'LINKEDIN';
+  const isChecked = (account) => (optIn(account) ? included.has(account.id) : !excluded.has(account.id));
+  const setChecked = (account, checked) => {
+    const [setter, addWhen] = optIn(account) ? [setIncluded, true] : [setExcluded, false];
+    setter((prev) => { const next = new Set(prev); if (checked === addWhen) next.add(account.id); else next.delete(account.id); return next; });
+  };
+  const targets = selectable.filter(isChecked);
   const platforms = Array.from(new Set(targets.map((account) => account.platform)));
   const problems = targets.length
     ? schedulingProblems({ item, assets: item.finalAssets || [], targets, now: new Date() })
@@ -92,7 +109,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
     return (
       <div className="border-t border-zinc-100 px-6 py-4 dark:border-white/5" data-social-publishing-panel>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          <span className="font-medium text-zinc-700 dark:text-zinc-300">Publicación en redes:</span> este cliente no tiene Instagram ni Facebook conectados. Se conectan desde la ficha del cliente.
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">Publicación en redes:</span> este cliente no tiene redes conectadas. Se conectan desde la ficha del cliente.
         </p>
       </div>
     );
@@ -175,8 +192,8 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
               {canChoose ? (
                 <input
                   type="checkbox"
-                  checked={!excluded.has(account.id)}
-                  onChange={(event) => setExcluded((prev) => { const next = new Set(prev); if (event.target.checked) next.delete(account.id); else next.add(account.id); return next; })}
+                  checked={isChecked(account)}
+                  onChange={(event) => setChecked(account, event.target.checked)}
                   aria-label={`Programar en ${SOCIAL_PLATFORM_LABELS[account.platform]} de ${account.displayName}`}
                   className="h-4 w-4 shrink-0 accent-brand-cyan"
                 />
