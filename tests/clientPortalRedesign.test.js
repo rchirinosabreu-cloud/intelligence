@@ -79,3 +79,11 @@ test('el enlace del cliente dice el período del contrato, va en claro y su cabe
   assert.match(theme, /pathname\.startsWith\('\/compartir\/'\)/);
   assert.doesNotMatch(portal, /flex h-24 max-w-6xl/);
 });
+
+test('client cards in the parrillas listing start closed and open from their header', async () => {
+  const grids = await readFile(new URL('../src/components/modules/ContentGrids.jsx', import.meta.url), 'utf8');
+  assert.match(grids, /data-client-toggle=\{group\.id\} onClick=\{\(\) => toggleClient\(group\.id\)\} aria-expanded=\{expanded\}/);
+  assert.match(grids, /const visiblePlans = expanded \? group\.plans : \[\];/);
+  assert.match(grids, /\{expanded && <ul/);
+  assert.doesNotMatch(grids, /RECENT_PLANS|Ver menos/);
+});
