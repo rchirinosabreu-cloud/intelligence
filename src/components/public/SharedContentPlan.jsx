@@ -126,7 +126,7 @@ const FinalAssetPreview = ({ assets = [], format }) => {
         <div className="relative">
           {isDrive ? (
             // Un reel es vertical: sin acotar el ancho, un 9:16 a 560 px mide mil de alto.
-            <div className={`relative mx-auto w-full ${isVerticalPiece ? 'max-w-[380px] lg:max-w-[min(380px,calc((100vh-11rem)*9/16))]' : ''}`} style={{ aspectRatio }}>
+            <div className={`relative mx-auto w-full ${isVerticalPiece ? 'max-w-[380px]' : ''} ${isVerticalPiece ? 'lg:max-w-[min(380px,calc((100vh-11rem)*9/16))]' : ''}`} style={{ aspectRatio }}>
               <iframe
                 src={asset.embedUrl}
                 title={asset.name || 'Pieza final en Drive'}
