@@ -66,6 +66,19 @@ Cambiar un archivo **no** exige cancelar la programación: basta con que el corr
 
 Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catálogo de Instagram, stickers de historias (enlace, encuesta), etiquetar productos. **Instagram** tampoco guarda publicaciones programadas por la API (Facebook sí, ver arriba «El calendario de Meta»; hoy no se usa): por eso la hora vive aquí. Límite: 100 publicaciones por cuenta de Instagram cada 24 horas.
 
+## LinkedIn: páginas de empresa (Rodny, 23 de noviembre de 2026)
+
+«Empecemos montando lo de LinkedIn.» La cola, el cron, el lease, los reintentos y «nunca dos veces» son los mismos; lo que cambia es todo lo que LinkedIn hace distinto de Meta, leído ese día en su documentación:
+
+- **Cada página la autoriza su administrador, sin llave compartida.** En «Redes conectadas», el «+» ofrece «Página de LinkedIn»: la persona va a LinkedIn, autoriza y vuelve a `/linkedin/callback`, donde **elige** cuál de las páginas que administra es la del cliente (nunca se conecta una de oficio). Es el camino autoservicio que Rodny pidió para cuando la plataforma se entregue a otras agencias. `linkedinAccountService.js`: el `state` es un JWT de 15 minutos atado a quien inició; la autorización viaja cifrada hasta que se elige la página y solo entonces se guarda (`ClientSocialAccount`, `platform: 'LINKEDIN'`, `pageId: 'linkedin:<id>'`). Ningún token llega al navegador.
+- **La autorización dura 60 días** (un año si LinkedIn le concede a la app tokens de renovación; entonces `linkedinTokenService.js` la renueva sola una semana antes). Sin renovación, la ficha avisa desde 7 días antes y, al vencer, la cuenta se apaga pidiendo reconectar.
+- **Una página de LinkedIn es un destino aparte**, no parte de una «cuenta» de Meta (`standaloneAccountsOf`). Está disponible para toda pieza del cliente y **sale sin marcar**: cada pieza la marca si va a LinkedIn. Un cliente con solo LinkedIn puede programar.
+- **Los archivos se suben, no se enlazan** (`linkedinService.js`): imágenes enteras, videos en las partes que LinkedIn indica, leyendo el archivo por rangos para no cargarlo entero en memoria. Se sube el **original** (LinkedIn acepta PNG); no hay copias derivadas.
+- **Formatos:** una imagen, varias imágenes (2 a 20; un carrusel mixto sale sin sus videos, y la banda lo avisa), un video MP4 de hasta 500 MB. **No hay historias**, ni portada aparte del video. El texto admite 3.000 caracteres (2.200 si la pieza va también a Meta).
+- **El texto se escapa** (`escapeLinkedInText`): los caracteres reservados de LinkedIn cortan la publicación si van sueltos; las etiquetas siguen siendo etiquetas y las menciones salen como texto.
+- **Fuera de la plataforma:** una app en linkedin.com/developers asociada a la página de la agencia, con el producto *Community Management API* (primero acceso de desarrollo, luego estándar), URL de regreso `${APP_URL}/linkedin/callback`, y en Railway `LINKEDIN_CLIENT_ID` y `LINKEDIN_CLIENT_SECRET` (opcionales: `LINKEDIN_API_VERSION`, hoy `202605`; `LINKEDIN_OAUTH_REDIRECT_URI`). Sin esas variables el botón dice qué falta y nada más cambia.
+- **Sin probar contra LinkedIn real** hasta que exista esa app: está construido contra la documentación y sus contratos (`tests/linkedinPublishing.test.js`). La primera publicación real hay que mirarla.
+
 ## Lo que hay que configurar fuera de la plataforma
 
 **Desde el 1 de octubre de 2026 la llave es de una persona, no del usuario del sistema (decisión de Rodny).** Cada cliente tiene su propio portfolio en Meta y quien tiene acceso a todos es Francisco Villa, el CEO, como persona. El usuario del sistema del portfolio Brain Studio solo veía la página de Brain Studio, y para llegar a páginas de otros negocios Meta exige hacerse «proveedor de tecnología» (verificación y revisión de la app). Con un token de usuario de alguien con rol en la app basta el acceso estándar.
@@ -84,6 +97,8 @@ Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catál
 - Un **enlace de Drive** como pieza final no se publica solo: Meta no puede descargar de Drive. `schedulingProblems` lo dice al programar. Falta copiar el archivo al almacenamiento justo antes de publicar.
 - Programar un mes entero de una vez; hoy es pieza por pieza, a propósito, hasta ver el primer mes publicado.
 - Un interruptor general para pausar el publicador sin tocar el código.
+- LinkedIn: un enlace para que el **cliente** autorice su página sin tener usuario en la plataforma, cifras de LinkedIn en Reportes, y perfiles personales (hoy solo páginas de empresa).
+- TikTok: investigado el 23 de noviembre de 2026, sin construir.
 
 ## Verificación
 

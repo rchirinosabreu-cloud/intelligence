@@ -30,6 +30,7 @@ const TalentRadar = lazyWithRecovery(() => import('./components/modules/TalentRa
 const ManagerTaskAnalytics = lazyWithRecovery(() => import('./components/modules/ManagerTaskAnalytics'));
 const Activity = lazyWithRecovery(() => import('./components/modules/Activity'));
 const GoogleCalendarCallback = lazyWithRecovery(() => import('./components/modules/Activity/GoogleCalendarCallback'));
+const LinkedInCallback = lazyWithRecovery(() => import('./components/modules/LinkedInCallback'));
 const Reports = lazyWithRecovery(() => import('./components/modules/Reports'));
 const MoodboardDashboard = lazyWithRecovery(() => import('./components/modules/Moodboard/MoodboardDashboard'));
 const MoodboardCanvas = lazyWithRecovery(() => import('./components/modules/Moodboard/MoodboardCanvas'));
@@ -348,6 +349,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="clientes">
                           <ClientOperationRoute />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/linkedin/callback"
+                      element={
+                        <ModuleGuard module="clientes">
+                          <LinkedInCallback />
                         </ModuleGuard>
                       }
                     />

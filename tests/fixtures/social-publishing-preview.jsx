@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
+import axios from 'axios';
+import { MemoryRouter } from 'react-router-dom';
+import LinkedInCallback from '../../src/components/modules/LinkedInCallback';
 import { ConfirmDialogProvider } from '../../src/components/ui/ConfirmDialog';
 import { BrainTimePicker } from '../../src/components/ui/BrainDatePicker';
 import SocialPublishingPanel from '../../src/components/modules/ContentPlan/SocialPublishingPanel';
@@ -15,6 +18,11 @@ import '../../src/index.css';
 const ig = { id: 'acc-ig', clientId: 'c1', platform: 'INSTAGRAM', externalId: '1789', displayName: '@titanescartagena', pageId: '5555', isActive: true, connectedAt: '2036-10-01T12:00:00.000Z', lastError: null };
 const fb = { id: 'acc-fb', clientId: 'c1', platform: 'FACEBOOK', externalId: '5555', displayName: 'Titanes Cartagena', pageId: '5555', isActive: true, connectedAt: '2036-10-01T12:00:00.000Z', lastError: null };
 const fbDead = { ...fb, isActive: false, lastError: 'La conexión con Meta venció: hay que volver a conectar la cuenta desde la ficha del cliente.' };
+
+// LinkedIn (23 de noviembre de 2026): una página de empresa es un destino aparte, que cada pieza marca si quiere.
+const inDays = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+const li = { id: 'acc-li', clientId: 'c5', platform: 'LINKEDIN', externalId: '2414183', displayName: 'Titanes Cartagena S.A.S.', pageId: 'linkedin:2414183', isActive: true, lastError: null, authorization: { expiresAt: inDays(52), refreshExpiresAt: null, canRefresh: false } };
+const liExpiring = { ...li, id: 'acc-li2', externalId: '99', pageId: 'linkedin:99', displayName: 'Fundación Titanes por la Educación del Caribe', authorization: { expiresAt: inDays(4), refreshExpiresAt: null, canRefresh: false } };
 
 const image = { id: 'a1', name: 'post-final.jpg', mimeType: 'image/jpeg', size: 2_400_000, storageKey: 'k/post.jpg' };
 const video = { id: 'v1', name: 'reel-final.mp4', mimeType: 'video/mp4', size: 48_000_000, storageKey: 'k/reel.mp4' };
@@ -35,12 +43,32 @@ const CASES = [
     { id: 'p3', platform: 'INSTAGRAM', status: 'FAILED', attempts: 3, error: 'Meta rechazó la proporción de la imagen: en el feed acepta de 4:5 a 1.91:1.' }
   ] }, accounts: [ig, fbDead] },
   { title: 'Publicando ahora mismo', item: { ...base, publications: [{ id: 'p4', platform: 'INSTAGRAM', status: 'PUBLISHING', scheduledAt: new Date().toISOString(), attempts: 0 }] }, accounts: [ig] },
-  { title: 'Cliente sin redes conectadas', item: base, accounts: [] }
+  { title: 'Cliente sin redes conectadas', item: base, accounts: [] },
+  { title: 'Con LinkedIn: Instagram, Facebook y la página de empresa', item: base, accounts: [ig, fb, li] },
+  { title: 'Solo LinkedIn, programado', item: { ...base, publications: [{ id: 'p5', socialAccountId: 'acc-li', platform: 'LINKEDIN', status: 'SCHEDULED', scheduledAt: `${tomorrow}T15:30:00.000Z`, attempts: 0 }] }, accounts: [li] },
+  { title: 'Historia con LinkedIn conectado', item: { ...base, format: 'Historia' }, accounts: [ig, fb, li] },
+  { title: 'LinkedIn publicado; Instagram falló', item: { ...base, publications: [
+    { id: 'p6', socialAccountId: 'acc-li', platform: 'LINKEDIN', status: 'PUBLISHED', publishedAt: new Date().toISOString(), permalink: 'https://www.linkedin.com/feed/update/urn:li:share:1/' },
+    { id: 'p7', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'FAILED', attempts: 1, error: 'Instagram todavía no había terminado de procesar el archivo. El archivo está bien: pulsa «Reintentar».' }
+  ] }, accounts: [ig, fb, li] }
 ];
+
+// La pantalla a la que LinkedIn devuelve a la persona: el servidor contesta con las páginas que administra.
+if (new URLSearchParams(window.location.search).has('linkedin')) {
+  axios.defaults.adapter = async (config) => ({
+    status: 200, statusText: 'OK', headers: {}, config,
+    data: { clientId: 'c5', clientName: 'Titanes Cartagena', pending: 'x', organizations: [
+      { organizationId: '2414183', name: 'Titanes Cartagena S.A.S.', vanityName: 'titanes-cartagena' },
+      { organizationId: '99', name: 'Fundación Titanes por la Educación del Caribe', vanityName: 'fundacion-titanes-por-la-educacion-del-caribe' },
+      { organizationId: '7', name: 'Brain Studio', vanityName: 'brainstudioagencia' }
+    ] }
+  });
+}
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
 queryClient.setQueryData(['social-accounts', 'c1'], [fb, ig]);
 queryClient.setQueryData(['social-accounts', 'c2'], []);
+queryClient.setQueryData(['social-accounts', 'c5'], [{ ...fb, clientId: 'c5' }, { ...ig, clientId: 'c5' }, li, liExpiring]);
 queryClient.setQueryData(['social-accounts', 'c3'], [fbDead, ig]);
 // Un cliente con dos cuentas (2 de octubre de 2026): PromoGroup IPS, la primera que se conectó, y Endova.
 queryClient.setQueryData(['social-accounts', 'c4'], [
@@ -88,7 +116,16 @@ function Caso({ title, item, accounts }) {
 }
 
 function App() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(new URLSearchParams(window.location.search).has('dark'));
+  if (new URLSearchParams(window.location.search).has('linkedin')) {
+    return (
+      <div className={dark ? 'dark' : ''}>
+        <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+          <MemoryRouter initialEntries={['/linkedin/callback?code=muestra&state=muestra']}><LinkedInCallback /></MemoryRouter>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={dark ? 'dark' : ''}>
       <div className="min-h-screen bg-zinc-50 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
@@ -103,6 +140,7 @@ function App() {
             </button>
           </header>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <SocialAccountsWidget clientId="c5" canManage />
             <SocialAccountsWidget clientId="c4" canManage />
             <SocialAccountsWidget clientId="c1" canManage />
             <SocialAccountsWidget clientId="c2" canManage />

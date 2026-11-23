@@ -24,7 +24,7 @@ test('the publishing band only offers «Programar» explicitly and explains itse
   assert.match(panel, /Programar\s*<\/button>/);
   assert.match(panel, /Cancelar/);
   assert.match(panel, /Reintentar/);
-  assert.match(panel, /no tiene Instagram ni Facebook conectados/);
+  assert.match(panel, /no tiene redes conectadas/);
   assert.doesNotMatch(panel, /encryptedToken|access_token/);
   assert.match(panel, /dark:/, 'dual theme');
 });

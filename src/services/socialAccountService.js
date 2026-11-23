@@ -10,6 +10,7 @@ import prisma from '../lib/prisma.js';
 import { encrypt } from '../utils/encryption.js';
 import { createMetaGraphClient } from './metaGraphService.js';
 import { publicSocialAccount } from './socialPublishingService.js';
+import { META_PLATFORMS } from '../lib/socialPublishing.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -65,12 +66,14 @@ export const createSocialAccountService = ({
     // El cliente tenía una sola cuenta y ahora va a tener dos. Con una sola, las piezas no nombran
     // cuenta (van a la única); con varias, la que no nombra ninguna no va a ninguna. Para que lo ya
     // programado no se quede sin destino, esas piezas pasan a nombrar la cuenta donde estaban.
-    const priorPages = Array.from(new Set(existing.map((row) => row.pageId)));
+    // Solo las páginas de Meta cuentan aquí: una página de LinkedIn no es una «cuenta» que la pieza elija.
+    const metaRows = existing.filter((row) => META_PLATFORMS.includes(row.platform));
+    const priorPages = Array.from(new Set(metaRows.map((row) => row.pageId)));
     if (priorPages.length === 1 && priorPages[0] && priorPages[0] !== page.pageId) {
       await db.contentItem.updateMany({
         where: {
           socialPageIds: { isEmpty: true },
-          publications: { some: { socialAccountId: { in: existing.map((row) => row.id) }, status: { in: ['SCHEDULED', 'PUBLISHING'] } } }
+          publications: { some: { socialAccountId: { in: metaRows.map((row) => row.id) }, status: { in: ['SCHEDULED', 'PUBLISHING'] } } }
         },
         data: { socialPageIds: [priorPages[0]] }
       });
