@@ -20,7 +20,7 @@ import ServiceCatalogModal from './ServiceCatalogModal';
 import ProposalDetailsEditor, { ExecutionEditor, ProposalRichField, proposalInput } from './ProposalDetailsEditor';
 import { normalizeProposalDetails, plainTextToProposalHtml } from '@/services/quotationProposalDetails';
 import { catalogServiceHtml } from '@/services/serviceCatalogDescription';
-import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle, quotationTaxExemptionReason } from '@/services/quotationDomainService';
+import { QuotationValidationError, calculateQuotationEconomics, calculateQuotationTotals, clampQuotationDuration, normalizeQuotationItemTitle, quotationTaxExemptionReason } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const emptyQuotationForm = () => ({
@@ -61,7 +61,8 @@ const QuotationForm = () => {
     const isEditing = !!id;
 
     const [draftForm, setDraftForm, localDraft] = useFormDraft({ scope: `quotation:${id || 'new'}`, initial: emptyQuotationForm(), defer: isEditing });
-    const { emisorType, clientCompany, clientName, clientEmail, clientPhone, clientType, currency, isTaxExempt, durationMonths, discountType, discountValue, discountLabel, selectedItems, proposalDetails, savedQuotationId, party, wasExpired, issuedAt, exchangeRate, exchangeRateSource, exchangeRateDate, contractTermsText, quotationMode, scenarios, activeScenarioId } = draftForm;
+    const { emisorType, clientCompany, clientName, clientEmail, clientPhone, clientType, currency, isTaxExempt, durationMonths: draftDurationMonths, discountType, discountValue, discountLabel, selectedItems, proposalDetails, savedQuotationId, party, wasExpired, issuedAt, exchangeRate, exchangeRateSource, exchangeRateDate, contractTermsText, quotationMode, scenarios, activeScenarioId } = draftForm;
+    const durationMonths = clampQuotationDuration(draftDurationMonths, 3);
     const setEmisorType = value => setDraftForm(current => ({ ...current, emisorType: typeof value === 'function' ? value(current.emisorType) : value }));
     const setClientCompany = value => setDraftForm(current => ({ ...current, clientCompany: typeof value === 'function' ? value(current.clientCompany) : value }));
     const setClientName = value => setDraftForm(current => ({ ...current, clientName: typeof value === 'function' ? value(current.clientName) : value }));
@@ -79,7 +80,7 @@ const QuotationForm = () => {
     const setExchangeRate = value => setDraftForm(current => ({ ...current, exchangeRate: typeof value === 'function' ? value(current.exchangeRate) : value }));
     const setExchangeRateSource = value => setDraftForm(current => ({ ...current, exchangeRateSource: typeof value === 'function' ? value(current.exchangeRateSource) : value }));
     const setExchangeRateDate = value => setDraftForm(current => ({ ...current, exchangeRateDate: typeof value === 'function' ? value(current.exchangeRateDate) : value }));
-    const setContractTermsText = value => setDraftForm(current => ({ ...current, contractTermsText: typeof value === 'function' ? value(current.contractTermsText) : value }));
+    const setContractTermsText = (value, options) => setDraftForm(current => ({ ...current, contractTermsText: typeof value === 'function' ? value(current.contractTermsText) : value }), options);
     const setQuotationMode = value => setDraftForm(current => ({ ...current, quotationMode: typeof value === 'function' ? value(current.quotationMode) : value }));
     const setScenarios = value => setDraftForm(current => ({ ...current, scenarios: typeof value === 'function' ? value(current.scenarios) : value }));
     const setActiveScenarioId = value => setDraftForm(current => ({ ...current, activeScenarioId: typeof value === 'function' ? value(current.activeScenarioId) : value }));
@@ -354,8 +355,24 @@ const QuotationForm = () => {
         setSelectedItems(selectedItems.filter((_, i) => i !== index));
     };
 
+    // Un valor a medio escribir (un descuento de 150 %, una cantidad vacía) no puede tumbar la pantalla: el
+    // borrador local lo conserva y la propuesta fallaría cada vez que se abre. Se dibuja el cálculo sin lo
+    // que no cuadra, se dice qué es y no se deja guardar hasta corregirlo.
+    let calculationIssue = '';
+    const guarded = (compute, items, options, ...rest) => {
+        const attempts = [[items, options], [items, { ...options, discountType: '', discountValue: '' }], [[], { ...options, discountType: '', discountValue: '' }]];
+        for (const [index, [tryItems, tryOptions]] of attempts.entries()) {
+            try { return compute(tryItems, ...rest, tryOptions); } catch (error) {
+                if (!(error instanceof QuotationValidationError) || index === attempts.length - 1) throw error;
+                calculationIssue ||= error.message;
+            }
+        }
+    };
+    const safeTotals = (items, taxExempt, options) => guarded(calculateQuotationTotals, items, options, taxExempt);
+    const safeEconomics = (items, options) => guarded(calculateQuotationEconomics, items, options);
+
     const calculateTotals = () => {
-        const result = calculateQuotationTotals(selectedItems, effectiveTaxExempt, {
+        const result = safeTotals(selectedItems, effectiveTaxExempt, {
             durationMonths,
             discountType,
             discountValue
@@ -387,6 +404,7 @@ const QuotationForm = () => {
 
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
         if (localDraft.conflict) return;
+        if (calculationIssue) { toast.error(`${calculationIssue}. Corrígelo antes de guardar.`); return; }
         if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
             toast.error("Por favor completa los campos obligatorios para emitir");
             return;
@@ -504,19 +522,19 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
-    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: calculateQuotationTotals(selectedItems.filter(item => item.scenarioId === scenario.id), effectiveTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
+    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: safeTotals(selectedItems.filter(item => item.scenarioId === scenario.id), effectiveTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
     const activeScenarioItems = quotationMode === 'SCENARIOS'
         ? selectedItems.filter((item) => item.scenarioId === activeScenarioId)
         : selectedItems;
     const activeScenario = scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId);
-    const activeScenarioTotals = calculateQuotationTotals(activeScenarioItems, effectiveTaxExempt, {
+    const activeScenarioTotals = safeTotals(activeScenarioItems, effectiveTaxExempt, {
         durationMonths,
         discountType: activeScenario?.discountType,
         discountValue: activeScenario?.discountValue
     });
     const profitabilityAvailable = currency === 'COP' || Number(exchangeRate) > 0;
     const profitability = profitabilityAvailable
-        ? calculateQuotationEconomics(activeScenarioItems, {
+        ? safeEconomics(activeScenarioItems, {
             currency,
             exchangeRate: Number(exchangeRate),
             durationMonths,
@@ -925,7 +943,7 @@ const QuotationForm = () => {
                                 ))}
                                 <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
                                     Otro
-                                    <input type="number" min="1" max="60" value={durationMonths} onChange={(e) => setDurationMonths(Math.max(1, Math.min(60, Number(e.target.value) || 1)))} className="w-12 bg-transparent text-right font-bold text-zinc-900 outline-none dark:text-zinc-100" aria-label="Meses de duración" />
+                                    <input type="number" min="1" max="60" value={durationMonths} onChange={(e) => setDurationMonths(clampQuotationDuration(e.target.value))} className="w-12 bg-transparent text-right font-bold text-zinc-900 outline-none dark:text-zinc-100" aria-label="Meses de duración" />
                                 </label>
                             </div>
                         </div>}
@@ -987,6 +1005,8 @@ const QuotationForm = () => {
                                 )}
                             </div>
                         )}
+
+                        {calculationIssue && <p role="alert" data-quotation-issue className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">{calculationIssue}. Corrígelo para ver el valor completo y poder guardar.</p>}
 
                         {quotationMode === 'SCENARIOS' ? (
                             <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">

@@ -47,9 +47,12 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
         [effectiveCustomTerms, effectiveIds]
     );
 
+    // Mientras nadie quite, añada ni recalcule, el texto lo calculó la pantalla: avisarlo evita que una
+    // propuesta sin tocar se guarde como borrador solo por traer sus términos sugeridos.
+    const automatic = !manualIds.length && !excludedIds.length && !customTerms.length && preserveExisting === isEditing;
     useEffect(() => {
-        onChange(finalText);
-    }, [finalText, onChange]);
+        onChange(finalText, { automatic });
+    }, [finalText, onChange, automatic]);
 
     const libraryById = useMemo(
         () => new Map(CONTRACT_TERM_LIBRARY.map((entry) => [entry.id, entry])),

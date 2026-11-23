@@ -45,3 +45,7 @@ export const restoreFormFields = (initial, saved) => Object.fromEntries(Object.e
     : typeof candidate === typeof value && !Array.isArray(candidate)));
   return [key, compatible ? candidate : value];
 }));
+// Un valor que calculó la pantalla sobre un formulario que nadie ha tocado ni recuperado es parte del punto
+// de partida, no un cambio de la persona: no crea borrador.
+export const isAutomaticBaseline = ({ form, baseline, saved = false, restored = false, conflict = false } = {}) =>
+  !saved && !restored && !conflict && JSON.stringify(form) === JSON.stringify(baseline);

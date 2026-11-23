@@ -171,3 +171,10 @@ test('descarta entradas vencidas y no restaura claves extra ni estructuras incom
   assert.equal(readFormDraft(s, 'ana', 'new'), null);
   assert.deepEqual(restoreFormFields({ name: '', items: [], enabled: false }, { name: {}, items: {}, enabled: 'false', admin: true }), { name: '', items: [], enabled: false });
 });
+test('un valor calculado por la pantalla sobre un formulario intacto no es un borrador', async () => {
+  const { isAutomaticBaseline } = await import('../src/lib/formDraft.js');
+  const form = { name: '', terms: '' };
+  assert.equal(isAutomaticBaseline({ form, baseline: { ...form } }), true);
+  assert.equal(isAutomaticBaseline({ form: { ...form, name: 'Ana' }, baseline: form, saved: true }), false);
+  assert.equal(isAutomaticBaseline({ form, baseline: { ...form }, restored: true }), false);
+});

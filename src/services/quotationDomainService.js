@@ -32,6 +32,15 @@ const toOptionalNumber = (value) => {
 const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 const roundPercentage = (value) => Math.round((value + Number.EPSILON) * 10) / 10;
 
+// Para la pantalla: lo que haya en el campo o en un borrador local se lleva a un entero válido en vez de
+// tumbar el formulario (Elisa, 23 de noviembre de 2026: una duración con decimales quedó en el borrador y
+// «Nueva propuesta» fallaba cada vez que la abría). El servidor sigue validando con `normalizeQuotationDuration`.
+export const clampQuotationDuration = (value, fallback = 1) => {
+  const parsed = Math.round(Number(value));
+  if (value === '' || value === null || value === undefined || !Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(MAX_QUOTATION_DURATION_MONTHS, parsed));
+};
+
 export const normalizeQuotationDuration = (value = 1) => {
   const durationMonths = Number(value ?? 1);
   if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > MAX_QUOTATION_DURATION_MONTHS) {
