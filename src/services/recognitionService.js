@@ -106,6 +106,28 @@ export async function attachTaskRecognitions(db, tasks) {
   const awards = await db.recognitionAward.findMany({ where: { taskId: { in: tasks.map(task => task.id) }, recipient: { isActive: true }, NOT: { kind: { endsWith: '_RETIRADO' } } }, include: { recipient: { select: { id: true, name: true } } }, orderBy: { occurredAt: 'asc' } });
   const byTask = new Map();
   for (const award of awards) { if (!byTask.has(award.taskId)) byTask.set(award.taskId, []); byTask.get(award.taskId).push(award); }
+  // «Al día» es de la persona y de su jornada, no de una tarea, así que no salía en «Logros hoy» aunque «On fire» y
+  // «Buen comienzo» sí (Rodny, 23 de noviembre de 2026: «a Rodny sí le sale ahí»). Se muestra en la última tarea que la
+  // persona cerró ese día; es solo presentación: la fila guardada sigue sin tarea.
+  const lastOfDay = new Map();
+  for (const task of tasks) {
+    if (!task.assignee?.userId || !task.completedAt) continue;
+    const key = `${task.assignee.userId}:${recognitionCalendar(task.completedAt).day}`;
+    const current = lastOfDay.get(key);
+    if (!current || new Date(task.completedAt) > new Date(current.completedAt)) lastOfDay.set(key, task);
+  }
+  if (lastOfDay.size) {
+    const personal = await db.recognitionAward.findMany({ where: { kind: 'CAUGHT_UP', taskId: null, planId: null,
+      recipientId: { in: [...new Set([...lastOfDay.values()].map(task => task.assignee.userId))] },
+      dayKey: { in: [...new Set([...lastOfDay.keys()].map(key => key.slice(key.lastIndexOf(':') + 1)))] },
+      recipient: { isActive: true } }, include: { recipient: { select: { id: true, name: true } } } });
+    for (const award of personal) {
+      const task = lastOfDay.get(`${award.recipientId}:${award.dayKey}`);
+      if (!task) continue;
+      if (!byTask.has(task.id)) byTask.set(task.id, []);
+      byTask.get(task.id).push({ ...award, taskId: task.id });
+    }
+  }
   return tasks.map(task => ({ ...task, recognitions: (byTask.get(task.id) || []).filter(award => award.recipientId === task.assignee?.userId).map(serialize) }));
 }
 
