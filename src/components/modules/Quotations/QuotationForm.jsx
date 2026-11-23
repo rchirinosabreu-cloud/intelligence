@@ -845,7 +845,7 @@ const QuotationForm = () => {
                                                 {/* Cada campo con su etiqueta y su borde a la vista (Francys, 23 de noviembre de 2026: llenó la
                                                     descripción creyendo que era el nombre, porque el nombre era un campo sin borde ni texto). */}
                                                 <div className="flex items-end gap-2">
-                                                    <label className="block min-w-0 flex-1 space-y-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                                                    <label className="block min-w-0 flex-1 space-y-2 text-sm font-medium">
                                                         <span className="block">Nombre del servicio {idx + 1}</span>
                                                         <input
                                                             aria-label={`Nombre del servicio ${idx + 1}`}
@@ -867,10 +867,10 @@ const QuotationForm = () => {
                                                     <ExecutionEditor label={`Ejecución del servicio ${idx + 1}`} value={item.execution} onChange={execution => updateItem(idx, 'execution', execution)} />
                                                 </div></details>
                                                 <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Nota o aclaración sobre este servicio</label>
+                                                    <label className="block text-sm font-medium">Nota o aclaración sobre este servicio</label>
                                                     <textarea
                                                         placeholder="Ej: Incluye 2 rondas de ajustes..."
-                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs outline-none focus:ring-1 ring-primary/30 min-h-[60px]"
+                                                        className={cn(proposalInput, 'min-h-[60px]')}
                                                         value={item.note}
                                                         onChange={(e) => updateItem(idx, 'note', e.target.value)}
                                                     />
