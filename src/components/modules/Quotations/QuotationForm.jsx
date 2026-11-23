@@ -842,27 +842,32 @@ const QuotationForm = () => {
                                         {(selectedItems || []).map((item, idx) => (
                                             quotationMode === 'SCENARIOS' && item.scenarioId !== activeScenarioId ? null :
                                             <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-3">
-                                                <div className="flex justify-between items-start">
-                                                    <input
-                                                        aria-label={`Nombre del servicio ${idx + 1}`}
-                                                        placeholder="Nombre del servicio"
-                                                        aria-invalid={!String(item.name || '').trim() || undefined}
-                                                        className={cn('min-w-0 flex-1 bg-transparent font-bold text-sm outline-none border-b focus:border-primary/40', String(item.name || '').trim() ? 'border-transparent' : 'border-destructive/60')}
-                                                        value={item.name}
-                                                        onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                                                        onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
-                                                    />
-                                                    <button aria-label={`Eliminar servicio ${idx + 1}`} onClick={() => removeItem(idx)} className="brain-danger-button-icon min-h-11 min-w-11 rounded-lg p-1">
+                                                {/* Cada campo con su etiqueta y su borde a la vista (Francys, 23 de noviembre de 2026: llenó la
+                                                    descripción creyendo que era el nombre, porque el nombre era un campo sin borde ni texto). */}
+                                                <div className="flex items-end gap-2">
+                                                    <label className="block min-w-0 flex-1 space-y-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                                                        <span className="block">Nombre del servicio {idx + 1}</span>
+                                                        <input
+                                                            aria-label={`Nombre del servicio ${idx + 1}`}
+                                                            placeholder="Ej. Manejo de redes"
+                                                            aria-invalid={!String(item.name || '').trim() || undefined}
+                                                            className={cn(proposalInput, 'font-bold', !String(item.name || '').trim() && 'border-destructive/60 dark:border-destructive/60')}
+                                                            value={item.name}
+                                                            onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                                                            onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
+                                                        />
+                                                    </label>
+                                                    <button type="button" aria-label={`Eliminar servicio ${idx + 1}`} onClick={() => removeItem(idx)} className="brain-danger-button-icon min-h-11 min-w-11 rounded-lg p-1">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                                 <ProposalRichField label={`Descripción del servicio ${idx + 1}`} value={item.descriptionHtml ?? plainTextToProposalHtml(item.description)} onChange={html => updateItem(idx, 'descriptionHtml', html)} />
                                                 <details className="py-2"><summary className="cursor-pointer text-xs font-medium text-zinc-500 dark:text-zinc-400">Grupo y duración de este servicio (opcional)</summary><div className="mt-4 space-y-4">
-                                                    <input aria-label={`Grupo del servicio ${idx + 1}`} className={proposalInput} placeholder="Ej. Desarrollo 1 · CRM" value={item.group || ''} onChange={e => updateItem(idx, 'group', e.target.value)} />
+                                                    <label className="block space-y-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"><span className="block">Grupo</span><input aria-label={`Grupo del servicio ${idx + 1}`} className={proposalInput} placeholder="Ej. Desarrollo 1 · CRM" value={item.group || ''} onChange={e => updateItem(idx, 'group', e.target.value)} /></label>
                                                     <ExecutionEditor label={`Ejecución del servicio ${idx + 1}`} value={item.execution} onChange={execution => updateItem(idx, 'execution', execution)} />
                                                 </div></details>
                                                 <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-zinc-400">Nota o aclaración sobre este servicio</label>
+                                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Nota o aclaración sobre este servicio</label>
                                                     <textarea
                                                         placeholder="Ej: Incluye 2 rondas de ajustes..."
                                                         className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs outline-none focus:ring-1 ring-primary/30 min-h-[60px]"
@@ -872,27 +877,29 @@ const QuotationForm = () => {
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium text-zinc-400">Cobro</span>
+                                                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Cobro</span>
                                                         <Select
                                                             value={item.billingType || 'MONTHLY'}
                                                             onChange={(e) => updateItem(idx, 'billingType', e.target.value)}
-                                                            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                                                            className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-8 text-xs dark:border-zinc-800 dark:bg-zinc-950"
                                                         >
                                                             <option value="MONTHLY">Pago mensual</option>
                                                             <option value="ONE_TIME">Pago único</option>
                                                         </Select>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium text-zinc-400">Cant.</span>
+                                                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Cant.</span>
                                                         <input
                                                             type="number"
+                                                            min="1"
+                                                            aria-label={`Cantidad del servicio ${idx + 1}`}
                                                             value={item.quantity}
                                                             onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                                                             className="w-12 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1 text-xs text-center"
                                                         />
                                                     </div>
                                                     <div className="flex-1 flex items-center gap-2 justify-end">
-                                                        <span className="text-xs font-medium text-zinc-400">Precio</span>
+                                                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Precio</span>
                                                         <MoneyInput
                                                             aria-label={`Precio de ${item.name || 'el servicio'}`}
                                                             value={item.price}

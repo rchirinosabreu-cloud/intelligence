@@ -141,7 +141,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                                     const targetIndex = preserveExisting ? index - (index < existingTerms.length ? 0 : existingTerms.length) : index;
                                     update((current) => current.map((termText, termIndex) => termIndex === targetIndex ? event.target.value : termText));
                                 }}
-                                className="mt-1 min-h-[64px] w-full resize-y bg-transparent text-xs leading-5 text-zinc-600 outline-none dark:text-zinc-300"
+                                className="mt-1 min-h-[64px] w-full resize-y rounded-lg border border-zinc-200 bg-white p-2 text-xs leading-5 text-zinc-700 outline-none focus:ring-2 focus:ring-primary/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
                             />
                         </div>
                         <button
