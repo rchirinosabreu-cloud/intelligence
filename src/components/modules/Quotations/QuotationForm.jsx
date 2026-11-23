@@ -20,7 +20,7 @@ import ServiceCatalogModal from './ServiceCatalogModal';
 import ProposalDetailsEditor, { ExecutionEditor, ProposalRichField, proposalInput } from './ProposalDetailsEditor';
 import { normalizeProposalDetails, plainTextToProposalHtml } from '@/services/quotationProposalDetails';
 import { catalogServiceHtml } from '@/services/serviceCatalogDescription';
-import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle, quotationTaxExemptionReason } from '@/services/quotationDomainService';
+import { QuotationValidationError, calculateQuotationEconomics, calculateQuotationTotals, clampQuotationDuration, normalizeQuotationItemTitle, quotationTaxExemptionReason } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const emptyQuotationForm = () => ({
@@ -61,7 +61,8 @@ const QuotationForm = () => {
     const isEditing = !!id;
 
     const [draftForm, setDraftForm, localDraft] = useFormDraft({ scope: `quotation:${id || 'new'}`, initial: emptyQuotationForm(), defer: isEditing });
-    const { emisorType, clientCompany, clientName, clientEmail, clientPhone, clientType, currency, isTaxExempt, durationMonths, discountType, discountValue, discountLabel, selectedItems, proposalDetails, savedQuotationId, party, wasExpired, issuedAt, exchangeRate, exchangeRateSource, exchangeRateDate, contractTermsText, quotationMode, scenarios, activeScenarioId } = draftForm;
+    const { emisorType, clientCompany, clientName, clientEmail, clientPhone, clientType, currency, isTaxExempt, durationMonths: draftDurationMonths, discountType, discountValue, discountLabel, selectedItems, proposalDetails, savedQuotationId, party, wasExpired, issuedAt, exchangeRate, exchangeRateSource, exchangeRateDate, contractTermsText, quotationMode, scenarios, activeScenarioId } = draftForm;
+    const durationMonths = clampQuotationDuration(draftDurationMonths, 3);
     const setEmisorType = value => setDraftForm(current => ({ ...current, emisorType: typeof value === 'function' ? value(current.emisorType) : value }));
     const setClientCompany = value => setDraftForm(current => ({ ...current, clientCompany: typeof value === 'function' ? value(current.clientCompany) : value }));
     const setClientName = value => setDraftForm(current => ({ ...current, clientName: typeof value === 'function' ? value(current.clientName) : value }));
@@ -79,7 +80,7 @@ const QuotationForm = () => {
     const setExchangeRate = value => setDraftForm(current => ({ ...current, exchangeRate: typeof value === 'function' ? value(current.exchangeRate) : value }));
     const setExchangeRateSource = value => setDraftForm(current => ({ ...current, exchangeRateSource: typeof value === 'function' ? value(current.exchangeRateSource) : value }));
     const setExchangeRateDate = value => setDraftForm(current => ({ ...current, exchangeRateDate: typeof value === 'function' ? value(current.exchangeRateDate) : value }));
-    const setContractTermsText = value => setDraftForm(current => ({ ...current, contractTermsText: typeof value === 'function' ? value(current.contractTermsText) : value }));
+    const setContractTermsText = (value, options) => setDraftForm(current => ({ ...current, contractTermsText: typeof value === 'function' ? value(current.contractTermsText) : value }), options);
     const setQuotationMode = value => setDraftForm(current => ({ ...current, quotationMode: typeof value === 'function' ? value(current.quotationMode) : value }));
     const setScenarios = value => setDraftForm(current => ({ ...current, scenarios: typeof value === 'function' ? value(current.scenarios) : value }));
     const setActiveScenarioId = value => setDraftForm(current => ({ ...current, activeScenarioId: typeof value === 'function' ? value(current.activeScenarioId) : value }));
@@ -354,8 +355,24 @@ const QuotationForm = () => {
         setSelectedItems(selectedItems.filter((_, i) => i !== index));
     };
 
+    // Un valor a medio escribir (un descuento de 150 %, una cantidad vacía) no puede tumbar la pantalla: el
+    // borrador local lo conserva y la propuesta fallaría cada vez que se abre. Se dibuja el cálculo sin lo
+    // que no cuadra, se dice qué es y no se deja guardar hasta corregirlo.
+    let calculationIssue = '';
+    const guarded = (compute, items, options, ...rest) => {
+        const attempts = [[items, options], [items, { ...options, discountType: '', discountValue: '' }], [[], { ...options, discountType: '', discountValue: '' }]];
+        for (const [index, [tryItems, tryOptions]] of attempts.entries()) {
+            try { return compute(tryItems, ...rest, tryOptions); } catch (error) {
+                if (!(error instanceof QuotationValidationError) || index === attempts.length - 1) throw error;
+                calculationIssue ||= error.message;
+            }
+        }
+    };
+    const safeTotals = (items, taxExempt, options) => guarded(calculateQuotationTotals, items, options, taxExempt);
+    const safeEconomics = (items, options) => guarded(calculateQuotationEconomics, items, options);
+
     const calculateTotals = () => {
-        const result = calculateQuotationTotals(selectedItems, effectiveTaxExempt, {
+        const result = safeTotals(selectedItems, effectiveTaxExempt, {
             durationMonths,
             discountType,
             discountValue
@@ -387,6 +404,19 @@ const QuotationForm = () => {
 
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
         if (localDraft.conflict) return;
+        if (calculationIssue) { toast.error(`${calculationIssue}. Corrígelo antes de guardar.`); return; }
+        // Un servicio sin nombre lo rechaza el servidor, y el aviso pasaba inadvertido (Francys, 23 de noviembre de
+        // 2026: pulsó «Guardar como Borrador» y creyó que había quedado). Se dice antes de enviar y se lleva al campo.
+        const unnamedIndex = selectedItems.findIndex(item => !String(item?.name || '').trim());
+        if (unnamedIndex >= 0) {
+            if (quotationMode === 'SCENARIOS' && selectedItems[unnamedIndex].scenarioId) setActiveScenarioId(selectedItems[unnamedIndex].scenarioId);
+            toast.error(`No se guardó: al servicio ${unnamedIndex + 1} le falta el nombre.`, { duration: 8000 });
+            setTimeout(() => {
+                const field = document.querySelector(`[aria-label="Nombre del servicio ${unnamedIndex + 1}"]`);
+                field?.scrollIntoView({ block: 'center' }); field?.focus();
+            }, 50);
+            return;
+        }
         if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
             toast.error("Por favor completa los campos obligatorios para emitir");
             return;
@@ -491,7 +521,7 @@ const QuotationForm = () => {
             if (!id && data.id) navigate(`/cotizaciones/editar/${data.id}`, { replace: true, state: location.state });
         } catch (error) {
             console.error("[QuotationForm] Save failed:", error);
-            toast.error(error.message || "Fallo al guardar la cotización");
+            toast.error(`No se guardó: ${error.message || "fallo al guardar la cotización"}`, { duration: 8000 });
         } finally {
             savingRef.current = false;
             setIsSaving(false);
@@ -504,19 +534,19 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
-    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: calculateQuotationTotals(selectedItems.filter(item => item.scenarioId === scenario.id), effectiveTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
+    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: safeTotals(selectedItems.filter(item => item.scenarioId === scenario.id), effectiveTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
     const activeScenarioItems = quotationMode === 'SCENARIOS'
         ? selectedItems.filter((item) => item.scenarioId === activeScenarioId)
         : selectedItems;
     const activeScenario = scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId);
-    const activeScenarioTotals = calculateQuotationTotals(activeScenarioItems, effectiveTaxExempt, {
+    const activeScenarioTotals = safeTotals(activeScenarioItems, effectiveTaxExempt, {
         durationMonths,
         discountType: activeScenario?.discountType,
         discountValue: activeScenario?.discountValue
     });
     const profitabilityAvailable = currency === 'COP' || Number(exchangeRate) > 0;
     const profitability = profitabilityAvailable
-        ? calculateQuotationEconomics(activeScenarioItems, {
+        ? safeEconomics(activeScenarioItems, {
             currency,
             exchangeRate: Number(exchangeRate),
             durationMonths,
@@ -812,55 +842,64 @@ const QuotationForm = () => {
                                         {(selectedItems || []).map((item, idx) => (
                                             quotationMode === 'SCENARIOS' && item.scenarioId !== activeScenarioId ? null :
                                             <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-3">
-                                                <div className="flex justify-between items-start">
-                                                    <input
-                                                        aria-label={`Nombre del servicio ${idx + 1}`}
-                                                        className="flex-1 bg-transparent font-bold text-sm outline-none border-b border-transparent focus:border-primary/20"
-                                                        value={item.name}
-                                                        onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                                                        onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
-                                                    />
-                                                    <button aria-label={`Eliminar servicio ${idx + 1}`} onClick={() => removeItem(idx)} className="brain-danger-button-icon min-h-11 min-w-11 rounded-lg p-1">
+                                                {/* Cada campo con su etiqueta y su borde a la vista (Francys, 23 de noviembre de 2026: llenó la
+                                                    descripción creyendo que era el nombre, porque el nombre era un campo sin borde ni texto). */}
+                                                <div className="flex items-end gap-2">
+                                                    <label className="block min-w-0 flex-1 space-y-2 text-sm font-medium">
+                                                        <span className="block">Nombre del servicio {idx + 1}</span>
+                                                        <input
+                                                            aria-label={`Nombre del servicio ${idx + 1}`}
+                                                            placeholder="Ej. Manejo de redes"
+                                                            aria-invalid={!String(item.name || '').trim() || undefined}
+                                                            className={cn(proposalInput, 'font-bold', !String(item.name || '').trim() && 'border-destructive/60 dark:border-destructive/60')}
+                                                            value={item.name}
+                                                            onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                                                            onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
+                                                        />
+                                                    </label>
+                                                    <button type="button" aria-label={`Eliminar servicio ${idx + 1}`} onClick={() => removeItem(idx)} className="brain-danger-button-icon min-h-11 min-w-11 rounded-lg p-1">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                                 <ProposalRichField label={`Descripción del servicio ${idx + 1}`} value={item.descriptionHtml ?? plainTextToProposalHtml(item.description)} onChange={html => updateItem(idx, 'descriptionHtml', html)} />
                                                 <details className="py-2"><summary className="cursor-pointer text-xs font-medium text-zinc-500 dark:text-zinc-400">Grupo y duración de este servicio (opcional)</summary><div className="mt-4 space-y-4">
-                                                    <input aria-label={`Grupo del servicio ${idx + 1}`} className={proposalInput} placeholder="Ej. Desarrollo 1 · CRM" value={item.group || ''} onChange={e => updateItem(idx, 'group', e.target.value)} />
+                                                    <label className="block space-y-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"><span className="block">Grupo</span><input aria-label={`Grupo del servicio ${idx + 1}`} className={proposalInput} placeholder="Ej. Desarrollo 1 · CRM" value={item.group || ''} onChange={e => updateItem(idx, 'group', e.target.value)} /></label>
                                                     <ExecutionEditor label={`Ejecución del servicio ${idx + 1}`} value={item.execution} onChange={execution => updateItem(idx, 'execution', execution)} />
                                                 </div></details>
                                                 <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-zinc-400">Nota o aclaración sobre este servicio</label>
+                                                    <label className="block text-sm font-medium">Nota o aclaración sobre este servicio</label>
                                                     <textarea
                                                         placeholder="Ej: Incluye 2 rondas de ajustes..."
-                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs outline-none focus:ring-1 ring-primary/30 min-h-[60px]"
+                                                        className={cn(proposalInput, 'min-h-[60px]')}
                                                         value={item.note}
                                                         onChange={(e) => updateItem(idx, 'note', e.target.value)}
                                                     />
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium text-zinc-400">Cobro</span>
+                                                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Cobro</span>
                                                         <Select
                                                             value={item.billingType || 'MONTHLY'}
                                                             onChange={(e) => updateItem(idx, 'billingType', e.target.value)}
-                                                            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                                                            className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-8 text-xs dark:border-zinc-800 dark:bg-zinc-950"
                                                         >
                                                             <option value="MONTHLY">Pago mensual</option>
                                                             <option value="ONE_TIME">Pago único</option>
                                                         </Select>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium text-zinc-400">Cant.</span>
+                                                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Cant.</span>
                                                         <input
                                                             type="number"
+                                                            min="1"
+                                                            aria-label={`Cantidad del servicio ${idx + 1}`}
                                                             value={item.quantity}
                                                             onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                                                             className="w-12 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1 text-xs text-center"
                                                         />
                                                     </div>
                                                     <div className="flex-1 flex items-center gap-2 justify-end">
-                                                        <span className="text-xs font-medium text-zinc-400">Precio</span>
+                                                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Precio</span>
                                                         <MoneyInput
                                                             aria-label={`Precio de ${item.name || 'el servicio'}`}
                                                             value={item.price}
@@ -925,7 +964,7 @@ const QuotationForm = () => {
                                 ))}
                                 <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
                                     Otro
-                                    <input type="number" min="1" max="60" value={durationMonths} onChange={(e) => setDurationMonths(Math.max(1, Math.min(60, Number(e.target.value) || 1)))} className="w-12 bg-transparent text-right font-bold text-zinc-900 outline-none dark:text-zinc-100" aria-label="Meses de duración" />
+                                    <input type="number" min="1" max="60" value={durationMonths} onChange={(e) => setDurationMonths(clampQuotationDuration(e.target.value))} className="w-12 bg-transparent text-right font-bold text-zinc-900 outline-none dark:text-zinc-100" aria-label="Meses de duración" />
                                 </label>
                             </div>
                         </div>}
@@ -987,6 +1026,8 @@ const QuotationForm = () => {
                                 )}
                             </div>
                         )}
+
+                        {calculationIssue && <p role="alert" data-quotation-issue className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive brain-destructive-text">{calculationIssue}. Corrígelo para ver el valor completo y poder guardar.</p>}
 
                         {quotationMode === 'SCENARIOS' ? (
                             <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">

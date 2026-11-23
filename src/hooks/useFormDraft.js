@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { clearFormDraft, inspectFormDraft, restoreFormFields, saveFormDraft } from '@/lib/formDraft';
+import { clearFormDraft, inspectFormDraft, isAutomaticBaseline, restoreFormFields, saveFormDraft } from '@/lib/formDraft';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const local = () => { try { return window.localStorage; } catch { return null; } };
@@ -35,12 +35,16 @@ export function useFormDraft({ scope, initial, fingerprint = null, open = true, 
     }
     previousOpen.current = open;
   }, [identity, userId, scope, open, defer, fingerprint, initialize, publish]);
-  const setForm = useCallback(update => {
+  // `automatic`: el valor lo calculó la pantalla, no lo escribió la persona (los términos sugeridos de una
+  // cotización). Sobre un formulario intacto pasa a ser el punto de partida: no es un borrador que conservar,
+  // y descartar no lo vuelve a crear (Rodny, 23 de noviembre de 2026: «¿por qué no me deja descartar los borradores?»).
+  const setForm = useCallback((update, { automatic = false } = {}) => {
     const previous = current.current;
     // También detiene efectos de editores hijos mientras la persona decide qué copia conservar.
     if (previous.identity !== latestIdentity.current || previous.conflict || !previous.ready) return;
     const nextForm = typeof update === 'function' ? update(clone(previous.form)) : update;
     if (JSON.stringify(nextForm) === JSON.stringify(previous.form)) return;
+    if (automatic && isAutomaticBaseline(previous)) { publish({ ...previous, form: nextForm, baseline: clone(nextForm) }); return; }
     const changed = JSON.stringify(nextForm) !== JSON.stringify(previous.baseline);
     const ok = previous.ready && (changed
       ? saveFormDraft(local(), previous.userId, previous.scope, nextForm, { fingerprint: previous.fingerprint })

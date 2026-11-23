@@ -17,9 +17,8 @@ export function ProposalRichField({ label, value = '', onChange }) {
   const [open, setOpen] = useState(false), [url, setUrl] = useState(''), [linkText, setLinkText] = useState('');
   return <div className="space-y-2" role="group" aria-labelledby={id}>
     <label id={id} className="block text-sm font-medium">{label}</label>
-    <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
-      <RichTextEditor value={value} onChange={html => change.current(html)} className="min-h-[88px] text-sm" placeholder="Escribe el alcance, entregables o contexto…" />
-    </div>
+    {/* El editor ya trae su borde, como en tareas, cartera y anuncios: sin otro recuadro alrededor (Rodny, 23 de noviembre de 2026). */}
+    <RichTextEditor value={value} onChange={html => change.current(html)} className="min-h-[88px] text-sm" placeholder="Escribe el alcance, entregables o contexto…" />
     <button type="button" className={action} onClick={() => setOpen(true)}>Añadir enlace</button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent>
       <DialogTitle>Añadir enlace</DialogTitle><DialogDescription>Se añadirá al final de este texto.</DialogDescription>

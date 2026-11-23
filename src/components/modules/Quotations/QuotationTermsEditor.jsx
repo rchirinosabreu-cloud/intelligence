@@ -47,9 +47,12 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
         [effectiveCustomTerms, effectiveIds]
     );
 
+    // Mientras nadie quite, añada ni recalcule, el texto lo calculó la pantalla: avisarlo evita que una
+    // propuesta sin tocar se guarde como borrador solo por traer sus términos sugeridos.
+    const automatic = !manualIds.length && !excludedIds.length && !customTerms.length && preserveExisting === isEditing;
     useEffect(() => {
-        onChange(finalText);
-    }, [finalText, onChange]);
+        onChange(finalText, { automatic });
+    }, [finalText, onChange, automatic]);
 
     const libraryById = useMemo(
         () => new Map(CONTRACT_TERM_LIBRARY.map((entry) => [entry.id, entry])),
@@ -138,7 +141,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                                     const targetIndex = preserveExisting ? index - (index < existingTerms.length ? 0 : existingTerms.length) : index;
                                     update((current) => current.map((termText, termIndex) => termIndex === targetIndex ? event.target.value : termText));
                                 }}
-                                className="mt-1 min-h-[64px] w-full resize-y bg-transparent text-xs leading-5 text-zinc-600 outline-none dark:text-zinc-300"
+                                className="mt-1 min-h-[64px] w-full resize-y rounded-lg border border-zinc-200 bg-white p-2 text-xs leading-5 text-zinc-700 outline-none focus:ring-2 focus:ring-primary/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
                             />
                         </div>
                         <button
