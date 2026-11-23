@@ -43,7 +43,7 @@ export function pendingEvidence(tasks = [], count = tasks.length, { open = false
     const dueDay = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null;
     const due = dueLabel(task.dueDate);
     if (!due) return `«${task.title}»`;
-    if (task.moved) return `«${task.title}» (vencía el ${due} y se le movió la fecha hoy)`;
+    if (task.moved) return `«${task.title}» (vencía el ${due} y le moviste la fecha hoy)`;
     if (open) return `«${task.title}» (${dueDay === day ? 'vence hoy' : `venció el ${due}`})`;
     return `«${task.title}» (vencía el ${due})`;
   });

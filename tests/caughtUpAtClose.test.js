@@ -159,3 +159,28 @@ test('moving the date of something due that day does not take it out of the coun
   assert.equal(caughtUpAtClose({ day: '2026-11-23', views: [...closed, { ...moved, movedFrom: undefined }] }).eligible, true, 'a task that was never due that day does not count');
   assert.equal(caughtUpAtClose({ day: '2026-11-23', views: [...closed, { ...moved, status: 'REALIZADA', completedAt: at('2026-11-23T20:00:00Z') }] }).eligible, true, 'moved and then closed before 17:00 is done');
 });
+
+test('a date moved by an admin or a project manager on someone else\'s task does not cost that person Al día; moving your own still does', async () => {
+  const { closeViewsFor } = await import('../src/services/caughtUpAtCloseService.js');
+  const pm = { role: 'EDITOR', teamMember: { id: 'm-pm', areas: ['PROJECT_MANAGEMENT'], role: 'Project manager' } };
+  const admin = { role: 'ADMIN', teamMember: { id: 'm-admin', areas: [], role: 'Director' } };
+  const designer = { role: 'EDITOR', teamMember: { id: 'm-dis', areas: ['DISENO'], role: 'Diseñadora' } };
+  const moves = [
+    { taskId: 't-by-pm', fromValue: '2026-11-23', actor: pm },
+    { taskId: 't-by-admin', fromValue: '2026-11-20', actor: admin },
+    { taskId: 't-own', fromValue: '2026-11-23', actor: designer },
+    { taskId: 't-pm-own', fromValue: '2026-11-23', actor: pm },
+    { taskId: 't-both', fromValue: '2026-11-23', actor: pm },
+    { taskId: 't-both', fromValue: '2026-11-24', actor: designer }
+  ];
+  const task = (id, assigneeId) => ({ id, title: id, status: 'PENDIENTE', assigneeId, completedAt: null, dueDate: at('2026-11-26T12:00:00Z'), focusDeadlineAt: null, participants: [] });
+  const tx = {
+    taskChangeEvent: { findMany: async ({ where }) => { assert.equal(where.kind, 'DUE_DATE'); return moves; } },
+    task: { findMany: async () => [task('t-by-pm', 'm-dis'), task('t-by-admin', 'm-dis'), task('t-own', 'm-dis'), task('t-pm-own', 'm-pm'), task('t-both', 'm-dis')] }
+  };
+  const views = await closeViewsFor(tx, { day: '2026-11-23', memberIds: ['m-dis', 'm-pm'] });
+  const moved = (memberId) => Object.fromEntries(views.get(memberId).map((view) => [view.title, view.movedFrom || null]));
+  assert.deepEqual(moved('m-dis'), { 't-by-pm': null, 't-by-admin': null, 't-own': '2026-11-23', 't-both': null },
+    'what the PM or the admin rescheduled is not held against her; her own move is; a later move from a future date never counts');
+  assert.deepEqual(moved('m-pm'), { 't-pm-own': '2026-11-23' }, 'a project manager moving their own task is still moving dates');
+});

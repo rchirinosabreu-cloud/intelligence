@@ -12,7 +12,7 @@ const team = [['elisa', 'Elisa'], ['jesu', 'Jesu'], ['rodny', 'Rodny'], ['helen'
 const changes = [
   { title: 'Tu área también suma', detail: 'Los registros de Financiero, las gestiones del CRM y las jornadas de producción con evidencia ya cuentan como esfuerzo.', icon: Layers },
   { title: 'Cada hábito, con tu trabajo', detail: 'Los hábitos se miden con lo que hace tu área. El que no te aplica no juega en tu día.', icon: Check },
-  { title: 'Al día cierra a las 5:00 p. m.', detail: 'Lo ganas si a esa hora no tienes nada vencido, sin mover fechas.', icon: Clock },
+  { title: 'Al día cierra a las 5:00 p. m.', detail: 'Lo ganas si a esa hora no tienes nada vencido, sin mover fechas. Si la fecha la mueve un administrador o tu project manager, no te resta.', icon: Clock },
   { title: 'Cámara encendida en tráfico', detail: 'Un administrador la marca después de la reunión.', points: `+${CAMERA_POINTS}`, icon: Video },
   { title: 'Entrega anticipada', detail: '5 puntos la primera del día y 2 la segunda.', points: 'hasta 7', icon: Zap },
 ];

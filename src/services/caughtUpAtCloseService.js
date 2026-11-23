@@ -10,6 +10,7 @@ import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipation.js';
 import { completedTaskParticipationWhere, taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 import { areaEquityActive } from '../lib/leagueAreaChecks.js';
+import { memberHasArea } from '../lib/teamAreas.js';
 import { CAUGHT_UP_AWARD_WINDOW_MS, CAUGHT_UP_POLICY, caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
 import { insertRecognitionAward, recognitionTransaction } from './recognitionService.js';
 
@@ -24,17 +25,28 @@ export async function closeViewsFor(tx, { day, memberIds }) {
   const nextUtcDay = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000);
   // «Sin tener que mover fechas» (Rodny, 21 de noviembre de 2026): lo que vencía ese día o antes y se reprogramó durante
   // la jornada sigue contando con la fecha que tenía. Vale la primera fecha del día si se movió varias veces.
-  const movedFrom = new Map();
+  // Excepción (Rodny, 23 de noviembre de 2026: «si quien le mueve las tareas a esta persona … es alguien con rol de
+  // admin o project manager, entonces sí aplicaría poder obtener el logro»): la reprogramación que decide un
+  // administrador o un project manager sobre la tarea de OTRA persona no le cuenta a esa persona. Mover las propias
+  // sigue contando, también para ellos.
+  const movesOf = new Map();
   if (areaEquityActive(day) && typeof tx.taskChangeEvent?.findMany === 'function') {
-    const moves = await tx.taskChangeEvent.findMany({ where: { kind: 'DUE_DATE', occurredAt: { gte: dayStart, lt: cutoff } }, orderBy: { occurredAt: 'asc' }, select: { taskId: true, fromValue: true } });
-    for (const move of moves) if (!movedFrom.has(move.taskId)) movedFrom.set(move.taskId, /^\d{4}-\d{2}-\d{2}/.test(String(move.fromValue || '')) ? String(move.fromValue).slice(0, 10) : null);
-    for (const [taskId, from] of movedFrom) if (!from || from > day) movedFrom.delete(taskId);
+    const moves = await tx.taskChangeEvent.findMany({ where: { kind: 'DUE_DATE', occurredAt: { gte: dayStart, lt: cutoff } }, orderBy: { occurredAt: 'asc' },
+      select: { taskId: true, fromValue: true, actor: { select: { role: true, teamMember: { select: { id: true, areas: true, role: true } } } } } });
+    for (const move of moves) {
+      const from = /^\d{4}-\d{2}-\d{2}/.test(String(move.fromValue || '')) ? String(move.fromValue).slice(0, 10) : null;
+      if (!from || from > day) continue;
+      const manager = move.actor?.role === 'ADMIN' || memberHasArea(move.actor?.teamMember, 'PROJECT_MANAGEMENT');
+      if (!movesOf.has(move.taskId)) movesOf.set(move.taskId, []);
+      movesOf.get(move.taskId).push({ from, manager, actorMemberId: move.actor?.teamMember?.id || null });
+    }
   }
+  const movedFromFor = (taskId, memberId) => (movesOf.get(taskId) || []).find((move) => !(move.manager && move.actorMemberId !== memberId))?.from || null;
   const tasks = await tx.task.findMany({
     where: { AND: [activeTaskSourceWhere, { OR: [
       completedTaskParticipationWhere({ gte: dayStart }),
       { status: { not: 'REALIZADA' }, OR: [{ dueDate: { lt: nextUtcDay } }, { focusDeadlineAt: { lt: cutoff } }] },
-      ...(movedFrom.size ? [{ id: { in: [...movedFrom.keys()] }, status: { not: 'REALIZADA' } }] : [])
+      ...(movesOf.size ? [{ id: { in: [...movesOf.keys()] }, status: { not: 'REALIZADA' } }] : [])
     ] }] },
     select: { id: true, title: true, status: true, assigneeId: true, completedAt: true, dueDate: true, focusDeadlineAt: true, ...taskParticipationSelect }
   });
@@ -44,7 +56,8 @@ export async function closeViewsFor(tx, { day, memberIds }) {
     for (const memberId of participants) {
       if (!viewsOf.has(memberId)) continue;
       const view = taskForMember(task, memberId);
-      if (view) viewsOf.get(memberId).push(movedFrom.has(task.id) ? { ...view, movedFrom: movedFrom.get(task.id) } : view);
+      const movedFrom = view ? movedFromFor(task.id, memberId) : null;
+      if (view) viewsOf.get(memberId).push(movedFrom ? { ...view, movedFrom } : view);
     }
   }
   return viewsOf;
