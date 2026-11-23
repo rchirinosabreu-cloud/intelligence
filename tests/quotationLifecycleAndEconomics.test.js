@@ -126,12 +126,16 @@ test('quotation product titles are normalized to title case at the domain bounda
 
   assert.equal(
     domain.normalizeQuotationItemTitle('  EVOLUCIÓN INTEGRAL DE IDENTIDAD VISUAL Y APLICACIONES DE MARCA  '),
-    'Evolución Integral De Identidad Visual Y Aplicaciones De Marca'
+    'Evolución integral de identidad visual y aplicaciones de marca'
   );
-  assert.equal(domain.normalizeQuotationItemTitle('DISEÑO WEB - E-COMMERCE'), 'Diseño Web - E-Commerce');
+  assert.equal(domain.normalizeQuotationItemTitle('DISEÑO WEB - E-COMMERCE'), 'Diseño web - e-commerce');
+  // Lo que la persona escribió se respeta: nombres propios y siglas quedan como están.
+  assert.equal(domain.normalizeQuotationItemTitle('administración de pauta en Meta Ads'), 'Administración de pauta en Meta Ads');
+  assert.equal(domain.normalizeQuotationItemTitle('CRM'), 'CRM');
+  assert.equal(domain.normalizeQuotationItemTitle('Acompañamiento Integral'), 'Acompañamiento Integral');
   assert.equal(
     domain.prepareQuotationItems([{ name: 'MARKETING ESTÁNDAR', price: 100, quantity: 1 }])[0].name,
-    'Marketing Estándar'
+    'Marketing estándar'
   );
 });
 
@@ -389,4 +393,33 @@ test('drafts stay private and expired quotations can be filtered independently',
   assert.match(form, /const shouldShare = targetStatus === 'ACTIVA'/);
   assert.match(list, /value="EXPIRADA"/);
   assert.match(list, /statusFilter === 'ACTIVA'[\s\S]{0,120}!q\.isExpired/);
+});
+
+test('catalog names recover their curated spelling without touching hand-made services', async () => {
+  const { restoreCatalogNameSpelling } = await import('../scripts/restore-catalog-name-spelling.js');
+  const rows = [
+    { id: '1', name: 'Auditoría De Marca' },
+    { id: '2', name: 'Administración De Meta Ads' },
+    { id: '3', name: 'Marca Plan Básico' },
+    { id: '4', name: 'Servicio Hecho A Mano' },
+    { id: '5', name: 'Naming' },
+    { id: '6', name: 'NAMING' }
+  ];
+  const updates = [];
+  const database = {
+    serviceCatalog: { findMany: async () => rows, update: async (args) => updates.push(args) },
+    $transaction: async (work) => work(database)
+  };
+  const catalog = [{ name: 'Auditoría de marca' }, { name: 'Administración de Meta Ads' }, { name: 'Marca Plan Básico' }, { name: 'Naming' }];
+
+  const preview = await restoreCatalogNameSpelling(database, { catalog, dryRun: true });
+  assert.equal(updates.length, 0);
+  assert.equal(preview.changes.length, 2);
+
+  const result = await restoreCatalogNameSpelling(database, { catalog });
+  assert.deepEqual(updates, [
+    { where: { id: '1' }, data: { name: 'Auditoría de marca' } },
+    { where: { id: '2' }, data: { name: 'Administración de Meta Ads' } }
+  ]);
+  assert.equal(result.updated, 2);
 });

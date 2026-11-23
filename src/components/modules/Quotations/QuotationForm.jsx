@@ -371,6 +371,18 @@ const QuotationForm = () => {
     const safeTotals = (items, taxExempt, options) => guarded(calculateQuotationTotals, items, options, taxExempt);
     const safeEconomics = (items, options) => guarded(calculateQuotationEconomics, items, options);
 
+    // Un servicio personalizado nuevo va al final y el cursor queda en su nombre. El botón está arriba de la
+    // lista y también debajo del último servicio, para no tener que subir a buscarlo (equipo comercial, 23 de
+    // noviembre de 2026).
+    const addCustomService = () => {
+        const position = selectedItems.length + 1;
+        setSelectedItems(items => [...items, { name: '', description: '', price: 0, quantity: 1, billingType: 'ONE_TIME', note: '', estimatedCost: null, ...(quotationMode === 'SCENARIOS' ? { scenarioId: activeScenarioId } : {}) }]);
+        setTimeout(() => {
+            const field = document.querySelector(`[aria-label="Nombre del servicio ${position}"]`);
+            field?.scrollIntoView({ block: 'center', behavior: 'smooth' }); field?.focus({ preventScroll: true });
+        }, 50);
+    };
+
     const calculateTotals = () => {
         const result = safeTotals(selectedItems, effectiveTaxExempt, {
             durationMonths,
@@ -826,7 +838,7 @@ const QuotationForm = () => {
                             </div>
 
                             {/* Selected Items */}
-                            <Button type="button" variant="outline" onClick={() => setSelectedItems(items => [...items, { name: '', description: '', price: 0, quantity: 1, billingType: 'ONE_TIME', note: '', estimatedCost: null, ...(quotationMode === 'SCENARIOS' ? { scenarioId: activeScenarioId } : {}) }])}>
+                            <Button type="button" variant="outline" onClick={addCustomService}>
                                 <Plus className="mr-2 h-4 w-4" />Añadir servicio personalizado
                             </Button>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">Solo se guarda en esta propuesta, sin crear un producto en el catálogo.</p>
@@ -924,6 +936,11 @@ const QuotationForm = () => {
                                             </div>
                                         ))}
                                     </div>
+                                )}
+                                {(selectedItems || []).some(item => quotationMode !== 'SCENARIOS' || item.scenarioId === activeScenarioId) && (
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" data-add-service-below onClick={addCustomService}>
+                                        <Plus className="mr-2 h-4 w-4" />Añadir servicio personalizado
+                                    </Button>
                                 )}
                             </div>
 

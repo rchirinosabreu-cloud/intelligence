@@ -322,16 +322,21 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.text('PROPUESTA COMERCIAL', PAGE.left + 21, y + 5.3, { align: 'center' });
   y += 18;
   setText(doc, { size: 25, style: 'bold' });
-  doc.text(String(quotation.client_company || quotation.client_name), PAGE.left, y);
+  // El nombre largo baja a otra línea antes de llegar a la columna de fechas (equipo comercial, 23 de noviembre de
+  // 2026: «Multik-Multimateriales Propuesta 2027» se imprimía encima de «EMISIÓN»). Las fechas se quedan arriba.
+  const datesY = y;
+  const clientLines = doc.splitTextToSize(String(quotation.client_company || quotation.client_name), 124);
+  doc.text(clientLines, PAGE.left, y, { lineHeightFactor: 1.1 });
+  y += (clientLines.length - 1) * 9.7;
   setText(doc, { size: 10, color: COLORS.muted });
   const intro = doc.splitTextToSize('Reunimos los servicios, alcances e inversión necesarios para avanzar con claridad hacia los objetivos acordados.', 118);
   doc.text(intro, PAGE.left, y + 9, { lineHeightFactor: 1.4 });
   setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
-  doc.text('EMISIÓN', PDF_LAYOUT.rightEdge, y - 2, { align: 'right' });
-  doc.text('VIGENCIA', PDF_LAYOUT.rightEdge, y + 13, { align: 'right' });
+  doc.text('EMISIÓN', PDF_LAYOUT.rightEdge, datesY - 2, { align: 'right' });
+  doc.text('VIGENCIA', PDF_LAYOUT.rightEdge, datesY + 13, { align: 'right' });
   setText(doc, { size: 8.5, style: 'bold' });
-  doc.text(formatDate(quotation.created_at), PDF_LAYOUT.rightEdge, y + 4, { align: 'right' });
-  doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, y + 19, { align: 'right' });
+  doc.text(formatDate(quotation.created_at), PDF_LAYOUT.rightEdge, datesY + 4, { align: 'right' });
+  doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, datesY + 19, { align: 'right' });
 
   y += 42;
   const details = quotation.proposal_details;
