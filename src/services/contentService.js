@@ -716,17 +716,24 @@ export const realignContentPlan = async (planId, { actorId = null, onlyIds = nul
 
 /**
  * Al arrancar (Rodny, 20 de noviembre de 2026: «la idea es que se arregle todo al desplegar»): lleva a su parrilla las
- * piezas que quedaron en otra por el mes calendario. Solo las que todavía no se publicaron: lo publicado es historia y
- * se mueve desde la parrilla, con el botón. Una vez hecho no encuentra nada, así que repetirlo en cada arranque no pesa.
+ * piezas que quedaron en otra por el mes calendario. Las pendientes, siempre. Las publicadas, solo en clientes con corte
+ * a mitad de mes (arqueo del 23 de noviembre de 2026: Multik, Mima's Kitchen, Promo Group y Bonsai tenían publicadas
+ * archivadas por mes calendario y Operación contaba cada corte con piezas de otro). Con corte 1 una publicada fuera de
+ * su mes suele ser una pieza que salió tarde: esa es historia y se mueve desde la parrilla, con el botón.
+ * Una vez hecho no encuentra nada, así que repetirlo en cada arranque no pesa.
  */
+const hasMidMonthCut = (contracts) => (contracts || []).some(contract => (Number(contract.cutDay) || 1) !== 1);
+
 export const realignPendingContentItems = async ({ db = prisma, realign = realignContentPlan } = {}) => {
-  const plans = await db.contentPlan.findMany({ where: { deletedAt: null, contentItems: { some: { deletedAt: null, status: { not: 'PUBLICADO' } } } },
+  const plans = await db.contentPlan.findMany({ where: { deletedAt: null, contentItems: { some: { deletedAt: null } } },
     select: { id: true, clientId: true, year: true, month: true,
-      contentItems: { where: { deletedAt: null, status: { not: 'PUBLICADO' } }, select: { id: true, publishDate: true } } } });
+      contentItems: { where: { deletedAt: null }, select: { id: true, publishDate: true, status: true } } } });
   const contracts = await contractsByClient(plans.map(plan => plan.clientId), db);
   const summary = { moved: 0, failed: [] };
   for (const plan of plans) {
-    const ids = outOfPeriodItems(plan, plan.contentItems, contracts.get(plan.clientId) || []).map(row => row.id);
+    const own = contracts.get(plan.clientId) || [];
+    const items = hasMidMonthCut(own) ? plan.contentItems : plan.contentItems.filter(item => item.status !== 'PUBLICADO');
+    const ids = outOfPeriodItems(plan, items, own).map(row => row.id);
     if (!ids.length) continue;
     try {
       const result = await realign(plan.id, { onlyIds: ids });
