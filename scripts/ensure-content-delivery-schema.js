@@ -34,13 +34,23 @@ export async function ensureContentDeliverySchema(client) {
     CREATE UNIQUE INDEX IF NOT EXISTS "ContentItemFinalAsset_storageArea_storageKey_key" ON "ContentItemFinalAsset"("storageArea", "storageKey");
     CREATE UNIQUE INDEX IF NOT EXISTS "ContentAssetDeletion_storageArea_storageKey_key" ON "ContentAssetDeletion"("storageArea", "storageKey");
     CREATE INDEX IF NOT EXISTS "ContentAssetDeletion_availableAt_idx" ON "ContentAssetDeletion"("availableAt");
+    ALTER TABLE "ContentAssetDeletion" ADD COLUMN IF NOT EXISTS "contentItemId" TEXT;
+    ALTER TABLE "ContentAssetDeletion" ADD COLUMN IF NOT EXISTS "assetId" TEXT;
+    ALTER TABLE "ContentAssetDeletion" ADD COLUMN IF NOT EXISTS "name" TEXT;
+    ALTER TABLE "ContentAssetDeletion" ADD COLUMN IF NOT EXISTS "mimeType" TEXT;
+    ALTER TABLE "ContentAssetDeletion" ADD COLUMN IF NOT EXISTS "size" INTEGER;
+    CREATE INDEX IF NOT EXISTS "ContentAssetDeletion_contentItemId_idx" ON "ContentAssetDeletion"("contentItemId");
     CREATE OR REPLACE FUNCTION enqueue_content_asset_deletion() RETURNS trigger LANGUAGE plpgsql AS $$
     DECLARE key TEXT; folder TEXT;
     BEGIN
       IF OLD."storageKey" IS NOT NULL THEN
         folder := regexp_replace(OLD."storageKey", '[^/]*$', '');
         FOREACH key IN ARRAY ARRAY[OLD."storageKey", folder || 'derived/' || OLD."id" || '-instagram.jpg', folder || 'derived/' || OLD."id" || '-facebook.jpg'] LOOP
-          INSERT INTO "ContentAssetDeletion"("id", "storageKey", "storageArea") VALUES (gen_random_uuid()::text, key, OLD."storageArea") ON CONFLICT ("storageArea", "storageKey") DO NOTHING;
+          -- Papelera: el archivo retirado y sus derivados esperan 30 días. Solo la fila del archivo lleva nombre.
+          INSERT INTO "ContentAssetDeletion"("id", "storageKey", "storageArea", "availableAt", "contentItemId", "assetId", "name", "mimeType", "size")
+            VALUES (gen_random_uuid()::text, key, OLD."storageArea", CURRENT_TIMESTAMP + INTERVAL '30 days', OLD."contentItemId", OLD."id",
+              CASE WHEN key = OLD."storageKey" THEN OLD."name" END, CASE WHEN key = OLD."storageKey" THEN OLD."mimeType" END, CASE WHEN key = OLD."storageKey" THEN OLD."size" END)
+            ON CONFLICT ("storageArea", "storageKey") DO NOTHING;
         END LOOP;
       END IF;
       RETURN OLD;

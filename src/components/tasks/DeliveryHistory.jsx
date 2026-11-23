@@ -2,7 +2,7 @@ import React from 'react';
 import { formatFileSize } from '@/lib/uploadLimits';
 
 const ACTIONS = { DELIVERED: 'Entrega guardada', REPLACED: 'Entrega actualizada', REORDERED: 'Orden actualizado', ADDED: 'Archivos añadidos', REMOVED: 'Archivo retirado',
-  APPENDED: 'Archivos añadidos', DELETED: 'Archivo retirado' };
+  APPENDED: 'Archivos añadidos', DELETED: 'Archivo retirado', RESTORED: 'Archivo restaurado' };
 const dateLabel = value => value && Number.isFinite(new Date(value).getTime())
   ? new Date(value).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' }) : 'Fecha no disponible';
 
@@ -11,7 +11,7 @@ function FileNames({ files }) {
     <li key={`${file.id || file.name}:${index}`} className="break-words">{file.name || 'Archivo'}{file.size ? ` · ${formatFileSize(file.size)}` : ''}</li>)}</ul>;
 }
 
-export default function DeliveryHistory({ history = [] }) {
+export default function DeliveryHistory({ history = [], note = 'El historial conserva los datos de cada entrega. Los archivos reemplazados ya no están disponibles.' }) {
   if (!history.length) return null;
   return <details className="rounded-xl border border-zinc-200 p-3 dark:border-white/10">
     <summary className="min-h-11 cursor-pointer text-sm font-medium">Historial de entregas ({history.length})</summary>
@@ -24,6 +24,6 @@ export default function DeliveryHistory({ history = [] }) {
         <FileNames files={entry.previousFiles} />
       </div>}
     </li>)}</ol>
-    <p className="mt-3 text-xs text-muted-foreground">El historial conserva los datos de cada entrega. Los archivos reemplazados ya no están disponibles.</p>
+    <p className="mt-3 text-xs text-muted-foreground">{note}</p>
   </details>;
 }

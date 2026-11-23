@@ -13,6 +13,10 @@ const metadata = files => files.map(({ id, name, mimeType, size, position }) => 
 const validRevision = value => (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) && Number.isSafeInteger(Number(value)) && Number(value) >= 0;
 // ContentItemFinalAsset.size remains PostgreSQL Int; independent task deliveries use their own type.
 export const CONTENT_FINAL_ASSET_DIRECT_MAX_BYTES = Math.min(FINAL_ASSET_DIRECT_MAX_BYTES, 2_147_483_647);
+// Papelera (Rodny, 23 de noviembre de 2026): un archivo retirado de una pieza se conserva 30 días antes de borrarse.
+const RETIRED_ASSET_RETENTION_DAYS = 30;
+const RETENTION_MS = RETIRED_ASSET_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const gone = () => httpError(410, 'Este archivo ya salió de la papelera y no se puede restaurar.');
 
 export function createContentDeliveryService({ db = prisma, storage, storageFor = getPlatformStorage, clock = () => new Date() } = {}) {
   const storageAt = area => {
@@ -31,10 +35,16 @@ export function createContentDeliveryService({ db = prisma, storage, storageFor 
     if (!item || item.deletedAt || item.plan?.deletedAt) throw httpError(404, 'Pieza no encontrada.');
     return item;
   };
+  // La papelera sale de la misma cola de borrado: solo metadatos, nunca la llave del objeto.
+  const trashOf = async (tx, itemId) => (await tx.contentAssetDeletion.findMany({ where: { contentItemId: itemId, availableAt: { gt: clock() } } }))
+    .filter(row => row.name && row.assetId)
+    .sort((a, b) => new Date(b.availableAt) - new Date(a.availableAt))
+    .map(row => ({ id: row.assetId, name: row.name, mimeType: row.mimeType ?? null, size: row.size ?? null, expiresAt: row.availableAt }));
   const snapshot = async (tx, itemId, item) => ({
     revision: (item || await itemFor(tx, itemId)).finalAssetsRevision,
     files: await rows(tx, itemId),
-    history: await tx.contentItemDeliveryChange.findMany({ where: { contentItemId: itemId }, orderBy: { revision: 'desc' } })
+    history: await tx.contentItemDeliveryChange.findMany({ where: { contentItemId: itemId }, orderBy: { revision: 'desc' } }),
+    trash: await trashOf(tx, itemId)
   });
   const get = itemId => db.$transaction(async tx => snapshot(tx, itemId, await itemFor(tx, itemId)), { isolationLevel: 'RepeatableRead' });
   const enqueue = async (tx, keys, availableAt = clock(), storageArea = 'LEGACY') => {
@@ -47,6 +57,16 @@ export function createContentDeliveryService({ db = prisma, storage, storageFor 
     const folder = asset.storageKey.slice(0, asset.storageKey.lastIndexOf('/') + 1);
     return [asset.storageKey, `${folder}derived/${asset.id}-instagram.jpg`, `${folder}derived/${asset.id}-facebook.jpg`];
   });
+  // El archivo retirado espera en la papelera; sus derivados lo acompañan para borrarse o volver juntos.
+  const retire = async (tx, itemId, asset) => {
+    if (!asset.storageKey) return;
+    const storageArea = asset.storageArea || 'LEGACY', availableAt = new Date(clock().getTime() + RETENTION_MS);
+    const [main, ...derived] = retiredKeys([asset]);
+    const owner = { contentItemId: itemId, assetId: asset.id, availableAt };
+    const file = { ...owner, name: asset.name, mimeType: asset.mimeType ?? null, size: asset.size ?? null };
+    await tx.contentAssetDeletion.upsert({ where: { storageArea_storageKey: { storageArea, storageKey: main } }, create: { storageArea, storageKey: main, ...file }, update: file });
+    for (const storageKey of derived) await tx.contentAssetDeletion.upsert({ where: { storageArea_storageKey: { storageArea, storageKey } }, create: { storageArea, storageKey, ...owner }, update: owner });
+  };
   const cleanup = async ({ limit = 100 } = {}) => {
     const now = clock();
     const expired = await db.contentItemDeliveryUpload.findMany({ where: { state: { in: ['PENDING', 'VERIFYING'] }, expiresAt: { lte: now } }, take: limit });
@@ -103,8 +123,10 @@ export function createContentDeliveryService({ db = prisma, storage, storageFor 
         actorId, actorName: author?.name || null, at: clock(), files: metadata(after), previousFiles: metadata(before)
       } });
       for (const retired of before.filter(file => !after.some(current => current.storageKey && current.storageKey === file.storageKey && (current.storageArea || 'LEGACY') === (file.storageArea || 'LEGACY')))) {
-        await enqueue(tx, retiredKeys([retired]), clock(), retired.storageArea || 'LEGACY');
+        await retire(tx, itemId, retired);
       }
+      // Un archivo vigente nunca figura en la papelera, aunque una operación lo haya quitado y vuelto a crear.
+      for (const current of after.filter(file => file.storageKey)) await tx.contentAssetDeletion.deleteMany({ where: { storageArea: current.storageArea || 'LEGACY', storageKey: current.storageKey } });
       return snapshot(tx, itemId, next);
     });
     await cleanupQuietly();
@@ -219,7 +241,25 @@ export function createContentDeliveryService({ db = prisma, storage, storageFor 
     });
     await cleanupQuietly();
   };
-  return { get, replace, prepare, confirm, mutate, cleanup, enqueue, discard };
+  const restore = async (itemId, { actor, expectedRevision, assetId } = {}) => {
+    if (!actorIdOf(actor)) throw httpError(401, 'Necesitas iniciar sesión.');
+    if (!validRevision(expectedRevision)) throw httpError(400, 'Se necesita la revisión vigente de la entrega.');
+    if (typeof assetId !== 'string' || !assetId.trim() || assetId.length > 100) throw httpError(400, 'Falta identificar el archivo que quieres restaurar.');
+    const find = client => client.contentAssetDeletion.findMany({ where: { contentItemId: itemId, assetId } }).then(found => found.find(row => row.name) || null);
+    const entry = await find(db);
+    // El margen evita competir con la limpieza cuando al archivo le queda menos de un minuto.
+    if (!entry || new Date(entry.availableAt).getTime() <= clock().getTime() + 60_000) throw gone();
+    if (!(await storageAt(entry.storageArea).head(entry.storageKey))) throw gone();
+    return mutate(itemId, { actor, expectedRevision, action: 'RESTORED' }, async (tx, _item, current) => {
+      const claimed = await find(tx);
+      if (!claimed || claimed.storageKey !== entry.storageKey) throw gone();
+      await tx.contentAssetDeletion.deleteMany({ where: { contentItemId: itemId, assetId } });
+      // Vuelve con su identidad, así sus derivados siguen sirviendo, y entra al final del carrusel.
+      await tx.contentItemFinalAsset.create({ data: { id: assetId, contentItemId: itemId, storageKey: claimed.storageKey, storageArea: claimed.storageArea || 'LEGACY',
+        name: claimed.name, mimeType: claimed.mimeType ?? null, size: claimed.size ?? null, position: Math.max(-1, ...current.map(asset => asset.position)) + 1 } });
+    });
+  };
+  return { get, replace, prepare, confirm, mutate, cleanup, enqueue, discard, restore };
 }
 
 const native = createContentDeliveryService();
@@ -228,6 +268,7 @@ export const replaceContentDelivery = native.replace;
 export const prepareContentDelivery = native.prepare;
 export const confirmContentDelivery = native.confirm;
 export const mutateContentDelivery = native.mutate;
+export const restoreContentDeliveryFile = native.restore;
 export const discardContentDeliveryObjects = native.discard;
 export const cleanupContentDeliveryUploads = ({ db = prisma, storage, storageFor, now, limit } = {}) =>
   createContentDeliveryService({ db, storage, storageFor, ...(now ? { clock: () => now } : {}) }).cleanup({ limit });

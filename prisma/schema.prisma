@@ -1275,7 +1275,14 @@ model ContentAssetDeletion {
   attempts Int @default(0)
   lastError String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  // Papelera de 30 días: de qué pieza y de qué archivo era. Solo la fila del archivo lleva nombre.
+  contentItemId String?
+  assetId String?
+  name String?
+  mimeType String?
+  size Int?
   @@index([availableAt])
+  @@index([contentItemId])
   @@unique([storageArea, storageKey])
 }
 

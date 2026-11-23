@@ -10,6 +10,7 @@ import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { uploadFinalPiece } from '@/lib/contentFinalDelivery';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { MultiLinkInput, CoverField, FinalAssetGrid } from '@/components/modules/ContentPlan/PieceMedia';
+import PieceTrash from '@/components/modules/ContentPlan/PieceTrash';
 import { WEEKDAY_LABELS, buildMonthGrid, buildCycleGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import { defaultPieceDay, cycleRangeLabel } from '@/lib/publicationPeriod';
 import { bogotaDayKey } from '@/lib/dashboardTips';
@@ -740,6 +741,8 @@ const ContentItemCard = ({
               />
             )}
 
+            <PieceTrash itemId={item.id} count={item.retiredFiles || 0} />
+
             {/* La zona grande es el estado vacío. Con material ya cargado se encoge a una línea: un
                 rectángulo enorme pesaba más que la propia pieza (Rodny, 25 de septiembre de 2026). */}
             {isEditing ? (
@@ -1349,7 +1352,8 @@ const ContentPlanDetail = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
-      toast.success('Pieza final eliminada');
+      queryClient.invalidateQueries({ queryKey: ['content-delivery'] });
+      toast.success('Archivo retirado. Queda 30 días en la papelera.');
     },
     onError: (error) => {
       console.error('Error deleting final content asset:', error.response?.data || error);

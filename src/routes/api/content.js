@@ -31,7 +31,7 @@ import {
 } from '../../services/contentService.js';
 import { getPlatformStorage } from '../../services/platformStorageService.js';
 import { reorderContentItemFinalAssets } from '../../services/finalAssetOrderService.js';
-import { getContentDelivery, replaceContentDelivery, prepareContentDelivery, confirmContentDelivery } from '../../services/contentDeliveryService.js';
+import { getContentDelivery, replaceContentDelivery, prepareContentDelivery, confirmContentDelivery, restoreContentDeliveryFile } from '../../services/contentDeliveryService.js';
 import { isDriveAsset } from '../../lib/finalAssetShape.js';
 import { sendStoredObject } from '../../lib/mediaRange.js';
 import { getJwtSecret } from '../../config/security.js';
@@ -398,6 +398,13 @@ router.post('/items/:id/delivery/direct-upload', async (req, res) => {
 router.post('/items/:id/delivery/confirm', async (req, res) => {
   try {
     return res.status(201).json(await confirmContentDelivery(req.params.id, { actor: req.user, uploadId: req.body?.uploadId, expectedRevision: req.body?.expectedRevision }));
+  } catch (error) { return deliveryError(res, error); }
+});
+
+// Papelera: un archivo retirado vuelve a la pieza mientras no hayan pasado sus 30 días.
+router.post('/items/:id/delivery/restore', async (req, res) => {
+  try {
+    return res.status(201).json(await restoreContentDeliveryFile(req.params.id, { actor: req.user, expectedRevision: req.body?.expectedRevision, assetId: req.body?.assetId }));
   } catch (error) { return deliveryError(res, error); }
 });
 

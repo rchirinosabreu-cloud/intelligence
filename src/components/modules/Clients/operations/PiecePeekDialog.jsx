@@ -12,6 +12,7 @@ import { CoverField, FinalAssetGrid, MultiLinkInput } from '@/components/modules
 import PieceDeliveryForm from '@/components/modules/ContentGrids/PieceDeliveryForm';
 import { approvalState } from '@/lib/contentApproval';
 import DeliveryHistory from '@/components/tasks/DeliveryHistory';
+import PieceTrash from '@/components/modules/ContentPlan/PieceTrash';
 
 // La vista rápida de una pieza desde Operación (Rodny, 30 de octubre de 2026: «debería poder dar click … o quizá
 // debería abrírseme allí sin tener que cambiar de módulo»). Se mira la pieza sin salir de la página del cliente; editarla
@@ -128,7 +129,8 @@ function NativePiece({ piece, plan, isLoading, error, onRetry, allowDelivery, on
           <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-800 [overflow-wrap:anywhere] dark:text-zinc-100">{item.internalNotes}</p>
         </div>
       )}
-      {allowDelivery && <DeliveryHistory history={deliveryReady ? delivery.data.history : []} />}
+      {allowDelivery && <DeliveryHistory history={deliveryReady ? delivery.data.history : []} note="El historial conserva los datos de cada entrega. Lo retirado queda 30 días en la papelera." />}
+      {allowDelivery && validDelivery && <PieceTrash itemId={item.id} count={delivery.data.trash?.length || 0} />}
       {allowDelivery && <PieceDeliveryForm key={item.id} itemId={item.id} onBusyChange={setDeliveryBusy} disabled={orderMutation.isPending || !deliveryReady}
         existingCount={assets.length} expectedRevision={deliveryReady ? delivery.data.revision : undefined} onConflict={refreshDelivery}
         onStored={() => Promise.all([
