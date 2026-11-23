@@ -121,11 +121,12 @@ const FinalAssetPreview = ({ assets = [], format }) => {
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-zinc-900 dark:border-white/10">
+      {/* Una imagen ajusta el marco a su ancho: acotada en alto ya no deja franjas negras a los lados. */}
+      <div className={`overflow-hidden rounded-[2rem] border border-zinc-200 bg-zinc-900 dark:border-white/10 ${isImage ? 'mx-auto w-fit max-w-full' : ''}`}>
         <div className="relative">
           {isDrive ? (
             // Un reel es vertical: sin acotar el ancho, un 9:16 a 560 px mide mil de alto.
-            <div className={`relative mx-auto w-full ${isVerticalPiece ? 'max-w-[380px]' : ''}`} style={{ aspectRatio }}>
+            <div className={`relative mx-auto w-full ${isVerticalPiece ? 'max-w-[380px] lg:max-w-[min(380px,calc((100vh-11rem)*9/16))]' : ''}`} style={{ aspectRatio }}>
               <iframe
                 src={asset.embedUrl}
                 title={asset.name || 'Pieza final en Drive'}
@@ -135,9 +136,9 @@ const FinalAssetPreview = ({ assets = [], format }) => {
               />
             </div>
           ) : isImage ? (
-            <img src={src} alt={asset.name || 'Pieza final'} className="max-h-[620px] w-full object-contain" />
+            <img src={src} alt={asset.name || 'Pieza final'} className="block max-h-[620px] w-auto max-w-full lg:max-h-[min(620px,calc(100vh-11rem))]" />
           ) : isVideo ? (
-            <video src={src} className="max-h-[620px] w-full bg-black" controls preload="metadata" />
+            <video src={src} className="max-h-[620px] w-full bg-black lg:max-h-[min(620px,calc(100vh-11rem))]" controls preload="metadata" />
           ) : (
             <div className="p-6 text-sm text-zinc-300">Archivo final disponible para revisi&oacute;n.</div>
           )}
@@ -156,13 +157,13 @@ const FinalAssetPreview = ({ assets = [], format }) => {
           (Rodny, 25 de septiembre de 2026). El botón de ventana emergente que sale sobre el video lo
           dibuja Google dentro de su propio marco y no se puede quitar desde fuera. */}
       {asset.name && (
-        <div className="px-1">
+        <div className="px-1 text-center">
           <span className="block truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{asset.name}</span>
         </div>
       )}
 
       {assets.length > 1 && (
-        <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Navegación del carrusel">
+        <div className="flex max-w-full justify-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Navegación del carrusel">
           {assets.map((entry, index) => (
             <button key={entry.id || entry.url || index} type="button" onClick={() => setActiveIndex(index)} aria-label={`Ver lámina ${index + 1}`} aria-current={index === activeIndex ? 'true' : undefined} className={`h-2.5 rounded-full transition-all ${index === activeIndex ? 'w-7 bg-brand-cyan' : 'w-2.5 bg-zinc-300 dark:bg-zinc-700'}`} />
           ))}
@@ -247,7 +248,7 @@ const PieceDetail = ({
         </div>
       </div>
 
-      <article className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
+      <article className="overflow-clip rounded-[2rem] border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
         <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 px-6 py-4 dark:border-white/5">
           <span className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:bg-white/5 dark:text-zinc-300">
             <FormatIcon format={item.format} className="h-3.5 w-3.5" /> {item.format}
@@ -262,9 +263,11 @@ const PieceDetail = ({
 
         <div className="grid grid-cols-1 gap-0 lg:grid-cols-12">
           {/* La pieza manda: es lo que el cliente aprueba. */}
-          {/* La pieza se centra en su panel: si es más corta que el texto, no deja un vacío arriba. */}
-          <div className="flex items-center justify-center border-b border-zinc-100 bg-zinc-50 p-6 dark:border-white/5 dark:bg-white/5 lg:col-span-7 lg:border-b-0 lg:border-r">
-            <div className="w-full">
+          {/* La pieza va arriba y acompaña la lectura (Rodny, 23 de noviembre de 2026: con un guion largo, centrada
+              quedaba a media altura, con un hueco enorme encima y el reel asomando abajo). En pantalla ancha se queda
+              fija bajo el encabezado mientras el cliente baja por el texto. */}
+          <div className="flex items-start justify-center border-b border-zinc-100 bg-zinc-50 p-6 dark:border-white/5 dark:bg-white/5 lg:col-span-7 lg:border-b-0 lg:border-r">
+            <div className="w-full lg:sticky lg:top-28" data-piece-media>
               <FinalAssetPreview assets={assetsOf(item)} format={item.format} />
             </div>
           </div>
