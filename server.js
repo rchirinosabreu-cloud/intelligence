@@ -265,7 +265,7 @@ async function bootstrap() {
         // Piezas sin publicar que quedaron en otra parrilla por el mes calendario: vuelven a la suya al desplegar
         // (20 de noviembre de 2026). No frena el arranque; si falla, la parrilla sigue ofreciendo el botón.
         realignPendingContentItems()
-            .then(({ moved, failed }) => { if (moved || failed.length) console.log(`[Parrillas] Piezas llevadas a su parrilla: ${moved}; sin mover: ${failed.length}`, failed.slice(0, 20)); })
+            .then(({ moved, failed }) => { if (moved || failed.length) console.log(`[Parrillas] Piezas llevadas a su parrilla: ${moved}; sin mover: ${failed.length} ${JSON.stringify(failed.slice(0, 20))}`); })
             .catch(error => console.error('[Parrillas] No se pudieron reubicar las piezas al arrancar:', error.message));
         initPlanCloseNoticeScheduler();
         // Arqueo de cortes (23 de noviembre de 2026): una línea por cuenta medida, para validar cliente por cliente.

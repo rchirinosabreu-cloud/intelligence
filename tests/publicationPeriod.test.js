@@ -89,23 +89,26 @@ test('Promogroup, corte 15: la parrilla de noviembre admite del 15 de noviembre 
   assert.equal(defaultPieceDay(null, '2026-12-20'), '2026-12-20');
 });
 
-test('al arrancar solo se reubican las parrillas con piezas sin publicar fuera de su ciclo', async () => {
+test('al arrancar se reubican las pendientes de todos y las publicadas solo con corte a mitad de mes', async () => {
   process.env.DATABASE_URL ||= 'postgresql://x:x@localhost:5432/x';
   const { realignPendingContentItems } = await import('../src/services/contentService.js');
   const noon = (key) => new Date(`${key}T12:00:00.000Z`);
+  const piece = (id, date, status = 'APROBADO') => ({ id, publishDate: noon(date), status });
   const db = {
-    contentPlan: { findMany: async ({ where }) => {
-      assert.equal(where.contentItems.some.status.not, 'PUBLICADO');
-      return [
-        { id: 'dic', clientId: 'promo', year: 2026, month: 12, contentItems: [{ id: 'x', publishDate: noon('2026-12-05') }, { id: 'y', publishDate: noon('2026-12-20') }] },
-        { id: 'nov', clientId: 'promo', year: 2026, month: 11, contentItems: [{ id: 'z', publishDate: noon('2026-11-20') }] },
-        { id: 'otro', clientId: 'mensual', year: 2026, month: 12, contentItems: [{ id: 'w', publishDate: noon('2026-12-05') }] }
-      ];
-    } },
-    clientContract: { findMany: async () => [{ clientId: 'promo', startDate: '2026-05-15', cutDay: 15, createdAt: '2026-05-15' }] }
+    contentPlan: { findMany: async () => [
+      { id: 'dic', clientId: 'promo', year: 2026, month: 12, contentItems: [piece('x', '2026-12-05'), piece('y', '2026-12-20'), piece('p', '2026-12-03', 'PUBLICADO')] },
+      { id: 'nov', clientId: 'promo', year: 2026, month: 11, contentItems: [piece('z', '2026-11-20')] },
+      // Con corte 1 la publicada fuera de su mes se queda (suele ser una que salió tarde); la pendiente sí vuelve.
+      { id: 'sep', clientId: 'mensual', year: 2026, month: 9, contentItems: [piece('tarde', '2026-10-02', 'PUBLICADO'), piece('w', '2026-10-05')] },
+      { id: 'otro', clientId: 'mensual', year: 2026, month: 12, contentItems: [piece('v', '2026-12-05')] }
+    ] },
+    clientContract: { findMany: async () => [
+      { clientId: 'promo', startDate: '2026-05-15', cutDay: 15, createdAt: '2026-05-15' },
+      { clientId: 'mensual', startDate: '2026-01-01', cutDay: 1, createdAt: '2026-01-01' }
+    ] }
   };
   const calls = [];
-  const summary = await realignPendingContentItems({ db, realign: async (planId, options) => { calls.push([planId, options.onlyIds]); return { moved: [{ id: 'x' }], failed: [] }; } });
-  assert.deepEqual(calls, [['dic', ['x']]]);
-  assert.deepEqual(summary, { moved: 1, failed: [] });
+  const summary = await realignPendingContentItems({ db, realign: async (planId, options) => { calls.push([planId, options.onlyIds]); return { moved: options.onlyIds.map(id => ({ id })), failed: [] }; } });
+  assert.deepEqual(calls, [['dic', ['x', 'p']], ['sep', ['w']]]);
+  assert.deepEqual(summary, { moved: 3, failed: [] });
 });
