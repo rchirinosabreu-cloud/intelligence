@@ -21,8 +21,14 @@ export const safeProposalLink = value => {
 export const sanitizeProposalHtml = value => {
   const html = text(value, 20000);
   const fragment = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'br', 'a'],
-    ALLOWED_ATTR: ['href'], RETURN_DOM: true
+    // `mark` es el resaltado de la barra del editor y `start` deja que una lista numerada siga en «2.» después de
+    // un párrafo: sin ellos el formato se perdía al guardar (Rodny, 23 de noviembre de 2026: «el resaltado no sirve»).
+    ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'strong', 'b', 'em', 'i', 'u', 'mark', 'ul', 'ol', 'li', 'br', 'a'],
+    ALLOWED_ATTR: ['href', 'start'], RETURN_DOM: true
+  });
+  fragment.querySelectorAll('[start]').forEach(node => {
+    const start = Number(node.getAttribute('start'));
+    if (node.nodeName === 'OL' && Number.isInteger(start) && start > 1 && start < 10000) node.setAttribute('start', String(start)); else node.removeAttribute('start');
   });
   fragment.querySelectorAll('a').forEach(link => {
     const href = safeProposalLink(link.getAttribute('href'));
@@ -36,7 +42,14 @@ export const proposalRichTextBlocks = value => {
   let current = null;
   const walk = (node, marks = {}, context = {}) => {
     if (node.nodeType === 3) {
-      if (!current) { current = { ...context, runs: [] }; blocks.push(current); }
+      if (!current) {
+        if (!node.textContent.trim()) return;
+        // Un segundo párrafo dentro de la misma viñeta sigue sangrado, sin repetir la viñeta ni el número.
+        const { item, ...rest } = context;
+        current = { ...rest, ...(item?.used ? { continuation: true } : {}), runs: [] };
+        if (item) item.used = true;
+        blocks.push(current);
+      }
       current.runs.push({ text: node.textContent, ...marks }); return;
     }
     const tag = node.nodeName.toLowerCase();
@@ -45,9 +58,17 @@ export const proposalRichTextBlocks = value => {
     if (['strong', 'b'].includes(tag)) next.bold = true;
     if (['em', 'i'].includes(tag)) next.italic = true;
     if (tag === 'u') next.underline = true;
+    if (tag === 'mark') next.highlight = true;
     if (tag === 'a' && safeProposalLink(node.getAttribute('href'))) next.href = safeProposalLink(node.getAttribute('href'));
-    const ctx = { ...context, ...(tag === 'li' ? { bullet: true } : {}), ...(/^h[123]$/.test(tag) ? { heading: Number(tag[1]) } : {}) };
-    if (tag === 'li' && node.parentNode?.nodeName === 'OL') ctx.ordinal = [...node.parentNode.children].indexOf(node) + 1;
+    const ctx = { ...context, ...(/^h[123]$/.test(tag) ? { heading: Number(tag[1]) } : {}) };
+    if (tag === 'li') {
+      // Cada viñeta sabe a qué nivel está (lista dentro de lista) y, si es numerada, con qué número sigue.
+      const level = context.bullet ? (context.level || 0) + 1 : 0;
+      Object.assign(ctx, { bullet: true, item: { used: false } });
+      if (level) ctx.level = level; else delete ctx.level;
+      delete ctx.ordinal;
+      if (node.parentNode?.nodeName === 'OL') ctx.ordinal = (Number(node.parentNode.getAttribute('start')) || 1) + [...node.parentNode.children].filter(child => child.nodeName === 'LI').indexOf(node);
+    }
     if (block) current = null;
     if (tag === 'br') walk({ nodeType: 3, textContent: '\n' }, next, ctx);
     else node.childNodes.forEach(child => walk(child, next, ctx));

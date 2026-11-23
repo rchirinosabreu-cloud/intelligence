@@ -52,7 +52,7 @@ export function normalizeChatContent(
       "h3",
       "mark",
     ],
-    ALLOWED_ATTR: ["href", "data-type", "data-id", "data-label"],
+    ALLOWED_ATTR: ["href", "start", "data-type", "data-id", "data-label"],
     ALLOW_DATA_ATTR: false,
   });
   const $ = load(clean, null, false);

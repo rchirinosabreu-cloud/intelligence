@@ -6,9 +6,10 @@ export function ProposalRichText({ html }) {
   return <div className="space-y-2 break-words text-sm leading-6 text-zinc-600 dark:text-zinc-300">
     {proposalRichTextBlocks(html).map((block, i) => {
       const Tag = block.heading ? `h${Math.min(block.heading + 1, 4)}` : 'p';
-      return <Tag key={i} className={block.heading ? 'pt-3 text-base font-semibold text-zinc-900 dark:text-zinc-100' : block.bullet ? 'ml-4 flex gap-2' : ''}>
-        {block.bullet && <span aria-hidden="true">{block.ordinal ? `${block.ordinal}.` : '•'}</span>}<span className="whitespace-pre-wrap">{block.runs.map((run, j) => {
+      return <Tag key={i} style={block.bullet ? { marginLeft: `${1 + (block.level || 0) * 1.25}rem` } : undefined} className={block.heading ? 'pt-3 text-base font-semibold text-zinc-900 dark:text-zinc-100' : block.bullet ? 'flex gap-2' : ''}>
+        {block.bullet && <span aria-hidden="true" className={`shrink-0 tabular-nums ${block.continuation ? 'invisible' : ''}`}>{block.ordinal ? `${block.ordinal}.` : '•'}</span>}<span className="min-w-0 whitespace-pre-wrap">{block.runs.map((run, j) => {
           let node = run.text;
+          if (run.highlight) node = <mark className="rounded bg-amber-200/70 px-0.5 text-inherit dark:bg-amber-400/25">{node}</mark>;
           if (run.bold) node = <strong>{node}</strong>;
           if (run.italic) node = <em>{node}</em>;
           if (run.underline) node = <u>{node}</u>;

@@ -30,7 +30,7 @@ export const RichCommentContent = ({ content, contextData = {}, onImageClick }) 
     // Client-side HTML sanitization with isomorphic-dompurify
     const cleanHTML = DOMPurify.sanitize(content, {
         ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'span', 'mark', 'a'],
-        ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'data-type', 'data-id', 'data-label', 'data-mention-id'],
+        ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'start', 'data-type', 'data-id', 'data-label', 'data-mention-id'],
         ADD_ATTR: ['target', 'rel'],
         FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'],
     });
@@ -51,7 +51,7 @@ export const RichCommentContent = ({ content, contextData = {}, onImageClick }) 
                        [&_mark]:rounded [&_mark]:bg-amber-200/70 [&_mark]:px-0.5 [&_mark]:text-zinc-950 [&_mark]:dark:bg-amber-400/25 [&_mark]:dark:text-amber-50
                        [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
                        [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
-                       [&_li]:my-0.5
+                       [&_li]:my-0.5 [&_li>p]:my-0 [&_li_ul]:my-0.5 [&_li_ol]:my-0.5
                        [&_a]:text-primary [&_a]:underline [&_a]:font-bold [&_a]:hover:text-primary/80
                        [&_span[data-type=mention]]:inline-block [&_span[data-type=mention]]:px-2 [&_span[data-type=mention]]:py-0.5 [&_span[data-type=mention]]:mx-0.5 [&_span[data-type=mention]]:bg-indigo-500/10 [&_span[data-type=mention]]:dark:bg-indigo-500/20 [&_span[data-type=mention]]:text-indigo-600 [&_span[data-type=mention]]:dark:text-indigo-300 [&_span[data-type=mention]]:rounded-full [&_span[data-type=mention]]:font-bold [&_span[data-type=mention]]:text-xs [&_span[data-type=mention]]:select-all [&_span[data-type=mention]]:shadow-sm"
             dangerouslySetInnerHTML={{ __html: cleanHTML }}

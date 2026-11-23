@@ -14,6 +14,13 @@
   list-style: decimal;
   padding-left: 1.25rem;
 }
+/* Títulos y resaltado de la barra de formato: el chat los guardaba pero se veían como texto corriente. */
+.team-chat .chat-rich-text h1 { font-size: 1.15rem; font-weight: 800; line-height: 1.25; margin: 0.4em 0 0.2em; }
+.team-chat .chat-rich-text h2 { font-size: 1rem; font-weight: 750; line-height: 1.3; margin: 0.35em 0 0.2em; }
+.team-chat .chat-rich-text h3 { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin: 0.3em 0 0.15em; }
+.team-chat .chat-rich-text mark { background: rgba(252, 211, 77, 0.55); color: inherit; border-radius: 0.25rem; padding: 0 0.125rem; }
+.dark .team-chat .chat-rich-text mark { background: rgba(251, 191, 36, 0.28); }
+.team-chat .chat-rich-text li > p { margin: 0; }
 .team-chat .chat-rich-text blockquote {
   border-left: 2px solid hsl(var(--border));
   padding-left: 0.75rem;

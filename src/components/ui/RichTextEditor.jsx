@@ -418,7 +418,9 @@ const RichTextEditor = React.forwardRef(({
               'w-full overflow-y-auto overscroll-contain transition-[min-height,max-height] duration-200 ease-out motion-reduce:transition-none scrollbar-thin',
               'min-h-[48px] max-h-[120px]',
               isToolbarOpen && 'min-h-[144px] max-h-[min(42vh,260px)]',
-              '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:break-all [&_.ProseMirror]:focus:outline-none'
+              // Las palabras bajan enteras a la línea siguiente; solo una palabra más ancha que el campo (un enlace largo) se
+              // parte. Antes `break-all` cortaba cualquier palabra al llegar al borde («acudiente|s», «p|ermita»).
+              '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:[overflow-wrap:anywhere] [&_.ProseMirror]:focus:outline-none'
             )}>
               <EditorContent editor={editor} />
             </div>

@@ -60,7 +60,7 @@ export const normalizeReceivableConcept = (value) => {
     if (value.length > CONCEPT_HTML_MAX) {
         throw new FinancialDomainError('RECEIVABLE_CONCEPT_REQUIRED_TOO_LONG', 'El concepto es demasiado largo para una cuenta de cobro.');
     }
-    const fragment = DOMPurify.sanitize(value, { ALLOWED_TAGS: CONCEPT_TAGS, ALLOWED_ATTR: [], RETURN_DOM: true });
+    const fragment = DOMPurify.sanitize(value, { ALLOWED_TAGS: CONCEPT_TAGS, ALLOWED_ATTR: ['start'], RETURN_DOM: true });
     text(fragment.textContent, RECEIVABLE_CONCEPT_MAX, 'RECEIVABLE_CONCEPT_REQUIRED', 'La cuenta de cobro necesita un concepto.');
     return fragment.innerHTML;
 };
