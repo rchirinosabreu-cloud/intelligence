@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertCircle, Facebook, Instagram, Linkedin, Loader2, Plus, Search, Share2, Trash2 } from '@/components/ui/icons';
+import { AlertCircle, Loader2, Plus, Search, Share2, Trash2 } from '@/components/ui/icons';
+import { FacebookLogo, InstagramLogo, LinkedinLogo, SOCIAL_BRAND_LOGOS } from '@/components/ui/SocialBrandLogos';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { SOCIAL_PLATFORM_LABELS, filterSocialPages, socialPagesOf, standaloneAccountsOf } from '@/lib/socialPublishing';
 import { linkedinAuthorizationState } from '@/lib/linkedinPublishing';
@@ -17,7 +18,7 @@ import { linkedinAuthorizationState } from '@/lib/linkedinPublishing';
  * de las páginas que administra la cuenta de Meta de la agencia es la de este cliente. Nadie pega
  * tokens: el servidor lista las páginas y guarda el token de la página cifrado.
  */
-const PLATFORM_ICON = { INSTAGRAM: Instagram, FACEBOOK: Facebook, LINKEDIN: Linkedin };
+const PLATFORM_ICON = SOCIAL_BRAND_LOGOS;
 /** A dónde volver después de autorizar en LinkedIn: la ficha desde la que se salió. */
 export const LINKEDIN_RETURN_KEY = 'linkedinConnectReturnTo';
 
@@ -247,10 +248,10 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
                 una lista; en LinkedIn su administrador inicia sesión y autoriza. */}
             <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuItem onSelect={() => setDialogOpen(true)} className="gap-2" data-social-connect-meta>
-                <Facebook className="h-4 w-4 shrink-0" aria-hidden="true" /> Facebook e Instagram
+                <FacebookLogo className="h-4 w-4 shrink-0" aria-hidden="true" /><InstagramLogo className="h-4 w-4 shrink-0" aria-hidden="true" /> Facebook e Instagram
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => connectLinkedIn.mutate()} className="gap-2" data-social-connect-linkedin>
-                <Linkedin className="h-4 w-4 shrink-0" aria-hidden="true" /> Página de LinkedIn
+                <LinkedinLogo className="h-4 w-4 shrink-0" aria-hidden="true" /> Página de LinkedIn
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

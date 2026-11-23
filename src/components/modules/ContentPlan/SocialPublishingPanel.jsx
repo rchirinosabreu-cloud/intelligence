@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock, ExternalLink, Facebook, Info, Instagram, Linkedin, Loader2, Send } from '@/components/ui/icons';
+import { AlertCircle, CheckCircle2, Clock, ExternalLink, Info, Loader2, Send } from '@/components/ui/icons';
+import { SOCIAL_BRAND_LOGOS } from '@/components/ui/SocialBrandLogos';
 import {
   SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS, pieceSocialPageIds, publishAtIso, schedulingNotices, schedulingProblems, socialPagesOf, standaloneAccountsOf
 } from '@/lib/socialPublishing';
@@ -20,7 +21,7 @@ import {
  * LinkedIn (23 de noviembre de 2026) va en su propia fila debajo, **sin marcar**: no todo lo que va a
  * Instagram va a LinkedIn, así que cada pieza lo pide marcando su casilla antes de «Programar».
  */
-const PLATFORM_ICON = { INSTAGRAM: Instagram, FACEBOOK: Facebook, LINKEDIN: Linkedin };
+const PLATFORM_ICON = SOCIAL_BRAND_LOGOS;
 
 const bogotaStamp = (value) => {
   if (!value) return '';

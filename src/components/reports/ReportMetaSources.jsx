@@ -5,7 +5,8 @@ import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Facebook, Instagram, Loader2, Megaphone, Plus, Search, X } from '@/components/ui/icons';
+import { Loader2, Megaphone, Plus, Search, X } from '@/components/ui/icons';
+import { FacebookLogo, InstagramLogo } from '@/components/ui/SocialBrandLogos';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { filterAdAccounts, insightWindows, splitCampaigns } from '@/lib/metaReportSources';
 
@@ -222,7 +223,7 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           <div className="min-w-0 space-y-2" role="group" aria-labelledby="report-meta-instagram">
-            <h3 id="report-meta-instagram" className="flex min-h-9 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><Instagram className="h-4 w-4" aria-hidden="true" /> Instagram</h3>
+            <h3 id="report-meta-instagram" className="flex min-h-9 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><InstagramLogo className="h-4 w-4" aria-hidden="true" /> Instagram</h3>
             {instagram.length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-200 p-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">Este cliente no tiene Instagram conectado. Se conecta en su ficha, en «Redes conectadas».</p>
             ) : (
@@ -245,7 +246,7 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
 
           {/* Facebook (2 de octubre de 2026): la página que el cliente ya tiene conectada para publicar. */}
           <div className="min-w-0 space-y-2" role="group" aria-labelledby="report-meta-facebook">
-            <h3 id="report-meta-facebook" className="flex min-h-9 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><Facebook className="h-4 w-4" aria-hidden="true" /> Facebook</h3>
+            <h3 id="report-meta-facebook" className="flex min-h-9 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><FacebookLogo className="h-4 w-4" aria-hidden="true" /> Facebook</h3>
             {facebook.length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-200 p-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">Este cliente no tiene página de Facebook conectada. Se conecta en su ficha, en «Redes conectadas».</p>
             ) : (

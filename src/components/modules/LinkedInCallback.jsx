@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, CheckCircle2, Linkedin, Loader2 } from '@/components/ui/icons';
+import { AlertCircle, CheckCircle2, Loader2 } from '@/components/ui/icons';
+import { LinkedinLogo } from '@/components/ui/SocialBrandLogos';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { LINKEDIN_RETURN_KEY } from './SocialAccountsWidget';
 
@@ -96,7 +97,7 @@ const LinkedInCallback = () => {
       <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-zinc-900 sm:p-8">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
           {status === 'loading' && <Loader2 className="h-6 w-6 animate-spin" />}
-          {status === 'choose' && <Linkedin className="h-6 w-6" />}
+          {status === 'choose' && <LinkedinLogo className="h-6 w-6" />}
           {status === 'success' && <CheckCircle2 className="h-6 w-6" />}
           {status === 'error' && <AlertCircle className="h-6 w-6 text-destructive" />}
         </div>
