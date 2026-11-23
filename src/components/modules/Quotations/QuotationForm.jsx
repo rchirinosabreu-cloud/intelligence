@@ -405,6 +405,18 @@ const QuotationForm = () => {
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
         if (localDraft.conflict) return;
         if (calculationIssue) { toast.error(`${calculationIssue}. Corrígelo antes de guardar.`); return; }
+        // Un servicio sin nombre lo rechaza el servidor, y el aviso pasaba inadvertido (Francys, 23 de noviembre de
+        // 2026: pulsó «Guardar como Borrador» y creyó que había quedado). Se dice antes de enviar y se lleva al campo.
+        const unnamedIndex = selectedItems.findIndex(item => !String(item?.name || '').trim());
+        if (unnamedIndex >= 0) {
+            if (quotationMode === 'SCENARIOS' && selectedItems[unnamedIndex].scenarioId) setActiveScenarioId(selectedItems[unnamedIndex].scenarioId);
+            toast.error(`No se guardó: al servicio ${unnamedIndex + 1} le falta el nombre.`, { duration: 8000 });
+            setTimeout(() => {
+                const field = document.querySelector(`[aria-label="Nombre del servicio ${unnamedIndex + 1}"]`);
+                field?.scrollIntoView({ block: 'center' }); field?.focus();
+            }, 50);
+            return;
+        }
         if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
             toast.error("Por favor completa los campos obligatorios para emitir");
             return;
@@ -509,7 +521,7 @@ const QuotationForm = () => {
             if (!id && data.id) navigate(`/cotizaciones/editar/${data.id}`, { replace: true, state: location.state });
         } catch (error) {
             console.error("[QuotationForm] Save failed:", error);
-            toast.error(error.message || "Fallo al guardar la cotización");
+            toast.error(`No se guardó: ${error.message || "fallo al guardar la cotización"}`, { duration: 8000 });
         } finally {
             savingRef.current = false;
             setIsSaving(false);
@@ -833,7 +845,9 @@ const QuotationForm = () => {
                                                 <div className="flex justify-between items-start">
                                                     <input
                                                         aria-label={`Nombre del servicio ${idx + 1}`}
-                                                        className="flex-1 bg-transparent font-bold text-sm outline-none border-b border-transparent focus:border-primary/20"
+                                                        placeholder="Nombre del servicio"
+                                                        aria-invalid={!String(item.name || '').trim() || undefined}
+                                                        className={cn('min-w-0 flex-1 bg-transparent font-bold text-sm outline-none border-b focus:border-primary/40', String(item.name || '').trim() ? 'border-transparent' : 'border-destructive/60')}
                                                         value={item.name}
                                                         onChange={(e) => updateItem(idx, 'name', e.target.value)}
                                                         onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}

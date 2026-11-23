@@ -48,6 +48,18 @@ try {
     await page.waitForTimeout(500);
     assert.equal(await page.locator('[data-form-draft]').count(), 0);
     assert.equal(await issue.count(), 0);
+    // Guardar con un servicio sin nombre no llega al servidor: lo dice y lleva al campo.
+    await company.fill('Café Altura');
+    await page.getByRole('button', { name: 'Añadir servicio personalizado', exact: true }).click();
+    await page.getByRole('button', { name: 'Guardar como Borrador' }).click();
+    await page.getByText('No se guardó: al servicio 1 le falta el nombre.').waitFor();
+    assert.deepEqual(await page.evaluate(() => window.__quotationDemoCalls()), []);
+    const nameField = page.getByLabel('Nombre del servicio 1');
+    await page.waitForTimeout(300);
+    assert.ok(await nameField.evaluate(node => node === document.activeElement), 'el foco queda en el nombre que falta');
+    assert.equal(await nameField.getAttribute('aria-invalid'), 'true');
+    await page.screenshot({ path: `output/quotation-unnamed-service-${viewport.width}.png`, animations: 'disabled' });
+    await page.getByRole('button', { name: 'Descartar borrador' }).click();
     assert.deepEqual(errors, []);
     await context.close();
   }
