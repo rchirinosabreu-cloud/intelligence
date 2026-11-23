@@ -356,3 +356,14 @@ test('la acción destacada de una persona del equipo se escribe y se puede vacia
   assert.equal(writes.at(-1)[1].data.highlightedAction, null);
   await assert.rejects(() => service.setTeamHighlight({ memberId: 'm-old', text: 'x' }), { status: 404 });
 });
+
+test('el arqueo de cortes lee cada cuenta medida y no escribe nada', async () => {
+  const { db, writes } = fixture();
+  const rows = await createClientOperationsService({ db, now: () => NOW }).auditClientCuts();
+  assert.deepEqual(rows.map((row) => row.cliente), ['Nattal', 'Mimas Kitchen']);
+  const mimas = rows[1].cortes.find((row) => row.desde === '2026-09-15');
+  assert.deepEqual(mimas.mostrado, { piezas: 2, publicadas: 0 });
+  assert.deepEqual(mimas.porFecha, { piezas: 2, publicadas: 0 });
+  assert.equal(rows[1].limpio, true);
+  assert.equal(writes.length, 0);
+});

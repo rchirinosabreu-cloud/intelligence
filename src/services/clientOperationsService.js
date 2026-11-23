@@ -26,6 +26,7 @@ import { canDecideContractContinuity, continuityActorSelect, setContractContinui
 import { clientOperationPlanPath } from '../lib/clientOperationAlerts.js';
 import { normalizeContractAdBudgets } from '../lib/adBudgetApproval.js';
 import { adBudgetService } from './adBudgetService.js';
+import { auditCuts } from '../lib/cutAudit.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -644,7 +645,19 @@ export const createClientOperationsService = ({
   };
 
   const decideContinuity = ({ clientId, input, actorUserId }) => setContractContinuity(db, clientId, input, actorUserId, { now: now() });
-  return { decideContinuity, listOperations, listOverduePlans, getOperation, authorizeWork, suspendClient, liftSuspension, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+
+  // Arqueo de cortes: por cada cuenta medida, lo que Operación muestra frente a lo contado por fecha. Solo lee.
+  const auditClientCuts = async () => {
+    const today = todayKey();
+    const clients = await db.client.findMany({ where: { isArchived: false }, orderBy: { name: 'asc' }, select: clientSelect(monthWindow(today)) });
+    return clients.map((client) => {
+      const operation = buildOperation(client, { today, reporters: new Map(), detail: true });
+      const cycles = [...(operation.history || []).slice().reverse(), operation.cycles?.current, operation.cycles?.next].filter(Boolean);
+      if (!cycles.length) return null;
+      return { cliente: client.name, ...auditCuts({ cycles, plans: client.contentPlans || [], contracts: client.contracts || [] }) };
+    }).filter(Boolean);
+  };
+  return { auditClientCuts, decideContinuity, listOperations, listOverduePlans, getOperation, authorizeWork, suspendClient, liftSuspension, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();
