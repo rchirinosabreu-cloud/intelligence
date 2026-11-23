@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RotateCcw } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { formatFileSize } from '@/lib/uploadLimits';
+import { shortDate } from '@/lib/clientOperations';
+import { bogotaDayKey } from '@/lib/dashboardTips';
 
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}` });
-const dayLabel = value => value && Number.isFinite(new Date(value).getTime())
-  ? new Date(value).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short' }) : null;
+const dayLabel = value => value && Number.isFinite(new Date(value).getTime()) ? shortDate(bogotaDayKey(new Date(value))) : null;
 
 /**
  * Papelera de una pieza (Rodny, 23 de noviembre de 2026): lo retirado se conserva 30 días y se puede
