@@ -72,15 +72,16 @@ const getBillingMultiplier = (item, durationMonths) => (
   (item?.billingType || 'MONTHLY') === 'ONE_TIME' ? 1 : durationMonths
 );
 
-export const normalizeQuotationItemTitle = (value = '') => (
-  String(value)
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLocaleLowerCase('es-CO')
-    .replace(/(^|[\s/\-–—])(\p{L})/gu, (_match, separator, letter) => (
-      `${separator}${letter.toLocaleUpperCase('es-CO')}`
-    ))
-);
+// Los nombres se escriben como en español: mayúscula solo al empezar (Rodny, 23 de noviembre de 2026, con el
+// equipo comercial: «la primera letra de cada palabra en mayúscula … ortográficamente no estaría bien»; sustituye
+// la mayúscula en cada palabra). Se respeta lo que la persona escribió —nombres propios y siglas como «Meta Ads»
+// o «CRM»—; solo un nombre de varias palabras TODO EN MAYÚSCULAS se pasa a minúsculas.
+export const normalizeQuotationItemTitle = (value = '') => {
+  const clean = String(value).trim().replace(/\s+/g, ' ');
+  const shouting = /\s/.test(clean) && !/\p{Ll}/u.test(clean);
+  const text = shouting ? clean.toLocaleLowerCase('es-CO') : clean;
+  return text.replace(/\p{L}/u, letter => letter.toLocaleUpperCase('es-CO'));
+};
 
 export const addQuotationValidityDays = (date) => (
   new Date(new Date(date).getTime() + QUOTATION_VALIDITY_DAYS * DAY_IN_MS)

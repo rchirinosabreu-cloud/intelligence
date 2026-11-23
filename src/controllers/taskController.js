@@ -4,8 +4,10 @@ import DOMPurify from 'isomorphic-dompurify';
 const sanitizeHTML = (html) => {
     if (!html) return '';
     return DOMPurify.sanitize(html, {
-        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'ul', 'ol', 'li', 'br', 'span', 'a'],
-        ALLOWED_ATTR: ['href', 'target', 'class', 'data-type', 'data-id', 'data-label', 'data-mention-id']
+        // La barra del editor ofrece Título 3 y resaltado: sin `h3` y `mark` se perdían al guardar el comentario
+        // (Rodny, 23 de noviembre de 2026: «el resaltado no sirve»). `start` conserva el número de una lista que sigue.
+        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'mark', 'ul', 'ol', 'li', 'br', 'span', 'a'],
+        ALLOWED_ATTR: ['href', 'target', 'class', 'start', 'data-type', 'data-id', 'data-label', 'data-mention-id']
     });
 };
 

@@ -125,7 +125,8 @@ test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verifica
     assert.ok(editorCode.includes('max-h-[min(42vh,260px)]'), 'RichTextEditor must cap long drafts inside the viewport.');
     assert.ok(editorCode.includes('data-rich-text-editor-shell'), 'RichTextEditor must expose a stable shell for layout checks.');
     assert.ok(editorCode.includes('editorContentClassName'), 'Task panel padding must be applied to the editable content, not the toolbar shell.');
-    assert.ok(editorCode.includes('[&_.ProseMirror]:break-all'), 'Long filenames and URLs must wrap inside the editor.');
+    // Los nombres largos y enlaces siguen partiéndose, pero las palabras normales ya no (23 de noviembre de 2026).
+    assert.ok(editorCode.includes('[&_.ProseMirror]:[overflow-wrap:anywhere]'), 'Long filenames and URLs must wrap inside the editor.');
     assert.ok(!editorCode.includes("block: 'center'"), 'Formatting must not re-center the entire chat while it expands.');
     assert.ok(editorCode.includes('ResizeObserver'), 'Anchor the bottom edge to the actual animated height, not delayed recentering.');
     assert.ok(editorCode.includes('motion-reduce:transition-none'), 'Respect reduced-motion preferences.');

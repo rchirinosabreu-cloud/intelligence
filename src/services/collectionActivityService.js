@@ -22,7 +22,20 @@ export const recordCollectionActivity = async (db = prisma, { clientId, receivab
         authorId: actor.userId || actor.id || null, authorName: actor.name || null, occurredAt: now };
     // El reintento conserva el evento original. Una violación de unicidad atrapada dentro de la transacción de
     // varias obligaciones dejaría PostgreSQL abortado; el upsert no produce esa excepción ni reescribe el evento.
-    if (noticeId) return db.collectionActivity.upsert({ where: { noticeId }, create: data, update: {} });
+    if (noticeId) {
+        try {
+            return await db.collectionActivity.upsert({ where: { noticeId }, create: data, update: {} });
+        } catch (error) {
+            // Dos reintentos al mismo tiempo: Prisma a veces resuelve el upsert como «buscar y crear», y el que
+            // llega segundo recibe la violación de unicidad (visto en CI el 23 de noviembre de 2026). El evento ya
+            // existe, así que se devuelve ese. Dentro de una transacción ya abortada la lectura falla y se
+            // propaga el error original, igual que antes.
+            if (error?.code !== 'P2002') throw error;
+            const existing = await db.collectionActivity.findUnique({ where: { noticeId } }).catch(() => null);
+            if (!existing) throw error;
+            return existing;
+        }
+    }
     return db.collectionActivity.create({ data });
 };
 

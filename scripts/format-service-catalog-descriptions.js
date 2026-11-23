@@ -17,7 +17,7 @@ import { normalizeQuotationItemTitle } from '../src/services/quotationDomainServ
 
 // Stored names are title-cased by normalize-quotation-titles ("Auditoría De
 // Marca") while the JSON keeps sentence case, so both sides are normalized.
-const identity = (name) => normalizeQuotationItemTitle(resolveCatalogIdentity(String(name || '').trim()));
+const identity = (name) => normalizeQuotationItemTitle(resolveCatalogIdentity(String(name || '').trim())).toLocaleLowerCase('es-CO');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const catalogPath = path.join(__dirname, '../data/service_catalog_2026.json');

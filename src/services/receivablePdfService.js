@@ -104,7 +104,7 @@ export const receivableConceptBlocks = (concept) => {
             .map(({ text, bold, italic, underline }) => ({ text, ...(bold ? { bold } : {}), ...(italic ? { italic } : {}), ...(underline ? { underline } : {}) }));
         const textValue = runs.map((run) => run.text).join('').replace(/\s+/g, ' ').trim();
         if (block.heading) return { kind: 'heading', level: block.heading, text: textValue, runs };
-        if (block.bullet) return { kind: 'bullet', ...(block.ordinal ? { ordinal: block.ordinal } : {}), text: textValue, runs };
+        if (block.bullet) return { kind: 'bullet', ...(block.ordinal ? { ordinal: block.ordinal } : {}), ...(block.continuation ? { continuation: true } : {}), text: textValue, runs };
         return { kind: 'paragraph', text: textValue, runs };
     }).filter((block) => block.text);
 };
@@ -356,7 +356,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
         if (block.kind === 'heading' && index > 0) y += 3;
         y = ensureSpace(doc, y, 8);
         const indent = block.kind === 'bullet' ? concept.indent : 0;
-        if (block.kind === 'bullet') {
+        if (block.kind === 'bullet' && !block.continuation) {
             if (block.ordinal) {
                 setText(doc, { size: concept.size });
                 doc.text(`${block.ordinal}.`, PAGE.left + 1.2, y, { charSpace: concept.charSpace });

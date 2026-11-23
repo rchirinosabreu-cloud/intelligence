@@ -21,7 +21,8 @@ const COLORS = {
   brandSoft: [232, 247, 249],
   discount: [4, 120, 87],
   discountSoft: [220, 252, 231],
-  white: [255, 255, 255]
+  white: [255, 255, 255],
+  highlight: [253, 230, 138]
 };
 
 let cachedFonts;
@@ -322,16 +323,21 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.text('PROPUESTA COMERCIAL', PAGE.left + 21, y + 5.3, { align: 'center' });
   y += 18;
   setText(doc, { size: 25, style: 'bold' });
-  doc.text(String(quotation.client_company || quotation.client_name), PAGE.left, y);
+  // El nombre largo baja a otra línea antes de llegar a la columna de fechas (equipo comercial, 23 de noviembre de
+  // 2026: «Multik-Multimateriales Propuesta 2027» se imprimía encima de «EMISIÓN»). Las fechas se quedan arriba.
+  const datesY = y;
+  const clientLines = doc.splitTextToSize(String(quotation.client_company || quotation.client_name), 124);
+  doc.text(clientLines, PAGE.left, y, { lineHeightFactor: 1.1 });
+  y += (clientLines.length - 1) * 9.7;
   setText(doc, { size: 10, color: COLORS.muted });
   const intro = doc.splitTextToSize('Reunimos los servicios, alcances e inversión necesarios para avanzar con claridad hacia los objetivos acordados.', 118);
   doc.text(intro, PAGE.left, y + 9, { lineHeightFactor: 1.4 });
   setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
-  doc.text('EMISIÓN', PDF_LAYOUT.rightEdge, y - 2, { align: 'right' });
-  doc.text('VIGENCIA', PDF_LAYOUT.rightEdge, y + 13, { align: 'right' });
+  doc.text('EMISIÓN', PDF_LAYOUT.rightEdge, datesY - 2, { align: 'right' });
+  doc.text('VIGENCIA', PDF_LAYOUT.rightEdge, datesY + 13, { align: 'right' });
   setText(doc, { size: 8.5, style: 'bold' });
-  doc.text(formatDate(quotation.created_at), PDF_LAYOUT.rightEdge, y + 4, { align: 'right' });
-  doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, y + 19, { align: 'right' });
+  doc.text(formatDate(quotation.created_at), PDF_LAYOUT.rightEdge, datesY + 4, { align: 'right' });
+  doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, datesY + 19, { align: 'right' });
 
   y += 42;
   const details = quotation.proposal_details;
@@ -513,9 +519,10 @@ const drawRichText = (doc, html, startY, { left = PAGE.left, width = CONTENT_WID
     const fontSize = block.heading ? size + 2 : size;
     const lineHeight = fontSize * 0.49;
     y = ensureSpace(doc, y, lineHeight * (block.heading ? 3 : 1));
-    let x = left + (block.bullet ? 4 : 0);
+    const markerLeft = left + (block.level || 0) * 4;
+    let x = markerLeft + (block.bullet ? (block.ordinal >= 10 ? 5.5 : 4) : 0);
     const lineLeft = x;
-    if (block.bullet) { setText(doc, { size: fontSize }); doc.text(block.ordinal ? `${block.ordinal}.` : '-', left, y); }
+    if (block.bullet && !block.continuation) { setText(doc, { size: fontSize }); doc.text(block.ordinal ? `${block.ordinal}.` : '-', markerLeft, y); }
     for (const run of block.runs) {
       const bold = run.bold || Boolean(block.heading);
       setText(doc, { size: fontSize, style: bold ? 'bold' : 'normal', color: run.href ? COLORS.brand : COLORS.muted });
@@ -530,6 +537,7 @@ const drawRichText = (doc, html, startY, { left = PAGE.left, width = CONTENT_WID
           let piece = remaining;
           while (piece.length > 1 && doc.getTextWidth(piece) > width - (lineLeft - left)) piece = piece.slice(0, -1);
           const measured = doc.getTextWidth(piece);
+          if (run.highlight) { doc.setFillColor(...COLORS.highlight); doc.rect(x, y - fontSize * 0.33, measured, fontSize * 0.45, 'F'); }
           doc.text(piece, x, y);
           if (run.underline || run.href) { doc.setDrawColor(...(run.href ? COLORS.brand : COLORS.muted)); doc.setLineWidth(0.15); doc.line(x, y + 0.7, x + measured, y + 0.7); }
           if (run.href) doc.link(x, y - fontSize * 0.35, measured, lineHeight, { url: run.href });

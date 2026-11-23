@@ -22,7 +22,7 @@ const actorNow = async (db, actor, manage = false) => {
   return user;
 };
 const sanitizeContent = content => DOMPurify.sanitize(content.trim(), { ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'span', 'mark', 'a'],
-  ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'data-type', 'data-id', 'data-label', 'data-mention-id'] }).trim();
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'start', 'data-type', 'data-id', 'data-label', 'data-mention-id'] }).trim();
 export const cleanAnnouncement = content => {
   if (typeof content !== 'string' || content.length > 30000) throw fail(400, 'Escribe un anuncio de hasta 30.000 caracteres.');
   const clean = sanitizeContent(content);

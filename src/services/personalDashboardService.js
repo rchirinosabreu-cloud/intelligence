@@ -19,7 +19,7 @@ const DASHBOARD_MEETING_LIMIT = 10;
 const DASHBOARD_CRM_LIMIT = 6;
 const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 const ANNOUNCEMENT_ALLOWED_TAGS = ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'span', 'mark', 'a'];
-const ANNOUNCEMENT_ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-type', 'data-id', 'data-label', 'data-mention-id'];
+const ANNOUNCEMENT_ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'start', 'data-type', 'data-id', 'data-label', 'data-mention-id'];
 
 export const sanitizeDashboardAnnouncementContent = (content = '') => DOMPurify.sanitize(content.trim(), {
   ALLOWED_TAGS: ANNOUNCEMENT_ALLOWED_TAGS,
