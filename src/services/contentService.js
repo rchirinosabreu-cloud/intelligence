@@ -281,6 +281,24 @@ export const getContentPlans = async (clientId) => {
   }
 };
 
+/**
+ * Cuántos archivos retirados conserva la papelera de cada pieza (30 días). Marca las mismas piezas que
+ * viajan en `items` y `contentItems`. Si la cuenta falla, la parrilla abre igual, sin papelera.
+ */
+const withRetiredFiles = async (items) => {
+  if (!items.length) return items;
+  try {
+    const rows = await prisma.contentAssetDeletion.findMany({
+      where: { contentItemId: { in: items.map(item => item.id) }, name: { not: null }, availableAt: { gt: new Date() } },
+      select: { contentItemId: true }
+    });
+    for (const item of items) item.retiredFiles = rows.filter(row => row.contentItemId === item.id).length;
+  } catch (error) {
+    console.warn('[Parrillas] No se pudo contar la papelera:', error.code || error.name || 'UNKNOWN');
+  }
+  return items;
+};
+
 export const getContentPlanById = async (id) => {
   const plan = await prisma.contentPlan.findUnique({
     where: { id },
@@ -298,7 +316,7 @@ export const getContentPlanById = async (id) => {
     const items = planItems(plan);
     return {
       ...normalizeContentPlan(await withCycle(plan)),
-      contentItems: items,
+      contentItems: await withRetiredFiles(items),
       items,
       misplacedItems: await misplacedOf(plan, items),
       // Por qué esta parrilla está congelada por una suspensión de cartera, o null. La pantalla lo dice arriba en vez
@@ -341,7 +359,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
     const items = planItems(plan);
     return {
       ...normalizeContentPlan(await withCycle(plan)),
-      contentItems: items,
+      contentItems: await withRetiredFiles(items),
       items,
       misplacedItems: await misplacedOf(plan, items)
     };

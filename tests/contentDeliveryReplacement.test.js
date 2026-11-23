@@ -57,7 +57,10 @@ test('replacement keeps one ordered new set despite identical names, records met
   assert.equal(result.history[0].actorName, 'Autora real');
   assert.equal(result.history[0].previousFiles[0].name, 'igual.png');
   assert.doesNotMatch(JSON.stringify(result.history), /storageKey|externalUrl|old-object|http/);
-  assert.equal(f.objects.has('old-object'), false);
+  // Papelera: lo retirado sigue guardado y se ofrece para restaurar, sin exponer su llave.
+  assert.equal(f.objects.has('old-object'), true);
+  assert.deepEqual(result.trash.map(row => [row.id, row.name]), [['old', 'igual.png']]);
+  assert.doesNotMatch(JSON.stringify(result.trash), /storageKey|old-object|http/);
 });
 
 test('a failed upload or failed atomic history write preserves the old delivery and revision', async () => {
@@ -284,4 +287,79 @@ test('a committed receipt can be recovered without starting a new upload while d
   assert.equal(replay.committed, true);
   assert.equal(replay.delivery.revision, 1);
   assert.equal(f.state().changes.length, 1);
+});
+
+const DAY = 24 * 60 * 60 * 1000;
+
+test('a retired file waits 30 days in the trash before its object and derivatives are deleted', async () => {
+  let now = new Date('2026-11-23T15:00:00Z');
+  const f = fixture({ clock: () => now });
+  await f.service.replace('piece', [file('nuevo.png')], { actor, expectedRevision: 0, requestId: 'trash-1' });
+  now = new Date(now.getTime() + 29 * DAY);
+  await f.service.cleanup();
+  assert.equal(f.objects.has('old-object'), true);
+  assert.equal((await f.service.get('piece')).trash.length, 1);
+  now = new Date(now.getTime() + 2 * DAY);
+  assert.equal((await f.service.get('piece')).trash.length, 0);
+  await f.service.cleanup();
+  assert.equal(f.objects.has('old-object'), false);
+  assert.ok(f.logs.includes('delete:derived/old-instagram.jpg'));
+  assert.equal(f.state().deletions.some(row => row.assetId === 'old'), false);
+});
+
+test('restoring a retired file returns it to the end of the piece with its identity and clears its trash rows', async () => {
+  let now = new Date('2026-11-23T15:00:00Z');
+  const f = fixture({ status: 'BORRADOR', clock: () => now });
+  const replaced = await f.service.replace('piece', [file('nuevo.png')], { actor, expectedRevision: 0, requestId: 'trash-2' });
+  const restored = await f.service.restore('piece', { actor, expectedRevision: replaced.revision, assetId: 'old' });
+  assert.equal(restored.revision, 2);
+  assert.deepEqual(restored.files.map(row => [row.name, row.position]), [['nuevo.png', 0], ['igual.png', 1]]);
+  assert.equal(restored.files[1].id, 'old');
+  assert.equal(restored.history.find(entry => entry.revision === 2).action, 'RESTORED');
+  assert.deepEqual(restored.trash, []);
+  assert.equal(f.state().deletions.some(row => row.assetId === 'old' || row.storageKey === 'old-object'), false);
+  now = new Date(now.getTime() + 40 * DAY);
+  await f.service.cleanup();
+  assert.equal(f.objects.has('old-object'), true);
+  // Retirarlo otra vez lo devuelve a la papelera con un plazo nuevo.
+  await f.service.mutate('piece', { actor, expectedRevision: 2, action: 'REMOVED' }, async tx => { await tx.contentItemFinalAsset.delete({ where: { id: 'old' } }); });
+  const again = await f.service.get('piece');
+  assert.deepEqual(again.trash.map(row => row.id), ['old']);
+  assert.equal(new Date(again.trash[0].expiresAt).getTime(), now.getTime() + 30 * DAY);
+});
+
+test('a file cannot be restored after its 30 days, without its object, with a stale revision or without a session', async () => {
+  let now = new Date('2026-11-23T15:00:00Z');
+  const f = fixture({ clock: () => now });
+  await f.service.replace('piece', [file('nuevo.png')], { actor, expectedRevision: 0, requestId: 'trash-3' });
+  await assert.rejects(f.service.restore('piece', { expectedRevision: 1, assetId: 'old' }), { status: 401 });
+  await assert.rejects(f.service.restore('piece', { actor, expectedRevision: 0, assetId: 'old' }), { status: 409 });
+  await assert.rejects(f.service.restore('piece', { actor, expectedRevision: 1, assetId: 'otro' }), { status: 410 });
+  await assert.rejects(f.service.restore('piece', { actor, expectedRevision: 1 }), { status: 400 });
+  assert.equal(f.state().files.length, 1);
+  f.objects.delete('old-object');
+  await assert.rejects(f.service.restore('piece', { actor, expectedRevision: 1, assetId: 'old' }), { status: 410 });
+  f.objects.set('old-object', { body: png, mimeType: 'image/png', etag: 'old-etag' });
+  now = new Date(now.getTime() + 30 * DAY);
+  await assert.rejects(f.service.restore('piece', { actor, expectedRevision: 1, assetId: 'old' }), { status: 410 });
+  assert.equal(f.state().item.finalAssetsRevision, 1);
+});
+
+test('the schema script keeps retired files 30 days and the route restores with the authenticated author', () => {
+  const schema = readFileSync(new URL('../scripts/ensure-content-delivery-schema.js', import.meta.url), 'utf8');
+  assert.match(schema, /CURRENT_TIMESTAMP \+ INTERVAL '30 days'/);
+  for (const column of ['contentItemId', 'assetId', 'name', 'mimeType', 'size']) assert.match(schema, new RegExp(`"ContentAssetDeletion" ADD COLUMN IF NOT EXISTS "${column}"`));
+  const routes = readFileSync(new URL('../src/routes/api/content.js', import.meta.url), 'utf8');
+  assert.match(routes, /delivery\/restore[\s\S]{0,200}restoreContentDeliveryFile\(req\.params\.id, \{ actor: req\.user/);
+});
+
+test('the piece trash is mounted where files are retired, with touch-sized restore buttons and no storage keys', () => {
+  const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const trash = read('../src/components/modules/ContentPlan/PieceTrash.jsx');
+  assert.match(trash, /delivery\/restore/);
+  assert.match(trash, /min-h-11[^"]*"[\s\S]{0,200}Restaurar/);
+  assert.doesNotMatch(trash, /storageKey/);
+  assert.match(read('../src/components/modules/ContentPlanDetail.jsx'), /<PieceTrash itemId=\{item\.id\} count=\{item\.retiredFiles \|\| 0\} \/>/);
+  assert.match(read('../src/components/modules/Clients/operations/PiecePeekDialog.jsx'), /<PieceTrash itemId=\{item\.id\}/);
+  assert.match(read('../src/services/contentService.js'), /withRetiredFiles\(items\)/);
 });

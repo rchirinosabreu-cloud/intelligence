@@ -71,7 +71,8 @@ const piece = (id, objective, format, day, status, extra = {}) => ({
   tasks: [],
   // La portada de un reel: nombre, tipo y peso; nunca la clave del almacenamiento.
   cover: extra.cover || null,
-  finalAssets: extra.finalAssets || []
+  finalAssets: extra.finalAssets || [],
+  retiredFiles: extra.retiredFiles || 0
 });
 
 const items = [
@@ -83,6 +84,8 @@ const items = [
     internalNotes: 'PONER TOMAS DE APOYO DE STOCK O IA. '.repeat(24).trim(),
     comments: '[Cliente - 18/09/2026]: ¿Podemos mostrar más la sala de espera?',
     finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }],
+    // Papelera: dos archivos retirados que todavía se pueden restaurar.
+    retiredFiles: 2,
     // Con hora puesta y sin programar todavía: el estado desde el que se pulsa «Programar».
     publishTime: '10:30',
     // Un reel con su portada puesta (15 de octubre de 2026): lo único a lo que Meta le admite una.
@@ -209,12 +212,28 @@ const socialApi = (config, url, ok, fail) => {
   return null;
 };
 
+let trash = [
+  { id: 't1', name: 'reel-endova-version-anterior-con-nombre-largo.mp4', mimeType: 'video/mp4', size: 48000000, expiresAt: '2026-12-23T15:00:00Z' },
+  { id: 't2', name: 'portada-vieja.jpg', mimeType: 'image/jpeg', size: 380000, expiresAt: '2026-12-20T15:00:00Z' },
+];
 axios.defaults.adapter = async (config) => {
   const url = String(config.url || '');
   const ok = (data) => ({ data, status: 200, statusText: 'OK', headers: {}, config });
   const fail = (status, data) => Promise.reject(Object.assign(new Error(data.error || 'Error'), { response: { status, data }, config }));
 
   if (url.includes('/api/social/')) return socialApi(config, url, ok, fail) || ok([]);
+  // La papelera de una pieza: se lee con la entrega y restaurar devuelve el archivo al final.
+  const delivery = /\/api\/content\/items\/([^/?]+)\/delivery(\/restore)?(\?|$)/.exec(url);
+  if (delivery) {
+    const item = items.find((candidate) => candidate.id === delivery[1]);
+    if (delivery[2]) {
+      const { assetId } = JSON.parse(config.data || '{}');
+      const restored = trash.find((file) => file.id === assetId);
+      trash = trash.filter((file) => file.id !== assetId);
+      if (item && restored) { item.finalAssets = [...item.finalAssets, { ...restored, storageKey: `k-${restored.id}`, position: item.finalAssets.length }]; item.retiredFiles = trash.length; }
+    }
+    return ok({ revision: 3, files: item?.finalAssets || [], history: [], trash });
+  }
   // La portada de un reel: subir, cambiar y quitar, como en el servidor.
   const cover = /\/api\/content\/items\/([^/?]+)\/cover(\?|$)/.exec(url);
   if (cover) {
