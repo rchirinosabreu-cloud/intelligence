@@ -261,10 +261,11 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
     >
       <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-5 py-5 text-white sm:px-6">
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 items-end gap-3" aria-label="Revisión de Bria">
-            {/* De cuerpo entero y con los pies en el borde de la cabecera: la cara sola se perdía en el turquesa. */}
-            <Bria3D mood={isReviewing || result?.meta?.state === 'RUNNING' ? 'trabajando' : 'reposo'} alt="" aria-hidden="true" data-bria-review
-              className="-mb-5 w-[72px] shrink-0 sm:w-[84px]" />
+          <div className="flex min-w-0 flex-1 items-center gap-3" aria-label="Revisión de Bria">
+            {/* En Parrillas Bria está sentada con su computadora (Rodny, 23 de noviembre de 2026), entera dentro de la
+                cabecera: con los pies en el borde se veía cortada. */}
+            <Bria3D mood="trabajando" alt="" aria-hidden="true" data-bria-review
+              className="-my-3 w-[72px] shrink-0 sm:w-[84px]" />
             <span className="min-w-0 flex-1 self-center">
               <span className="text-base font-semibold sm:text-lg">Revisión de Bria</span>
               <span className="mt-1 block text-xs leading-relaxed text-white/90 sm:text-sm">

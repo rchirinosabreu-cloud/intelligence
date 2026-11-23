@@ -18,9 +18,10 @@ test('content-plan review API exposes shared read, rerun and finding lifecycle r
 test('shared Bria panel uses the AI gradient and navigates findings three cards at a time', async () => {
   const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
 
-  assert.match(panel, /<Bria3D mood=\{isReviewing/, 'Bria de cuerpo entero: la cara sola se perdía en el turquesa');
+  assert.match(panel, /<Bria3D mood="trabajando"/, 'Bria de cuerpo entero, sentada con su computadora (Rodny, 23 de noviembre de 2026)');
   assert.match(panel, /aria-label="Revisión de Bria"/);
-  assert.match(panel, /-mb-5 w-\[72px\]/, 'con los pies sobre el borde de la cabecera');
+  assert.match(panel, /-my-3 w-\[72px\]/, 'entera dentro de la cabecera');
+  assert.doesNotMatch(panel, /-mb-5 w-\[72px\]/, 'con los pies en el borde se veía cortada');
   assert.doesNotMatch(panel, /absolute -bottom-3 right-3 h-24 w-24/);
   assert.doesNotMatch(panel, /Revisión compartida/);
   assert.match(panel, /'Corregido'/);

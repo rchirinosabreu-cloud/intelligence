@@ -18,5 +18,6 @@ test('no platform module can render Bria from the old cacheable public URL or a 
   const outdated = files.filter(({ text }) => /brainstudio-mascot-tip|bria-pixel/.test(text));
   assert.deepEqual(outdated.map(({ file }) => path.relative(process.cwd(), file)), [], 'all Bria portraits must use the shared 3D identity');
   const directPortraits = files.filter(({ text }) => /(?:from\s*|src=)[^\n]*bria-3d\/cara\.png/.test(text));
-  assert.equal(directPortraits.length, 1, 'one shared portrait owns the approved static asset; modules cannot create independent versions');
+  // Desde el 23 de noviembre de 2026 el retrato es Bria de cuerpo entero (`Bria3D`): la cara recortada ya no existe.
+  assert.equal(directPortraits.length, 0, 'the cropped face is gone: every portrait is the whole Bria through Bria3D');
 });

@@ -214,7 +214,7 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                 </section>}
                 {league.nextStep && <section className={cn(surface, 'relative overflow-hidden p-4')}>
                   <span aria-hidden="true" className="brain-gradient-primary absolute inset-x-0 top-0 h-1" />
-                  <div className="flex items-start gap-3"><BriaPortrait className="h-12 w-12 shrink-0" /><div><p className="text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">UN PASO PARA HOY</p><h3 className="mt-1 text-base font-bold">{league.nextStep.label}</h3><p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{league.nextStep.text}</p></div></div>
+                  <div className="flex items-start gap-3"><BriaPortrait className="h-16 w-16 shrink-0" /><div><p className="text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">UN PASO PARA HOY</p><h3 className="mt-1 text-base font-bold">{league.nextStep.label}</h3><p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{league.nextStep.text}</p></div></div>
                   <a href={league.nextStepUrl || '/gestion'} className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan">Ir a mis tareas<ArrowRight className="h-4 w-4" /></a>
                 </section>}
                 <div className="grid grid-cols-2 gap-3">
