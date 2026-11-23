@@ -24,8 +24,8 @@ import {
 import { toast } from 'react-hot-toast';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
-// Cuántas parrillas se ven de entrada por cliente; las anteriores se abren con «Ver anteriores» (21 de noviembre de 2026).
-const RECENT_PLANS = 3;
+// Todas las tarjetas de cliente arrancan cerradas y del mismo alto; un clic en la cabecera despliega sus
+// parrillas (Rodny, 23 de noviembre de 2026: con tres filas a la vista las tarjetas quedaban disparejas).
 const ROW = 'flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan/30 dark:hover:bg-white/5 sm:px-5';
 const PLAN_STATUS = {
   PLANIFICACION: { label: 'Planificación', chip: 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300' },
@@ -209,29 +209,32 @@ const ContentGrids = () => {
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {filteredClientGroups.map((group) => {
             const rows = group.plans.length + (group.external?.months.length || 0);
-            const expanded = activeClientId === group.id || Boolean(searchTerm);
+            // Una búsqueda que deja un solo cliente lo abre: no hay nada más que mirar.
+            const expanded = activeClientId === group.id || (Boolean(searchTerm) && filteredClientGroups.length === 1);
             const externalMonths = group.external?.months || [];
-            const visiblePlans = expanded ? group.plans : group.plans.slice(0, Math.max(0, RECENT_PLANS - externalMonths.length));
-            const hidden = group.plans.length - visiblePlans.length;
+            const visiblePlans = expanded ? group.plans : [];
+            const latest = group.plans[0];
             return (
               <section key={group.id} data-client-card={group.id} aria-label={`Parrillas de ${group.client?.name || 'cliente'}`}
                 className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
-                <header className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3.5 dark:border-white/5 sm:px-5">
+                <button type="button" data-client-toggle={group.id} onClick={() => toggleClient(group.id)} aria-expanded={expanded}
+                  className="flex min-h-[4.5rem] w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan dark:hover:bg-white/5 sm:px-5">
                   <ClientAvatar client={group.client} size={40} className="shrink-0 rounded-xl" />
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-base font-bold leading-tight text-zinc-900 dark:text-white">{group.client?.name}</h3>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      <span>{rows} {rows === 1 ? 'parrilla' : 'parrillas'}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-bold leading-tight text-zinc-900 dark:text-white">{group.client?.name}</span>
+                    <span className="mt-0.5 flex items-center gap-x-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="truncate">{rows} {rows === 1 ? 'parrilla' : 'parrillas'}{latest ? ` · última: ${planPeriodName(latest)}` : ''}</span>
                       {group.external && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green">
                           <FileSpreadsheet className="h-3 w-3" />Hoja de MIO
                         </span>
                       )}
-                    </p>
-                  </div>
-                </header>
+                    </span>
+                  </span>
+                  {expanded ? <ChevronUp className="h-5 w-5 shrink-0 text-zinc-400" /> : <ChevronDown className="h-5 w-5 shrink-0 text-zinc-400" />}
+                </button>
 
-                <ul className="divide-y divide-zinc-100 dark:divide-white/5">
+                {expanded && <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-white/5 dark:border-white/5">
                   {externalMonths.map((month) => (
                     <li key={`hoja-${month.slug}`} className="flex items-stretch">
                       <button type="button" data-external-month={month.slug}
@@ -294,15 +297,7 @@ const ContentGrids = () => {
                       </li>
                     );
                   })}
-                </ul>
-
-                {(hidden > 0 || (activeClientId === group.id && group.plans.length > RECENT_PLANS)) && (
-                  <button type="button" onClick={() => toggleClient(group.id)} aria-expanded={activeClientId === group.id}
-                    className="flex min-h-11 w-full items-center justify-center gap-1.5 border-t border-zinc-100 px-4 text-sm font-semibold text-brand-cyan-deep transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cyan/30 dark:border-white/5 dark:text-brand-cyan dark:hover:bg-white/5">
-                    {hidden > 0 ? `Ver ${hidden} ${hidden === 1 ? 'anterior' : 'anteriores'}` : 'Ver menos'}
-                    {hidden > 0 ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </button>
-                )}
+                </ul>}
               </section>
             );
           })}
