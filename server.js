@@ -30,6 +30,7 @@ import { initCollectionAlertScheduler } from './src/services/collectionAlertServ
 import { initFormalizationScheduler } from './src/services/projectFormalizationService.js';
 import { initContractCycleAlertScheduler } from './src/services/contractCycleAlertService.js';
 import { realignPendingContentItems } from './src/services/contentService.js';
+import { clientOperationsService } from './src/services/clientOperationsService.js';
 import { initPlanCloseNoticeScheduler } from './src/services/planCloseNoticeService.js';
 import { initAdBudgetAlertScheduler } from './src/services/adBudgetNoticeService.js';
 import { initAdMetaSyncScheduler } from './src/services/adBudgetMetaService.js';
@@ -267,6 +268,11 @@ async function bootstrap() {
             .then(({ moved, failed }) => { if (moved || failed.length) console.log(`[Parrillas] Piezas llevadas a su parrilla: ${moved}; sin mover: ${failed.length}`, failed.slice(0, 20)); })
             .catch(error => console.error('[Parrillas] No se pudieron reubicar las piezas al arrancar:', error.message));
         initPlanCloseNoticeScheduler();
+        // Arqueo de cortes (23 de noviembre de 2026): una línea por cuenta medida, para validar cliente por cliente.
+        // Solo lee y solo escribe en el registro; si falla no frena nada.
+        clientOperationsService.auditClientCuts()
+            .then(rows => rows.forEach(row => console.log(`[Arqueo de cortes] ${JSON.stringify(row)}`)))
+            .catch(error => console.error('[Arqueo de cortes] No se pudo leer:', error.message));
         initAdBudgetAlertScheduler();
         initAdMetaSyncScheduler();
         initClientSuspensionScheduler();
