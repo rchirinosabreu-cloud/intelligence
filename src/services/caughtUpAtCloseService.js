@@ -36,7 +36,8 @@ export async function closeViewsFor(tx, { day, memberIds }) {
     for (const move of moves) {
       const from = /^\d{4}-\d{2}-\d{2}/.test(String(move.fromValue || '')) ? String(move.fromValue).slice(0, 10) : null;
       if (!from || from > day) continue;
-      const manager = move.actor?.role === 'ADMIN' || memberHasArea(move.actor?.teamMember, 'PROJECT_MANAGEMENT');
+      // «Rol de admin o project manager»: el rol del sistema manda (ADMIN, PROJECT_MANAGER); el área de Equipo también vale.
+      const manager = ['ADMIN', 'PROJECT_MANAGER'].includes(move.actor?.role) || memberHasArea(move.actor?.teamMember, 'PROJECT_MANAGEMENT');
       if (!movesOf.has(move.taskId)) movesOf.set(move.taskId, []);
       movesOf.get(move.taskId).push({ from, manager, actorMemberId: move.actor?.teamMember?.id || null });
     }

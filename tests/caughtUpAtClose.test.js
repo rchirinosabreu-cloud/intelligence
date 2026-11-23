@@ -170,17 +170,18 @@ test('a date moved by an admin or a project manager on someone else\'s task does
     { taskId: 't-by-admin', fromValue: '2026-11-20', actor: admin },
     { taskId: 't-own', fromValue: '2026-11-23', actor: designer },
     { taskId: 't-pm-own', fromValue: '2026-11-23', actor: pm },
+    { taskId: 't-by-role', fromValue: '2026-11-23', actor: { role: 'PROJECT_MANAGER', teamMember: { id: 'm-otra', areas: ['COMMUNITY'], role: 'Community manager' } } },
     { taskId: 't-both', fromValue: '2026-11-23', actor: pm },
     { taskId: 't-both', fromValue: '2026-11-24', actor: designer }
   ];
   const task = (id, assigneeId) => ({ id, title: id, status: 'PENDIENTE', assigneeId, completedAt: null, dueDate: at('2026-11-26T12:00:00Z'), focusDeadlineAt: null, participants: [] });
   const tx = {
     taskChangeEvent: { findMany: async ({ where }) => { assert.equal(where.kind, 'DUE_DATE'); return moves; } },
-    task: { findMany: async () => [task('t-by-pm', 'm-dis'), task('t-by-admin', 'm-dis'), task('t-own', 'm-dis'), task('t-pm-own', 'm-pm'), task('t-both', 'm-dis')] }
+    task: { findMany: async () => [task('t-by-pm', 'm-dis'), task('t-by-admin', 'm-dis'), task('t-own', 'm-dis'), task('t-by-role', 'm-dis'), task('t-pm-own', 'm-pm'), task('t-both', 'm-dis')] }
   };
   const views = await closeViewsFor(tx, { day: '2026-11-23', memberIds: ['m-dis', 'm-pm'] });
   const moved = (memberId) => Object.fromEntries(views.get(memberId).map((view) => [view.title, view.movedFrom || null]));
-  assert.deepEqual(moved('m-dis'), { 't-by-pm': null, 't-by-admin': null, 't-own': '2026-11-23', 't-both': null },
+  assert.deepEqual(moved('m-dis'), { 't-by-pm': null, 't-by-admin': null, 't-own': '2026-11-23', 't-by-role': null, 't-both': null },
     'what the PM or the admin rescheduled is not held against her; her own move is; a later move from a future date never counts');
   assert.deepEqual(moved('m-pm'), { 't-pm-own': '2026-11-23' }, 'a project manager moving their own task is still moving dates');
 });
