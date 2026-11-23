@@ -1006,7 +1006,7 @@ const QuotationForm = () => {
                             </div>
                         )}
 
-                        {calculationIssue && <p role="alert" data-quotation-issue className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">{calculationIssue}. Corrígelo para ver el valor completo y poder guardar.</p>}
+                        {calculationIssue && <p role="alert" data-quotation-issue className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive brain-destructive-text">{calculationIssue}. Corrígelo para ver el valor completo y poder guardar.</p>}
 
                         {quotationMode === 'SCENARIOS' ? (
                             <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
