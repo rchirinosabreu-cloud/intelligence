@@ -29,6 +29,7 @@ const noSleep = async () => {};
 test('a single image goes out as one container and one publish, with the caption and the token in the body, never in the URL', async () => {
   const { fetchImpl, calls } = scriptedFetch([
     { body: { id: 'container-1' } },
+    { body: { status_code: 'FINISHED' } },
     { body: { id: 'media-9' } },
     { body: { id: 'media-9', permalink: 'https://www.instagram.com/p/abc/' } }
   ]);
@@ -41,10 +42,29 @@ test('a single image goes out as one container and one publish, with the caption
   assert.equal(calls[0].url, `https://graph.facebook.com/${META_GRAPH_VERSION}/1789/media`);
   assert.equal(calls[0].method, 'POST');
   assert.deepEqual(calls[0].body, { image_url: 'https://files.example/post.jpg', caption: 'Hola #brain', access_token: 'tok-secret' });
-  assert.equal(calls[1].url, `https://graph.facebook.com/${META_GRAPH_VERSION}/1789/media_publish`);
-  assert.deepEqual(calls[1].body, { creation_id: 'container-1', access_token: 'tok-secret' });
+  assert.equal(calls[2].url, `https://graph.facebook.com/${META_GRAPH_VERSION}/1789/media_publish`);
+  assert.deepEqual(calls[2].body, { creation_id: 'container-1', access_token: 'tok-secret' });
   assert.doesNotMatch(calls[0].url, /tok-secret/, 'the token travels in the body');
   assert.equal(META_GRAPH_VERSION, 'v25.0');
+});
+
+test('a single image waits for Meta to finish processing it before publishing (16 and 19 November 2026: «Media ID is not available»)', async () => {
+  const { fetchImpl, calls } = scriptedFetch([
+    { body: { id: 'container-i' } },
+    { body: { status_code: 'IN_PROGRESS' } },
+    { body: { status_code: 'FINISHED' } },
+    { body: { id: 'media-i' } },
+    { body: { id: 'media-i', permalink: 'https://www.instagram.com/p/img/' } }
+  ]);
+  const meta = createMetaGraphClient({ fetchImpl, sleep: noSleep });
+  const result = await meta.publishToInstagram({
+    igUserId: '1789', token: 't', kind: 'IMAGE', caption: 'Hola',
+    media: [{ url: 'https://files.example/post.jpg', isVideo: false }]
+  });
+  assert.equal(result.mediaId, 'media-i');
+  assert.match(calls[1].url, /\/container-i\?fields=status_code%2Cstatus&access_token=t$/);
+  assert.match(calls[3].url, /\/media_publish$/);
+  assert.equal(calls[3].body.creation_id, 'container-i');
 });
 
 test('a reel waits for Meta to finish processing the video before publishing', async () => {
@@ -118,6 +138,7 @@ test('a carousel creates one child container per file and a parent that lists th
 test('a story is one container without caption, image or video', async () => {
   const { fetchImpl, calls } = scriptedFetch([
     { body: { id: 's1' } },
+    { body: { status_code: 'FINISHED' } },
     { body: { id: 'media-s' } },
     { body: { id: 'media-s', permalink: 'https://www.instagram.com/stories/x/' } }
   ]);

@@ -166,11 +166,15 @@ export const createMetaGraphClient = ({
         ? await post(`${igUserId}/media`, { media_type: 'STORIES', video_url: file.url, access_token: token })
         : await post(`${igUserId}/media`, { media_type: 'STORIES', image_url: file.url, access_token: token });
       creationId = container.id;
-      if (file.isVideo) await waitForContainer({ containerId: creationId, token });
+      await waitForContainer({ containerId: creationId, token });
     } else if (kind === 'IMAGE') {
       const [file] = media;
       const container = await post(`${igUserId}/media`, { image_url: file.url, caption, access_token: token });
       creationId = container.id;
+      // Una imagen también se espera (23 de noviembre de 2026): Meta suele tenerla lista al instante, pero el 16 y
+      // el 19 de noviembre contestó «Media ID is not available» a publicaciones de una sola imagen porque se le
+      // pidió publicar antes de que terminara de procesarla. Si ya está lista, es una sola consulta más.
+      await waitForContainer({ containerId: creationId, token });
     } else {
       throw new MetaGraphError(`Instagram no publica «${kind}».`, { status: 400, code: 'UNSUPPORTED_KIND' });
     }

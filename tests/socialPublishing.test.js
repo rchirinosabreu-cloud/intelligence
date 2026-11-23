@@ -118,6 +118,7 @@ test('Meta errors are told apart: transient ones retry, permanent ones explain t
   assert.match(humanizeMetaError({ code: 10 }), /permiso/i);
   assert.match(humanizeMetaError({ code: 4 }), /límite/i);
   assert.match(humanizeMetaError({ code: 9007 }), /archivo|formato/i);
+  assert.match(humanizeMetaError({ code: 9007, subcode: 2207027, message: 'Media ID is not available' }), /no había terminado de procesar.*Reintentar/);
   assert.match(humanizeMetaError({ code: 2207026 }), /video/i);
   assert.match(humanizeMetaError({ code: 'CONTAINER_ERROR', message: 'Meta could not process the media' }), /Meta/);
   assert.equal(humanizeMetaError({ name: 'MetaGraphError', status: 400, message: 'Something odd' }), 'Meta respondió: Something odd');
