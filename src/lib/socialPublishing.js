@@ -464,6 +464,8 @@ export const isRetryableMetaError = (error) => {
   return !status && code == null;
 };
 
+const META_MEDIA_NOT_READY_SUBCODE = 2207027;
+
 const META_ERROR_TEXT = Object.freeze({
   190: 'La conexión con Meta venció: hay que volver a conectar la cuenta desde la ficha del cliente.',
   102: 'La conexión con Meta venció: hay que volver a conectar la cuenta desde la ficha del cliente.',
@@ -485,6 +487,9 @@ const META_ERROR_TEXT = Object.freeze({
 export const humanizeMetaError = (error) => {
   if (!error) return 'Meta no respondió.';
   const code = typeof error.code === 'number' ? error.code : Number(error.code);
+  // «Media ID is not available» (subcódigo 2207027) llega con el código 9007, el de «no pudo leer el archivo», y el
+  // archivo está bien: Instagram no había terminado de procesarlo (19 de noviembre de 2026, «65.png»).
+  if (Number(error.subcode) === META_MEDIA_NOT_READY_SUBCODE) return 'Instagram todavía no había terminado de procesar el archivo. El archivo está bien: pulsa «Reintentar».';
   if (Number.isFinite(code) && META_ERROR_TEXT[code]) return META_ERROR_TEXT[code];
   if (NETWORK_CODES.has(String(error.code))) return 'No se pudo llegar a Meta; se vuelve a intentar.';
   const message = String(error.userMessage || error.message || '').trim();
