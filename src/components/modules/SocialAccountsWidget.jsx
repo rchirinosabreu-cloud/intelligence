@@ -84,7 +84,7 @@ const ConnectPageDialog = ({ clientId, open, onClose, onLinked }) => {
         ) : pages.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">La cuenta de Meta de la agencia todavía no administra ninguna página. Hay que darle acceso a la página del cliente en Meta Business.</p>
         ) : (
-          <div className="flex min-h-0 flex-col gap-3">
+          <div className="flex min-h-0 min-w-0 flex-col gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
               <input
@@ -105,7 +105,7 @@ const ConnectPageDialog = ({ clientId, open, onClose, onLinked }) => {
                 Ninguna página coincide con «{search.trim()}».
               </p>
             ) : (
-              <fieldset className="max-h-[50vh] space-y-2 overflow-y-auto pr-1" aria-labelledby={listId}>
+              <fieldset className="max-h-[50vh] min-w-0 space-y-2 overflow-y-auto pr-1" aria-labelledby={listId}>
                 <legend id={listId} className="sr-only">Páginas disponibles</legend>
                 {visible.map((page) => (
                   <label key={page.pageId} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${chosenId === page.pageId ? 'border-brand-cyan bg-brand-cyan-soft/40 dark:bg-brand-cyan/10' : 'border-zinc-200 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5'}`}>

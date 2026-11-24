@@ -84,7 +84,9 @@ const SAMPLE_PAGES = [
   ['Barra Lima', null], ['Fundación Río Claro', 'fundacionrioclaro'], ['Colegio Los Álamos', 'colegiolosalamos'],
   ['Panadería La Espiga', null], ['Óptica Central', 'opticacentral'], ['Hotel Bahía Azul', 'hotelbahiaazul'],
   ['Academia Samurái', 'academiasamurai'], ['Vinos del Puerto', 'vinosdelpuerto'], ['Ferretería El Tornillo', null],
-  ['Estudio Ñandú', 'estudionandu'], ['Zapatería Paso Firme', 'pasofirme']
+  ['Estudio Ñandú', 'estudionandu'], ['Zapatería Paso Firme', 'pasofirme'],
+  // Un nombre largo de verdad: el diálogo se salía por la derecha con uno así (24 de noviembre de 2026).
+  ['Corporación Universitaria Empresarial de Salamanca y del Caribe Colombiano Sede Barranquilla', 'corporacion_universitaria_empresarial_de_salamanca_barranquilla']
 ].map(([pageName, username], index) => ({ pageId: `page-${index + 1}`, pageName, instagram: username ? { id: `ig-${index + 1}`, username } : null }));
 queryClient.setQueryData(['social-available-pages'], { configured: true, pages: SAMPLE_PAGES });
 
