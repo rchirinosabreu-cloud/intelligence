@@ -103,3 +103,13 @@ test('a network is always shown with its official logo, never the generic stroke
     assert.match(await read(new URL(`../src/components/${file}`, import.meta.url), 'utf8'), /ui\/SocialBrandLogos'/, `${file} uses the official logos`);
   }
 });
+
+test('the client space no longer carries announcements, deliverables or Chat Flow, and the page dialog never spills sideways', () => {
+  // Rodny, 24 November 2026: «esas funciones ya no me sirven para nada».
+  const space = readFileSync(new URL('../src/components/modules/ClientDetail.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(space, /<(AnnouncementWidget|DeliverablesWidget|FlowWidget)\b/);
+  assert.match(space, /<SocialAccountsWidget/);
+  // A fieldset is as wide as its longest word unless told otherwise: one long page name pushed «Conectar» out of the dialog.
+  const widget = readFileSync(new URL('../src/components/modules/SocialAccountsWidget.jsx', import.meta.url), 'utf8');
+  assert.match(widget, /<fieldset className="[^"]*\bmin-w-0\b/);
+});

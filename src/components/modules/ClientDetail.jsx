@@ -1,37 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React from 'react';
 import { ArrowLeft, Layout } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import ClientAvatar from '@/components/ui/ClientAvatar';
-import FlowWidget from './FlowWidget';
 import DigitalIdentityWidget from './DigitalIdentityWidget';
-import DeliverablesWidget from './DeliverablesWidget';
 import ClientTasksWidget from './ClientTasksWidget';
 import KeyLinksWidget from './KeyLinksWidget';
-import AnnouncementWidget from './AnnouncementWidget';
 import SocialAccountsWidget from './SocialAccountsWidget';
 import { useAuth } from '@/context/AuthContext';
 import { usePageLabel } from '@/components/layout/BackToOrigin';
 
 const ClientDetail = ({ client, onBack }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const canManageSocial = ['ADMIN', 'PROJECT_MANAGER'].includes(String(currentUser?.role || '').toUpperCase());
-  const [isChatOpen, setIsChatOpen] = useState(false);
   usePageLabel(client?.name ? `Espacio · ${client.name}` : null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('openChat') === 'true') {
-        setIsChatOpen(true);
-        // Clean up URL parameter without refreshing
-        const newParams = new URLSearchParams(location.search);
-        newParams.delete('openChat');
-        const newSearch = newParams.toString();
-        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}${location.hash}`, { replace: true, state: location.state });
-    }
-  }, [location, navigate]);
 
   if (!client) return <div>No se seleccionó cliente</div>;
 
@@ -55,24 +36,19 @@ const ClientDetail = ({ client, onBack }) => {
       {/* Main Content Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
 
+        {/* Anuncios, Entregables y Chat Flow salieron del espacio del cliente (Rodny, 24 de noviembre de 2026:
+            «esas funciones ya no me sirven para nada»). No reponerlos; sus datos no se borraron. */}
         {/* Left Column (Main Content) */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-            <AnnouncementWidget scope="client" clientId={client.id} />
-            <DeliverablesWidget clientId={client.id} />
             <ClientTasksWidget clientId={client.id} />
         </div>
 
         {/* Right Column (Sidebar). `lg:self-start`: la rejilla estiraba esta columna a la altura de la
             izquierda y dos widgets con `h-full` (Identidad Digital, Enlaces clave) reclamaban cada uno
-            esa altura entera, así que el flex aplastaba a Chat Flow y a Redes conectadas hasta dejar
+            esa altura entera, así que el flex aplastaba a Redes conectadas hasta dejar
             solo la cabecera (30 de septiembre de 2026). Con la columna a su altura natural, `h-full`
             deja de significar nada y cada tarjeta mide lo que contiene. */}
         <div className="lg:col-span-1 lg:self-start flex flex-col gap-6">
-            <FlowWidget
-                clientId={client.id}
-                externalOpen={isChatOpen}
-                onExternalOpenChange={setIsChatOpen}
-            />
             <SocialAccountsWidget clientId={client.id} canManage={canManageSocial} />
             <DigitalIdentityWidget client={client} />
             <KeyLinksWidget clientId={client.id} />

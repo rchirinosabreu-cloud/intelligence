@@ -19,7 +19,7 @@ test('all product select fields go through the shared mobile-aware component', (
 });
 
 test('specialized option lists and action menus keep the shared neutral surface', () => {
-  for (const file of ['modules/ChatWidget.jsx', 'modules/AnnouncementWidget.jsx', 'modules/DashboardAnnouncements.jsx', 'modules/Quotations/QuotationForm.jsx', 'modules/TaskSidePanel.jsx']) {
+  for (const file of ['modules/DashboardAnnouncements.jsx', 'modules/Quotations/QuotationForm.jsx', 'modules/TaskSidePanel.jsx']) {
     assert.ok(/brain-popover-surface/.test(readFileSync(`src/components/${file}`, 'utf8')), file);
   }
   for (const file of ['ui/LinkDropdown.jsx', 'modules/Moodboard/MoodboardCanvas.jsx']) {
