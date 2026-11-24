@@ -4,7 +4,7 @@ import { SERVICE_CATEGORIES } from '@/lib/commercialRequestForm';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import CrmStatCard from './CrmStatCard';
-import CrmFilters from './CrmFilters';
+import CrmFilters, { visibleCrmFilters } from './CrmFilters';
 import { useCrmMetrics } from './crmApi';
 import {
   StageBadge, TrafficLightBadge, TrafficLightDot, FollowUpLabel, formatPercent, formatDays,
@@ -56,8 +56,10 @@ const Skeleton = () => (
   </div>
 );
 
+const DASHBOARD_FILTERS = ['stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'dates'];
+
 const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab }) => {
-  const { data: metrics, isLoading, error } = useCrmMetrics(filters);
+  const { data: metrics, isLoading, error } = useCrmMetrics(visibleCrmFilters(filters, DASHBOARD_FILTERS));
   const funnel = metrics?.funnel;
   const total = metrics?.total || 0;
   const lights = metrics?.byTrafficLight || { VERDE: 0, AMARILLO: 0, ROJO: 0 };
@@ -82,7 +84,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
         <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900">Buscar</button>
       </form>
 
-      <CrmFilters filters={filters} onChange={onFiltersChange} team={team} show={['stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'dates']} />
+      <CrmFilters filters={filters} onChange={onFiltersChange} team={team} show={DASHBOARD_FILTERS} />
 
       {error && (
         <div className="brain-alert-surface rounded-2xl p-4 text-sm">

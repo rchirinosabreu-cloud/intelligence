@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { AlertTriangle, CalendarClock, CalendarDays, HelpCircle, AlertCircle, Send } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-import CrmFilters from './CrmFilters';
+import CrmFilters, { visibleCrmFilters } from './CrmFilters';
 import CrmActivityForm from './CrmActivityForm';
 import { useCrmFollowUps } from './crmApi';
 import { StageBadge, TrafficLightDot, PriorityBadge, formatDate, relativeDays, leadTitle, leadSubtitle } from './crmPresentation';
@@ -45,7 +45,7 @@ const LeadCard = ({ lead, onOpen, onLog, bucket }) => (
 
 /** The daily work view: four buckets, each card can log a touch without leaving the screen. */
 const CrmFollowUps = ({ filters, onFiltersChange, team, onOpenLead }) => {
-  const { data, isLoading, error } = useCrmFollowUps(filters);
+  const { data, isLoading, error } = useCrmFollowUps(visibleCrmFilters(filters, ['ownerId', 'priority', 'origin']));
   const [logging, setLogging] = useState(null);
   const [active, setActive] = useState('VENCIDO');
   const buckets = data?.buckets || {};
