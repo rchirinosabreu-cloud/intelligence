@@ -99,6 +99,11 @@ test('the authorisation address asks only for the page scopes and returns to the
     scope: 'w_organization_social r_organization_social rw_organization_admin'
   });
   assert.equal(createLinkedInClient({ env: {} }).isConfigured(), false);
+  // Producción no define APP_URL: la dirección de regreso sale de donde se está usando la plataforma.
+  const bare = createLinkedInClient({ env: { LINKEDIN_CLIENT_ID: 'cid', LINKEDIN_CLIENT_SECRET: 's' } });
+  assert.equal(bare.redirectUri('https://labs.brainstudioagencia.com'), 'https://labs.brainstudioagencia.com/linkedin/callback');
+  assert.equal(new URL(bare.authorizationUrl({ state: 'st', redirectUri: bare.redirectUri('https://otra-agencia.example/') })).searchParams.get('redirect_uri'), 'https://otra-agencia.example/linkedin/callback');
+  assert.equal(createLinkedInClient({ env: { ...env, LINKEDIN_OAUTH_REDIRECT_URI: 'https://fija.example/cb' } }).redirectUri('https://labs.example'), 'https://fija.example/cb', 'an explicit address still wins');
 });
 
 test('pages where the person can publish: roles that cannot post are left out, names come from LinkedIn', async () => {
@@ -197,8 +202,9 @@ const accountDb = (rows = []) => {
 };
 const fakeLinkedIn = (overrides = {}) => ({
   isConfigured: () => true,
-  authorizationUrl: ({ state }) => `https://www.linkedin.com/oauth/v2/authorization?state=${state}`,
-  exchangeCode: async () => ({ accessToken: 'access-1', expiresInSeconds: 5184000, refreshToken: 'refresh-1', refreshExpiresInSeconds: 31536000, scope: 'w_organization_social' }),
+  redirectUri: (origin) => `${origin || 'http://localhost:3000'}/linkedin/callback`,
+  authorizationUrl: ({ state, redirectUri }) => `https://www.linkedin.com/oauth/v2/authorization?state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+  exchangeCode: async (_code, { redirectUri } = {}) => ({ redirectUriUsed: redirectUri, accessToken: 'access-1', expiresInSeconds: 5184000, refreshToken: 'refresh-1', refreshExpiresInSeconds: 31536000, scope: 'w_organization_social' }),
   listOrganizations: async () => [{ organizationId: '2414183', name: 'Titanes SAS', vanityName: 'titanes' }, { organizationId: '777', name: 'Otra', vanityName: null }],
   ...overrides
 });
@@ -208,8 +214,10 @@ const accountService = ({ db, linkedin = fakeLinkedIn() }) => createLinkedInAcco
 
 test('connecting a page: who leaves for LinkedIn is who comes back, and the tokens are stored encrypted only once a page is chosen', async () => {
   const { db, state } = accountDb();
-  const service = accountService({ db });
-  const { url } = await service.start({ clientId: 'client-1', actorUserId: 'user-1' });
+  const exchanged = [];
+  const service = accountService({ db, linkedin: fakeLinkedIn({ exchangeCode: async (_code, { redirectUri } = {}) => { exchanged.push(redirectUri); return { accessToken: 'access-1', expiresInSeconds: 5184000, refreshToken: 'refresh-1', refreshExpiresInSeconds: 31536000, scope: 'w_organization_social' }; } }) });
+  const { url } = await service.start({ clientId: 'client-1', actorUserId: 'user-1', origin: 'https://labs.brainstudioagencia.com' });
+  assert.equal(new URL(url).searchParams.get('redirect_uri'), 'https://labs.brainstudioagencia.com/linkedin/callback', 'LinkedIn returns to where the platform is being used, never to localhost');
   const oauthState = new URL(url).searchParams.get('state');
 
   await assert.rejects(service.exchange({ code: 'c', state: oauthState, actorUserId: 'user-2' }), /la inició otra persona/);
@@ -217,6 +225,7 @@ test('connecting a page: who leaves for LinkedIn is who comes back, and the toke
 
   const pending = await service.exchange({ code: 'c', state: oauthState, actorUserId: 'user-1' });
   assert.deepEqual([pending.clientId, pending.clientName, pending.organizations.length], ['client-1', 'Titanes', 2]);
+  assert.deepEqual(exchanged, ['https://labs.brainstudioagencia.com/linkedin/callback'], 'the code is exchanged with the very same return address');
   assert.equal(state.rows.length, 0, 'nothing is saved until the page is chosen');
   assert.ok(!JSON.stringify(pending.organizations).includes('access-1'));
 

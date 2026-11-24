@@ -1,5 +1,5 @@
 import express from 'express';
-import { isManagerRole } from '../../config/security.js';
+import { isAllowedOrigin, isManagerRole, normalizeOrigin } from '../../config/security.js';
 import { socialPublishingService } from '../../services/socialPublishingService.js';
 import { socialAccountService } from '../../services/socialAccountService.js';
 import { linkedinAccountService } from '../../services/linkedinAccountService.js';
@@ -131,7 +131,10 @@ export const createSocialPublishingRouter = ({
     try {
       const clientId = String(req.body?.clientId || '').trim();
       if (!clientId) return res.status(400).json({ error: 'Falta clientId.' });
-      return res.json(await linkedinAccounts.start({ clientId, actorUserId: req.user.userId }));
+      // Solo un origen que la plataforma ya acepta puede ser la dirección de regreso.
+      const asked = normalizeOrigin(req.get('origin') || `${req.protocol}://${req.get('host')}`);
+      const origin = asked && isAllowedOrigin(asked) ? asked : undefined;
+      return res.json(await linkedinAccounts.start({ clientId, actorUserId: req.user.userId, origin }));
     } catch (error) {
       return reply(res, error, logger);
     }

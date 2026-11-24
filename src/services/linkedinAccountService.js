@@ -38,12 +38,14 @@ export const createLinkedInAccountService = ({
     if (!isConfigured() || !stateSecret()) throw httpError(503, NOT_CONFIGURED, { code: 'LINKEDIN_NOT_CONFIGURED' });
   };
 
-  const start = async ({ clientId, actorUserId }) => {
+  const start = async ({ clientId, actorUserId, origin }) => {
     requireConfigured();
     const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true } });
     if (!client) throw httpError(404, 'El cliente no existe.');
-    const state = jwt.sign({ purpose: STATE_PURPOSE, clientId, userId: actorUserId }, stateSecret(), { expiresIn: STATE_TTL_SECONDS });
-    return { url: linkedin.authorizationUrl({ state }) };
+    // La dirección de regreso viaja firmada en el `state`: al volver se le repite a LinkedIn tal cual.
+    const redirectUri = linkedin.redirectUri(origin);
+    const state = jwt.sign({ purpose: STATE_PURPOSE, clientId, userId: actorUserId, redirectUri }, stateSecret(), { expiresIn: STATE_TTL_SECONDS });
+    return { url: linkedin.authorizationUrl({ state, redirectUri }) };
   };
 
   const readState = (state, actorUserId) => {
@@ -76,13 +78,13 @@ export const createLinkedInAccountService = ({
 
   const exchange = async ({ code, state, actorUserId }) => {
     requireConfigured();
-    const { clientId } = readState(state, actorUserId);
+    const { clientId, redirectUri } = readState(state, actorUserId);
     const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, slug: true } });
     if (!client) throw httpError(404, 'El cliente no existe.');
     let tokens;
     let organizations;
     try {
-      tokens = await linkedin.exchangeCode(String(code || ''));
+      tokens = await linkedin.exchangeCode(String(code || ''), { redirectUri });
       organizations = await linkedin.listOrganizations(tokens.accessToken);
     } catch (error) {
       if (error?.name !== 'LinkedInError') throw error;
