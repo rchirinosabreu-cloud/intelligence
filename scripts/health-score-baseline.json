@@ -35,7 +35,6 @@
     "src/components/modules/Crm/CrmDashboard.jsx",
     "src/components/modules/Crm/CrmLayout.jsx",
     "src/components/modules/DashboardAnnouncements.jsx",
-    "src/components/modules/DeliverablesWidget.jsx",
     "src/components/modules/Drive/DriveLayout.jsx",
     "src/components/modules/FinancialDashboard.jsx",
     "src/components/modules/Minutes/CompleteAnalysis.jsx",

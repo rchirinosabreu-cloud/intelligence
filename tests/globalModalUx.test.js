@@ -32,7 +32,6 @@ test('Drive uses the shared dialog primitive for every file and folder modal', a
 test('legacy custom modals are migrated to the shared dismissal and focus contract', async () => {
   const files = [
     'src/components/modules/CompletedTasksHistoryModal.jsx',
-    'src/components/modules/DeliverablesWidget.jsx',
     'src/components/modules/Moodboard/MoodboardDashboard.jsx',
     'src/components/modules/Profile.jsx',
     'src/components/modules/Activity/OperationalCalendar.jsx'
@@ -43,16 +42,13 @@ test('legacy custom modals are migrated to the shared dismissal and focus contra
     assert.match(source, /from ['"]@\/components\/ui\/dialog['"]/);
   }
 
-  const deliverables = await read(files[1]);
-  assert.match(deliverables, /<Dialog open=\{!!previewFile\}/);
-
-  const moodboard = await read(files[2]);
+  const moodboard = await read(files[1]);
   assert.match(moodboard, /<Dialog open=\{isModalOpen\}/);
 
-  const profile = await read(files[3]);
+  const profile = await read(files[2]);
   assert.match(profile, /<Dialog open=\{isAvatarModalOpen\}/);
 
-  const calendar = await read(files[4]);
+  const calendar = await read(files[3]);
   assert.match(calendar, /<Dialog open=\{!!reconciliationPreview\}/);
   assert.match(calendar, /<Dialog open=\{!!deleteCandidate\}/);
 });

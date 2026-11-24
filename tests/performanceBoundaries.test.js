@@ -35,15 +35,13 @@ test('notification header derives unread count from one query', async () => {
 });
 
 test('high frequency polling is slowed and pauses while the document is hidden', async () => {
-  const chat = await read('src/components/modules/ChatWidget.jsx');
-  const announcements = await read('src/components/modules/AnnouncementWidget.jsx');
+  // El chat y los anuncios del espacio del cliente se retiraron el 24 de noviembre de 2026.
   const taskPanel = await read('src/components/modules/TaskSidePanel.jsx');
   const activity = await read('src/components/modules/Activity/ActivityMap.jsx');
 
-  for (const source of [chat, announcements, taskPanel, activity]) {
+  for (const source of [taskPanel, activity]) {
     assert.match(source, /document\.hidden/);
   }
-  assert.doesNotMatch(chat, /},\s*3000\)/);
   assert.doesNotMatch(taskPanel, /},\s*4000\)/);
   assert.doesNotMatch(activity, /\?\s*5000\s*:\s*false/);
 });
