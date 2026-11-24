@@ -28,3 +28,17 @@ test('unknown filter keys are dropped when reading', () => {
   assert.equal(filters.from, '2026-09-01');
   assert.equal('evil' in filters, false);
 });
+
+test('a view only applies and counts the filters it shows', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+  const [bar, dashboard, followUps] = await Promise.all([
+    read('src/components/modules/Crm/CrmFilters.jsx'), read('src/components/modules/Crm/CrmDashboard.jsx'), read('src/components/modules/Crm/CrmFollowUps.jsx')
+  ]);
+  assert.match(dashboard, /useCrmMetrics\(visibleCrmFilters\(filters, DASHBOARD_FILTERS\)\)/);
+  assert.match(dashboard, /show=\{DASHBOARD_FILTERS\}/);
+  assert.doesNotMatch(dashboard.match(/const DASHBOARD_FILTERS = \[[^\]]*\]/)[0], /search|request|silence|archived/);
+  assert.match(followUps, /useCrmFollowUps\(visibleCrmFilters\(filters, \['ownerId', 'priority', 'origin'\]\)\)/);
+  assert.match(bar, /const shown = visibleCrmFilters\(filters, show\)/);
+  assert.match(bar, /Object\.entries\(shown\)[\s\S]*Object\.entries\(shown\)/);
+});

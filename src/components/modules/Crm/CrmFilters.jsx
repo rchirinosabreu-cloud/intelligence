@@ -15,6 +15,16 @@ const Field = ({ label, children, className }) => (
 
 const selectClass = 'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100';
 
+// Cada vista del CRM solo aplica y cuenta los filtros que muestra. Los filtros se comparten entre pestañas, y uno
+// puesto en Oportunidades (la búsqueda, «Formulario», «Sin respuesta») seguía filtrando el Dashboard sin verse:
+// a Francys le decía «1 filtro activo» con todo en «Todos» y le escondía las solicitudes nuevas (Rodny, 24 de
+// noviembre de 2026: «¿por qué a Francys no le aparece esto?»).
+const FILTER_KEYS = { dates: ['from', 'to'] };
+export const visibleCrmFilters = (filters = {}, show = []) => {
+  const keys = new Set(show.flatMap(key => FILTER_KEYS[key] || [key]));
+  return Object.fromEntries(Object.entries(filters).filter(([key]) => keys.has(key)));
+};
+
 /**
  * Shared filter bar for the dashboard, the list and the follow-ups.
  * `show` limits which controls render; the same `filters` object feeds every CRM query.
@@ -24,8 +34,9 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
   const set = (key, value) => onChange({ ...filters, [key]: value });
   const has = key => show.includes(key);
   // «Ver archivadas» es un botón de la lista, no un filtro de esta barra (Rodny, 4 de noviembre de 2026): no se cuenta aquí.
-  const active = Object.entries(filters).filter(([key, value]) => key !== 'archived' && value && value.trim() !== '').length;
-  const hidden = Object.entries(filters).filter(([key, value]) => key !== 'search' && key !== 'archived' && value && value.trim() !== '').length;
+  const shown = visibleCrmFilters(filters, show);
+  const active = Object.entries(shown).filter(([key, value]) => key !== 'archived' && value && value.trim() !== '').length;
+  const hidden = Object.entries(shown).filter(([key, value]) => key !== 'search' && key !== 'archived' && value && value.trim() !== '').length;
 
   return (
     <div className={cn('rounded-2xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40 sm:p-4', className)}>
@@ -140,7 +151,7 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
       {active > 0 && (
         <div className="mt-3 flex items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400">
           <span>{active} {active === 1 ? 'filtro activo' : 'filtros activos'}</span>
-          <button type="button" onClick={() => onChange({ ...defaultCrmFilters(), archived: filters.archived || '' })} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-semibold text-zinc-600 transition-colors hover:bg-zinc-200/60 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white">
+          <button type="button" onClick={() => onChange({ ...filters, ...visibleCrmFilters(defaultCrmFilters(), show), archived: filters.archived || '' })} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-semibold text-zinc-600 transition-colors hover:bg-zinc-200/60 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white">
             <X className="h-3.5 w-3.5" /> Limpiar
           </button>
         </div>
