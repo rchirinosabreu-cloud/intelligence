@@ -49,7 +49,11 @@ export const createLinkedInClient = ({
   const clientId = () => String(env.LINKEDIN_CLIENT_ID || '').trim();
   const clientSecret = () => String(env.LINKEDIN_CLIENT_SECRET || '').trim();
   const version = () => String(env.LINKEDIN_API_VERSION || LINKEDIN_DEFAULT_VERSION).trim();
-  const redirectUri = () => String(env.LINKEDIN_OAUTH_REDIRECT_URI || `${env.APP_URL || 'http://localhost:3000'}/linkedin/callback`).trim();
+  // A dónde devuelve LinkedIn a la persona. Sale de la dirección desde la que se usa la plataforma (`origin`,
+  // que las rutas ya validaron contra los orígenes permitidos): así vale para cada agencia sin configurar
+  // nada. La primera prueba real (24 de noviembre de 2026) mandó `localhost` porque dependía de `APP_URL`,
+  // que producción no define.
+  const redirectUri = (origin) => String(env.LINKEDIN_OAUTH_REDIRECT_URI || `${String(origin || env.APP_URL || 'http://localhost:3000').replace(/\/$/, '')}/linkedin/callback`).trim();
   const isConfigured = () => Boolean(clientId() && clientSecret());
 
   const parse = async (response) => {
@@ -85,8 +89,8 @@ export const createLinkedInClient = ({
     signal: AbortSignal.timeout(timeoutMs)
   }));
 
-  const authorizationUrl = ({ state }) => {
-    const params = new URLSearchParams({ response_type: 'code', client_id: clientId(), redirect_uri: redirectUri(), state, scope: LINKEDIN_SCOPES.join(' ') });
+  const authorizationUrl = ({ state, redirectUri: target = redirectUri() }) => {
+    const params = new URLSearchParams({ response_type: 'code', client_id: clientId(), redirect_uri: target, state, scope: LINKEDIN_SCOPES.join(' ') });
     return `${authOrigin}/oauth/v2/authorization?${params.toString()}`;
   };
 
@@ -108,7 +112,8 @@ export const createLinkedInClient = ({
     };
   };
 
-  const exchangeCode = (code) => tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: redirectUri() });
+  // LinkedIn exige aquí la misma dirección de regreso que se le dio al salir.
+  const exchangeCode = (code, { redirectUri: target = redirectUri() } = {}) => tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: target });
   const refreshAccessToken = (refreshToken) => tokenRequest({ grant_type: 'refresh_token', refresh_token: refreshToken });
 
   /** Las páginas de empresa donde quien autorizó puede publicar, con su nombre. */
