@@ -539,14 +539,37 @@ export const refreshExternalPlanBySlug = async (db = prisma, slug, options = {})
     return refreshClientExternalPlan(db, client, options);
 };
 
+/**
+ * Lo que dejó una lectura, en una línea para el registro: una lectura buena no dejaba rastro y no había cómo saber, sin
+ * entrar a la base, si la plataforma estaba al día con la hoja (25 de noviembre de 2026). `sinLeer` son los meses que
+ * Google no dejó leer; `sinPestana`, los que la hoja todavía no tiene.
+ */
+export const sheetReadReport = (client, results = [], now = new Date()) => {
+    const label = ({ year, month }) => `${year}-${String(month).padStart(2, '0')}`;
+    return {
+        cliente: client.name,
+        leida: now.toISOString(),
+        alDia: results.length > 0 && results.every((result) => result.ok),
+        meses: results.filter((result) => result.ok && result.tabName).map((result) => ({
+            mes: label(result), pestana: result.tabName, piezas: result.summary?.created ?? 0,
+            publicadas: result.summary?.reached?.publicada ?? 0, ...(result.problem ? { aviso: result.problem } : {})
+        })),
+        sinPestana: results.filter((result) => result.ok && !result.tabName).map(label),
+        sinLeer: results.filter((result) => !result.ok).map((result) => ({ mes: label(result), problema: result.problem }))
+    };
+};
+
 /** Lee las hojas de todos los clientes que tienen una. Un cliente que falla no frena a los demás. */
 export const refreshAllExternalPlans = async (db = prisma, options = {}) => {
     const clients = await db.client.findMany({ where: { isArchived: false, externalPlanUrl: { not: null } }, select: { id: true, name: true, externalPlanUrl: true } });
     let read = 0;
+    const say = options.report || console.log;
+    const via = await sourceFor(options).then((reader) => (reader.kind === 'google' ? 'cuenta de Google' : 'enlace público')).catch(() => 'sin conexión');
     for (const client of clients) {
         try {
-            await refreshClientExternalPlan(db, client, options);
+            const results = await refreshClientExternalPlan(db, client, options);
             read += 1;
+            say(`[Hojas MIO] ${JSON.stringify({ ...sheetReadReport(client, results, options.now || new Date()), conexion: via })}`);
         } catch (error) {
             (options.log || console.error)(`[Parrillas MIO] ${client.name}:`, error?.message || error);
         }

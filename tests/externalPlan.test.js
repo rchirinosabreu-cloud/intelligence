@@ -8,7 +8,7 @@ import {
 import { pieceStage } from '../src/lib/clientOperations.js';
 import { normalizeOperationProfile } from '../src/lib/clientOperations.js';
 import {
-    ExternalPlanError, monthsToRead, readExternalPlan, refreshClientExternalPlan, replyToExternalComment, updateExternalPieceStatus
+    ExternalPlanError, monthsToRead, readExternalPlan, refreshClientExternalPlan, replyToExternalComment, sheetReadReport, updateExternalPieceStatus
 } from '../src/services/externalPlanService.js';
 
 test('se leen los tres meses anteriores, el mes en curso y el siguiente: el semáforo juzga el mes que acaba de cerrar', () => {
@@ -339,4 +339,17 @@ test('responder un comentario de Google lo firma con el nombre de quien escribe 
     assert.equal(comment.replies.at(-1).mine, true, 'la respuesta propia no se avisa como cambio en la próxima lectura');
     await assert.rejects(replyToExternalComment(db, { slug: 'villa-montana', year: 2026, month: 11, commentId: 'g1', content: '   ' }, { source }), { status: 422 });
     await assert.rejects(replyToExternalComment(db, { slug: 'villa-montana', year: 2026, month: 11, commentId: 'nope', content: 'Hola' }, { source }), { status: 404 });
+});
+
+test('cada lectura deja en el registro qué leyó de la hoja, qué mes no tiene pestaña y qué no pudo leer', () => {
+    const report = sheetReadReport({ name: 'Mari Colon' }, [
+        { year: 2026, month: 11, ok: true, tabName: 'NOVIEMBRE 2026', summary: { created: 24, reached: { publicada: 11 } }, problem: null },
+        { year: 2026, month: 12, ok: true, tabName: null, summary: { created: 0, reached: {} }, problem: 'La hoja no tiene una pestaña de diciembre.' },
+        { year: 2026, month: 10, ok: false, problem: 'No pudimos conectarnos con Google.' }
+    ], new Date('2026-11-25T14:00:00Z'));
+    assert.deepEqual(report.meses, [{ mes: '2026-11', pestana: 'NOVIEMBRE 2026', piezas: 24, publicadas: 11 }]);
+    assert.deepEqual(report.sinPestana, ['2026-12']);
+    assert.deepEqual(report.sinLeer, [{ mes: '2026-10', problema: 'No pudimos conectarnos con Google.' }]);
+    assert.equal(report.alDia, false);
+    assert.equal(report.leida, '2026-11-25T14:00:00.000Z');
 });
