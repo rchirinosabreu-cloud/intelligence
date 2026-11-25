@@ -87,3 +87,14 @@ test('client cards in the parrillas listing start closed and open from their hea
   assert.match(grids, /\{expanded && <ul/);
   assert.doesNotMatch(grids, /RECENT_PLANS|Ver menos/);
 });
+
+test('en el enlace del cliente la pieza va arriba y se queda fija mientras se lee el texto', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/components/public/SharedContentPlan.jsx', import.meta.url), 'utf8');
+  // Centrada, con un guion largo quedaba a media altura y el reel asomaba abajo (Rodny, 23 de noviembre de 2026).
+  assert.match(source, /flex items-start justify-center[^"]*lg:col-span-7/);
+  assert.match(source, /lg:sticky lg:top-28" data-piece-media/);
+  // `overflow-hidden` en la tarjeta anula `sticky`; `overflow-clip` recorta las esquinas sin anularlo.
+  assert.match(source, /<article className="overflow-clip /);
+  assert.match(source, /lg:max-h-\[min\(620px,calc\(100vh-11rem\)\)\]/);
+});
