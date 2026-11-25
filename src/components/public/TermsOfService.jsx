@@ -71,7 +71,7 @@ const TermsOfService = () => (
 
       <H2>8. Servicios de terceros</H2>
       <p>
-        La plataforma se integra con servicios de terceros (por ejemplo Meta, Google, Fireflies y OpenAI). Su disponibilidad y la exactitud de los datos que entregan dependen de esos proveedores. Brainstudio no responde por fallas, cambios o demoras atribuibles a ellos, sin perjuicio de actuar con diligencia para mitigarlas.
+        La plataforma se integra con servicios de terceros (por ejemplo Meta, LinkedIn, Google, Fireflies y OpenAI). Su disponibilidad y la exactitud de los datos que entregan dependen de esos proveedores. Brainstudio no responde por fallas, cambios o demoras atribuibles a ellos, sin perjuicio de actuar con diligencia para mitigarlas.
       </p>
 
       <H2>9. Disponibilidad y responsabilidad</H2>

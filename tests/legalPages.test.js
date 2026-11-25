@@ -30,7 +30,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.26 · 2026-11-21$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.27 · 2026-11-25$/);
     // 21 de noviembre de 2026: la respuesta rápida de Bria en voz nombra a Anthropic como encargado.
     assert.match(page, /Anthropic, PBC/); assert.match(page, /primera respuesta rápida puede venir de un modelo de Anthropic/);
     // 20 de noviembre de 2026: el borrador listo de un correo importante y el aviso de los que siguen sin respuesta.
@@ -127,4 +127,27 @@ test('las páginas legales compilan y se enlazan entre sí', async () => {
     const security = await read('src/components/public/AiGovernancePolicy.jsx');
     assert.match(security, /15 días hábiles/);
     assert.match(security, /verificación en dos pasos/);
+});
+
+test('la dirección principal presenta el producto debajo del inicio de sesión y la política nombra a LinkedIn', async () => {
+    // Rodny, 25 de noviembre de 2026: quien revisa la plataforma desde fuera (las redes que aprueban la publicación,
+    // una agencia interesada) solo veía el inicio de sesión. La presentación va debajo; el inicio no se mueve.
+    const [login, overview, privacy, terms] = await Promise.all([
+        read('src/components/Login.jsx'), read('src/components/public/ProductOverview.jsx'),
+        read('src/components/public/PrivacyPolicy.jsx'), read('src/components/public/TermsOfService.jsx')
+    ]);
+    assert.match(login, /<ProductOverview \/>/);
+    assert.match(login, /href="#producto"/);
+    assert.ok(login.indexOf('<ProductOverview />') > login.indexOf('</main>'), 'La presentación va después del inicio de sesión');
+    assert.match(overview, /id="producto"/);
+    for (const expected of ['to="/privacidad"', 'to="/terminos"', 'E.email', 'E.nit', 'InstagramLogo', 'FacebookLogo', 'LinkedinLogo', 'nunca pide ni guarda la contraseña de la red']) {
+        assert.ok(overview.includes(expected), `Falta en la presentación: ${expected}`);
+    }
+    // Solo se anuncia una red cuando ya publica.
+    assert.doesNotMatch(overview, /TikTok/);
+    assert.match(privacy, /LinkedIn Corporation/);
+    assert.match(privacy, /id="linkedin">12\. Datos de LinkedIn/);
+    assert.match(privacy, /No se leen mensajes, contactos, comentarios ni datos de personas individuales/);
+    assert.match(terms, /Meta, LinkedIn, Google/);
+    await transformWithEsbuild(overview, 'ProductOverview.jsx', { loader: 'jsx', jsx: 'automatic' });
 });
