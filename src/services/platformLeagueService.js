@@ -117,10 +117,11 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const opener = firstTrace === undefined ? undefined : firstTrace && new Date(firstTrace.occurredAt) >= startedAt ? (() => { const member = memberOfUser.get(firstTrace.actorId); return member ? { memberId: member.id, name: firstName(member.name), at: firstTrace.occurredAt } : null; })() : null;
       const closedIds = closed.map((task) => task.id);
       const [states, taskSessions] = closedIds.length ? await Promise.all([
-        db.recognitionTaskState.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, originalDueDate: true } }),
+        db.recognitionTaskState.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, originalDueDate: true, firstCompletedAt: true } }),
         db.taskWorkSession.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } })
       ]) : [[], []];
       const originalDue = new Map(states.map((row) => [row.taskId, row.originalDueDate]));
+      const firstClosed = new Map(states.map((row) => [row.taskId, row.firstCompletedAt]));
       const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, snapshotOverdueCount(person.metrics, dayKey)]));
       const byMember = new Map(members.map((member) => [member.id, { memberId: member.id, closedTasks: [], createdTasks: [], sessions: [], overdueAtDawn: overdueAtDawn.get(member.id) ?? null,
         dawnEvidenceReason: overdueAtDawn.has(member.id) && overdueAtDawn.get(member.id) === null ? 'La foto de la mañana no permite comprobar las fechas de entrega. Este hábito queda sin evaluar.' : null,
@@ -147,7 +148,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const mine = taskSessions.filter((session) => session.taskId === task.id && session.workerId === task.assigneeId);
         const measuredMs = mine.filter((session) => session.closeReason !== 'DECLARED').reduce((sum, session) => sum + Number(session.durationMs || 0), 0);
         const declared = mine.some((session) => session.closeReason === 'DECLARED');
-        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, measuredMs, declared,
+        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, firstCompletedAt: firstClosed.get(task.id) || null, measuredMs, declared,
           production: isProductionWork({ title: task.title, aiCategory: task.aiCategory }) || bucket.productionDays.length > 0 });
       }
       for (const session of daySessions) {

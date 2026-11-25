@@ -188,13 +188,16 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     evidence.AL_DIA = Number(overdueAtDawn) === 0 ? 'Amaneció sin vencidas.' : `Amaneció con ${plural(Number(overdueAtDawn), 'vencida', 'vencidas')}.`;
   }
 
-  // A tiempo: cada cierre del día contra la fecha con la que nació.
-  const dated = closedTasks.map((task) => ({ task, due: dueDayOf(task) })).filter((row) => row.due);
+  // A tiempo: cada cierre del día contra la fecha con la que nació. Una tarea que se había entregado otro día y volvió
+  // (una pieza con ajustes, por ejemplo) se juzga por su primera entrega: si fue a tiempo, sigue a tiempo; si fue tarde,
+  // ya pagó ese día y no vuelve a contar (Rodny, 25 de noviembre de 2026: «estoy entregando a tiempo y mira», 4 de 9).
+  const firstDayOf = (task) => { const first = bogotaDayOf(task.firstCompletedAt), closed = bogotaDayOf(task.completedAt); return first && closed && first < closed ? first : null; };
+  const dated = closedTasks.map((task) => ({ task, due: dueDayOf(task), first: firstDayOf(task) })).filter((row) => row.due && !(row.first && row.first > row.due));
   if (!dated.length) {
     habits.A_TIEMPO = null;
     evidence.A_TIEMPO = closedTasks.length ? 'Lo cerrado no tenía fecha.' : 'Sin cierres ese día.';
   } else {
-    const onTime = dated.filter((row) => { const closedDay = bogotaDayOf(row.task.completedAt); return closedDay && closedDay <= row.due; });
+    const onTime = dated.filter((row) => { const closedDay = row.first || bogotaDayOf(row.task.completedAt); return closedDay && closedDay <= row.due; });
     habits.A_TIEMPO = onTime.length === dated.length;
     units.A_TIEMPO = { ok: onTime.length, total: dated.length };
     evidence.A_TIEMPO = `${onTime.length} de ${dated.length} a tiempo.`;

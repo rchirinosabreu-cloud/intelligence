@@ -57,8 +57,10 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   const { task, state } = before;
   const userId = task.assignee?.isActive ? task.assignee.userId : null;
   const user = userId ? await tx.user.findUnique({ where: { id: userId }, select: { isActive: true } }) : null;
-  const first = after?.status === 'REALIZADA' && task.status !== 'REALIZADA' && !state.firstCompletedAt;
-  const eligible = first && after.assigneeId === task.assigneeId && user?.isActive;
+  const closing = after?.status === 'REALIZADA' && task.status !== 'REALIZADA';
+  const first = closing && !state.firstCompletedAt;
+  const sameOwner = closing && after.assigneeId === task.assigneeId && Boolean(user?.isActive);
+  const eligible = first && sameOwner;
   // Record the first completion even without an eligible recipient: later assignment cannot invent a completion.
   if (first) {
     const { day, week } = recognitionCalendar(at);
@@ -66,13 +68,24 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   } else if (!state.originalDueDate && after?.dueDate) {
     await tx.recognitionTaskState.update({ where: { taskId: task.id }, data: { originalDueDate: after.dueDate } });
   }
-  if (!eligible) return;
   const { day, week } = recognitionCalendar(at);
+  // Una tarea reabierta y vuelta a cerrar en un día distinto al de su primer cierre cuenta para «On fire» de ese día,
+  // una vez por día (Rodny, 25 de noviembre de 2026: Melissa cerró nueve y cuatro eran piezas de producción que
+  // volvieron con ajustes; la cuenta se quedó en cinco). Solo para «On fire»: lo demás sigue mirando el primer cierre.
+  const reclosed = closing && !first && sameOwner && Boolean(state.dayKey) && state.dayKey !== day;
+  if (!eligible && !reclosed) return;
+  const doneToday = await tx.task.findMany({ where: { assigneeId: task.assigneeId, status: 'REALIZADA', completedAt: { gte: new Date(`${day}T05:00:00.000Z`) } }, select: { id: true } });
+  const reclosedToday = await tx.recognitionTaskState.count({ where: { taskId: { in: [...new Set([...doneToday.map(item => item.id), ...(reclosed ? [task.id] : [])])] }, firstCompletedAt: { not: null }, dayKey: { not: day } } });
+  if (reclosed) {
+    const userDayCount = reclosedToday + await tx.recognitionTaskState.count({ where: { recipientId: userId, dayKey: day } });
+    if (userDayCount === 8) await insertAward(tx, { kind: 'DAILY_EIGHT', recipientId: userId, taskId: task.id, at, evidence: { userDayCount, reclosedToday, completedDay: day } });
+    return;
+  }
   // El equipo empieza a contar a las 8:00: antes de esa hora nadie compite por «Buen comienzo» (`dayStartCutoff`).
   const morning = dayStartCutoff(day);
   const [teamDayCount, userDayCount, userWeekCount] = await Promise.all([
     new Date(at) < morning ? 0 : tx.recognitionTaskState.count({ where: { dayKey: day, firstCompletedAt: { gte: morning } } }),
-    tx.recognitionTaskState.count({ where: { recipientId: userId, dayKey: day } }),
+    tx.recognitionTaskState.count({ where: { recipientId: userId, dayKey: day } }).then(count => count + reclosedToday),
     tx.recognitionTaskState.count({ where: { recipientId: userId, weekKey: week } }),
   ]);
   const originalDue = recognitionDueDay(state.originalDueDate);
@@ -80,7 +93,7 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   const early = Boolean(originalDue && currentDue && day < originalDue && day < currentDue);
   for (const kind of taskAwardKinds({ teamDayCount, userDayCount, userWeekCount, early })) {
     await insertAward(tx, { kind, recipientId: userId, taskId: task.id, at,
-      evidence: { teamDayCount, userDayCount, userWeekCount, originalDue, completedDay: day } });
+      evidence: { teamDayCount, userDayCount, userWeekCount, reclosedToday, originalDue, completedDay: day } });
   }
 }
 

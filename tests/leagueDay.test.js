@@ -235,3 +235,14 @@ test('Elisa’s good day: her area sources play Al día, A tiempo and Sin devolu
   assert.equal(day.evidence.ESFUERZO, '6 registros en Financiero, 3 con soporte.');
   assert.equal(day.evidence.SIN_DEVOLUCION, 'Financiero: Ningún registro anulado por otra persona.');
 });
+
+test('a task delivered another day that comes back is judged by its first delivery: on time stays on time, late does not count twice', () => {
+  const back = task({ id: 'back', completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-01T12:00:00.000Z', firstCompletedAt: '2026-11-01T15:00:00.000Z' });
+  const lateBefore = task({ id: 'late', completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-10-28T12:00:00.000Z', firstCompletedAt: '2026-10-30T15:00:00.000Z' });
+  const fresh = task({ id: 'fresh' });
+  const result = evaluateLeagueDay({ day: DAY, closedTasks: [back, lateBefore, fresh], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
+  assert.equal(result.habits.A_TIEMPO, true);
+  assert.match(result.evidence.A_TIEMPO, /2 de 2 a tiempo/);
+  const sameDay = task({ completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-01T12:00:00.000Z', firstCompletedAt: `${DAY}T14:00:00.000Z` });
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [sameDay], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.A_TIEMPO, false, 'reclosing the same day changes nothing');
+});
