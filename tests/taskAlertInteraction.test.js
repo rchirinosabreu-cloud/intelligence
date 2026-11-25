@@ -76,6 +76,7 @@ test('only a newly persisted award creates a recognition history entry in the sa
   const traces = [];
   const tx = {
     user: { findUnique: async () => ({ isActive: true }) },
+    task: { findMany: async () => [] },
     recognitionTaskState: { update: async () => {}, count: async () => 1 },
     recognitionDebtState: { findUnique: async () => null },
     recognitionAward: { createMany: async () => { const count = inserted ? 0 : 1; inserted = true; return { count }; } },
