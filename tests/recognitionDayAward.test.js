@@ -35,3 +35,49 @@ test('«Al día» se muestra en la última tarea que la persona cerró ese día 
   assert.equal(calls[1].kind, 'CAUGHT_UP');
   assert.deepEqual(calls[1].dayKey.in, ['2026-11-23']);
 });
+
+// Rodny, 25 de noviembre de 2026: una pieza que vuelve con ajustes y se cierra otro día es trabajo de ese día.
+const onFireTx = ({ firstToday, reclosedBefore, state }) => {
+  const created = [];
+  return { created, tx: {
+    user: { findUnique: async () => ({ isActive: true }) },
+    task: { findMany: async () => reclosedBefore.map(id => ({ id })) },
+    recognitionTaskState: {
+      update: async () => ({}),
+      count: async ({ where }) => {
+        if (where.taskId) return where.taskId.in.length;
+        if (where.weekKey) return 20;
+        if (where.recipientId) return firstToday;
+        return 5;
+      },
+    },
+    recognitionAward: { createMany: async ({ data }) => { created.push(...data); return { count: data.length }; }, findMany: async () => [] },
+    operationalTraceEvent: { create: async () => ({}) },
+  }, before: { task: { id: 't-now', status: 'EN_CURSO', assigneeId: 'm1', assignee: { id: 'm1', userId: 'u1', isActive: true } }, state } };
+};
+const closedNow = { id: 't-now', status: 'REALIZADA', assigneeId: 'm1', dueDate: null };
+const at = new Date('2026-11-25T21:00:00Z');
+
+test('«On fire» cuenta una tarea reabierta y vuelta a cerrar en un día distinto al de su primer cierre', async () => {
+  const { finishTaskRecognition } = await import('../src/services/recognitionService.js');
+  const run = onFireTx({ firstToday: 5, reclosedBefore: ['a', 'b'], state: { taskId: 't-now', firstCompletedAt: new Date('2026-11-20T15:00:00Z'), dayKey: '2026-11-20', originalDueDate: null } });
+  await finishTaskRecognition(run.tx, run.before, closedNow, at);
+  assert.deepEqual(run.created.map(item => [item.kind, item.taskId, item.dedupeKey]), [['DAILY_EIGHT', 't-now', 'v1:DAILY_EIGHT:u1:2026-11-25']]);
+});
+
+test('recerrar el mismo día del primer cierre no suma, y un recierre solo puede dar «On fire»', async () => {
+  const { finishTaskRecognition } = await import('../src/services/recognitionService.js');
+  const sameDay = onFireTx({ firstToday: 8, reclosedBefore: [], state: { taskId: 't-now', firstCompletedAt: new Date('2026-11-25T15:00:00Z'), dayKey: '2026-11-25', originalDueDate: null } });
+  await finishTaskRecognition(sameDay.tx, sameDay.before, closedNow, at);
+  assert.equal(sameDay.created.length, 0);
+  const notEight = onFireTx({ firstToday: 3, reclosedBefore: [], state: { taskId: 't-now', firstCompletedAt: new Date('2026-11-20T15:00:00Z'), dayKey: '2026-11-20', originalDueDate: null } });
+  await finishTaskRecognition(notEight.tx, notEight.before, closedNow, at);
+  assert.equal(notEight.created.length, 0);
+});
+
+test('un primer cierre también suma los recierres del día para llegar a ocho', async () => {
+  const { finishTaskRecognition } = await import('../src/services/recognitionService.js');
+  const run = onFireTx({ firstToday: 5, reclosedBefore: ['a', 'b', 'c'], state: { taskId: 't-now', firstCompletedAt: null, dayKey: null, originalDueDate: null } });
+  await finishTaskRecognition(run.tx, run.before, closedNow, at);
+  assert.deepEqual(run.created.map(item => item.kind), ['DAILY_EIGHT']);
+});

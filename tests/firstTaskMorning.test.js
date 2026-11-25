@@ -10,6 +10,8 @@ function fakeTx(states) {
   return {
     awards,
     user: { findUnique: async () => ({ isActive: true }) },
+    // Nadie recerró tareas de otros días en estos casos (cuenta para «On fire» desde el 25 de noviembre de 2026).
+    task: { findMany: async () => [] },
     recognitionTaskState: {
       update: async ({ where, data }) => { states.set(where.taskId, { ...states.get(where.taskId), ...data }); },
       count: async ({ where }) => [...states.values()].filter(s => s.dayKey === where.dayKey
