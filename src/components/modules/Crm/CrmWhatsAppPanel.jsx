@@ -101,8 +101,8 @@ const BriaStatus = ({ leadId, contact, available }) => {
     // que sigue en «Devolver a Bria» no parezca que no hizo nada.
     onSuccess: result => {
       if (!active) return toast.success('Tomaste la conversación: Bria ya no responde.');
-      if (result?.agent?.handoff) return toast.success('Bria respondió y te volvió a pasar la conversación: mira el motivo arriba del chat.');
-      return toast.success(result?.agent?.replied ? 'Bria respondió y sigue atendiendo esta conversación.' : 'Bria vuelve a atender esta conversación.');
+      if (result?.agent?.handoff) return toast.success('Bria respondió y te volvió a pasar la conversación.');
+      return toast.success(result?.agent?.replied ? 'Bria respondió y sigue atendiendo.' : 'Bria vuelve a atender esta conversación.');
     },
     onError: failure => toast.error(failure.message)
   });
