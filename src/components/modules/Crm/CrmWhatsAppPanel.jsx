@@ -97,14 +97,22 @@ const BriaStatus = ({ leadId, contact, available }) => {
   if (!available || !contact || contact.authorizationPending) return null;
   const briaOn = !contact.botPausedAt;
   const change = active => toggle.mutate({ id: leadId, active }, {
-    onSuccess: () => toast.success(active ? 'Bria vuelve a atender esta conversación.' : 'Tomaste la conversación: Bria ya no responde.'),
+    // Al devolverla, Bria responde lo pendiente; si con eso vuelve a pasarla al equipo, se dice, para que el botón
+    // que sigue en «Devolver a Bria» no parezca que no hizo nada.
+    onSuccess: result => {
+      if (!active) return toast.success('Tomaste la conversación: Bria ya no responde.');
+      if (result?.agent?.handoff) return toast.success('Bria respondió y te volvió a pasar la conversación.');
+      return toast.success(result?.agent?.replied ? 'Bria respondió y sigue atendiendo.' : 'Bria vuelve a atender esta conversación.');
+    },
     onError: failure => toast.error(failure.message)
   });
   return (
     <div className="mb-3 flex flex-col gap-2 rounded-xl border border-zinc-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800" data-wa-bria={briaOn ? 'on' : 'off'}>
       <p className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
         <Sparkles className={cn('mt-0.5 h-4 w-4 shrink-0', briaOn ? 'text-brand-cyan-deep dark:text-brand-cyan' : 'text-zinc-400')} />
-        {briaOn ? 'Bria está atendiendo esta conversación.' : (contact.botPausedReason || 'La atiende el equipo.')}
+        <span>
+          {briaOn ? 'Bria está atendiendo esta conversación.' : <><span className="font-semibold">La atiende el equipo.</span>{contact.botPausedReason ? ` ${contact.botPausedReason}` : ''}</>}
+        </span>
       </p>
       <Button type="button" variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" disabled={toggle.isPending} onClick={() => change(!briaOn)}>
         {toggle.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {briaOn ? 'Tomar conversación' : 'Devolver a Bria'}
