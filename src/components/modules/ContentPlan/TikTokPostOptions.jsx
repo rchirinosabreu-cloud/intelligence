@@ -31,7 +31,7 @@ const CHECK = 'h-4 w-4 shrink-0 accent-brand-cyan disabled:cursor-not-allowed';
 const LINK = 'font-medium text-brand-cyan-deep underline underline-offset-2 dark:text-brand-cyan';
 
 const Toggle = ({ label, checked, disabled, hint, onChange, ...rest }) => (
-  <label className={`inline-flex min-h-9 items-center gap-2 text-[13px] ${disabled ? 'cursor-not-allowed text-zinc-400 dark:text-zinc-500' : 'cursor-pointer text-zinc-700 dark:text-zinc-200'}`} title={hint || undefined}>
+  <label className={`inline-flex min-h-9 items-center gap-2 text-sm ${disabled ? 'cursor-not-allowed text-zinc-400 dark:text-zinc-500' : 'cursor-pointer text-zinc-700 dark:text-zinc-200'}`} title={hint || undefined}>
     <input type="checkbox" checked={checked && !disabled} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className={CHECK} {...rest} />
     <span>{label}{disabled && hint ? <span className="text-zinc-400 dark:text-zinc-500"> · {hint}</span> : null}</span>
   </label>
