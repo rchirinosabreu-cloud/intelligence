@@ -103,14 +103,22 @@ export function workRecordFromTrace(event = {}) {
  * `areaChecks`: los chequeos de su área por hábito (`leagueAreaChecks.js`), que se suman a lo que dieron las tareas.
  * `areas`: las áreas de la persona en Equipo (`memberAreas`), para las reglas que cambian por área.
  */
+/** Marca en `extras` cuántas tareas de «Publicar» sumaron al esfuerzo del día: también dice que el día ya las cuenta. */
+export const PUBLICATION_EFFORT_KEY = 'PUBLICAR';
+/** El texto de las tareas en el esfuerzo del día: «7 tareas cerradas (2 de publicar)». */
+export const effortTaskText = (closed, published) => (closed
+  ? `${plural(closed, 'tarea cerrada', 'tareas cerradas')}${published ? ` (${plural(published, 'de publicar', 'de publicar')})` : ''}`
+  : null);
+
 export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, dawnEvidenceReason = null, returnedToday = null, firstOpener, workRecords = [], presence = false, productionDays = [], areaChecks = null, closeState = null, areas = [] } = {}) {
   const habits = {}, evidence = {}, extras = {};
   // La parte cumplida de cada hábito, en unidades: `{ ok, total }`. Sirve para pagar la parte de un hábito perdido.
   const units = {};
 
   // Reglas de Rodny (18 de noviembre de 2026):
-  // · Las tareas de «Publicar» no cuentan ni para Reloj ni para Esfuerzo: las cierra la cola de Meta, casi sola.
-  // · Esfuerzo: cada otra tarea cerrada suma un punto, tenga o no reloj.
+  // · Las tareas de «Publicar» no cuentan para Reloj: las cierra la cola de Meta, casi sola, sin cronómetro.
+  // · Esfuerzo: cada tarea cerrada suma un punto, tenga o no reloj. Desde el 26 de noviembre de 2026 las de «Publicar»
+  //   también (Rodny: «necesito que las tareas de publicar sí cuenten, y actualizar entonces los puntos»); antes no sumaban.
   // · Reloj mira solo las tareas en que se usó el reloj: una que pasó directo a realizado no aplica. Con reloj,
   //   cuenta si llegó a diez minutos medidos. Una jornada de producción vale con su tiempo declarado: en campo no hay cronómetro.
   const counted = closedTasks.filter((task) => !isPublicationTask(task.title || ''));
@@ -119,13 +127,11 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   // —registros de Financiero, gestiones del CRM, jornadas con evidencia—, con el mismo tope del día.
   const areaEffort = (areaChecks?.effort || []).filter((row) => Number(row?.units) > 0);
   const areaUnits = areaEffort.reduce((sum, row) => sum + Number(row.units), 0);
-  extras[EFFORT_KEY] = counted.length + areaUnits;
-  const taskEffort = counted.length
-    ? `${plural(counted.length, 'tarea cerrada', 'tareas cerradas')}${published ? ` (sin contar ${plural(published, 'de publicar', 'de publicar')})` : ''}`
-    : null;
-  evidence[EFFORT_KEY] = taskEffort || areaUnits
-    ? `${[taskEffort, ...areaEffort.map((row) => row.text)].filter(Boolean).join(' · ')}.`
-    : published ? 'Solo cerraste tareas de publicar, que no suman.' : 'Ninguna tarea cerrada.';
+  extras[EFFORT_KEY] = closedTasks.length + areaUnits;
+  extras[PUBLICATION_EFFORT_KEY] = published;
+  evidence[EFFORT_KEY] = closedTasks.length || areaUnits
+    ? `${[effortTaskText(closedTasks.length, published), ...areaEffort.map((row) => row.text)].filter(Boolean).join(' · ')}.`
+    : 'Ninguna tarea cerrada.';
   const measuredOf = (task) => Number(task.measuredMs || 0);
   const kindOf = (task) => {
     if (task.production) return task.declared || measuredOf(task) >= MIN_MEASURED_MS ? 'ok' : 'directo';
@@ -315,4 +321,29 @@ export function isoWeekRange(dayKey) {
 /** La semana anterior a la de un día. */
 export function previousWeekRange(dayKey) {
   return isoWeekRange(shiftDay(isoWeekRange(dayKey).from, -7));
+}
+
+/**
+ * Los días guardados antes del 26 de noviembre de 2026 no sumaban las tareas de «Publicar» al esfuerzo. Esto las suma
+ * a un día ya guardado, sin recalcular nada más del día (los hábitos se juzgaron a su hora y así se quedan). Cuántas
+ * eran se lee de lo que el día guardó: el texto «(sin contar N de publicar)» o, si solo hubo de esas, la lista del
+ * reloj. Devuelve `null` si el día ya las cuenta o no tuvo ninguna, así que repetirlo no cambia nada.
+ */
+export function withPublicationEffort(row) {
+  const extras = row?.extras || {};
+  if (extras[PUBLICATION_EFFORT_KEY] !== undefined) return null;
+  const text = String(row?.evidence?.[EFFORT_KEY] || '');
+  const skipped = text.match(/\(sin contar (\d+) de publicar\)/);
+  const listed = (extras[RELOJ_LIST_KEY] || []).filter((item) => item?.kind === 'publicar').length;
+  const published = skipped ? Number(skipped[1]) : /^Solo cerraste tareas de publicar/.test(text) ? listed : 0;
+  const nextExtras = { ...extras, [PUBLICATION_EFFORT_KEY]: published };
+  if (!published) return { extras: nextExtras, evidence: row?.evidence || {} };
+  const before = Number(extras[EFFORT_KEY]) || 0;
+  const counted = text.match(/^(\d+) tareas? cerradas?/);
+  const closed = (counted ? Number(counted[1]) : 0) + published;
+  const rest = counted ? text.replace(/^\d+ tareas? cerradas?(?: \(sin contar \d+ de publicar\))?/, '') : text.replace(/^Solo cerraste tareas de publicar, que no suman\./, '.');
+  return {
+    extras: { ...nextExtras, [EFFORT_KEY]: before + published },
+    evidence: { ...(row?.evidence || {}), [EFFORT_KEY]: `${effortTaskText(closed, published)}${rest || '.'}` },
+  };
 }

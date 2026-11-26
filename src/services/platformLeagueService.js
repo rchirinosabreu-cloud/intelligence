@@ -9,7 +9,7 @@
 import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
-import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace } from '../lib/leagueDay.js';
+import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace, withPublicationEffort } from '../lib/leagueDay.js';
 import { CAMERA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
@@ -55,6 +55,8 @@ const firstName = (name = '') => String(name).trim().split(/\s+/)[0] || name;
 export const createPlatformLeagueService = ({ db = prisma, repository, snapshots, areaSources, now = () => new Date(), logger = console } = {}) => {
   const repo = repository || createPlatformLeagueRepository({ pool: getSidecarPool() });
   const snaps = snapshots || createDailyReadingRepository({ pool: getSidecarPool() });
+  // Una vez por arranque: los días guardados antes del 26 de noviembre suman sus tareas de «Publicar» (`countPublicationEffort`).
+  let publicationEffortCounted = !repo.daysWithoutPublicationEffort;
   // Las fuentes de cada área (Rodny, 12 de noviembre de 2026). Parrillas y Pautas se leen con sus reglas de siempre solo
   // con la base real; una base inyectada (las pruebas) nunca cae por defecto a Operación, que lee la base de `.env`.
   const area = areaSources || (db === prisma
@@ -197,7 +199,25 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
     },
 
     /** Cada 10 minutos: desde las 18:05 de un día hábil calcula hoy una vez; siempre completa los días hábiles del mes que falten. */
+    /**
+     * Rodny, 26 de noviembre de 2026: «necesito que las tareas de publicar sí cuenten, y actualizar entonces los puntos».
+     * Suma al esfuerzo de los días ya guardados las tareas de «Publicar» que entonces no contaban; solo eso del día.
+     */
+    async countPublicationEffort() {
+      const rows = await repo.daysWithoutPublicationEffort();
+      const updated = rows.map((row) => ({ row, next: withPublicationEffort(row) })).filter((item) => item.next);
+      if (!updated.length) return 0;
+      await repo.saveDays(updated.map(({ row, next }) => ({ day_key: row.day_key, member_id: row.member_id, habits: row.habits, extras: next.extras, evidence: next.evidence })));
+      const added = updated.reduce((sum, { next }) => sum + Number(next.extras.PUBLICAR || 0), 0);
+      logger.info(`[Liga] Tareas de publicar sumadas al esfuerzo de ${updated.length} días guardados: ${added} en total.`);
+      return added;
+    },
+
     async runAutomatic() {
+      if (!publicationEffortCounted) {
+        try { await this.countPublicationEffort(); publicationEffortCounted = true; }
+        catch (error) { logger.error('[Liga] No se pudieron sumar las tareas de publicar:', error?.message || error); }
+      }
       const at = now();
       const today = bogotaDate(at), monthKey = monthOf(today);
       const firstDay = bogotaDate(await repo.startedAt());
