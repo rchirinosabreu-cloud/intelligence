@@ -8,10 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertCircle, Loader2, Plus, Search, Share2, Trash2 } from '@/components/ui/icons';
-import { FacebookLogo, InstagramLogo, LinkedinLogo, SOCIAL_BRAND_LOGOS } from '@/components/ui/SocialBrandLogos';
+import { FacebookLogo, InstagramLogo, LinkedinLogo, TiktokLogo, SOCIAL_BRAND_LOGOS } from '@/components/ui/SocialBrandLogos';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { SOCIAL_PLATFORM_LABELS, filterSocialPages, socialPagesOf, standaloneAccountsOf } from '@/lib/socialPublishing';
 import { linkedinAuthorizationState } from '@/lib/linkedinPublishing';
+import { tiktokAuthorizationState } from '@/lib/tiktokPublishing';
 
 /**
  * Redes conectadas de un cliente (Rodny, 29 de septiembre de 2026). Un administrador elige aquí cuál
@@ -21,12 +22,21 @@ import { linkedinAuthorizationState } from '@/lib/linkedinPublishing';
 const PLATFORM_ICON = SOCIAL_BRAND_LOGOS;
 /** A dónde volver después de autorizar en LinkedIn: la ficha desde la que se salió. */
 export const LINKEDIN_RETURN_KEY = 'linkedinConnectReturnTo';
+/** Lo mismo para TikTok. */
+export const TIKTOK_RETURN_KEY = 'tiktokConnectReturnTo';
 
 /**
  * Lo que hay que saber de la autorización de una página de LinkedIn (23 de noviembre de 2026). LinkedIn la
  * da por 60 días; si la plataforma la puede renovar sola no se dice nada hasta que de verdad haga falta.
  */
 const linkedinNote = (account) => {
+  // TikTok renueva su llave sola cada día; lo único que se avisa es el permiso anual cuando está por vencer.
+  if (account.platform === 'TIKTOK' && account.isActive) {
+    const state = tiktokAuthorizationState({ refreshExpiresAt: account.authorization?.refreshExpiresAt });
+    if (state.expired) return 'La autorización venció: vuelve a conectarla.';
+    if (state.expiringSoon) return state.daysLeft <= 0 ? 'La autorización vence hoy: vuelve a conectarla.' : `La autorización vence en ${state.daysLeft} ${state.daysLeft === 1 ? 'día' : 'días'}: vuelve a conectarla.`;
+    return null;
+  }
   if (account.platform !== 'LINKEDIN' || !account.isActive) return null;
   const state = linkedinAuthorizationState(account.authorization || {});
   if (state.expired) return 'La autorización venció: vuelve a conectarla.';
@@ -178,6 +188,23 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
     }
   });
 
+  // TikTok igual: el dueño de la cuenta inicia sesión en TikTok, autoriza y vuelve.
+  const connectTikTok = useMutation({
+    mutationFn: async () => (await axios.post(`${getApiBaseUrl()}/api/social/tiktok/start`, { clientId }, { headers: authHeaders() })).data,
+    onSuccess: ({ url }) => {
+      try {
+        sessionStorage.setItem(TIKTOK_RETURN_KEY, `${window.location.pathname}${window.location.search}`);
+      } catch {
+        // Sin almacenamiento de sesión se vuelve a la ficha del cliente por su identificador.
+      }
+      window.location.assign(url);
+    },
+    onError: (err) => {
+      console.error('[SocialAccounts] No se pudo empezar la conexión con TikTok:', err.response?.data || err.message || err);
+      toast.error(err.response?.data?.error || 'No se pudo empezar la conexión con TikTok.');
+    }
+  });
+
   const handleDisconnect = async (account) => {
     const ok = await confirm({
       title: `Desconectar ${SOCIAL_PLATFORM_LABELS[account.platform] || account.platform}`,
@@ -236,11 +263,11 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
                 type="button"
                 aria-label={connectLabel}
                 title={connectLabel}
-                disabled={connectLinkedIn.isPending}
+                disabled={connectLinkedIn.isPending || connectTikTok.isPending}
                 data-social-connect
                 className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 ${accounts.length ? 'w-9' : 'px-3'}`}
               >
-                {connectLinkedIn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {connectLinkedIn.isPending || connectTikTok.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 {!accounts.length && <span>Conectar página</span>}
               </button>
             </DropdownMenuTrigger>
@@ -253,6 +280,9 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
               <DropdownMenuItem onSelect={() => connectLinkedIn.mutate()} className="gap-2" data-social-connect-linkedin>
                 <LinkedinLogo className="h-4 w-4 shrink-0" aria-hidden="true" /> Página de LinkedIn
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => connectTikTok.mutate()} className="gap-2" data-social-connect-tiktok>
+                <TiktokLogo className="h-4 w-4 shrink-0" aria-hidden="true" /> Cuenta de TikTok
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -262,7 +292,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
         <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
       ) : accounts.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
-          Sin redes conectadas. {canManage ? 'Conecta la página de Facebook o de LinkedIn del cliente para programar sus publicaciones desde la parrilla.' : 'Un administrador puede conectar la página del cliente.'}
+          Sin redes conectadas. {canManage ? 'Conecta la página de Facebook o de LinkedIn, o la cuenta de TikTok del cliente, para programar sus publicaciones desde la parrilla.' : 'Un administrador puede conectar la página del cliente.'}
         </p>
       ) : (
         <>
@@ -282,7 +312,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
             ))}
             {standalone.length > 0 && (
               <li data-social-standalone>
-                {pages.length > 1 && <span className="mb-1.5 block truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">LinkedIn</span>}
+                {pages.length > 1 && <span className="mb-1.5 block truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">Otras redes</span>}
                 <ul className="space-y-2">{standalone.map(renderAccount)}</ul>
               </li>
             )}

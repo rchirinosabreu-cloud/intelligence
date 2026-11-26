@@ -1539,6 +1539,9 @@ model SocialPublication {
   permalink       String?
   error           String?
   diagnostics     Json?
+  /// Lo que la persona eligió al programar y que la red obliga a preguntar cada vez. Hoy solo TikTok:
+  /// quién puede ver el video, comentarios, dúo, pegar, contenido comercial y su consentimiento.
+  options         Json?
   requestedById   String?
   publishedAt     DateTime?
   cancelledAt     DateTime?

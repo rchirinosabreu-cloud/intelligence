@@ -4,6 +4,8 @@ import { SOCIAL_BRAND_LOGOS } from '@/components/ui/SocialBrandLogos';
 import {
   SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS, pieceSocialPageIds, publishAtIso, schedulingNotices, schedulingProblems, socialPagesOf, standaloneAccountsOf
 } from '@/lib/socialPublishing';
+import { TIKTOK_PRIVACY_LABELS } from '@/lib/tiktokPublishing';
+import TikTokPostOptions from './TikTokPostOptions';
 
 /**
  * Publicación automática de una pieza en Instagram y Facebook (Rodny, 29 de septiembre de 2026).
@@ -20,6 +22,9 @@ import {
  *
  * LinkedIn (23 de noviembre de 2026) va en su propia fila debajo, **sin marcar**: no todo lo que va a
  * Instagram va a LinkedIn, así que cada pieza lo pide marcando su casilla antes de «Programar».
+ *
+ * TikTok (25 de noviembre de 2026) igual, y además abre debajo las preguntas que TikTok obliga a hacer en
+ * cada publicación (`TikTokPostOptions`): sin responderlas, «Programar» no se enciende.
  */
 const PLATFORM_ICON = SOCIAL_BRAND_LOGOS;
 
@@ -32,8 +37,11 @@ const bogotaStamp = (value) => {
   }
 };
 
+/** En TikTok se dice además para quién quedó visible: es lo que la persona eligió al programar. */
+const audienceOf = (row) => (row.options?.privacyLevel ? ` · visible para: ${TIKTOK_PRIVACY_LABELS[row.options.privacyLevel]}` : '');
+
 const STATUS_TEXT = {
-  SCHEDULED: (row) => `Programada · ${bogotaStamp(row.scheduledAt)}${row.attempts ? ` · reintento ${row.attempts}` : ''}`,
+  SCHEDULED: (row) => `Programada · ${bogotaStamp(row.scheduledAt)}${row.attempts ? ` · reintento ${row.attempts}` : ''}${audienceOf(row)}`,
   PUBLISHING: () => 'Publicando…',
   PUBLISHED: (row) => `Publicada · ${bogotaStamp(row.publishedAt)}`,
   FAILED: (row) => row.error || 'No se pudo publicar.',
@@ -54,7 +62,7 @@ const ACTION_CLASS = 'text-xs font-bold text-brand-cyan-deep hover:underline dar
 /** Lo que ya salió o está por salir se sigue mostrando aunque la pieza deje esa cuenta: es su historial. */
 const KEPT_STATUSES = ['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'FAILED'];
 
-export default function SocialPublishingPanel({ item, accounts = [], onSchedule, onCancel, onRetry, onReopen, onChangePages, isBusy = false, serverProblems = [] }) {
+export default function SocialPublishingPanel({ item, accounts = [], onSchedule, onCancel, onRetry, onReopen, onChangePages, isBusy = false, serverProblems = [], loadTikTokCreatorInfo = undefined }) {
   const connected = useMemo(() => accounts.filter((account) => SOCIAL_PLATFORMS.includes(account.platform)), [accounts]);
   const pages = useMemo(() => socialPagesOf(connected), [connected]);
   const chosenPageIds = pieceSocialPageIds(item, connected);
@@ -81,7 +89,12 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   const [excluded, setExcluded] = useState(() => new Set());
   // LinkedIn al revés: se recuerda lo que la persona marcó, porque no viene marcado.
   const [included, setIncluded] = useState(() => new Set());
-  const optIn = (account) => account.platform === 'LINKEDIN';
+  const optIn = (account) => account.platform === 'LINKEDIN' || account.platform === 'TIKTOK';
+  // Las respuestas de TikTok para esta pieza. Empiezan vacías: nada viene elegido.
+  const [tiktokOptions, setTiktokOptions] = useState(null);
+  // De qué cuentas de TikTok ya se sabe qué permiten. Sin eso no se programa ahí.
+  const [tiktokKnown, setTiktokKnown] = useState(() => new Set());
+  const rememberCreator = (accountId) => setTiktokKnown((prev) => (prev.has(accountId) ? prev : new Set(prev).add(accountId)));
   const isChecked = (account) => (optIn(account) ? included.has(account.id) : !excluded.has(account.id));
   const setChecked = (account, checked) => {
     const [setter, addWhen] = optIn(account) ? [setIncluded, true] : [setExcluded, false];
@@ -89,9 +102,12 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   };
   const targets = selectable.filter(isChecked);
   const platforms = Array.from(new Set(targets.map((account) => account.platform)));
+  const tiktokTargets = targets.filter((account) => account.platform === 'TIKTOK');
+  const goesToTikTok = tiktokTargets.length > 0;
   const problems = targets.length
-    ? schedulingProblems({ item, assets: item.finalAssets || [], targets, now: new Date() })
+    ? schedulingProblems({ item, assets: item.finalAssets || [], targets, ...(goesToTikTok ? { tiktokOptions } : {}), now: new Date() })
     : [];
+  const tiktokPending = tiktokTargets.some((account) => !tiktokKnown.has(account.id));
   // Lo que no impide programar pero hay que saber antes de pulsar (en Facebook el carrusel sale sin video).
   const notices = targets.length && !problems.length
     ? schedulingNotices({ item, assets: item.finalAssets || [], platforms })
@@ -127,8 +143,8 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
         {selectable.length > 0 && (
           <button
             type="button"
-            onClick={() => onSchedule(item.id, targets.map((account) => account.id))}
-            disabled={isBusy || !targets.length || problems.length > 0}
+            onClick={() => onSchedule(item.id, targets.map((account) => account.id), goesToTikTok ? { tiktokOptions } : undefined)}
+            disabled={isBusy || !targets.length || problems.length > 0 || tiktokPending}
             className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-sm font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -187,8 +203,10 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
             ? `Desconectada${account.lastError ? ` · ${account.lastError}` : ''}`
             : row ? STATUS_TEXT[row.status]?.(row) : 'Sin programar';
           const tone = disconnected ? STATUS_CLASS.FAILED : (row ? STATUS_CLASS[row.status] : STATUS_CLASS.CANCELLED);
+          const asksTikTok = account.platform === 'TIKTOK' && canChoose && isChecked(account);
           return (
-            <li key={account.id} className={`flex min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-sm ${tone}`} data-social-platform={account.platform} data-social-account={account.id}>
+            <li key={account.id} className="min-w-0" data-social-platform={account.platform} data-social-account={account.id}>
+            <div className={`flex min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-sm ${tone}`}>
               {canChoose ? (
                 <input
                   type="checkbox"
@@ -225,6 +243,10 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
               {row?.status === 'PUBLISHED' && !disconnected && typeof onReopen === 'function' && (
                 <button type="button" onClick={() => onReopen(row.id, account.platform)} disabled={isBusy} className={`${ACTION_CLASS} shrink-0`}>Publicar de nuevo</button>
               )}
+            </div>
+            {asksTikTok && (
+              <TikTokPostOptions account={account} value={tiktokOptions} onChange={setTiktokOptions} onCreatorInfo={rememberCreator} loadCreatorInfo={loadTikTokCreatorInfo} disabled={isBusy} />
+            )}
             </li>
           );
         })}

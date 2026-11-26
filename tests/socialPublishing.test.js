@@ -90,11 +90,11 @@ test('scheduling a piece names every reason it cannot go out, in plain Spanish',
   assert.match(schedulingProblems({ item: approved, assets: [image], accounts: [fbAccount], platforms: ['INSTAGRAM'], now })[0], /Instagram.*conectad/i);
   assert.match(schedulingProblems({ item: approved, assets: [image], accounts: [{ ...igAccount, isActive: false }], platforms: ['INSTAGRAM'], now })[0], /conectad/i, 'a disconnected account counts as missing');
   assert.match(schedulingProblems({ item: approved, assets: [image], accounts: [igAccount], platforms: [], now })[0], /red/i, 'at least one network');
-  assert.match(schedulingProblems({ item: approved, assets: [image], accounts: [igAccount], platforms: ['TIKTOK'], now })[0], /red/i);
+  assert.match(schedulingProblems({ item: approved, assets: [image], accounts: [igAccount], platforms: ['THREADS'], now })[0], /red/i, 'a network the platform does not publish to');
   assert.match(schedulingProblems({ item: { ...approved, captionText: 'x'.repeat(2201) }, assets: [image], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /2\.?200/);
   assert.match(schedulingProblems({ item: approved, assets: [], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /pieza final/i);
   assert.match(schedulingProblems({ item: { ...approved, format: 'Historia' }, assets: [image], accounts: [fbAccount], platforms: ['FACEBOOK'], now })[0], /historia.*Facebook/i, 'stories go to Instagram only');
-  assert.deepEqual(SOCIAL_PLATFORMS, ['INSTAGRAM', 'FACEBOOK', 'LINKEDIN']);
+  assert.deepEqual(SOCIAL_PLATFORMS, ['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'TIKTOK']);
 });
 
 test('a failed publication retries a few times with a growing wait, then stops', () => {

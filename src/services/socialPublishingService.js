@@ -17,6 +17,9 @@ import { createMetaGraphClient } from './metaGraphService.js';
 import { createLinkedInClient } from './linkedinService.js';
 import { linkedinTokenService } from './linkedinTokenService.js';
 import { humanizeLinkedInError, linkedinMedia } from '../lib/linkedinPublishing.js';
+import { createTikTokClient } from './tiktokService.js';
+import { tiktokTokenService } from './tiktokTokenService.js';
+import { humanizeTikTokError, normalizeTikTokOptions, tiktokMedia, tiktokOptionProblems } from '../lib/tiktokPublishing.js';
 import { createSignedDownload, getS3ObjectBuffer } from './s3Service.js';
 import { getPlatformStorage } from './platformStorageService.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
@@ -34,7 +37,9 @@ import {
 const AMBIGUOUS_PUBLISH_MESSAGE = 'Meta recibió la orden de publicar pero no confirmó el resultado. Revisa la cuenta antes de reintentar: si la pieza ya salió, no la vuelvas a programar.';
 const AMBIGUOUS_LINKEDIN_MESSAGE = 'LinkedIn recibió la orden de publicar pero no confirmó el resultado. Revisa la página antes de reintentar: si la pieza ya salió, no la vuelvas a programar.';
 /** A quién se le pidió publicar, para decirlo en los avisos: «No se envió a LinkedIn: …». */
-const networkOf = (platform) => (platform === 'LINKEDIN' ? 'LinkedIn' : 'Meta');
+const AMBIGUOUS_TIKTOK_MESSAGE = 'TikTok recibió el video pero no confirmó el resultado. Revisa la cuenta antes de reintentar: si el video ya salió, no lo vuelvas a programar.';
+const networkOf = (platform) => (platform === 'LINKEDIN' ? 'LinkedIn' : platform === 'TIKTOK' ? 'TikTok' : 'Meta');
+const ambiguousMessageFor = (platform) => (platform === 'LINKEDIN' ? AMBIGUOUS_LINKEDIN_MESSAGE : platform === 'TIKTOK' ? AMBIGUOUS_TIKTOK_MESSAGE : AMBIGUOUS_PUBLISH_MESSAGE);
 
 const MAX_DIAGNOSTICS = 5;
 /** Meta descarga el archivo al crear el contenedor; una hora cubre con holgura un reel de 300 MB. */
@@ -66,7 +71,9 @@ export const publicPublication = (row) => row && ({
   error: row.error,
   publishedAt: row.publishedAt,
   cancelledAt: row.cancelledAt,
-  requestedById: row.requestedById
+  requestedById: row.requestedById,
+  // TikTok: lo que la persona eligió al programar (quién lo ve, comentarios, contenido comercial).
+  ...(row.platform === 'TIKTOK' ? { options: row.options ? normalizeTikTokOptions(row.options) : null } : {})
 });
 
 export const publicSocialAccount = (account) => account && ({
@@ -87,6 +94,10 @@ export const publicSocialAccount = (account) => account && ({
       refreshExpiresAt: account.metadata?.refreshExpiresAt || null,
       canRefresh: Boolean(account.metadata?.canRefresh)
     }
+  } : {}),
+  // TikTok: la llave diaria se renueva sola; lo que la ficha avisa es el vencimiento anual.
+  ...(account.platform === 'TIKTOK' ? {
+    authorization: { expiresAt: account.metadata?.refreshExpiresAt || null, refreshExpiresAt: account.metadata?.refreshExpiresAt || null, canRefresh: true }
   } : {})
 });
 
@@ -108,6 +119,9 @@ export const createSocialPublishingService = ({
   // LinkedIn (23 de noviembre de 2026): su cliente y la llave vigente de cada página, renovada si hace falta.
   linkedin = createLinkedInClient(),
   linkedinToken = (account) => linkedinTokenService.freshToken(account),
+  // TikTok (25 de noviembre de 2026): lo mismo, con su llave diaria renovada al momento.
+  tiktok = createTikTokClient(),
+  tiktokToken = (account) => tiktokTokenService.freshToken(account),
   decrypt: decryptToken = decrypt,
   mediaUrlFor = finalAssetPublicationUrl,
   now = () => new Date(),
@@ -189,7 +203,7 @@ export const createSocialPublishingService = ({
    * a escondidas. `platforms` es la forma de antes, cuando había una cuenta por red: se resuelve
    * contra las cuentas de la pieza.
    */
-  const schedulePublications = async ({ itemId, accountIds = null, platforms = [], actorUserId = null }) => {
+  const schedulePublications = async ({ itemId, accountIds = null, platforms = [], tiktokOptions = null, actorUserId = null }) => {
     const item = await loadItem(itemId);
     // Un cliente suspendido por cartera no publica el mes congelado: programar es la última parte de la producción.
     await assertNotSuspended(db, { clientId: item.plan?.clientId, year: item.plan?.year, month: item.plan?.month, clientName: item.plan?.client?.name });
@@ -206,10 +220,10 @@ export const createSocialPublishingService = ({
       const wantedIds = Array.from(new Set(accountIds.map((id) => String(id))));
       targets = wantedIds.map((id) => pool.find((account) => account.id === id)).filter(Boolean);
       problems = targets.length === wantedIds.length ? [] : ['Una de las cuentas elegidas no es de esta pieza. Elige la cuenta en la pieza y vuelve a programar.'];
-      problems.push(...schedulingProblems({ item, assets: item.finalAssets, targets, now: now() }));
+      problems.push(...schedulingProblems({ item, assets: item.finalAssets, targets, tiktokOptions, now: now() }));
     } else {
       const wanted = Array.from(new Set(platforms.map((platform) => String(platform || '').toUpperCase())));
-      problems = schedulingProblems({ item, assets: item.finalAssets, accounts: pool, platforms: wanted, now: now() });
+      problems = schedulingProblems({ item, assets: item.finalAssets, accounts: pool, platforms: wanted, tiktokOptions, now: now() });
       targets = wanted.map((platform) => pool.find((candidate) => candidate.platform === platform && candidate.isActive !== false)).filter(Boolean);
     }
     for (const account of targets) {
@@ -220,6 +234,8 @@ export const createSocialPublishingService = ({
     if (problems.length) throw httpError(422, problems[0], { code: 'SOCIAL_PUBLICATION_INVALID', problems });
 
     const scheduledAt = new Date(publishAtIso(item.publishDate, item.publishTime));
+    // Lo que la persona respondió para TikTok viaja con la fila: la cola publica eso y nada más.
+    const optionsFor = (account) => (account.platform === 'TIKTOK' ? { options: normalizeTikTokOptions(tiktokOptions) } : {});
     const rows = [];
     for (const account of targets) {
       const fresh = {
@@ -228,8 +244,8 @@ export const createSocialPublishingService = ({
       };
       rows.push(await db.socialPublication.upsert({
         where: { contentItemId_socialAccountId: { contentItemId: item.id, socialAccountId: account.id } },
-        create: { contentItemId: item.id, socialAccountId: account.id, platform: account.platform, ...fresh },
-        update: { platform: account.platform, ...fresh }
+        create: { contentItemId: item.id, socialAccountId: account.id, platform: account.platform, ...fresh, ...optionsFor(account) },
+        update: { platform: account.platform, ...fresh, ...optionsFor(account) }
       }));
     }
     // La pieza queda «Programada»: ya no es solo «hecha», está en la cola esperando su hora.
@@ -391,12 +407,15 @@ export const createSocialPublishingService = ({
     // Si la orden de publicar ya salió y la respuesta se perdió (red, tiempo de espera, 5xx), no se sabe si
     // Meta publicó: repetirlo solo podría duplicar el post. Queda en manos de una persona.
     const isLinkedIn = row.platform === 'LINKEDIN';
+    const isTikTok = row.platform === 'TIKTOK';
     const ambiguous = publishRequested && isRetryableMetaError(error) && !error.permanent;
     const retryable = !ambiguous && isRetryableMetaError(error) && !error.permanent;
     const nextAttemptAt = retryable ? nextPublicationRetryAt(attempts, now()) : null;
-    const humanError = ambiguous ? (isLinkedIn ? AMBIGUOUS_LINKEDIN_MESSAGE : AMBIGUOUS_PUBLISH_MESSAGE)
-      : error.permanent ? error.message
-        : isLinkedIn ? humanizeLinkedInError(error) : humanizeMetaError(error);
+    // Un fallo propio de TikTok lleva su motivo en el código aunque sea definitivo; los nuestros ya vienen en español.
+    const humanError = ambiguous ? ambiguousMessageFor(row.platform)
+      : isTikTok && error.name === 'TikTokError' ? humanizeTikTokError(error)
+        : error.permanent ? error.message
+          : isLinkedIn ? humanizeLinkedInError(error) : isTikTok ? humanizeTikTokError(error) : humanizeMetaError(error);
     const diagnostic = {
       at: now().toISOString(), code: error.code ?? null, subcode: error.subcode ?? null, status: error.status ?? null,
       fbtraceId: error.fbtraceId ?? null, message: String(error.message || '').slice(0, 300), willRetry: Boolean(nextAttemptAt), ambiguous
@@ -407,7 +426,7 @@ export const createSocialPublishingService = ({
       where: { id: row.id, leaseToken },
       data: { status, attempts, nextAttemptAt, error: humanError, diagnostics, leaseToken: null, leaseAt: null }
     });
-    if (error.code === 190 || error.code === 102 || (isLinkedIn && Number(error.status) === 401)) {
+    if (error.code === 190 || error.code === 102 || (isLinkedIn && Number(error.status) === 401) || (isTikTok && (Number(error.status) === 401 || error.code === 'access_token_invalid' || error.code === 'auth_removed'))) {
       await db.clientSocialAccount.update({ where: { id: row.socialAccountId }, data: { isActive: false, lastError: humanError, lastCheckedAt: now() } }).catch(() => {});
     }
     // Un fallo definitivo deja la cola sin nada vivo: la pieza deja de estar «Programada» y vuelve al
@@ -474,10 +493,10 @@ export const createSocialPublishingService = ({
       if (item.plan?.client?.isArchived) throw Object.assign(new Error(`No se envió a ${networkOf(full.platform)}: el cliente está archivado. Reactívalo en Clientes → Directorio para publicarla.`), { permanent: true, code: 'CLIENT_ARCHIVED' });
       if (full.publishRequestedAt && row.status === 'PUBLISHING') {
         // Una fila recogida con lease vencido **después** de haber mandado publicar: no se repite la orden.
-        throw Object.assign(new Error(full.platform === 'LINKEDIN' ? AMBIGUOUS_LINKEDIN_MESSAGE : AMBIGUOUS_PUBLISH_MESSAGE), { permanent: true, code: 'PUBLISH_AMBIGUOUS' });
+        throw Object.assign(new Error(ambiguousMessageFor(full.platform)), { permanent: true, code: 'PUBLISH_AMBIGUOUS' });
       }
       // Se vuelve a comprobar todo en el momento de salir: la pieza pudo perder la aprobación o el archivo.
-      const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: account ? [account] : [], platforms: [full.platform], now: new Date(0) });
+      const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: account ? [account] : [], platforms: [full.platform], ...(full.platform === 'TIKTOK' ? { tiktokOptions: full.options || null } : {}), now: new Date(0) });
       // «Esta pieza ya está publicada» dicho a la hora de salir señalaba justo lo contrario de lo que
       // pasaba: la pieza no había salido (15 de octubre de 2026). Lo que se dice aquí es que **no se
       // envió**, y después el motivo.
@@ -494,6 +513,26 @@ export const createSocialPublishingService = ({
         const published = await linkedin.publishToLinkedIn({
           organizationId: account.externalId, token: await linkedinToken(account), kind: post.kind,
           text: String(item.captionText || ''), media: uploads, title: item.objective || '', beforePublish
+        });
+        await db.socialPublication.updateMany({
+          where: { id: row.id, leaseToken },
+          data: { status: 'PUBLISHED', publishedAt: now(), externalMediaId: published.mediaId || null, permalink: published.permalink || null, error: null, leaseToken: null, leaseAt: null }
+        });
+        await syncItemStatusWithQueue(item.id);
+        await notifyRequester(full, item, { type: 'SOCIAL_PUBLICATION_PUBLISHED', message: `«${item.objective || item.format}» ya está publicado en ${whereLabel(account)}.` });
+        return { id: row.id, status: 'PUBLISHED', permalink: published.permalink || null };
+      }
+      if (full.platform === 'TIKTOK') {
+        const post = tiktokMedia({ kind: described.kind, assets: described.assets });
+        const [asset] = post.assets;
+        const token = await tiktokToken(account);
+        // Lo que la cuenta permite **ahora**: el dueño pudo cambiarlo en su teléfono después de programar.
+        const creator = await tiktok.creatorInfo(token);
+        const stale = tiktokOptionProblems(full.options, { creatorInfo: creator });
+        if (stale.length) throw Object.assign(new Error(`No se envió a TikTok: ${stale[0].charAt(0).toLowerCase()}${stale[0].slice(1)}`), { permanent: true });
+        const published = await tiktok.publishVideo({
+          token, creator, options: full.options, text: String(item.captionText || ''), beforePublish,
+          file: { url: await mediaUrlFor(asset, { platform: 'TIKTOK', kind: post.kind }), size: Number(asset.size || 0), name: asset.name || null, mimeType: asset.mimeType || 'video/mp4' }
         });
         await db.socialPublication.updateMany({
           where: { id: row.id, leaseToken },

@@ -3,6 +3,7 @@ import { isAllowedOrigin, isManagerRole, normalizeOrigin } from '../../config/se
 import { socialPublishingService } from '../../services/socialPublishingService.js';
 import { socialAccountService } from '../../services/socialAccountService.js';
 import { linkedinAccountService } from '../../services/linkedinAccountService.js';
+import { tiktokAccountService } from '../../services/tiktokAccountService.js';
 
 // Publicación automática en Instagram y Facebook (29 de septiembre de 2026). Todo bajo el permiso de
 // parrillas; conectar o desconectar cuentas es de administradores y project managers.
@@ -28,6 +29,7 @@ export const createSocialPublishingRouter = ({
   publishing = socialPublishingService,
   accounts = socialAccountService,
   linkedinAccounts = linkedinAccountService,
+  tiktokAccounts = tiktokAccountService,
   logger = console
 } = {}) => {
   const router = express.Router();
@@ -49,7 +51,9 @@ export const createSocialPublishingRouter = ({
       if (!itemId) return res.status(400).json({ error: 'Falta itemId.' });
       // Con varias cuentas por cliente se programa por cuenta (`accountIds`); `platforms` es la forma de antes.
       const accountIds = Array.isArray(req.body?.accountIds) ? req.body.accountIds.map((value) => String(value)) : null;
-      const rows = await publishing.schedulePublications({ itemId, platforms, ...(accountIds ? { accountIds } : {}), actorUserId: req.user.userId });
+      // TikTok obliga a preguntar en cada publicación quién la ve y qué se permite; llega aquí tal como se respondió.
+      const tiktokOptions = req.body?.tiktokOptions && typeof req.body.tiktokOptions === 'object' ? req.body.tiktokOptions : null;
+      const rows = await publishing.schedulePublications({ itemId, platforms, ...(accountIds ? { accountIds } : {}), ...(tiktokOptions ? { tiktokOptions } : {}), actorUserId: req.user.userId });
       return res.status(201).json(rows);
     } catch (error) {
       return reply(res, error, logger);
@@ -157,6 +161,55 @@ export const createSocialPublishingRouter = ({
       const organizationId = String(req.body?.organizationId || '').trim();
       if (!pending || !organizationId) return res.status(400).json({ error: 'Faltan la conexión y la página elegida.' });
       return res.status(201).json(await linkedinAccounts.link({ pending, organizationId, actorUserId: req.user.userId }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  // TikTok (25 de noviembre de 2026): el dueño de la cuenta inicia sesión en TikTok y autoriza. Los mismos
+  // tres pasos que LinkedIn; en `link` no se elige nada, se confirma que la cuenta que autorizó es la del cliente.
+  router.get('/tiktok/status', requireManager, (_req, res) => res.json({ configured: tiktokAccounts.isConfigured() }));
+
+  router.post('/tiktok/start', requireManager, async (req, res) => {
+    try {
+      const clientId = String(req.body?.clientId || '').trim();
+      if (!clientId) return res.status(400).json({ error: 'Falta clientId.' });
+      const asked = normalizeOrigin(req.get('origin') || `${req.protocol}://${req.get('host')}`);
+      const origin = asked && isAllowedOrigin(asked) ? asked : undefined;
+      return res.json(await tiktokAccounts.start({ clientId, actorUserId: req.user.userId, origin }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  router.post('/tiktok/exchange', requireManager, async (req, res) => {
+    try {
+      const code = String(req.body?.code || '').trim();
+      const state = String(req.body?.state || '').trim();
+      if (!code || !state) return res.status(400).json({ error: 'TikTok no devolvió un código de autorización.' });
+      return res.json(await tiktokAccounts.exchange({ code, state, actorUserId: req.user.userId }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  router.post('/tiktok/link', requireManager, async (req, res) => {
+    try {
+      const pending = String(req.body?.pending || '').trim();
+      if (!pending) return res.status(400).json({ error: 'Falta la conexión por confirmar.' });
+      return res.status(201).json(await tiktokAccounts.link({ pending, actorUserId: req.user.userId }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  // Lo que la cuenta de TikTok permite ahora mismo. La pantalla de publicar lo pide cada vez que se abre:
+  // TikTok no deja guardarlo. Lo lee cualquiera con permiso de parrillas, que es quien programa.
+  router.get('/tiktok/creator-info', async (req, res) => {
+    try {
+      const accountId = String(req.query.accountId || '').trim();
+      if (!accountId) return res.status(400).json({ error: 'Falta accountId.' });
+      return res.json(await tiktokAccounts.creatorInfoFor({ accountId }));
     } catch (error) {
       return reply(res, error, logger);
     }

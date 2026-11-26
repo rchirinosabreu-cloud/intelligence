@@ -65,4 +65,6 @@
 // pertinentes, solo cuando el servicio tiene configurada esa API; lo que requiere consultar sigue con el modelo habitual.
 // 2.27 (25 de noviembre de 2026): LinkedIn como encargado, para publicar las piezas aprobadas en las páginas de
 // empresa que su administrador conecta. La publicación en LinkedIn salió el 23 de noviembre sin este texto.
-export const PRIVACY_POLICY_VERSION = '2.27 · 2026-11-25';
+// 2.28 (25 de noviembre de 2026): TikTok como encargado, para publicar los videos aprobados en las cuentas que su
+// dueño conecta. Sección propia, como Meta y LinkedIn.
+export const PRIVACY_POLICY_VERSION = '2.28 · 2026-11-25';

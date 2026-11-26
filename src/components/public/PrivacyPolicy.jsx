@@ -32,6 +32,7 @@ const PROCESSORS = [
   ['ElevenLabs Inc.', 'Voz de Bria: convierte en audio el texto de la respuesta que Bria ya escribió, cuando un administrador o project manager le habla en voz alta. Recibe solo ese texto; no recibe la voz de la persona ni el historial', 'Estados Unidos'],
   ['Fireflies.ai Corp.', 'Grabación y transcripción de las reuniones de trabajo de la agencia: su asistente se suma como participante visible a los eventos de calendario que tienen enlace de videollamada', 'Estados Unidos'],
   ['Meta Platforms, Inc.', 'Publicación de las piezas aprobadas en las cuentas de Instagram y Facebook de los clientes que las conectan (texto de la publicación y archivo de la pieza), consulta de las estadísticas agregadas de esas cuentas y de sus campañas publicitarias para los reportes, y el canal de WhatsApp Business por el que Bria conversa con las personas del equipo que vinculan su número', 'Estados Unidos'],
+  ['TikTok (TikTok Pte. Ltd. y sus afiliadas)', 'Publicación de los videos aprobados en las cuentas de TikTok que el dueño de cada cuenta conecta (texto de la publicación, archivo del video y las opciones elegidas para publicarlo). La autorización que TikTok emite para esa cuenta se guarda cifrada', 'Singapur y Estados Unidos'],
   ['LinkedIn Corporation', 'Publicación de las piezas aprobadas en las páginas de empresa de LinkedIn que el administrador de cada página conecta (texto de la publicación y archivo de la pieza). La autorización que LinkedIn emite para esa página se guarda cifrada', 'Estados Unidos'],
   ['Servicios de notificación del navegador (Google, Mozilla, Apple)', 'Entrega de notificaciones push a quien las activa', 'Según el navegador']
 ];
@@ -65,8 +66,8 @@ const PrivacyPolicy = () => (
 
       <H3>Clientes y sus representantes</H3>
       <p>
-        <strong>Datos:</strong> nombre o razón social, tipo y número de documento (NIT o cédula), datos de contacto, condiciones comerciales, pagos, identificadores de sus cuentas en redes sociales y de sus cuentas publicitarias, las credenciales que Meta y LinkedIn emiten para esas cuentas (guardadas cifradas), las estadísticas agregadas de rendimiento de esas cuentas y los materiales que entregan para el servicio.
-        {' '}<strong>Finalidades:</strong> prestar los servicios contratados, planear y aprobar contenidos, publicar las piezas aprobadas en las cuentas de Instagram y Facebook y en las páginas de LinkedIn que el cliente conecta, elaborar reportes de resultados, emitir cuentas de cobro, llevar la cartera y cumplir obligaciones contables y tributarias.
+        <strong>Datos:</strong> nombre o razón social, tipo y número de documento (NIT o cédula), datos de contacto, condiciones comerciales, pagos, identificadores de sus cuentas en redes sociales y de sus cuentas publicitarias, las credenciales que Meta, LinkedIn y TikTok emiten para esas cuentas (guardadas cifradas), las estadísticas agregadas de rendimiento de esas cuentas y los materiales que entregan para el servicio.
+        {' '}<strong>Finalidades:</strong> prestar los servicios contratados, planear y aprobar contenidos, publicar las piezas aprobadas en las cuentas de Instagram y Facebook en las páginas de LinkedIn y en las cuentas de TikTok que el cliente conecta, elaborar reportes de resultados, emitir cuentas de cobro, llevar la cartera y cumplir obligaciones contables y tributarias.
       </p>
 
       <H3>Colaboradores y contratistas de Brainstudio</H3>
@@ -193,7 +194,12 @@ const PrivacyPolicy = () => (
         La plataforma se conecta únicamente a las páginas de empresa de LinkedIn que un administrador de la página autoriza desde la pantalla de LinkedIn, con un solo fin: <strong>publicar las piezas aprobadas</strong>. De la persona que autoriza solo se consulta en qué páginas puede publicar, para que elija la del cliente; no se guarda su perfil. <strong>No se leen mensajes, contactos, comentarios ni datos de personas individuales.</strong> La autorización se guarda cifrada, vence según el plazo que LinkedIn fija y puede retirarse en cualquier momento desconectando la página en la plataforma o desde LinkedIn. Para pedir la eliminación de cualquier dato relacionado, escriba a <a href={`mailto:${E.email}`} className={linkClass}>{E.email}</a>.
       </p>
 
-      <H2 id="vigencia">13. Vigencia y cambios</H2>
+      <H2 id="tiktok">13. Datos de TikTok</H2>
+      <p>
+        La plataforma se conecta únicamente a las cuentas de TikTok que su dueño autoriza desde la pantalla de TikTok, con un solo fin: <strong>publicar los videos aprobados</strong>. De la cuenta solo se consulta su nombre, su usuario, su foto de perfil y lo que permite al publicar (quién puede ver el video, comentarios, dúos y pegar), y eso se pregunta cada vez, sin guardarlo. <strong>No se leen mensajes, seguidores, comentarios, videos publicados por fuera de la plataforma ni datos de otras personas.</strong> La autorización se guarda cifrada y puede retirarse en cualquier momento desconectando la cuenta en la plataforma o desde TikTok, en «Seguridad y permisos»; al desconectarla, la autorización guardada se elimina. Para pedir la eliminación de cualquier dato relacionado, escriba a <a href={`mailto:${E.email}`} className={linkClass}>{E.email}</a>.
+      </p>
+
+      <H2 id="vigencia">14. Vigencia y cambios</H2>
       <p>
         Esta política rige desde el 27 de septiembre de 2026 y reemplaza la versión de febrero de 2025. El 28 de septiembre de 2026 se corrigieron las normas citadas sobre transmisión de datos a encargados y sobre los casos en que no se requiere autorización, sin cambiar las finalidades del tratamiento. Las bases de datos se mantendrán mientras subsistan las finalidades que justifican su tratamiento. Los cambios sustanciales se informarán en esta página y por los canales habituales antes de aplicarse.
       </p>

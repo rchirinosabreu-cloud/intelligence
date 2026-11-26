@@ -8,6 +8,7 @@
  */
 import { isDriveAsset } from './finalAssetShape.js';
 import { LINKEDIN_TEXT_MAX_CHARS, linkedinMedia } from './linkedinPublishing.js';
+import { tiktokMedia, tiktokOptionProblems } from './tiktokPublishing.js';
 
 const MB = 1024 * 1024;
 
@@ -16,9 +17,10 @@ export const META_PLATFORMS = Object.freeze(['INSTAGRAM', 'FACEBOOK']);
 /**
  * LinkedIn llegó el 23 de noviembre de 2026. No forma parte de ninguna «cuenta» de Meta: cada página de
  * LinkedIn conectada es un destino suelto que toda pieza del cliente puede marcar (`standaloneAccountsOf`).
+ * TikTok llegó el 25 de noviembre de 2026 y es otro destino suelto, igual que LinkedIn (`tiktokPublishing.js`).
  */
-export const SOCIAL_PLATFORMS = Object.freeze([...META_PLATFORMS, 'LINKEDIN']);
-export const SOCIAL_PLATFORM_LABELS = Object.freeze({ INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook', LINKEDIN: 'LinkedIn' });
+export const SOCIAL_PLATFORMS = Object.freeze([...META_PLATFORMS, 'LINKEDIN', 'TIKTOK']);
+export const SOCIAL_PLATFORM_LABELS = Object.freeze({ INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook', LINKEDIN: 'LinkedIn', TIKTOK: 'TikTok' });
 
 export const PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'CANCELLED']);
 export const ACTIVE_PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHING']);
@@ -291,7 +293,7 @@ export const facebookMedia = ({ kind, assets = [] }) => {
 export const schedulingNotices = ({ item, assets = [], platforms = [] }) => {
   const notices = [];
   const wanted = (platforms || []).map((platform) => String(platform || '').toUpperCase());
-  if (!wanted.includes('FACEBOOK') && !wanted.includes('LINKEDIN')) return notices;
+  if (!wanted.includes('FACEBOOK') && !wanted.includes('LINKEDIN') && !wanted.includes('TIKTOK')) return notices;
   const media = describeMetaMedia({ format: item?.format, assets });
   if (media.problem) return notices;
   const namesOf = (dropped) => dropped.map((asset) => `«${asset.name || 'video'}»`).join(', ');
@@ -308,6 +310,10 @@ export const schedulingNotices = ({ item, assets = [], platforms = [] }) => {
     }
     if (media.kind === 'REELS' && (item?.coverKey || item?.coverName)) notices.push('En LinkedIn el video sale sin la portada de la pieza: LinkedIn elige el fotograma.');
     if (/(^|\s)@[\p{L}\p{N}_.]+/u.test(String(item?.captionText || ''))) notices.push('En LinkedIn las menciones (@) salen como texto, sin enlace al perfil.');
+  }
+  if (wanted.includes('TIKTOK') && media.kind === 'REELS') {
+    if (item?.coverKey || item?.coverName) notices.push('En TikTok el video sale sin la portada de la pieza: TikTok usa el primer fotograma.');
+    notices.push('En TikTok el video sale sin música añadida: una canción de TikTok solo se pone desde el teléfono.');
   }
   return notices;
 };
@@ -409,7 +415,7 @@ export const pieceAccountLabel = (item, accounts = []) => {
  * Con `targets` se pregunta por cuentas concretas (un cliente puede tener varias de la misma red);
  * con `accounts` + `platforms`, por redes, que es como se preguntaba cuando había una cuenta por red.
  */
-export const schedulingProblems = ({ item, assets = [], accounts = [], platforms = [], targets = null, now = new Date() }) => {
+export const schedulingProblems = ({ item, assets = [], accounts = [], platforms = [], targets = null, tiktokOptions = undefined, now = new Date() }) => {
   const problems = [];
   const status = String(item?.status || '');
   if (status === 'PUBLICADO') problems.push('Esta pieza ya está publicada.');
@@ -452,11 +458,19 @@ export const schedulingProblems = ({ item, assets = [], accounts = [], platforms
       const linkedin = linkedinMedia({ kind: media.kind, assets });
       if (linkedin.problem) problems.push(linkedin.problem);
     }
+    if (!media.problem && wanted.includes('TIKTOK')) {
+      const tiktok = tiktokMedia({ kind: media.kind, assets });
+      if (tiktok.problem) problems.push(tiktok.problem);
+      // Las respuestas que TikTok obliga a pedir. `undefined` es «no se está preguntando por ellas» (la banda
+      // antes de abrir las opciones); el servidor siempre las pasa.
+      else if (tiktokOptions !== undefined) problems.push(...tiktokOptionProblems(tiktokOptions));
+    }
   }
 
   const captionLength = String(item?.captionText || '').length;
-  if (wanted.some((platform) => META_PLATFORMS.includes(platform)) || !wanted.length) {
-    if (captionLength > CAPTION_MAX_CHARS) problems.push(`El texto de la publicación tiene ${captionLength} caracteres; Meta acepta hasta 2.200.`);
+  // Meta y TikTok comparten el tope de 2.200 caracteres.
+  if (wanted.some((platform) => META_PLATFORMS.includes(platform) || platform === 'TIKTOK') || !wanted.length) {
+    if (captionLength > CAPTION_MAX_CHARS) problems.push(`El texto de la publicación tiene ${captionLength} caracteres; ${wanted.some((platform) => META_PLATFORMS.includes(platform)) || !wanted.length ? 'Meta' : 'TikTok'} acepta hasta 2.200.`);
   } else if (captionLength > LINKEDIN_TEXT_MAX_CHARS) {
     problems.push(`El texto de la publicación tiene ${captionLength} caracteres; LinkedIn acepta hasta 3.000.`);
   }
