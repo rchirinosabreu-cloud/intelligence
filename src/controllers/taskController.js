@@ -227,6 +227,8 @@ export const updateExistingTask = async (req, res) => {
         }
 
         const updateData = pickAllowedTaskUpdates(req.body);
+        // «La fecha la movió el cliente» (26 de noviembre de 2026) no es un campo de la tarea: viaja aparte hasta el historial.
+        if (req.body?.dueDateReason === 'CLIENTE') updateData.dueDateReason = 'CLIENTE';
         const updatedTask = await updateTask(req.params.taskId, updateData, req.user?.userId);
         // Cerrada sin cronómetro por quien la hizo: la pantalla le pregunta cuánto le tomó (9 de octubre de 2026).
         // Si esta comprobación falla, el cierre ya está hecho y no se tumba por ella.

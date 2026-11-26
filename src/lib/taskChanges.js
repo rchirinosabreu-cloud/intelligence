@@ -19,6 +19,9 @@ const FIELDS = [
   ['PRIORITY', priorityOf]
 ];
 
+/** La marca de que una fecha la movió el cliente: un evento propio junto al de la fecha (`recordClientDueDateMove`). */
+export const CLIENT_DUE_DATE_KIND = 'DUE_DATE_CLIENT';
+
 export const taskChangesBetween = (before, after) => FIELDS
   .map(([kind, read]) => ({ kind, fromValue: read(before), toValue: read(after) }))
   .filter((change) => change.fromValue !== change.toValue);
@@ -44,6 +47,7 @@ export const describeTaskChange = (event, names = {}) => {
     case 'ASSIGNEE': return `${who} cambió el responsable: ${arrow(person(event.fromValue), person(event.toValue))}`;
     case 'STATUS': return `${who} lo pasó a ${TASK_STATUS_LABELS[event.toValue] || event.toValue}`;
     case 'DUE_DATE': return event.toValue ? `${who} cambió la fecha: ${arrow(event.fromValue ? shortDay(event.fromValue) : 'sin fecha', shortDay(event.toValue))}` : `${who} quitó la fecha`;
+    case CLIENT_DUE_DATE_KIND: return `${who} indicó que la fecha la movió el cliente`;
     case 'CLIENT': return `${who} cambió el cliente: ${arrow(names[event.fromValue] || 'sin cliente', names[event.toValue] || 'sin cliente')}`;
     case 'TITLE': return `${who} cambió el título`;
     case 'PRIORITY': return event.toValue ? `${who} lo marcó como ${PRIORITY_LABELS[event.toValue] || 'prioritario'}` : `${who} le quitó la prioridad`;

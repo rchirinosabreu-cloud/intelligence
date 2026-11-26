@@ -15,7 +15,7 @@ import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, 
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { notifyTeamCompletion } from './teamCompletionNoticeService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
-import { recordTaskCreated, recordTaskDiff } from './taskChangeHistoryService.js';
+import { recordClientDueDateMove, recordTaskCreated, recordTaskDiff } from './taskChangeHistoryService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession, formatTaskReturnEventContent, reassignmentEffect } from '../lib/taskTiming.js';
@@ -1106,6 +1106,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
         // El historial de la tarea: quién cambió responsable, estado, fecha… (19 de noviembre de 2026).
         await recordTaskDiff(tx, { taskId: id, actorId: updaterId, before: currentTask, after: updatedTask });
+        await recordClientDueDateMove(tx, { taskId: id, actorId: updaterId, before: currentTask, after: updatedTask, reason: data?.dueDateReason });
         if (collaboratorChange?.shared) await applyTaskAggregateEffects(tx, currentTask, updatedTask.status, updaterId);
         const recognitionAt = recognitionBefore?.task.status !== 'REALIZADA' && updatedTask.status === 'REALIZADA' ? updatedTask.completedAt : new Date();
         await finishTaskRecognition(tx, recognitionBefore, updatedTask, recognitionAt);

@@ -23,8 +23,12 @@ export const bogotaDayOf = (value) => {
   return new Date(time - BOGOTA_OFFSET_MS).toISOString().slice(0, 10);
 };
 
-/** La fecha con la que nació la tarea se guarda al mediodía UTC: su día es el de esa fecha en UTC. */
+/**
+ * La fecha con la que nació la tarea se guarda al mediodía UTC: su día es el de esa fecha en UTC. Si el cliente la movió
+ * (Rodny, 26 de noviembre de 2026), vale la última fecha que puso el cliente: esa espera no es de la persona.
+ */
 const dueDayOf = (task) => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(task?.clientDueDate || ''))) return task.clientDueDate;
   const value = task?.originalDueDate || task?.dueDate || null;
   if (!value) return null;
   const time = value instanceof Date ? value.getTime() : Date.parse(value);

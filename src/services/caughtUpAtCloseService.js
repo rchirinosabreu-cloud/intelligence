@@ -11,6 +11,7 @@ import { hasTaskParticipations, taskParticipations } from '../lib/taskParticipat
 import { completedTaskParticipationWhere, taskForMember, taskParticipationSelect } from '../lib/taskParticipationMetrics.js';
 import { areaEquityActive } from '../lib/leagueAreaChecks.js';
 import { memberHasArea } from '../lib/teamAreas.js';
+import { CLIENT_DUE_DATE_KIND } from '../lib/taskChanges.js';
 import { CAUGHT_UP_AWARD_WINDOW_MS, CAUGHT_UP_POLICY, caughtUpAtClose, dayCloseCutoff } from './recognitionRules.js';
 import { insertRecognitionAward, recognitionTransaction } from './recognitionService.js';
 
@@ -31,8 +32,11 @@ export async function closeViewsFor(tx, { day, memberIds }) {
   // sigue contando, también para ellos.
   const movesOf = new Map();
   if (areaEquityActive(day) && typeof tx.taskChangeEvent?.findMany === 'function') {
-    const moves = await tx.taskChangeEvent.findMany({ where: { kind: 'DUE_DATE', occurredAt: { gte: dayStart, lt: cutoff } }, orderBy: { occurredAt: 'asc' },
-      select: { taskId: true, fromValue: true, actor: { select: { role: true, teamMember: { select: { id: true, areas: true, role: true } } } } } });
+    // Tampoco cuenta la que se marcó como movida por el cliente (Rodny, 26 de noviembre de 2026).
+    const events = await tx.taskChangeEvent.findMany({ where: { kind: { in: ['DUE_DATE', CLIENT_DUE_DATE_KIND] }, occurredAt: { gte: dayStart, lt: cutoff } }, orderBy: { occurredAt: 'asc' },
+      select: { taskId: true, kind: true, fromValue: true, toValue: true, actor: { select: { role: true, teamMember: { select: { id: true, areas: true, role: true } } } } } });
+    const byClient = new Set(events.filter((event) => event.kind === CLIENT_DUE_DATE_KIND).map((event) => `${event.taskId}:${event.fromValue}:${event.toValue}`));
+    const moves = events.filter((event) => event.kind !== CLIENT_DUE_DATE_KIND && !byClient.has(`${event.taskId}:${event.fromValue}:${event.toValue}`));
     for (const move of moves) {
       const from = /^\d{4}-\d{2}-\d{2}/.test(String(move.fromValue || '')) ? String(move.fromValue).slice(0, 10) : null;
       if (!from || from > day) continue;
