@@ -2,6 +2,7 @@ import React, { useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { AlertCircle, Info, Loader2 } from '@/components/ui/icons';
+import Select from '@/components/ui/Select';
 import { TiktokLogo } from '@/components/ui/SocialBrandLogos';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
@@ -93,7 +94,7 @@ export default function TikTokPostOptions({ account, value, onChange, onCreatorI
 
       <div className="min-w-0">
         <label htmlFor={`${id}-privacy`} className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-300">Quién puede ver este video</label>
-        <select
+        <Select
           id={`${id}-privacy`}
           value={options.privacyLevel || ''}
           onChange={(event) => set({ privacyLevel: event.target.value || null })}
@@ -107,7 +108,7 @@ export default function TikTokPostOptions({ account, value, onChange, onCreatorI
               {TIKTOK_PRIVACY_LABELS[level]}{privateWithBranded(level) ? ' (no disponible para colaboración pagada)' : ''}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div role="group" aria-label="Permitir a otras personas" className="min-w-0">
