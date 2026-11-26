@@ -120,12 +120,20 @@ export async function ensureCrmSchema(client) {
       "dataAuthorizedAt" TIMESTAMPTZ,
       "dataAuthorizationVersion" TEXT,
       "createdLeadId" TEXT,
+      "botPausedAt" TIMESTAMPTZ,
+      "botPausedReason" TEXT,
+      "consentReminderAt" TIMESTAMPTZ,
+      brief JSONB,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "dataAuthorizedAt" TIMESTAMPTZ;
     ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "dataAuthorizationVersion" TEXT;
     ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "createdLeadId" TEXT;
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "botPausedAt" TIMESTAMPTZ;
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "botPausedReason" TEXT;
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "consentReminderAt" TIMESTAMPTZ;
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS brief JSONB;
     CREATE INDEX IF NOT EXISTS "CrmWhatsAppContact_phone_idx" ON "CrmWhatsAppContact"("phoneKey");
     CREATE INDEX IF NOT EXISTS "CrmWhatsAppContact_lead_idx" ON "CrmWhatsAppContact"("leadId");
     CREATE TABLE IF NOT EXISTS "CrmWhatsAppMessage" (

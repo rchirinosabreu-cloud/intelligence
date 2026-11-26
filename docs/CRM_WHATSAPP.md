@@ -45,10 +45,22 @@ Creadas por `scripts/ensure-crm-schema.js` (aditivo, en cada arranque):
 
 Política 2.29 (26 de noviembre de 2026): sección 2 explica qué se guarda de quien escribe y por qué; la línea de Bria en WhatsApp ya no dice que no habla con números sin vincular.
 
+## Bria conversa con los prospectos (etapa 2, 26 de noviembre de 2026)
+
+Rodny: «¿no es posible usar IA para hablar con el cliente, recabar información, cotizar, ofrecer servicios...?». Recomendado y en marcha: Bria responde sola y pasa al equipo.
+
+- **Solo con autorización.** Hasta que la persona toca «Acepto», nada de lo que escribe va a la IA. Si escribe sin aceptar, se le recuerda con los botones (un minuto después de la bienvenida y luego como mucho cada 12 horas).
+- **Qué hace** (`src/lib/whatsappProspectAgent.js`, `src/services/whatsappProspectAgentService.js`): conversa para armar el brief (servicio, marca o empresa, sector, ciudad, plazo, presupuesto), orienta con el catálogo de servicios activo (`ServiceCatalog`, nombre, descripción y `valor_neto` como precio de referencia; «según alcance» si es variable; nunca el costo) y pasa la conversación al equipo cuando la persona pide una persona o una propuesta, cuando ya hay servicio y plazo o presupuesto, o ante una queja, una duda fuera del catálogo o una negociación.
+- **Qué no hace:** cerrar precios, dar descuentos, comprometer fechas ni aceptar condiciones de pago; no inventa servicios ni casos; ignora instrucciones dentro de los mensajes de la persona.
+- **El modelo:** API de Claude por el SDK oficial y la salida gobernada (`governedFetch`, caso de uso `crm.whatsapp-prospect`), modelo `claude-opus-5-5` con esfuerzo `low`, salida con esquema JSON (respuesta, `handoff`, motivo, brief), catálogo e instrucciones fijos y reutilizados en caché, la fecha y el contexto como mensaje de sistema al final, y respaldo del servidor ante rechazos (`fallbacks: "default"`). Variables: `ANTHROPIC_API_KEY` (sin ella queda solo la bienvenida), `WHATSAPP_PROSPECTS_AI=off` para apagarla, `WHATSAPP_PROSPECTS_MODEL` y `WHATSAPP_PROSPECTS_EFFORT` para cambiar modelo o esfuerzo.
+- **Paso al equipo:** el contacto queda con `botPausedAt` y el motivo, la oportunidad con próxima acción «Seguir la conversación de WhatsApp: …» para hoy, una nota con el brief, y el aviso en la campana a la responsable y a los administradores. Si la IA falla o declina, la persona recibe «una persona del equipo te escribe pronto» y el equipo el aviso.
+- **El brief** se guarda en el contacto (`brief`) y completa en la oportunidad el servicio de interés y la empresa si estaban vacíos; nunca pisa lo que escribió el equipo.
+- **En la ficha:** «Lo que Bria averiguó», quién atiende y el botón **Tomar conversación** / **Devolver a Bria** (`POST /api/crm/leads/:id/whatsapp/bria` con `{ active }`). Responder desde la ficha también toma la conversación. El panel muestra la *negrita* de WhatsApp.
+- Política de datos 2.30: Anthropic como encargado también para esto.
+
 ## Lo que falta (etapas siguientes)
 
 - Plantillas aprobadas para escribir después de 24 horas y seguimiento automático.
-- Bria clasifica el prospecto (servicio, urgencia, presupuesto) y propone la respuesta.
 - Descargar fotos y documentos del prospecto.
 - Bandeja de conversaciones (todas en una vista) y asignación por turnos.
 - Unir el anuncio con su campaña en las cifras de Meta (`AdMetaCampaign`).

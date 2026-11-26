@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
-import { MessageCircle, SendMessage, Check, AlertCircle, Loader2, Megaphone, Clock, ShieldCheck } from '@/components/ui/icons';
+import { MessageCircle, SendMessage, Check, AlertCircle, Loader2, Megaphone, Clock, ShieldCheck, Sparkles } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-import { useCrmWhatsApp, useSendWhatsApp } from './crmApi';
+import { useCrmWhatsApp, useSendWhatsApp, useSetWhatsAppBria } from './crmApi';
 import { formatDateTime } from './crmPresentation';
 import { CRM_TIMEZONE } from '@/lib/crmRules';
 
@@ -29,9 +29,14 @@ export const DeliveryStatus = ({ status }) => {
 
 const authorLabel = message => {
   if (message.direction === 'IN') return null;
-  if (message.author === 'BRIA') return 'Bria · mensaje automático';
+  if (message.author === 'BRIA') return 'Bria';
   return message.authorName || 'Equipo';
 };
+
+/** *negrita* de WhatsApp, como se ve en el teléfono. */
+export const withBold = text => String(text || '').split(/(\*[^*\n]+\*)/g).map((part, index) => (
+  /^\*[^*\n]+\*$/.test(part) ? <strong key={index} className="font-semibold">{part.slice(1, -1)}</strong> : part
+));
 
 const Bubble = ({ message }) => {
   const mine = message.direction === 'OUT';
@@ -49,13 +54,62 @@ const Bubble = ({ message }) => {
           </p>
         )}
         {authorLabel(message) && <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{authorLabel(message)}</p>}
-        <p className="whitespace-pre-wrap break-words">{message.text}</p>
+        <p className="whitespace-pre-wrap break-words">{withBold(message.text)}</p>
         <p className="mt-0.5 flex items-center justify-end gap-1.5 text-xs text-zinc-400" title={formatDateTime(message.occurredAt)}>
           {formatTime(message.occurredAt)}
           {mine && <DeliveryStatus status={message.status} />}
         </p>
       </div>
     </li>
+  );
+};
+
+const BRIEF_ROWS = [
+  ['serviceInterest', 'Servicio'], ['company', 'Marca o empresa'], ['sector', 'Sector'], ['city', 'Ciudad'],
+  ['timeline', 'Para cuándo'], ['budget', 'Presupuesto']
+];
+
+/** Lo que Bria averiguó en la conversación, para que el equipo no tenga que leerla entera. */
+const BriaBrief = ({ brief }) => {
+  const rows = BRIEF_ROWS.filter(([key]) => brief?.[key]);
+  if (!rows.length && !brief?.summary) return null;
+  return (
+    <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/60" data-wa-brief>
+      <p className="brain-type-label mb-1.5 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-brand-cyan-deep dark:text-brand-cyan" /> Lo que Bria averiguó</p>
+      {brief.summary && <p className="brain-type-body mb-2">{brief.summary}</p>}
+      {rows.length > 0 && (
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+          {rows.map(([key, label]) => (
+            <div key={key} className="flex min-w-0 gap-1.5">
+              <dt className="shrink-0 text-zinc-500 dark:text-zinc-400">{label}:</dt>
+              <dd className="min-w-0 break-words text-zinc-900 dark:text-zinc-50">{brief[key]}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+};
+
+/** Quién atiende: Bria o el equipo, con el botón para tomar la conversación o devolvérsela. */
+const BriaStatus = ({ leadId, contact, available }) => {
+  const toggle = useSetWhatsAppBria();
+  if (!available || !contact || contact.authorizationPending) return null;
+  const briaOn = !contact.botPausedAt;
+  const change = active => toggle.mutate({ id: leadId, active }, {
+    onSuccess: () => toast.success(active ? 'Bria vuelve a atender esta conversación.' : 'Tomaste la conversación: Bria ya no responde.'),
+    onError: failure => toast.error(failure.message)
+  });
+  return (
+    <div className="mb-3 flex flex-col gap-2 rounded-xl border border-zinc-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800" data-wa-bria={briaOn ? 'on' : 'off'}>
+      <p className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+        <Sparkles className={cn('mt-0.5 h-4 w-4 shrink-0', briaOn ? 'text-brand-cyan-deep dark:text-brand-cyan' : 'text-zinc-400')} />
+        {briaOn ? 'Bria está atendiendo esta conversación.' : (contact.botPausedReason || 'La atiende el equipo.')}
+      </p>
+      <Button type="button" variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" disabled={toggle.isPending} onClick={() => change(!briaOn)}>
+        {toggle.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {briaOn ? 'Tomar conversación' : 'Devolver a Bria'}
+      </Button>
+    </div>
   );
 };
 
@@ -95,13 +149,16 @@ const CrmWhatsAppPanel = ({ leadId, origin }) => {
 
       {contact && (contact.authorizationPending ? (
         <p className="mb-3 flex items-start gap-2 rounded-xl bg-status-attention/15 px-3 py-2 text-xs text-status-attention-fg" data-wa-consent="pending">
-          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Aún no autoriza el tratamiento de sus datos. Bria se lo pidió en la bienvenida; si responde «No acepto», la conversación se borra.
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Aún no autoriza el tratamiento de sus datos. Bria se lo pidió en la bienvenida y no conversa con la persona hasta que acepte; si responde «No acepto», la conversación se borra.
         </p>
       ) : (
         <p className="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400" data-wa-consent="ok">
           <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" /> Autorizó el tratamiento de sus datos el {formatDateTime(contact.dataAuthorizedAt)}
         </p>
       ))}
+
+      <BriaStatus leadId={leadId} contact={contact} available={Boolean(data?.briaAvailable)} />
+      <BriaBrief brief={contact?.brief} />
 
       {isLoading && <p className="flex items-center gap-2 py-6 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando la conversación…</p>}
       {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error.message}</p>}

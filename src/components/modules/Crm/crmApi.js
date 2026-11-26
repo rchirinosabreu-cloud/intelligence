@@ -79,3 +79,4 @@ export const useArchiveLeads = options => useCrmMutation(({ ids }) => crmRequest
 export const useSaveFollowUpAlertDays = options => useCrmMutation(payload => crmRequest('/follow-up-alerts', { method: 'PUT', body: payload }), options);
 export const useCreateQuotationDraft =options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/quotations`, { method: 'POST' }), options);
 export const useSendWhatsApp = options => useCrmMutation(({ id, text }) => crmRequest(`/leads/${id}/whatsapp`, { method: 'POST', body: { text } }), options);
+export const useSetWhatsAppBria = options => useCrmMutation(({ id, active }) => crmRequest(`/leads/${id}/whatsapp/bria`, { method: 'POST', body: { active } }), options);

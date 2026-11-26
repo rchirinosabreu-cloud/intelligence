@@ -16,6 +16,8 @@ import {
   consentAnswer, CONSENT_BUTTONS, CONSENT_THANKS_TEXT, CONSENT_DECLINED_TEXT
 } from '../lib/whatsappProspects.js';
 import { PRIVACY_POLICY_VERSION } from '../lib/privacyPolicy.js';
+import { shouldRemindConsent, CONSENT_REMINDER_TEXT } from '../lib/whatsappProspectAgent.js';
+import { getProspectAgent } from './whatsappProspectAgentService.js';
 import { SERVICE_WINDOW_MS, WINDOW_MARGIN_MS } from '../lib/whatsappAlerts.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -43,6 +45,9 @@ const serializeContact = (row, at) => {
     lastInboundAt: row.lastInboundAt || null,
     dataAuthorizedAt: row.dataAuthorizedAt || null,
     authorizationPending: !row.dataAuthorizedAt,
+    botPausedAt: row.botPausedAt || null,
+    botPausedReason: row.botPausedReason || null,
+    brief: row.brief || null,
     canReply: open,
     windowClosesAt: row.lastInboundAt ? new Date(new Date(row.lastInboundAt).getTime() + SERVICE_WINDOW_MS - WINDOW_MARGIN_MS) : null
   };
@@ -58,8 +63,11 @@ export const createWhatsAppProspectService = ({
   resolveOwner = resolveIntakeOwner,
   recipientsFor = intakeRecipients,
   logActivity = addActivity,
-  logger = console
+  logger = console,
+  prospectAgent = undefined
 } = {}) => {
+  // Bria con IA (src/services/whatsappProspectAgentService.js). `null` la apaga; sin pasarla, la del servicio.
+  const agent = () => (prospectAgent === undefined ? (prospectAgent = getProspectAgent()) : prospectAgent);
   const privacyUrl = () => {
     const base = String(env.APP_URL || LEGAL_ENTITY.platformUrl).trim().replace(/\/+$/, '');
     return /^https:\/\//.test(base) ? `${base}/privacidad` : null;
@@ -186,6 +194,7 @@ export const createWhatsAppProspectService = ({
     });
 
     const { contact, lead, createdLead, previousInboundAt } = saved;
+    let turn = null;
     const record = async (text, extra = {}) => {
       const metaMessageId = await send(text, extra);
       await db.crmWhatsAppMessage.create({ data: { contactId: contact.id, leadId: lead.id, direction: 'OUT', author: 'BRIA', authorName: 'Bria', metaMessageId: metaMessageId || null, text, status: 'SENT', occurredAt: now() } });
@@ -195,7 +204,10 @@ export const createWhatsAppProspectService = ({
       await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { dataAuthorizedAt: at, dataAuthorizationVersion: PRIVACY_POLICY_VERSION } });
       await db.crmActivity.create({ data: { leadId: lead.id, type: 'NOTA', occurredAt: at, note: `Autorizó por WhatsApp el tratamiento de sus datos (política ${PRIVACY_POLICY_VERSION}).`, authorId: null } })
         .catch((failure) => logger.warn?.(`[WhatsApp prospectos] La autorización quedó en el contacto pero no en la oportunidad: ${failure.message}`));
-      if (send) {
+      contact.dataAuthorizedAt = at;
+      // Con Bria activa, ella agradece y sigue con lo que la persona ya contó; si no, el agradecimiento fijo.
+      if (send && agent()?.active(contact, at)) turn = { justAuthorized: true };
+      else if (send) {
         try { await record(CONSENT_THANKS_TEXT); await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { lastOutboundAt: now() } }); }
         catch (failure) { logger.warn?.(`[WhatsApp prospectos] El agradecimiento no salió: ${failure.message}`); }
       }
@@ -207,6 +219,16 @@ export const createWhatsAppProspectService = ({
         await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { welcomedAt: at, lastOutboundAt: now() } });
       } catch (failure) {
         logger.warn?.(`[WhatsApp prospectos] La bienvenida no salió: ${failure.message}`);
+      }
+    } else if (send && contact.dataAuthorizedAt) {
+      turn = {};
+    } else if (send && shouldRemindConsent(contact, at)) {
+      // Escribió sin tocar «Acepto»: sin autorización su mensaje no va a la IA; se le recuerda con los botones.
+      try {
+        await record(CONSENT_REMINDER_TEXT, { buttons: CONSENT_BUTTONS });
+        await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { consentReminderAt: at, lastOutboundAt: now() } });
+      } catch (failure) {
+        logger.warn?.(`[WhatsApp prospectos] El recordatorio de autorización no salió: ${failure.message}`);
       }
     }
 
@@ -224,7 +246,12 @@ export const createWhatsAppProspectService = ({
         }))))
         .catch((failure) => logger.error?.('[WhatsApp prospectos] El aviso no salió:', failure?.message || failure));
     }
-    return { outcome: createdLead ? 'prospect-new' : 'prospect-message', leadId: lead.id };
+    let agentResult = null;
+    if (turn && agent()) {
+      try { agentResult = await agent().respond({ contact, lead, send: (text) => send(text), ...turn }); }
+      catch (failure) { logger.warn?.(`[WhatsApp prospectos] Bria no pudo atender: ${failure.message}`); }
+    }
+    return { outcome: createdLead ? 'prospect-new' : 'prospect-message', leadId: lead.id, ...(agentResult ? { agent: agentResult } : {}) };
   };
 
   /** La conversación de WhatsApp de una oportunidad, para su ficha. */
@@ -234,7 +261,7 @@ export const createWhatsAppProspectService = ({
     if (!lead) throw httpError(404, 'Oportunidad no encontrada.');
     const contacts = await db.crmWhatsAppContact.findMany({ where: { leadId }, orderBy: { lastInboundAt: 'desc' } });
     const rows = await db.crmWhatsAppMessage.findMany({ where: { leadId }, orderBy: { occurredAt: 'desc' }, take: MESSAGES_SHOWN });
-    return { contacts: contacts.map((row) => serializeContact(row, at)), messages: rows.reverse().map(serializeMessage), maxLength: PROSPECT_TEXT_MAX };
+    return { contacts: contacts.map((row) => serializeContact(row, at)), messages: rows.reverse().map(serializeMessage), maxLength: PROSPECT_TEXT_MAX, briaAvailable: Boolean(agent()?.available()) };
   };
 
   /**
@@ -262,7 +289,8 @@ export const createWhatsAppProspectService = ({
     const row = await db.crmWhatsAppMessage.create({
       data: { contactId: contact.id, leadId, direction: 'OUT', author: 'TEAM', authorId: userId, authorName: author?.name || null, metaMessageId: metaMessageId || null, text: cleaned.text, status: 'SENT', occurredAt: at }
     });
-    await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { lastOutboundAt: at } });
+    // Quien responde desde la ficha toma la conversación: Bria deja de contestar hasta que se la devuelvan.
+    await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { lastOutboundAt: at, ...(contact.botPausedAt ? {} : { botPausedAt: at, botPausedReason: `${author?.name || 'El equipo'} respondió desde la ficha.` }) } });
     let lead = null;
     try {
       lead = (await logActivity(db, leadId, { type: 'WHATSAPP', occurredAt: at.toISOString(), note: cleaned.text.slice(0, 500), result: 'Enviado desde Intelligence' }, actor, at)).lead;
@@ -282,7 +310,15 @@ export const createWhatsAppProspectService = ({
     }
   };
 
-  return { receive, conversationForLead, reply, recordStatuses };
+  /** El equipo toma la conversación o se la devuelve a Bria. */
+  const setBria = async (leadId, payload = {}, actor = {}) => {
+    if (typeof payload.active !== 'boolean') throw httpError(400, 'Indica si Bria atiende o no esta conversación.');
+    if (!agent() || (payload.active && !agent().available())) throw httpError(409, 'Bria no puede atender prospectos todavía: falta activar la IA en el servidor.');
+    const row = await agent().setActive(leadId, payload, actor);
+    return { contact: serializeContact(row, now()) };
+  };
+
+  return { receive, conversationForLead, reply, recordStatuses, setBria };
 };
 
 let instance;

@@ -3620,6 +3620,12 @@ model CrmWhatsAppContact {
   dataAuthorizationVersion String?
   /// La oportunidad que creó este contacto al escribir; si no acepta y nadie la gestionó, se retira.
   createdLeadId  String?
+  /// Bria deja de responder cuando pasa la conversación al equipo o alguien del equipo la toma.
+  botPausedAt     DateTime? @db.Timestamptz()
+  botPausedReason String?
+  consentReminderAt DateTime? @db.Timestamptz()
+  /// Lo que Bria averiguó: servicio, empresa, ciudad, plazo, presupuesto, resumen.
+  brief          Json?
   createdAt      DateTime             @default(now()) @db.Timestamptz()
   updatedAt      DateTime             @default(now()) @updatedAt @db.Timestamptz()
   messages       CrmWhatsAppMessage[]

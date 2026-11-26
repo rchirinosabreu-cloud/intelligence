@@ -71,4 +71,7 @@
 // anuncio) queda como oportunidad en el CRM con su perfil, número, mensajes y el anuncio de origen; Bria le manda un
 // saludo automático con el enlace a esta política y le pide autorización con los botones «Acepto» y «No acepto»: se
 // guarda la fecha y la versión al aceptar, y al no aceptar se borra la conversación y se retiran sus datos.
-export const PRIVACY_POLICY_VERSION = '2.29 · 2026-11-26';
+// 2.30 (26 de noviembre de 2026): solo con esa autorización, Bria conversa con quien escribe por WhatsApp con un modelo
+// de Anthropic contratado por API (recibe la conversación y el catálogo de servicios), anota el brief en la oportunidad
+// y pasa la conversación al equipo comercial.
+export const PRIVACY_POLICY_VERSION = '2.30 · 2026-11-26';
