@@ -31,7 +31,8 @@ export const crmKeys = {
   lead: id => ['crm', 'lead', id],
   followUps: filters => ['crm', 'followups', activeCrmFilters(filters)],
   metrics: filters => ['crm', 'metrics', activeCrmFilters(filters)],
-  followUpAlertDays: ['crm', 'follow-up-alerts']
+  followUpAlertDays: ['crm', 'follow-up-alerts'],
+  whatsapp: id => ['crm', 'whatsapp', id]
 };
 
 // Los días de las alertas comerciales (26 de octubre de 2026): los lee quien usa el CRM, los cambia un administrador.
@@ -50,6 +51,8 @@ export const useCrmTeam = () => useQuery({
 
 export const useCrmLeads = filters => useQuery({ queryKey: crmKeys.leads(filters), queryFn: () => crmRequest('/leads', { params: filters }) });
 export const useCrmLead = id => useQuery({ queryKey: crmKeys.lead(id), queryFn: () => crmRequest(`/leads/${id}`), enabled: Boolean(id) });
+// La conversación de WhatsApp de un prospecto: se refresca sola mientras la ficha está abierta.
+export const useCrmWhatsApp = id => useQuery({ queryKey: crmKeys.whatsapp(id), queryFn: () => crmRequest(`/leads/${id}/whatsapp`), enabled: Boolean(id), refetchInterval: 15_000, refetchOnWindowFocus: true });
 export const useCrmFollowUps = filters => useQuery({ queryKey: crmKeys.followUps(filters), queryFn: () => crmRequest('/followups', { params: filters }) });
 export const useCrmMetrics = filters => useQuery({ queryKey: crmKeys.metrics(filters), queryFn: () => crmRequest('/metrics', { params: filters }) });
 
@@ -75,3 +78,4 @@ export const useUnarchiveLead = options => useCrmMutation(({ id }) => crmRequest
 export const useArchiveLeads = options => useCrmMutation(({ ids }) => crmRequest('/leads/archive', { method: 'POST', body: { ids } }), options);
 export const useSaveFollowUpAlertDays = options => useCrmMutation(payload => crmRequest('/follow-up-alerts', { method: 'PUT', body: payload }), options);
 export const useCreateQuotationDraft =options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/quotations`, { method: 'POST' }), options);
+export const useSendWhatsApp = options => useCrmMutation(({ id, text }) => crmRequest(`/leads/${id}/whatsapp`, { method: 'POST', body: { text } }), options);

@@ -104,7 +104,43 @@ export async function ensureCrmSchema(client) {
       "followUpReviewDay" INTEGER NOT NULL DEFAULT 30,
       "updatedById" TEXT,
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-    );`);
+    );
+    -- Prospectos por WhatsApp (26 de noviembre de 2026): quien escribe al número de la agencia sin ser del equipo,
+    -- su oportunidad y la conversación. "waId" es su BSUID (o su número en un aviso viejo sin BSUID).
+    CREATE TABLE IF NOT EXISTS "CrmWhatsAppContact" (
+      id TEXT PRIMARY KEY,
+      "waId" TEXT NOT NULL UNIQUE,
+      phone TEXT,
+      "phoneKey" TEXT,
+      "profileName" TEXT,
+      "leadId" TEXT REFERENCES "CrmLead"(id),
+      "lastInboundAt" TIMESTAMPTZ,
+      "lastOutboundAt" TIMESTAMPTZ,
+      "welcomedAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS "CrmWhatsAppContact_phone_idx" ON "CrmWhatsAppContact"("phoneKey");
+    CREATE INDEX IF NOT EXISTS "CrmWhatsAppContact_lead_idx" ON "CrmWhatsAppContact"("leadId");
+    CREATE TABLE IF NOT EXISTS "CrmWhatsAppMessage" (
+      id TEXT PRIMARY KEY,
+      "contactId" TEXT NOT NULL REFERENCES "CrmWhatsAppContact"(id),
+      "leadId" TEXT REFERENCES "CrmLead"(id),
+      direction TEXT NOT NULL CHECK (direction IN ('IN','OUT')),
+      author TEXT NOT NULL CHECK (author IN ('CONTACT','BRIA','TEAM')),
+      "authorId" TEXT,
+      "authorName" TEXT,
+      "metaMessageId" TEXT UNIQUE,
+      type TEXT NOT NULL DEFAULT 'text',
+      text TEXT NOT NULL,
+      referral JSONB,
+      status TEXT CHECK (status IS NULL OR status IN ('SENT','DELIVERED','READ','FAILED')),
+      error TEXT,
+      "occurredAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS "CrmWhatsAppMessage_lead_idx" ON "CrmWhatsAppMessage"("leadId", "occurredAt");
+    CREATE INDEX IF NOT EXISTS "CrmWhatsAppMessage_contact_idx" ON "CrmWhatsAppMessage"("contactId", "occurredAt");`);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(rollbackError => console.error('[CRM schema] Rollback failed:', rollbackError.message));

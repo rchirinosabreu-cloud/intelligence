@@ -9,6 +9,8 @@ import { runWithAiContext } from '../lib/aiRequestContext.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION } from './metaGraphService.js';
 import { createWhatsAppLinkRepository } from './whatsappLinkRepository.js';
+import { getWhatsAppProspectService } from './whatsappProspectService.js';
+import { parseStatuses } from '../lib/whatsappProspects.js';
 import { signWhatsAppSession } from '../lib/whatsappSession.js';
 import {
   verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, isStatusOnlyNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
@@ -48,6 +50,9 @@ export const createWhatsAppBridgeService = ({
   logger = console,
   scheduleWork = (work) => queueMicrotask(work),
   actions = {},
+  // Prospectos (26 de noviembre de 2026): quien no es del equipo entra al CRM. Sin esto, se le explica una vez
+  // que el número es solo del equipo, como antes. WHATSAPP_PROSPECTS=off vuelve a ese comportamiento.
+  prospects = null,
   signSession = signWhatsAppSession,
   // Lo que alguien manda seguido (la foto y enseguida «regístralo») se junta en una sola respuesta.
   batchWindowMs = WHATSAPP_BATCH_WINDOW_MS,
@@ -100,6 +105,13 @@ export const createWhatsAppBridgeService = ({
     return { buffer, originalname: mediaFileName({ ...media, mimeType: mimetype }, messageId), mimetype: media.kind === 'audio' ? mimetype : mimetype.split(';')[0].trim(), size: buffer.length };
   };
   const sendText = async (to, text) => { for (const part of splitForWhatsApp(text)) await messages(textMessagePayload(to, part)); };
+  // Igual que sendText, pero devuelve el identificador de Meta del último trozo: con él llegan los estados de entrega.
+  const sendTextWithId = async (to, text) => {
+    let id = null;
+    for (const part of splitForWhatsApp(text)) id = (await messages(textMessagePayload(to, part)))?.messages?.[0]?.id || null;
+    return id;
+  };
+  const prospectsOn = () => Boolean(prospects) && String(env.WHATSAPP_PROSPECTS || '').toLowerCase() !== 'off';
   // Las opciones acompañan el último trozo de la respuesta, sin añadir una voz del transporte.
   // Si Meta no acepta los botones, las opciones se dicen en texto.
   const sendReply = async (to, { text, options = [], optionsUnavailable = null }) => {
@@ -166,6 +178,7 @@ export const createWhatsAppBridgeService = ({
       await sendText(replyTo(message), REPLIES.invalidCode);
       return { outcome: 'invalid-code', reason: outcome.reason };
     }
+    if (prospectsOn()) return prospects().receive(message, { send: (text) => sendTextWithId(replyTo(message), text) });
     if (await repository.unknownRepliesSince(message.from, new Date(at.getTime() - DAY_MS)) >= UNKNOWN_SENDER_REPLIES_PER_DAY) return { outcome: 'ignored' };
     await repository.rememberUnknownReply(message.from, at);
     await sendText(replyTo(message), REPLIES.unknown);
@@ -379,6 +392,9 @@ export const createWhatsAppBridgeService = ({
       if (messages.length) logger.warn?.('[WhatsApp] Llegaron mensajes pero falta META_WHATSAPP_TOKEN o META_WHATSAPP_PHONE_NUMBER_ID.');
       return { status: 200, body: { accepted: true, ignored: messages.length } };
     }
+    // Enviado, entregado, leído o fallido de lo que el equipo o Bria le mandaron a un prospecto.
+    const statuses = prospectsOn() ? parseStatuses(body, c.phoneNumberId) : [];
+    if (statuses.length) prospects().recordStatuses(statuses).catch((failure) => logger.warn?.(`[WhatsApp] No se anotaron estados de entrega: ${failure.message}`));
     // Se responde a Meta antes de trabajar: un webhook que espera al modelo vence y Meta lo reenvía.
     for (const message of messages) {
       if (message.type === 'unsupported') logger.warn?.(`[WhatsApp] Contenido no entregado por Meta: tipo=unsupported errores=${message.errorCodes?.join(',') || 'sin código'}.`);
@@ -411,7 +427,7 @@ export const createWhatsAppBridgeService = ({
       return out;
     }
     const last = fresh.at(-1);
-    const merged = { ...last, text: fresh.map((message) => message.text).filter(Boolean).join('\n') || null, media: null, medias: fresh.map((message) => message.media).filter(Boolean).slice(0, 5), replyId: null };
+    const merged = { ...last, text: fresh.map((message) => message.text).filter(Boolean).join('\n') || null, media: null, medias: fresh.map((message) => message.media).filter(Boolean).slice(0, 5), replyId: null, referral: fresh.find((message) => message.referral)?.referral || null };
     return [{ message: merged, result: await processMessage(merged, { alreadyRemembered: true }) }];
   };
   const accept = (message) => {
@@ -451,13 +467,20 @@ export const createWhatsAppBridgeService = ({
 
   const unlink = async (userId) => { await repository.unlink(userId); return { linked: false }; };
 
-  return { handleWebhook, verificationChallenge: (query) => webhookChallenge(query, config().verifyToken), processMessage, status, createLinkCode, unlink, configured, deliverAlert, setAlert, setAlertRule };
+  /** Un mensaje del equipo a un prospecto, desde la ficha del CRM. Devuelve el identificador de Meta. */
+  const sendProspectText = async (to, text) => {
+    if (!configured()) throw httpError(503, 'WhatsApp todavía no está configurado en el servidor.', 'WHATSAPP_NOT_CONFIGURED');
+    return sendTextWithId(to, text);
+  };
+
+  return { handleWebhook, verificationChallenge: (query) => webhookChallenge(query, config().verifyToken), processMessage, status, createLinkCode, unlink, configured, deliverAlert, setAlert, setAlertRule, sendProspectText };
 };
 
 let instance;
 export const getWhatsAppBridgeService = () => instance ||= createWhatsAppBridgeService({
   repository: createWhatsAppLinkRepository({ pool: getSidecarPool() }),
-  conversations: () => applicationConversations()
+  conversations: () => applicationConversations(),
+  prospects: () => getWhatsAppProspectService()
 });
 
 let applicationConversationsInstance;

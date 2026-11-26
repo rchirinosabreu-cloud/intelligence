@@ -30,7 +30,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.28 · 2026-11-25$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.29 · 2026-11-26$/);
     // 21 de noviembre de 2026: la respuesta rápida de Bria en voz nombra a Anthropic como encargado.
     assert.match(page, /Anthropic, PBC/); assert.match(page, /primera respuesta rápida puede venir de un modelo de Anthropic/);
     // 20 de noviembre de 2026: el borrador listo de un correo importante y el aviso de los que siguen sin respuesta.

@@ -3396,6 +3396,8 @@ model CrmLead {
   request              CrmRequest?
   quotations           Quotation[]   @relation("QuotationLead")
   followUpAlertLog     CrmFollowUpAlert[]
+  whatsappContacts     CrmWhatsAppContact[]
+  whatsappMessages     CrmWhatsAppMessage[]
 
   @@index([stage, archivedAt], map: "CrmLead_stage_idx")
   @@index([ownerId, nextFollowUpAt], map: "CrmLead_followup_idx")
@@ -3598,6 +3600,50 @@ model CrmActivity {
   @@unique([authorId, requestId])
   @@index([leadId, occurredAt], map: "CrmActivity_lead_idx")
   @@index([authorId], map: "CrmActivity_author_idx")
+}
+
+// Prospectos por WhatsApp (26 de noviembre de 2026): quien escribe al número de la agencia sin ser del equipo.
+// Tablas aditivas en scripts/ensure-crm-schema.js; reglas en src/lib/whatsappProspects.js.
+model CrmWhatsAppContact {
+  id             String               @id @default(uuid())
+  waId           String               @unique
+  phone          String?
+  phoneKey       String?
+  profileName    String?
+  leadId         String?
+  lead           CrmLead?             @relation(fields: [leadId], references: [id])
+  lastInboundAt  DateTime?            @db.Timestamptz()
+  lastOutboundAt DateTime?            @db.Timestamptz()
+  welcomedAt     DateTime?            @db.Timestamptz()
+  createdAt      DateTime             @default(now()) @db.Timestamptz()
+  updatedAt      DateTime             @default(now()) @updatedAt @db.Timestamptz()
+  messages       CrmWhatsAppMessage[]
+
+  @@index([phoneKey], map: "CrmWhatsAppContact_phone_idx")
+  @@index([leadId], map: "CrmWhatsAppContact_lead_idx")
+}
+
+model CrmWhatsAppMessage {
+  id            String             @id @default(uuid())
+  contactId     String
+  contact       CrmWhatsAppContact @relation(fields: [contactId], references: [id])
+  leadId        String?
+  lead          CrmLead?           @relation(fields: [leadId], references: [id])
+  direction     String
+  author        String
+  authorId      String?
+  authorName    String?
+  metaMessageId String?            @unique
+  type          String             @default("text")
+  text          String
+  referral      Json?
+  status        String?
+  error         String?
+  occurredAt    DateTime           @default(now()) @db.Timestamptz()
+  createdAt     DateTime           @default(now()) @db.Timestamptz()
+
+  @@index([leadId, occurredAt], map: "CrmWhatsAppMessage_lead_idx")
+  @@index([contactId, occurredAt], map: "CrmWhatsAppMessage_contact_idx")
 }
 
 // The public commercial request that created a lead: every answer as the prospect wrote it.

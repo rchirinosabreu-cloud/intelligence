@@ -65,7 +65,7 @@ Nadie se vincula sin haber entrado a la plataforma. En **Mi espacio → perfil �
 
 Por qué así y no al revés: que Bria escriba primero exige plantillas aprobadas por Meta y un método de pago, y el primer mensaje de la persona abre la ventana de 24 horas en la que Bria puede responder libremente.
 
-- Un número que nadie vinculó recibe **una vez al día** la explicación de qué es ese número, y nada más. Un código que no existe o venció se dice.
+- Un número que nadie vinculó es un **prospecto** desde el 26 de noviembre de 2026: queda como oportunidad en el CRM, recibe la bienvenida de Bria y el equipo comercial le responde desde la ficha (ver `docs/CRM_WHATSAPP.md`). Con `WHATSAPP_PROSPECTS=off` vuelve el comportamiento anterior: una vez al día la explicación de qué es ese número. Un código que no existe o venció se dice.
 - Un número que ya es de otra persona no se roba (`taken`). Pedir otro código invalida el anterior. Desvincular borra el vínculo y los códigos.
 - `GET /api/bria/whatsapp` da el estado (vinculado, número, desde cuándo); `DELETE` desvincula. Todo bajo `/api/bria`, fuera del mapa de la plataforma: Bria no se vincula números a sí misma.
 

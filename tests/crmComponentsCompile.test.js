@@ -15,6 +15,7 @@ const files = [
   'src/components/modules/Crm/CrmFilters.jsx',
   'src/components/modules/Crm/CrmStatCard.jsx',
   'src/components/modules/Crm/CrmRequestPanel.jsx',
+  'src/components/modules/Crm/CrmWhatsAppPanel.jsx',
   'src/components/modules/Crm/crmPresentation.jsx'
 ];
 

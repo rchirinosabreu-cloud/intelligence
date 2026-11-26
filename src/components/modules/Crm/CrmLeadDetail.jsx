@@ -17,6 +17,7 @@ import CrmLeadForm from './CrmLeadForm';
 import CrmActivityForm from './CrmActivityForm';
 import CrmActivityTimeline from './CrmActivityTimeline';
 import CrmRequestPanel from './CrmRequestPanel';
+import CrmWhatsAppPanel from './CrmWhatsAppPanel';
 import {
   CRM_STAGES, CRM_TRAFFIC_LIGHTS, TrafficLightBadge, TrafficLightDot, PriorityBadge, OriginBadge, ArchivedBadge, FollowUpLabel,
   formatDate, formatDateTime, formatCurrency, originLabel, trafficLightLabel, leadTitle, leadSubtitle, inputClass, labelClass
@@ -269,6 +270,8 @@ const CrmLeadDetail = () => {
           </Panel>
 
           <CrmRequestPanel request={lead.request} />
+
+          <CrmWhatsAppPanel leadId={lead.id} origin={lead.origin} />
 
           <Panel title="Registrar gestión">
             <CrmActivityForm leadId={lead.id} />
