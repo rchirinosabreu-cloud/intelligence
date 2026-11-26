@@ -438,6 +438,7 @@ export const PLATFORM_OPERATIONS = {
   'GET /crm/leads/:leadId': { que: 'Una oportunidad con su historial.' },
   'PATCH /crm/leads/:leadId': { que: 'Edita una oportunidad.', campos: 'company, contactName, email, phone, ownerId, nextFollowUpAt, notes' },
   'POST /crm/leads/:leadId/stage': { que: 'Cambia la etapa de una oportunidad.', campos: 'stage, reason' },
+  'POST /crm/leads/:leadId/whatsapp/bria': { que: 'El equipo toma la conversación de WhatsApp de un prospecto (Bria deja de responderle) o se la devuelve a Bria.', campos: 'active (true: Bria atiende; false: la atiende el equipo)' },
   'GET /crm/leads/:leadId/whatsapp': { que: 'La conversación de WhatsApp de una oportunidad: lo que escribió el prospecto, la bienvenida de Bria y las respuestas del equipo, si autorizó sus datos y hasta cuándo se le puede escribir.' },
   'POST /crm/leads/:leadId/activities': { que: 'Registra una actividad (llamada, reunión, correo).', campos: 'type, note, happenedAt, nextFollowUpAt' },
   'PATCH /crm/leads/:leadId/activities/:activityId': { que: 'Edita una actividad.', campos: 'note, happenedAt' },

@@ -110,6 +110,10 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
     res.json(await (await whatsapp.prospects()).conversationForLead(req.params.leadId));
   }));
 
+  router.post('/leads/:leadId/whatsapp/bria', handle('No pudimos cambiar quién atiende la conversación.', async (req, res) => {
+    res.json(await (await whatsapp.prospects()).setBria(req.params.leadId, req.body || {}, req.user));
+  }));
+
   router.post('/leads/:leadId/whatsapp', handle('No pudimos enviar el mensaje por WhatsApp.', async (req, res) => {
     const prospects = await whatsapp.prospects();
     res.status(201).json(await prospects.reply(req.params.leadId, req.body || {}, req.user, { sendMessage: await whatsapp.sendMessage() }));
