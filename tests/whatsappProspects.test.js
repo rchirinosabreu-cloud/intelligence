@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
   parseReferral, originDetailFor, phoneKey, leadPhone, welcomeText, shouldWelcome, shouldNotify, inboundTextFor,
-  canReplyFreely, cleanReply, nextStatus, parseStatuses, PROSPECT_TEXT_MAX
+  canReplyFreely, cleanReply, nextStatus, parseStatuses, PROSPECT_TEXT_MAX,
+  consentAnswer, CONSENT_ACCEPT_ID, CONSENT_DECLINE_ID, CONSENT_THANKS_TEXT, CONSENT_DECLINED_TEXT
 } from '../src/lib/whatsappProspects.js';
+import { PRIVACY_POLICY_VERSION } from '../src/lib/privacyPolicy.js';
 import { parseInboundMessages } from '../src/lib/whatsappBridge.js';
 import { createWhatsAppProspectService } from '../src/services/whatsappProspectService.js';
 import { createWhatsAppBridgeService } from '../src/services/whatsappBridgeService.js';
@@ -101,6 +103,7 @@ const fakeDb = ({ leads = [], members = [{ id: 'tm-francys', name: 'Francys', us
     if (value && typeof value === 'object' && !(value instanceof Date)) {
       if ('notIn' in value) return !value.notIn.includes(row[key]);
       if ('contains' in value) return String(row[key] || '').includes(value.contains);
+      if ('not' in value) return row[key] !== value.not && row[key] !== undefined;
     }
     return row[key] === value;
   }));
@@ -117,7 +120,10 @@ const fakeDb = ({ leads = [], members = [{ id: 'tm-francys', name: 'Francys', us
       const row = { id: crypto.randomUUID(), createdAt: new Date(), ...data };
       rows.push(row); return row;
     },
-    async update({ where, data }) { const row = pick(rows, where)[0]; Object.assign(row, data); return row; }
+    async update({ where, data }) { const row = pick(rows, where)[0]; Object.assign(row, data); return row; },
+    async delete({ where }) { const row = pick(rows, where)[0]; rows.splice(rows.indexOf(row), 1); return row; },
+    async deleteMany({ where }) { const gone = pick(rows, where); for (const row of gone) rows.splice(rows.indexOf(row), 1); return { count: gone.length }; },
+    async count({ where }) { return pick(rows, where).length; }
   });
   const db = {
     tables,
@@ -149,7 +155,7 @@ test('el primer mensaje crea la oportunidad con origen, anuncio, responsable y s
   const db = fakeDb();
   const { service, notices } = buildService(db);
   const sent = [];
-  const result = await service.receive(prospectMessage({ referral: { source_type: 'ad', headline: 'Branding 360' } }), { send: async (text) => { sent.push(text); return 'wamid.out1'; } });
+  const result = await service.receive(prospectMessage({ referral: { source_type: 'ad', headline: 'Branding 360' } }), { send: async (text, options) => { sent.push(text); sent.options = options; return 'wamid.out1'; } });
   assert.equal(result.outcome, 'prospect-new');
   const [lead] = db.tables.leads;
   assert.equal(lead.origin, 'WHATSAPP');
@@ -164,6 +170,11 @@ test('el primer mensaje crea la oportunidad con origen, anuncio, responsable y s
   assert.equal(db.tables.messages[0].referral.headline, 'Branding 360');
   assert.equal(sent.length, 1);
   assert.match(sent[0], /¡Hola, Ana!/);
+  assert.match(sent[0], /¿Nos autorizas\?/);
+  assert.match(sent[0], /https:\/\/labs\.brainstudioagencia\.com\/privacidad/);
+  assert.deepEqual(sent.options.buttons.map((button) => button.label), ['Acepto', 'No acepto']);
+  assert.equal(db.tables.contacts[0].dataAuthorizedAt ?? null, null);
+  assert.equal(db.tables.contacts[0].createdLeadId, lead.id);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(notices.map((notice) => notice.userId).sort(), ['u-admin', 'u-francys']);
   assert.match(notices[0].message, /Nuevo lead por WhatsApp: Ana Gómez \(.+\)\. Anuncio: Branding 360/);
@@ -181,6 +192,65 @@ test('los mensajes siguientes van a la misma oportunidad, sin otra bienvenida ni
   assert.equal(db.tables.messages.filter((row) => row.author === 'BRIA').length, 1);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(notices.length, 2);
+});
+
+test('«Acepto» guarda la prueba de la autorización (fecha y versión de la política) y da las gracias', async () => {
+  const db = fakeDb();
+  const { service } = buildService(db);
+  await service.receive(prospectMessage(), { send: async () => 'wamid.w' });
+  const sent = [];
+  await service.receive(prospectMessage({ messageId: 'wamid.2', type: 'interactive', text: 'Acepto', replyId: CONSENT_ACCEPT_ID }), { send: async (text) => { sent.push(text); return 'wamid.t'; } });
+  const [contact] = db.tables.contacts;
+  assert.equal(contact.dataAuthorizedAt.toISOString(), AT.toISOString());
+  assert.equal(contact.dataAuthorizationVersion, PRIVACY_POLICY_VERSION);
+  assert.ok(db.tables.activities.some((row) => /Autorizó por WhatsApp el tratamiento de sus datos \(política /.test(row.note)));
+  assert.deepEqual(sent, [CONSENT_THANKS_TEXT]);
+  const view = await service.conversationForLead(db.tables.leads[0].id);
+  assert.equal(view.contacts[0].authorizationPending, false);
+  // Ya autorizado, escribir «acepto» otra vez no repite nada.
+  const again = [];
+  await service.receive(prospectMessage({ messageId: 'wamid.3', text: 'acepto' }), { send: async (text) => { again.push(text); return null; } });
+  assert.deepEqual(again, []);
+});
+
+test('«No acepto» borra la conversación y retira la oportunidad que creó su mensaje', async () => {
+  const db = fakeDb();
+  const { service } = buildService(db);
+  await service.receive(prospectMessage(), { send: async () => 'wamid.w' });
+  const sent = [];
+  const result = await service.receive(prospectMessage({ messageId: 'wamid.2', type: 'interactive', text: 'No acepto', replyId: CONSENT_DECLINE_ID }), { send: async (text) => { sent.push(text); return null; } });
+  assert.equal(result.outcome, 'prospect-declined');
+  assert.equal(db.tables.contacts.length, 0);
+  assert.equal(db.tables.messages.length, 0);
+  const [lead] = db.tables.leads;
+  assert.equal(lead.phone, null);
+  assert.equal(lead.contactName, 'Datos retirados por su titular');
+  assert.equal(lead.stage, 'DESCARTADO');
+  assert.ok(lead.archivedAt);
+  assert.deepEqual(sent, [CONSENT_DECLINED_TEXT]);
+});
+
+test('«No acepto» en una oportunidad que el equipo ya gestionó borra la conversación, deja nota y avisa', async () => {
+  const db = fakeDb({ leads: [{ id: 'lead-old', consecutive: 7, phone: '+57 300 123 4567', stage: 'CONTACTADO', archivedAt: null, contactName: 'Ana', enteredAt: AT, ownerId: 'tm-francys' }] });
+  const { service, notices } = buildService(db);
+  await service.receive(prospectMessage(), { send: async () => 'wamid.w' });
+  await service.receive(prospectMessage({ messageId: 'wamid.2', text: 'No acepto' }), { send: async () => null });
+  assert.equal(db.tables.contacts.length, 0);
+  assert.equal(db.tables.messages.length, 0);
+  const [lead] = db.tables.leads;
+  assert.equal(lead.phone, '+57 300 123 4567');
+  assert.ok(db.tables.activities.some((row) => /No autorizó por WhatsApp/.test(row.note)));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(notices.some((notice) => /no autorizó el tratamiento de sus datos/.test(notice.message)));
+});
+
+test('la autorización se entiende por botón o escrita tal cual, no dentro de otra frase', () => {
+  assert.equal(consentAnswer({ replyId: CONSENT_ACCEPT_ID }), 'ACCEPT');
+  assert.equal(consentAnswer({ replyId: CONSENT_DECLINE_ID }), 'DECLINE');
+  assert.equal(consentAnswer({ text: 'Sí, acepto.' }), 'ACCEPT');
+  assert.equal(consentAnswer({ text: 'No acepto' }), 'DECLINE');
+  assert.equal(consentAnswer({ text: '¿acepto el precio?' }), null);
+  assert.equal(consentAnswer({ text: 'Acepto la propuesta si incluye video' }), null);
 });
 
 test('si ya había una oportunidad abierta con ese número, el mensaje se suma a ella', async () => {
@@ -268,6 +338,15 @@ test('el puente manda al CRM a quien no es del equipo y le responde con el ident
   assert.equal(result.welcomeId, 'wamid.out1');
   assert.equal(calls[0].from, 'CO.111222333');
   assert.equal(sent[0].to, '573001234567');
+});
+
+test('la bienvenida sale con los botones Acepto y No acepto', async () => {
+  const prospects = { async receive(message, { send }) { return { outcome: 'prospect-new', welcomeId: await send('Hola. ¿Nos autorizas?', { buttons: [{ id: CONSENT_ACCEPT_ID, label: 'Acepto' }, { id: CONSENT_DECLINE_ID, label: 'No acepto' }] }) }; } };
+  const { service, sent } = bridgeFor({ prospects });
+  const result = await service.processMessage(prospectMessage());
+  assert.equal(result.welcomeId, 'wamid.out1');
+  assert.equal(sent[0].type, 'interactive');
+  assert.deepEqual(sent[0].interactive.action.buttons.map((button) => [button.reply.id, button.reply.title]), [[CONSENT_ACCEPT_ID, 'Acepto'], [CONSENT_DECLINE_ID, 'No acepto']]);
 });
 
 test('con WHATSAPP_PROSPECTS=off vuelve el aviso de «solo para el equipo»', async () => {

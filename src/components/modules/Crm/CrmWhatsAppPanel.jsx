@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
-import { MessageCircle, SendMessage, Check, AlertCircle, Loader2, Megaphone, Clock } from '@/components/ui/icons';
+import { MessageCircle, SendMessage, Check, AlertCircle, Loader2, Megaphone, Clock, ShieldCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useCrmWhatsApp, useSendWhatsApp } from './crmApi';
 import { formatDateTime } from './crmPresentation';
@@ -29,7 +29,7 @@ export const DeliveryStatus = ({ status }) => {
 
 const authorLabel = message => {
   if (message.direction === 'IN') return null;
-  if (message.author === 'BRIA') return 'Bria · bienvenida automática';
+  if (message.author === 'BRIA') return 'Bria · mensaje automático';
   return message.authorName || 'Equipo';
 };
 
@@ -92,6 +92,16 @@ const CrmWhatsAppPanel = ({ leadId, origin }) => {
         </h2>
         {contact?.phone && <span className="text-xs text-zinc-500 dark:text-zinc-400">{contact.profileName ? `${contact.profileName} · ` : ''}{contact.phone}</span>}
       </div>
+
+      {contact && (contact.authorizationPending ? (
+        <p className="mb-3 flex items-start gap-2 rounded-xl bg-status-attention/15 px-3 py-2 text-xs text-status-attention-fg" data-wa-consent="pending">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Aún no autoriza el tratamiento de sus datos. Bria se lo pidió en la bienvenida; si responde «No acepto», la conversación se borra.
+        </p>
+      ) : (
+        <p className="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400" data-wa-consent="ok">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" /> Autorizó el tratamiento de sus datos el {formatDateTime(contact.dataAuthorizedAt)}
+        </p>
+      ))}
 
       {isLoading && <p className="flex items-center gap-2 py-6 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando la conversación…</p>}
       {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error.message}</p>}

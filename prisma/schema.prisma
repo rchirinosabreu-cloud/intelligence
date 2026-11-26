@@ -3615,6 +3615,11 @@ model CrmWhatsAppContact {
   lastInboundAt  DateTime?            @db.Timestamptz()
   lastOutboundAt DateTime?            @db.Timestamptz()
   welcomedAt     DateTime?            @db.Timestamptz()
+  /// Autorización de datos: cuándo tocó «Acepto» y con qué versión de la política (prueba, Ley 1581).
+  dataAuthorizedAt         DateTime? @db.Timestamptz()
+  dataAuthorizationVersion String?
+  /// La oportunidad que creó este contacto al escribir; si no acepta y nadie la gestionó, se retira.
+  createdLeadId  String?
   createdAt      DateTime             @default(now()) @db.Timestamptz()
   updatedAt      DateTime             @default(now()) @updatedAt @db.Timestamptz()
   messages       CrmWhatsAppMessage[]

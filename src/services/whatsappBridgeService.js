@@ -111,6 +111,17 @@ export const createWhatsAppBridgeService = ({
     for (const part of splitForWhatsApp(text)) id = (await messages(textMessagePayload(to, part)))?.messages?.[0]?.id || null;
     return id;
   };
+  // Un mensaje a un prospecto, con botones de respuesta si los trae (la autorización de datos). Si Meta no los acepta,
+  // sale en texto con las opciones escritas, que también se entienden al responderlas.
+  const sendProspectMessage = async (to, text, { buttons = [] } = {}) => {
+    const payload = buttons.length ? optionsMessagePayload(to, text, buttons) : null;
+    if (!payload) return sendTextWithId(to, buttons.length ? `${text}\n\nResponde «${buttons.map((button) => button.label).join('» o «')}».` : text);
+    try { return (await messages(payload))?.messages?.[0]?.id || null; }
+    catch (failure) {
+      logger.warn?.(`[WhatsApp prospectos] Meta no aceptó los botones; van en texto: ${failure.message}`);
+      return sendTextWithId(to, `${text}\n\nResponde «${buttons.map((button) => button.label).join('» o «')}».`);
+    }
+  };
   const prospectsOn = () => Boolean(prospects) && String(env.WHATSAPP_PROSPECTS || '').toLowerCase() !== 'off';
   // Las opciones acompañan el último trozo de la respuesta, sin añadir una voz del transporte.
   // Si Meta no acepta los botones, las opciones se dicen en texto.
@@ -178,7 +189,7 @@ export const createWhatsAppBridgeService = ({
       await sendText(replyTo(message), REPLIES.invalidCode);
       return { outcome: 'invalid-code', reason: outcome.reason };
     }
-    if (prospectsOn()) return prospects().receive(message, { send: (text) => sendTextWithId(replyTo(message), text) });
+    if (prospectsOn()) return prospects().receive(message, { send: (text, options) => sendProspectMessage(replyTo(message), text, options) });
     if (await repository.unknownRepliesSince(message.from, new Date(at.getTime() - DAY_MS)) >= UNKNOWN_SENDER_REPLIES_PER_DAY) return { outcome: 'ignored' };
     await repository.rememberUnknownReply(message.from, at);
     await sendText(replyTo(message), REPLIES.unknown);

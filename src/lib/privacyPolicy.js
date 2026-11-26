@@ -69,5 +69,6 @@
 // dueño conecta. Sección propia, como Meta y LinkedIn.
 // 2.29 (26 de noviembre de 2026): quien escribe al WhatsApp de la agencia sin ser del equipo (por ejemplo, desde un
 // anuncio) queda como oportunidad en el CRM con su perfil, número, mensajes y el anuncio de origen; Bria le manda un
-// saludo automático con el enlace a esta política y el equipo comercial responde desde la plataforma.
+// saludo automático con el enlace a esta política y le pide autorización con los botones «Acepto» y «No acepto»: se
+// guarda la fecha y la versión al aceptar, y al no aceptar se borra la conversación y se retiran sus datos.
 export const PRIVACY_POLICY_VERSION = '2.29 · 2026-11-26';

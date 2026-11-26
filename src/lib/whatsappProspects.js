@@ -68,15 +68,41 @@ export const leadPhone = (value) => {
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 
-/** La primera respuesta, apenas escribe. Dice quién responde, que una persona sigue y dónde está la política de datos. */
+// Autorización de datos (Ley 1581; Rodny, 26 de noviembre de 2026, tras la revisión del PR 1438): la bienvenida pide
+// autorización expresa con dos botones. «Acepto» guarda la fecha y la versión de la política como prueba, igual que la
+// casilla del formulario; «No acepto» borra la conversación y retira sus datos del CRM.
+export const CONSENT_ACCEPT_ID = 'crm:datos:si';
+export const CONSENT_DECLINE_ID = 'crm:datos:no';
+export const CONSENT_BUTTONS = Object.freeze([
+  Object.freeze({ id: CONSENT_ACCEPT_ID, label: 'Acepto' }),
+  Object.freeze({ id: CONSENT_DECLINE_ID, label: 'No acepto' })
+]);
+
+const plain = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** La respuesta a la autorización: por el botón, o si escribe exactamente «acepto» / «no acepto». Si no, null. */
+export const consentAnswer = (message) => {
+  if (message?.replyId === CONSENT_ACCEPT_ID) return 'ACCEPT';
+  if (message?.replyId === CONSENT_DECLINE_ID) return 'DECLINE';
+  const text = plain(message?.text);
+  if (['no acepto', 'no autorizo'].includes(text)) return 'DECLINE';
+  if (['acepto', 'si acepto', 'autorizo', 'si autorizo'].includes(text)) return 'ACCEPT';
+  return null;
+};
+
+/** La primera respuesta, apenas escribe. Dice quién responde, que una persona sigue, y pide la autorización de datos. */
 export const welcomeText = ({ name = null, privacyUrl = null, agencyName = AGENCY_ENTITY } = {}) => {
   const hello = firstName(name) ? `¡Hola, ${firstName(name)}!` : '¡Hola!';
   return [
     `${hello} Gracias por escribir a ${agencyName}. Soy Bria, la asistente de la agencia.`,
     'Ya le avisé a nuestro equipo comercial y una persona te responde muy pronto. Mientras tanto, cuéntanos qué necesitas para tu marca y para cuándo.',
-    privacyUrl ? `Tratamos tus datos según nuestra política: ${privacyUrl}` : null
+    'Para atenderte guardamos tu nombre, tu número y esta conversación según nuestra política de datos. ¿Nos autorizas?',
+    privacyUrl ? `Política de datos: ${privacyUrl}` : null
   ].filter(Boolean).join('\n\n');
 };
+
+export const CONSENT_THANKS_TEXT = '¡Gracias! Ya quedó registrado. Cuéntanos qué necesitas y una persona del equipo te responde.';
+export const CONSENT_DECLINED_TEXT = 'Listo. Borramos esta conversación y retiramos tus datos de nuestro sistema. Si cambias de opinión, escríbenos de nuevo.';
 
 /** ¿Toca bienvenida? La primera vez, o si pasó mucho desde la anterior. */
 export const shouldWelcome = (contact, at = new Date()) => {

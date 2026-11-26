@@ -12,8 +12,10 @@ import { LEGAL_ENTITY } from '../components/public/legalEntity.js';
 import { displayPhone } from '../lib/whatsappBridge.js';
 import {
   parseReferral, originDetailFor, phoneKey, leadPhone, welcomeText, shouldWelcome, shouldNotify, inboundTextFor,
-  canReplyFreely, cleanReply, nextStatus, CLOSED_STAGES, PROSPECT_TEXT_MAX
+  canReplyFreely, cleanReply, nextStatus, CLOSED_STAGES, PROSPECT_TEXT_MAX,
+  consentAnswer, CONSENT_BUTTONS, CONSENT_THANKS_TEXT, CONSENT_DECLINED_TEXT
 } from '../lib/whatsappProspects.js';
+import { PRIVACY_POLICY_VERSION } from '../lib/privacyPolicy.js';
 import { SERVICE_WINDOW_MS, WINDOW_MARGIN_MS } from '../lib/whatsappAlerts.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -39,6 +41,8 @@ const serializeContact = (row, at) => {
     phone: displayPhone(row.phone) || null,
     profileName: row.profileName || null,
     lastInboundAt: row.lastInboundAt || null,
+    dataAuthorizedAt: row.dataAuthorizedAt || null,
+    authorizationPending: !row.dataAuthorizedAt,
     canReply: open,
     windowClosesAt: row.lastInboundAt ? new Date(new Date(row.lastInboundAt).getTime() + SERVICE_WINDOW_MS - WINDOW_MARGIN_MS) : null
   };
@@ -73,11 +77,60 @@ export const createWhatsAppProspectService = ({
   };
 
   /**
+   * «No acepto»: se borra la conversación y el contacto. Si la oportunidad la creó su mensaje y nadie del equipo la ha
+   * gestionado, se retira (sin nombre ni número, descartada y archivada); si ya era una oportunidad trabajada, queda
+   * una nota y se avisa para que el equipo decida qué más retirar.
+   */
+  const decline = async (contact, { send, at }) => {
+    const outcome = await db.$transaction(async (tx) => {
+      const lead = contact.leadId ? await tx.crmLead.findUnique({ where: { id: contact.leadId } }) : null;
+      const worked = lead ? await tx.crmActivity.count({ where: { leadId: lead.id, authorId: { not: null } } }) : 0;
+      const retire = Boolean(lead) && contact.createdLeadId === lead.id && worked === 0;
+      await tx.crmWhatsAppMessage.deleteMany({ where: { contactId: contact.id } });
+      await tx.crmWhatsAppContact.delete({ where: { id: contact.id } });
+      if (retire) {
+        await tx.crmLead.update({
+          where: { id: lead.id },
+          data: {
+            contactName: 'Datos retirados por su titular', phone: null, email: null, company: null, companyKey: null, notes: null,
+            stage: 'DESCARTADO', lostReason: 'No autorizó el tratamiento de sus datos', closedAt: at, archivedAt: at, nextAction: null, nextFollowUpAt: null
+          }
+        });
+      } else if (lead) {
+        await tx.crmActivity.create({ data: { leadId: lead.id, type: 'NOTA', occurredAt: at, note: 'No autorizó por WhatsApp el tratamiento de sus datos: se borró la conversación. Revisar qué más se debe retirar de esta oportunidad.', authorId: null } });
+      }
+      return { lead, retire };
+    });
+    if (send) {
+      try { await send(CONSENT_DECLINED_TEXT); }
+      catch (failure) { logger.warn?.(`[WhatsApp prospectos] La confirmación del retiro no salió: ${failure.message}`); }
+    }
+    if (outcome.lead && !outcome.retire) {
+      const ownerUserId = outcome.lead.ownerId ? (await db.teamMember.findUnique({ where: { id: outcome.lead.ownerId }, select: { userId: true } }).catch(() => null))?.userId || null : null;
+      recipientsFor(db, ownerUserId)
+        .then((userIds) => Promise.all(userIds.map((userId) => notify({
+          userId,
+          type: 'CRM_WHATSAPP_MESSAGE',
+          message: `${outcome.lead.contactName || 'Un prospecto'} (${formatLeadCode(outcome.lead.consecutive)}) no autorizó el tratamiento de sus datos por WhatsApp.`,
+          relatedId: outcome.lead.id,
+          url: `/crm/oportunidades/${outcome.lead.id}`
+        }))))
+        .catch((failure) => logger.error?.('[WhatsApp prospectos] El aviso no salió:', failure?.message || failure));
+    }
+    return { outcome: 'prospect-declined', leadId: outcome.retire ? null : outcome.lead?.id || null };
+  };
+
+  /**
    * Un mensaje de alguien que no es del equipo. `send(text)` le responde por el mismo chat y devuelve el
    * identificador de Meta. Nunca lanza hacia el puente por un aviso o una bienvenida que no salió.
    */
   const receive = async (message, { send } = {}) => {
     const at = now();
+    const answer = consentAnswer(message);
+    if (answer === 'DECLINE') {
+      const known = await db.crmWhatsAppContact.findUnique({ where: { waId: message.from } });
+      if (known) return decline(known, { send, at });
+    }
     const referral = parseReferral(message.referral);
     const key = phoneKey(message.phone);
     const owner = await resolveOwner(db, env.CRM_INTAKE_OWNER || DEFAULT_INTAKE_OWNER).catch(() => null);
@@ -117,6 +170,7 @@ export const createWhatsAppProspectService = ({
         data: {
           leadId: lead.id,
           lastInboundAt: at,
+          ...(createdLead ? { createdLeadId: lead.id } : {}),
           ...(message.phone ? { phone: message.phone, phoneKey: key } : {}),
           ...(message.profileName ? { profileName: message.profileName } : {})
         }
@@ -132,10 +186,23 @@ export const createWhatsAppProspectService = ({
     });
 
     const { contact, lead, createdLead, previousInboundAt } = saved;
-    if (send && shouldWelcome(contact, at)) {
+    const record = async (text, extra = {}) => {
+      const metaMessageId = await send(text, extra);
+      await db.crmWhatsAppMessage.create({ data: { contactId: contact.id, leadId: lead.id, direction: 'OUT', author: 'BRIA', authorName: 'Bria', metaMessageId: metaMessageId || null, text, status: 'SENT', occurredAt: now() } });
+    };
+    if (answer === 'ACCEPT' && !contact.dataAuthorizedAt && contact.welcomedAt) {
+      // La prueba de la autorización: cuándo y con qué versión de la política, en el contacto y en la oportunidad.
+      await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { dataAuthorizedAt: at, dataAuthorizationVersion: PRIVACY_POLICY_VERSION } });
+      await db.crmActivity.create({ data: { leadId: lead.id, type: 'NOTA', occurredAt: at, note: `Autorizó por WhatsApp el tratamiento de sus datos (política ${PRIVACY_POLICY_VERSION}).`, authorId: null } })
+        .catch((failure) => logger.warn?.(`[WhatsApp prospectos] La autorización quedó en el contacto pero no en la oportunidad: ${failure.message}`));
+      if (send) {
+        try { await record(CONSENT_THANKS_TEXT); await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { lastOutboundAt: now() } }); }
+        catch (failure) { logger.warn?.(`[WhatsApp prospectos] El agradecimiento no salió: ${failure.message}`); }
+      }
+    } else if (send && !contact.dataAuthorizedAt && shouldWelcome(contact, at)) {
       const text = welcomeText({ name: contact.profileName, privacyUrl: privacyUrl() });
       try {
-        const metaMessageId = await send(text);
+        const metaMessageId = await send(text, { buttons: CONSENT_BUTTONS });
         await db.crmWhatsAppMessage.create({ data: { contactId: contact.id, leadId: lead.id, direction: 'OUT', author: 'BRIA', authorName: 'Bria', metaMessageId: metaMessageId || null, text, status: 'SENT', occurredAt: now() } });
         await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { welcomedAt: at, lastOutboundAt: now() } });
       } catch (failure) {

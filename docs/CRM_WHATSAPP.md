@@ -15,8 +15,16 @@ Interruptor: `WHATSAPP_PROSPECTS=off` en Railway apaga todo esto y vuelve la exp
 1. Busca o crea el contacto (`CrmWhatsAppContact`, por `waId`).
 2. Busca la oportunidad: la ya enlazada si sigue abierta; si no, una abierta con el mismo número (últimos 10 dígitos). Si no hay, crea una: origen WhatsApp, detalle del origen = el anuncio («Anuncio: Redes que venden») o «Escribió directo al WhatsApp», nombre del perfil de WhatsApp, etapa Por gestionar, responsable `CRM_INTAKE_OWNER` (Francys por defecto), próxima acción «Responder por WhatsApp» con seguimiento hoy. Una oportunidad Ganada, Perdida o Descartada no se reabre: se crea otra.
 3. Guarda el mensaje (`CrmWhatsAppMessage`, dirección IN). Los archivos se anotan como «[Foto]», «[Nota de voz]»…; todavía no se descargan.
-4. La primera vez (o tras 30 días) Bria responde la bienvenida con el enlace a `/privacidad`. Si Meta falla, se registra igual.
+4. La primera vez (o tras 30 días, mientras no haya autorizado) Bria responde la bienvenida con el enlace a `/privacidad` y los botones **Acepto** / **No acepto**. Si Meta no acepta los botones, van escritos y se entiende la respuesta escrita igual. Si Meta falla, se registra igual.
 5. Avisa en la campana a la responsable y a los administradores: siempre en una oportunidad nueva, y luego solo si la persona vuelve tras 12 horas de silencio.
+
+## Autorización de datos (Ley 1581)
+
+Rodny eligió el 26 de noviembre de 2026, tras la revisión del PR 1438, pedirla con botones en la bienvenida (la regla del proyecto: toda superficie pública que recoge datos pide autorización previa, expresa e informada y guarda la prueba).
+
+- **Acepto** (botón, o escribir exactamente «acepto» / «sí acepto» / «autorizo»): el contacto guarda `dataAuthorizedAt` y `dataAuthorizationVersion` (versión de la política), queda una nota en la oportunidad y Bria da las gracias.
+- **No acepto** (botón, o «no acepto» / «no autorizo»): se borran los mensajes y el contacto. Si la oportunidad la creó su mensaje (`createdLeadId`) y nadie del equipo la gestionó, se retira: sin nombre ni número, descartada y archivada. Si ya era una oportunidad trabajada, queda una nota y se avisa a la responsable para que retire lo demás. Bria confirma el retiro.
+- Mientras no responda, la ficha muestra «Aún no autoriza el tratamiento de sus datos» y el equipo puede responderle igual.
 
 Los estados de entrega de Meta (`value.statuses`) actualizan los mensajes enviados: enviado, entregado, leído o no se entregó; un estado viejo nunca pisa uno nuevo.
 

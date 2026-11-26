@@ -117,9 +117,15 @@ export async function ensureCrmSchema(client) {
       "lastInboundAt" TIMESTAMPTZ,
       "lastOutboundAt" TIMESTAMPTZ,
       "welcomedAt" TIMESTAMPTZ,
+      "dataAuthorizedAt" TIMESTAMPTZ,
+      "dataAuthorizationVersion" TEXT,
+      "createdLeadId" TEXT,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "dataAuthorizedAt" TIMESTAMPTZ;
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "dataAuthorizationVersion" TEXT;
+    ALTER TABLE "CrmWhatsAppContact" ADD COLUMN IF NOT EXISTS "createdLeadId" TEXT;
     CREATE INDEX IF NOT EXISTS "CrmWhatsAppContact_phone_idx" ON "CrmWhatsAppContact"("phoneKey");
     CREATE INDEX IF NOT EXISTS "CrmWhatsAppContact_lead_idx" ON "CrmWhatsAppContact"("leadId");
     CREATE TABLE IF NOT EXISTS "CrmWhatsAppMessage" (
