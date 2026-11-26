@@ -115,6 +115,10 @@ export const createProspectAgent = ({
       parsed = { reply: '', handoff: true, handoffReason: 'Bria no pudo responder (falla del servicio de IA).', brief: {}, failed: true };
     }
 
+    // Mientras el modelo pensaba, alguien del equipo pudo tomar la conversación o responder: entonces Bria no envía.
+    const current = await db.crmWhatsAppContact.findUnique({ where: { id: contact.id } }).catch(() => null);
+    if (!current || current.botPausedAt || !current.dataAuthorizedAt) return { replied: false, handoff: false, skipped: true, takenOver: true };
+
     const reply = (parsed.reply || (parsed.handoff ? HANDOFF_FALLBACK_TEXT : '')).slice(0, AGENT_REPLY_MAX * 2);
     let replied = false;
     if (reply) {
@@ -124,16 +128,22 @@ export const createProspectAgent = ({
         replied = true;
       } catch (failure) {
         logger.warn?.(`[WhatsApp prospectos] La respuesta de Bria no salió: ${failure.message}`);
+        // Si el mensaje no salió, la persona queda esperando: pasa al equipo para que no se pierda.
+        parsed = { ...parsed, handoff: true, handoffReason: 'La respuesta de Bria no salió por WhatsApp; hay que escribirle.' };
       }
     }
 
-    const brief = mergeBrief(contact.brief, parsed.brief);
+    const brief = mergeBrief(current.brief ?? contact.brief, parsed.brief);
     await db.crmWhatsAppContact.update({ where: { id: contact.id }, data: { brief: brief || undefined, ...(replied ? { lastOutboundAt: now() } : {}) } });
-    // Lo que la oportunidad aún no tiene, lo completa el brief. Nunca pisa lo que escribió el equipo.
-    const fill = {};
-    if (!lead.serviceInterest && brief?.serviceInterest) fill.serviceInterest = brief.serviceInterest.slice(0, 250);
-    if (!lead.company && brief?.company) { fill.company = brief.company.slice(0, 200); fill.companyKey = normalizeCompanyKey(fill.company); }
-    if (Object.keys(fill).length) await db.crmLead.update({ where: { id: lead.id }, data: fill }).catch((failure) => logger.warn?.(`[WhatsApp prospectos] El brief no quedó en la oportunidad: ${failure.message}`));
+    // Lo que la oportunidad aún no tiene, lo completa el brief. Nunca pisa lo que escribió el equipo: la condición de
+    // campo vacío se revisa al escribir, no con la copia leída antes de llamar al modelo.
+    const fills = [];
+    if (brief?.serviceInterest) fills.push(['serviceInterest', { serviceInterest: brief.serviceInterest.slice(0, 250) }]);
+    if (brief?.company) { const company = brief.company.slice(0, 200); fills.push(['company', { company, companyKey: normalizeCompanyKey(company) }]); }
+    for (const [field, data] of fills) {
+      await db.crmLead.updateMany({ where: { id: lead.id, OR: [{ [field]: null }, { [field]: '' }] }, data })
+        .catch((failure) => logger.warn?.(`[WhatsApp prospectos] El brief no quedó en la oportunidad: ${failure.message}`));
+    }
 
     if (parsed.handoff) {
       await pause(contact, lead, parsed.handoffReason, at);

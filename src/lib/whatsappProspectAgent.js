@@ -107,7 +107,9 @@ export const turnNote = ({ today, contactName = null, originDetail = null, justA
 export const parseAgentOutput = (raw) => {
   let data = raw;
   if (typeof raw === 'string') {
-    try { data = JSON.parse(raw); } catch { return null; }
+    // Aunque la API devuelve JSON por esquema, un modelo de respaldo puede envolverlo en un bloque ```json.
+    const unfenced = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    try { data = JSON.parse(unfenced); } catch { return null; }
   }
   if (!data || typeof data !== 'object') return null;
   const reply = String(data.reply ?? '').replace(/\r\n/g, '\n').trim().slice(0, AGENT_REPLY_MAX * 2);

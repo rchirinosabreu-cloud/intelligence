@@ -56,6 +56,9 @@ test('la salida del modelo se limpia; si no sirve, no se usa', () => {
   const parsed = parseAgentOutput(JSON.stringify({ reply: ' Hola ', handoff: false, handoffReason: '', brief: { serviceInterest: 'Logo', city: '', company: 'Café Sol' } }));
   assert.deepEqual(parsed, { reply: 'Hola', handoff: false, handoffReason: null, brief: { serviceInterest: 'Logo', company: 'Café Sol' } });
   assert.equal(parseAgentOutput('no es json'), null);
+  // AGENTS.md §6.2: la respuesta envuelta en un bloque ```json se limpia y se lee igual.
+  assert.deepEqual(parseAgentOutput('```json\n{"reply":"Hola","handoff":false,"handoffReason":"","brief":{"city":"Cali"}}\n```'), { reply: 'Hola', handoff: false, handoffReason: null, brief: { city: 'Cali' } });
+  assert.equal(parseAgentOutput('```\n{"reply":"Hola","handoff":false}\n```').reply, 'Hola');
   assert.equal(parseAgentOutput({ reply: '', handoff: false }), null);
   assert.equal(parseAgentOutput({ reply: '', handoff: true, handoffReason: '' }).handoffReason, 'Bria pasó la conversación al equipo.');
   assert.deepEqual(mergeBrief({ city: 'Cali', budget: '2M' }, { budget: '3M' }), { city: 'Cali', budget: '3M' });
@@ -96,12 +99,13 @@ const fakeDb = () => {
   const tables = { contacts: [], leads: [], activities: [], messages: [], catalog: [{ category: 'BRANDING', name: 'Logo', description: 'Diseño de logo', valor_neto: 900000, activo: true }] };
   let consecutive = 10;
   const pick = (rows, where = {}) => rows.filter((row) => Object.entries(where).every(([key, value]) => {
+    if (key === 'OR') return value.some((option) => pick([row], option).length);
     if (value && typeof value === 'object' && !(value instanceof Date)) {
       if ('notIn' in value) return !value.notIn.includes(row[key]);
       if ('contains' in value) return String(row[key] || '').includes(value.contains);
       if ('not' in value) return row[key] !== value.not && row[key] !== undefined;
     }
-    return row[key] === value;
+    return row[key] === value || (value === null && row[key] == null);
   }));
   const model = (rows, { unique = [] } = {}) => ({
     async findUnique({ where }) { return pick(rows, where)[0] || null; },
@@ -116,6 +120,7 @@ const fakeDb = () => {
       const row = { id: crypto.randomUUID(), createdAt: new Date(), ...data }; rows.push(row); return row;
     },
     async update({ where, data }) { const row = pick(rows, where)[0]; Object.assign(row, Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined))); return row; },
+    async updateMany({ where, data }) { const hit = pick(rows, where); for (const row of hit) Object.assign(row, data); return { count: hit.length }; },
     async delete({ where }) { const row = pick(rows, where)[0]; rows.splice(rows.indexOf(row), 1); return row; },
     async deleteMany({ where }) { const gone = pick(rows, where); for (const row of gone) rows.splice(rows.indexOf(row), 1); return { count: gone.length }; },
     async count({ where }) { return pick(rows, where).length; }
@@ -138,18 +143,18 @@ let clock = AT;
 const tick = (ms) => { clock = new Date(clock.getTime() + ms); };
 const message = (overrides = {}) => ({ messageId: crypto.randomUUID(), from: 'CO.555', phone: '573005550000', profileName: 'Ana Gómez', type: 'text', text: 'Hola, quiero un logo para mi café', ...overrides });
 
-const build = ({ answers = [], fail = false } = {}) => {
+const build = ({ answers = [], fail = false, during = null } = {}) => {
   clock = AT;
   const db = fakeDb();
   const calls = [];
   const notices = [];
-  const brain = { model: 'claude-opus-5-5', async reply(input) { calls.push(input); if (fail) throw new Error('caída'); return answers.shift() || { text: JSON.stringify({ reply: 'Claro, ¿para cuándo lo necesitas?', handoff: false, handoffReason: '', brief: { serviceInterest: 'Logo', company: 'Café Sol' } }) }; } };
+  const brain = { model: 'claude-opus-5-5', async reply(input) { calls.push(input); if (fail) throw new Error('caída'); if (during) await during(db); return answers.shift() || { text: JSON.stringify({ reply: 'Claro, ¿para cuándo lo necesitas?', handoff: false, handoffReason: '', brief: { serviceInterest: 'Logo', company: 'Café Sol' } }) }; } };
   const common = { db, now: () => clock, notify: async (notice) => { notices.push(notice); }, recipientsFor: async () => ['u-francys', 'u-admin'], logger: { warn() {}, error() {}, info() {} } };
   const agent = createProspectAgent({ ...common, brain });
   const service = createWhatsAppProspectService({ ...common, env: { APP_URL: 'https://labs.example.com' }, resolveOwner: async () => ({ id: 'tm-francys' }), prospectAgent: agent });
   const sent = [];
   const send = async (text, options) => { sent.push({ text, options }); return `wamid.out${sent.length}`; };
-  return { db, calls, notices, service, sent, send };
+  return { db, calls, notices, service, sent, send, agent };
 };
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -259,4 +264,41 @@ test('sin IA configurada todo sigue como antes: bienvenida, agradecimiento fijo 
   const view = await service.conversationForLead(db.tables.leads[0].id);
   assert.equal(view.briaAvailable, false);
   await assert.rejects(() => service.setBria(db.tables.leads[0].id, { active: true }, {}), { statusCode: 409 });
+});
+
+const authorize = async ({ service, send }) => {
+  await service.receive(message(), { send });
+  tick(MINUTE);
+};
+
+test('si el equipo toma la conversación mientras Bria piensa, Bria no envía nada', async () => {
+  const ctx = build({ during: async (db) => { db.tables.contacts[0].botPausedAt = clock; } });
+  await authorize(ctx);
+  const before = ctx.sent.length;
+  const briaBefore = ctx.db.tables.messages.filter((row) => row.author === 'BRIA').length;
+  const result = await ctx.service.receive(message({ type: 'interactive', text: 'Acepto', replyId: CONSENT_ACCEPT_ID }), { send: ctx.send });
+  assert.equal(result.agent.replied, false);
+  assert.equal(ctx.sent.length, before);
+  assert.equal(ctx.db.tables.messages.filter((row) => row.author === 'BRIA').length, briaBefore);
+});
+
+test('el brief no pisa la empresa que el equipo escribió mientras Bria pensaba', async () => {
+  const ctx = build({ during: async (db) => { db.tables.leads[0].company = 'Cafetería del Sol S.A.S.'; } });
+  await authorize(ctx);
+  await ctx.service.receive(message({ type: 'interactive', text: 'Acepto', replyId: CONSENT_ACCEPT_ID }), { send: ctx.send });
+  assert.equal(ctx.db.tables.leads[0].company, 'Cafetería del Sol S.A.S.');
+  assert.equal(ctx.db.tables.leads[0].serviceInterest, 'Logo');
+});
+
+test('si la respuesta de Bria no sale por WhatsApp, pasa al equipo y avisa', async () => {
+  const ctx = build();
+  await authorize(ctx);
+  const failing = async (text, options) => { if (!options?.buttons) throw new Error('Meta rechazó'); return ctx.send(text, options); };
+  const result = await ctx.service.receive(message({ type: 'interactive', text: 'Acepto', replyId: CONSENT_ACCEPT_ID }), { send: failing });
+  await settle();
+  assert.equal(result.agent.replied, false);
+  assert.equal(result.agent.handoff, true);
+  assert.ok(ctx.db.tables.contacts[0].botPausedAt);
+  assert.match(ctx.db.tables.contacts[0].botPausedReason, /no salió/);
+  assert.ok(ctx.notices.some((notice) => /Bria te pasa/.test(notice.message)));
 });
