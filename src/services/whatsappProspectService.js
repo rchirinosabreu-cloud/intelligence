@@ -311,11 +311,23 @@ export const createWhatsAppProspectService = ({
   };
 
   /** El equipo toma la conversación o se la devuelve a Bria. */
-  const setBria = async (leadId, payload = {}, actor = {}) => {
+  // Al devolverle la conversación, si lo último lo escribió la persona y nadie le respondió, Bria lo contesta
+  // enseguida (Rodny, 26 de noviembre de 2026: el cliente había preguntado algo más y Bria no siguió).
+  const setBria = async (leadId, payload = {}, actor = {}, { sendMessage } = {}) => {
     if (typeof payload.active !== 'boolean') throw httpError(400, 'Indica si Bria atiende o no esta conversación.');
     if (!agent() || (payload.active && !agent().available())) throw httpError(409, 'Bria no puede atender prospectos todavía: falta activar la IA en el servidor.');
     const row = await agent().setActive(leadId, payload, actor);
-    return { contact: serializeContact(row, now()) };
+    let agentResult = null;
+    if (payload.active && typeof sendMessage === 'function') {
+      const [last] = await db.crmWhatsAppMessage.findMany({ where: { contactId: row.id }, orderBy: { occurredAt: 'desc' }, take: 1 });
+      const lead = last?.direction === 'IN' ? await db.crmLead.findUnique({ where: { id: leadId } }) : null;
+      if (lead) {
+        try { agentResult = await agent().respond({ contact: row, lead, send: (text) => sendMessage(row.phone || row.waId, text) }); }
+        catch (failure) { logger.warn?.(`[WhatsApp prospectos] Bria no pudo retomar la conversación: ${failure.message}`); }
+      }
+    }
+    const contact = agentResult ? await db.crmWhatsAppContact.findUnique({ where: { id: row.id } }) : row;
+    return { contact: serializeContact(contact || row, now()), ...(agentResult ? { agent: agentResult } : {}) };
   };
 
   return { receive, conversationForLead, reply, recordStatuses, setBria };

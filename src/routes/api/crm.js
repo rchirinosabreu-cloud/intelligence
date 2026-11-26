@@ -111,7 +111,10 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
   }));
 
   router.post('/leads/:leadId/whatsapp/bria', handle('No pudimos cambiar quién atiende la conversación.', async (req, res) => {
-    res.json(await (await whatsapp.prospects()).setBria(req.params.leadId, req.body || {}, req.user));
+    const prospects = await whatsapp.prospects();
+    // Al devolverle la conversación, Bria responde lo que la persona dejó pendiente.
+    const sendMessage = req.body?.active === true ? await whatsapp.sendMessage() : undefined;
+    res.json(await prospects.setBria(req.params.leadId, req.body || {}, req.user, { sendMessage }));
   }));
 
   router.post('/leads/:leadId/whatsapp', handle('No pudimos enviar el mensaje por WhatsApp.', async (req, res) => {
