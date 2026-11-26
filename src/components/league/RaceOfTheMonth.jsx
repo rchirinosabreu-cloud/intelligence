@@ -151,7 +151,7 @@ function Rules() {
       <li>Si estás entre las dos primeras personas en ingresar a la reunión de tráfico, sumarás {MEETING_POINTS} puntos.</li>
       <li>Tener la cámara encendida en la reunión de tráfico suma {CAMERA_POINTS} puntos. Un administrador lo marca después de la reunión.</li>
       <li>Cada semana tendrás {KUDOS_WEEKLY} puntos para regalar a otra persona como agradecimiento o reconocimiento.</li>
-      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos; la segunda entrega anticipada del mismo día suma {EARLY_DELIVERY_EXTRA_POINTS} y las siguientes ya no suman: el tope es de {RECOGNITION_POINTS + EARLY_DELIVERY_EXTRA_POINTS} al día. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 5:00 pm sin dejar nada vencido y sin mover fechas.</li>
+      <li>Las insignias de logros también te sumarán {RECOGNITION_POINTS} puntos; la segunda entrega anticipada del mismo día suma {EARLY_DELIVERY_EXTRA_POINTS} y las siguientes ya no suman: el tope es de {RECOGNITION_POINTS + EARLY_DELIVERY_EXTRA_POINTS} al día. La insignia Al día pide cerrar al menos {CAUGHT_UP_MIN_CLOSED} tareas antes de las 5:00 pm sin dejar nada vencido y sin mover fechas. Cada parrilla terminada, sin piezas en borrador, le suma {RECOGNITION_POINTS} puntos a su responsable.</li>
     </ul>
   </details>;
 }

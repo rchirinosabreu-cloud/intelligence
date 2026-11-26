@@ -99,7 +99,7 @@ test('recognition collection reads only the current recipient and Bogotá month,
 test('collection respects module permissions and marks a limited recent list as partial', async () => {
   const db = fakeDb();
   db.teamMember.findUnique = async () => ({ id: 'm', isActive: true, user: { role: 'EDITOR', isActive: true, modulePermissions: { liga: true, parrillas: true, gestion: false } } });
-  db.recognitionAward.groupBy = async ({ where }) => { assert.deepEqual(where.kind.in, ['PLAN_APPROVED']); return [{ kind: 'PLAN_APPROVED', _count: { _all: 18 } }]; };
+  db.recognitionAward.groupBy = async ({ where }) => { assert.deepEqual(where.kind.in, ['PLAN_APPROVED', 'PLAN_FINISHED']); return [{ kind: 'PLAN_APPROVED', _count: { _all: 18 } }]; };
   db.recognitionAward.findMany = async ({ take }) => Array.from({ length: take }, (_, i) => ({ id: `a-${i}`, kind: 'PLAN_APPROVED', occurredAt: new Date() }));
   const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
   const result = await service.recognitionsFor({ userId: 'u' });

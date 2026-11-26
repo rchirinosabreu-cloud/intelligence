@@ -371,7 +371,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const [year, monthNumber] = month.split('-').map(Number);
       const kinds = [];
       if (hasModulePermission(me.user, 'gestion')) kinds.push('FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'WEEKLY_FIFTY');
-      if (hasModulePermission(me.user, 'parrillas')) kinds.push('PLAN_APPROVED');
+      if (hasModulePermission(me.user, 'parrillas')) kinds.push('PLAN_APPROVED', 'PLAN_FINISHED');
       if (!kinds.length) return { month, counts: {}, total: 0, recent: [], hasMore: false };
       const where = { recipientId: userId, kind: { in: kinds }, occurredAt: {
         gte: new Date(Math.max(Date.parse(`${month}-01T05:00:00.000Z`), startedAt.getTime())),

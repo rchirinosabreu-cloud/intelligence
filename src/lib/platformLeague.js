@@ -67,7 +67,7 @@ export function recognitionPointsById(awards = []) {
   return points;
 }
 export const recognitionPoints = (awards = []) => [...recognitionPointsById(awards).values()].reduce((sum, value) => sum + value, 0);
-export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'PLAN_APPROVED', 'WEEKLY_FIFTY'];
+export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'PLAN_APPROVED', 'PLAN_FINISHED', 'WEEKLY_FIFTY'];
 
 /**
  * Esfuerzo (Rodny, 18 de noviembre de 2026: «a puntos por esfuerzo, solo ponle un punto»): cada tarea cerrada con su

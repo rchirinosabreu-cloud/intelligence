@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, CalendarClock, Check, Flame, Sparkles, Sun } from '@/components/ui/icons';
+import { Award, CalendarClock, Check, Flame, LayoutGrid, Sparkles, Sun } from '@/components/ui/icons';
 import { recognitionLabels, recognitionMessages } from '@/lib/recognitionPresentation';
 import { EARLY_DELIVERY_EXTRA_POINTS, leagueMonthLabel, RECOGNITION_POINTS } from '@/lib/platformLeague';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ const badges = {
   DAILY_EIGHT: { icon: Flame, tone: 'bg-brand-coral/15 text-brand-coral-deep dark:bg-brand-coral/15 dark:text-brand-coral', face: 'bg-brand-coral text-zinc-950 border-brand-coral-deep/40' },
   CAUGHT_UP: { icon: Check, tone: 'bg-brand-green/10 text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green', face: 'bg-brand-green text-zinc-950 border-brand-green-deep/40' },
   PLAN_APPROVED: { icon: CalendarClock, tone: 'bg-brand-magenta/10 text-brand-magenta-deep dark:bg-brand-magenta/15 dark:text-brand-coral', face: 'bg-brand-magenta text-white border-brand-magenta-deep/40' },
+  PLAN_FINISHED: { icon: LayoutGrid, tone: 'bg-brand-magenta/10 text-brand-magenta-deep dark:bg-brand-magenta/15 dark:text-brand-coral', face: 'bg-brand-magenta text-white border-brand-magenta-deep/40' },
   WEEKLY_FIFTY: { icon: Sparkles, tone: 'bg-brand-yellow/15 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow', face: 'bg-brand-yellow text-zinc-950 border-brand-yellow-deep/30' },
 };
 
@@ -54,7 +55,7 @@ export default function RecognitionCollection({ data }) {
     <div data-recognition-collection className="grid grid-cols-2 gap-3">
       {Object.entries(recognitionLabels).map(([kind, label]) => {
         const count = data.counts[kind] || 0;
-        return <details key={kind} data-recognition-badge={kind} data-earned={count > 0} className={cn('group rounded-2xl border bg-white dark:bg-zinc-900', count ? 'border-zinc-200 dark:border-white/15' : 'border-dashed border-zinc-200 dark:border-white/10')}>
+        return <details key={kind} data-recognition-badge={kind} data-earned={count > 0} className={cn('group rounded-2xl border bg-white dark:bg-zinc-900 odd:last:col-span-2 odd:last:mx-auto odd:last:w-[calc(50%-0.375rem)]', count ? 'border-zinc-200 dark:border-white/15' : 'border-dashed border-zinc-200 dark:border-white/10')}>
           <summary className="flex cursor-pointer list-none flex-col items-center rounded-2xl px-2 py-4 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden">
             <RecognitionMedal kind={kind} earned={count > 0} />
             <span className="mt-4 text-sm font-semibold">{label}</span>

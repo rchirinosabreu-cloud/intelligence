@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { recognitionPointsById } from '../lib/platformLeague.js';
-import { dayStartCutoff, recognitionCalendar, recognitionDueDay, taskAwardKinds, planIsApproved } from './recognitionRules.js';
+import { dayStartCutoff, recognitionCalendar, recognitionDueDay, taskAwardKinds, planIsApproved, planIsFinished, planCountsForFinished, PLAN_FINISHED_FROM } from './recognitionRules.js';
 import { recognitionMessages } from '../lib/recognitionPresentation.js';
 import { hasModulePermission } from '../config/security.js';
 
@@ -41,7 +41,7 @@ export async function prepareTaskRecognition(tx, taskId) {
 // La clave de cada insignia: «Al día» sigue siendo una por persona y día, de la regla vieja o de la nueva.
 export async function insertRecognitionAward(tx, { kind, recipientId, taskId = null, planId = null, at, evidence, ruleVersion = 1, actorId = null, seenAt = null }) {
   const { day, week } = recognitionCalendar(at);
-  const key = kind === 'FIRST_TASK' ? day : kind === 'EARLY_DELIVERY' ? taskId : kind === 'PLAN_APPROVED' ? planId : `${recipientId}:${kind === 'WEEKLY_FIFTY' ? week : day}`;
+  const key = kind === 'FIRST_TASK' ? day : kind === 'EARLY_DELIVERY' ? taskId : kind === 'PLAN_APPROVED' || kind === 'PLAN_FINISHED' ? planId : `${recipientId}:${kind === 'WEEKLY_FIFTY' ? week : day}`;
   const id = randomUUID();
   const inserted = await tx.recognitionAward.createMany({ data: [{ id, dedupeKey: `v1:${kind}:${key}`, kind, ruleVersion, recipientId, taskId, planId, occurredAt: at, dayKey: day, weekKey: week, evidence, ...(seenAt ? { seenAt } : {}) }], skipDuplicates: true });
   if (inserted.count) await tx.operationalTraceEvent.create({ data: {
@@ -97,9 +97,34 @@ export async function finishTaskRecognition(tx, before, after, at = new Date()) 
   }
 }
 
+// «Parrilla terminada»: una por parrilla (la clave es la parrilla), sin importar quién movió la última pieza.
+export async function recordPlanFinished(tx, plan, at = new Date()) {
+  if (!plan || plan.deletedAt || !planCountsForFinished(plan) || !planIsFinished(plan.contentItems)) return null;
+  if (!plan.owner?.isActive || !plan.owner.userId) return null;
+  const user = await tx.user.findUnique({ where: { id: plan.owner.userId }, select: { isActive: true } });
+  if (!user?.isActive) return null;
+  return insertAward(tx, { kind: 'PLAN_FINISHED', recipientId: plan.owner.userId, planId: plan.id, at,
+    evidence: { itemIds: plan.contentItems.map(item => item.id), ownerId: plan.owner.id, month: plan.month, year: plan.year } });
+}
+// Repaso de todas las parrillas que cuentan: entrega las ya terminadas (las de noviembre que estaban listas el día en
+// que nació el logro) y las que se terminan por un camino que no pasa por `recordPlanRecognition`, como las hojas de MIO.
+export async function grantFinishedPlans(db, at = new Date()) {
+  const plans = await db.contentPlan.findMany({ where: { deletedAt: null, ownerId: { not: null },
+    OR: [{ year: { gt: PLAN_FINISHED_FROM.year } }, { year: PLAN_FINISHED_FROM.year, month: { gte: PLAN_FINISHED_FROM.month } }] },
+    include: { owner: { select: identitySelect }, contentItems: { where: { deletedAt: null }, select: { id: true, status: true } } } });
+  const done = new Set((await db.recognitionAward.findMany({ where: { kind: { startsWith: 'PLAN_FINISHED' }, planId: { in: plans.map(plan => plan.id) } }, select: { planId: true } })).map(award => award.planId));
+  const granted = [];
+  for (const plan of plans) {
+    if (done.has(plan.id) || !planIsFinished(plan.contentItems)) continue;
+    const id = await recognitionTransaction(db, tx => recordPlanFinished(tx, plan, at));
+    if (id) granted.push({ id, planId: plan.id, month: plan.month, year: plan.year, ownerId: plan.ownerId, recipientId: plan.owner?.userId });
+  }
+  return granted;
+}
 export async function recordPlanRecognition(tx, planId, at = new Date(), { allowAward = true } = {}) {
   const plan = await tx.contentPlan.findUnique({ where: { id: planId }, include: { owner: { select: identitySelect }, contentItems: { where: { deletedAt: null }, select: { id: true, status: true } } } });
   if (!plan || plan.deletedAt) return;
+  await recordPlanFinished(tx, plan, at);
   const state = await tx.recognitionPlanState.upsert({ where: { planId }, create: { planId }, update: {} });
   const approvedIds = plan.contentItems.filter(item => item.status === 'APROBADO'
     || (state.approvedIds.includes(item.id) && ['EN_PRODUCCION', 'REALIZADO', 'PROGRAMADO', 'PUBLICADO'].includes(item.status))).map(item => item.id);
@@ -165,7 +190,7 @@ export async function claimRecognition(db, userId, at = new Date()) {
     if (inFlight) return null;
     const kinds = [];
     if (hasModulePermission(user, 'gestion')) kinds.push('FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'WEEKLY_FIFTY');
-    if (hasModulePermission(user, 'parrillas')) kinds.push('PLAN_APPROVED');
+    if (hasModulePermission(user, 'parrillas')) kinds.push('PLAN_APPROVED', 'PLAN_FINISHED');
     const candidates = await tx.recognitionAward.findMany({ where: { recipientId: userId, kind: { in: kinds }, seenAt: null, occurredAt: { gte: new Date(at.getTime() - 86400000), lte: at } }, include: { recipient: { select: { id: true, name: true } } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], take: 20 });
     for (const award of candidates) {
       const valid = await validRecipientResource(tx, award, userId);

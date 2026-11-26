@@ -68,6 +68,19 @@ export function caughtUpAtClose({ day, views = [] }) {
     .sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || '')));
   return { eligible: closed >= CAUGHT_UP_MIN_CLOSED && pending === 0, closed, pending, pendingTasks };
 }
+/**
+ * «Parrilla terminada» (Rodny, 26 de noviembre de 2026, a partir de lo que dijo Sara: «las tareas más grandes, como
+ * hacer parrillas, deberían dar más puntos»; «hazlo sumando 5 puntos»). Se gana cuando la parrilla tiene piezas y ya no
+ * le queda ninguna en borrador: todas salieron a revisión o más allá. Es el momento en que acaban las horas de armado.
+ * Rige para las parrillas de noviembre de 2026 en adelante; una por parrilla.
+ */
+export const PLAN_FINISHED_FROM = { year: 2026, month: 11 };
+export const planCountsForFinished = (plan) => Number(plan?.year) > PLAN_FINISHED_FROM.year
+  || (Number(plan?.year) === PLAN_FINISHED_FROM.year && Number(plan?.month) >= PLAN_FINISHED_FROM.month);
+export function planIsFinished(items = []) {
+  const active = items.filter(item => !item.deletedAt);
+  return active.length > 0 && active.every(item => item.status !== 'BORRADOR');
+}
 export function planIsApproved(items, approvedIds = []) {
   const active = items.filter(item => !item.deletedAt);
   return active.length > 0 && active.every(item => item.status === 'APROBADO'
