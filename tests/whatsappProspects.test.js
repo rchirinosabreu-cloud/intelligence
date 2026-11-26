@@ -66,6 +66,11 @@ test('un archivo sin texto queda dicho en palabras', () => {
   assert.equal(inboundTextFor({ type: 'location' }), '[Ubicación]');
 });
 
+test('varios mensajes largos seguidos, que el puente junta en uno, se guardan completos', () => {
+  const batch = `${'a'.repeat(3000)}\n${'b'.repeat(3000)}`;
+  assert.equal(inboundTextFor({ type: 'text', text: batch }), batch);
+});
+
 test('el equipo escribe libre solo dentro de las 24 horas y con un texto válido', () => {
   assert.equal(canReplyFreely({ lastInboundAt: new Date(AT.getTime() - 2 * HOUR) }, AT), true);
   assert.equal(canReplyFreely({ lastInboundAt: new Date(AT.getTime() - 25 * HOUR) }, AT), false);

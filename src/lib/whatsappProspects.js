@@ -13,6 +13,9 @@ export const PROSPECT_RENOTIFY_AFTER_MS = 12 * 60 * 60 * 1000;
 export const PROSPECT_WELCOME_AGAIN_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 /** Lo más largo que se guarda de un mensaje y de una respuesta del equipo (WhatsApp acepta 4.096). */
 export const PROSPECT_TEXT_MAX = 4096;
+/** Lo que se guarda de lo que escribe la persona. El puente junta en uno los mensajes que llegan seguidos (2,5 s), así
+ * que el tope no puede ser el de un mensaje: varios largos seguidos se guardan completos. */
+export const PROSPECT_INBOUND_MAX = 64000;
 /** Etapas en las que una oportunidad ya no se reabre con un mensaje nuevo: se crea otra. */
 export const CLOSED_STAGES = Object.freeze(['GANADO', 'PERDIDO', 'DESCARTADO']);
 
@@ -91,7 +94,7 @@ export const shouldNotify = ({ createdLead, previousInboundAt }, at = new Date()
 /** Lo que se guarda como texto de un mensaje entrante: lo escrito, o qué mandó si fue un archivo sin texto. */
 const MEDIA_LABELS = Object.freeze({ image: 'Foto', video: 'Video', document: 'Documento', audio: 'Nota de voz', sticker: 'Sticker', location: 'Ubicación', contacts: 'Contacto' });
 export const inboundTextFor = (message) => {
-  const text = clip(message?.text, PROSPECT_TEXT_MAX);
+  const text = clip(message?.text, PROSPECT_INBOUND_MAX);
   const kinds = (message?.medias || (message?.media ? [message.media] : [])).map((media) => media?.kind).filter(Boolean);
   const labels = kinds.map((kind) => `[${MEDIA_LABELS[kind] || 'Archivo'}]`);
   if (!labels.length && !text && message?.type && message.type !== 'text') labels.push(`[${MEDIA_LABELS[message.type] || 'Mensaje que WhatsApp no muestra aquí'}]`);
