@@ -302,3 +302,27 @@ test('si la respuesta de Bria no sale por WhatsApp, pasa al equipo y avisa', asy
   assert.match(ctx.db.tables.contacts[0].botPausedReason, /no salió/);
   assert.ok(ctx.notices.some((notice) => /Bria te pasa/.test(notice.message)));
 });
+
+test('al devolverle la conversación, Bria responde lo que la persona preguntó mientras la atendía el equipo', async () => {
+  const ctx = build({ answers: [
+    { text: JSON.stringify({ reply: 'El logo tiene una referencia de $900.000. Te paso con el equipo.', handoff: true, handoffReason: 'Ya tiene servicio y presupuesto.', brief: { serviceInterest: 'Logo', budget: '1M' } }) },
+    { text: JSON.stringify({ reply: 'Sí, incluye el manual básico de uso.', handoff: false, handoffReason: '', brief: {} }) }
+  ] });
+  await authorize(ctx);
+  await ctx.service.receive(message({ type: 'interactive', text: 'Acepto', replyId: CONSENT_ACCEPT_ID }), { send: ctx.send });
+  assert.ok(ctx.db.tables.contacts[0].botPausedAt);
+  tick(MINUTE);
+  await ctx.service.receive(message({ text: '¿Incluye el manual de marca?' }), { send: ctx.send });
+  assert.equal(ctx.calls.length, 1, 'pausada, Bria no responde');
+  const [lead] = ctx.db.tables.leads;
+  tick(MINUTE);
+  const result = await ctx.service.setBria(lead.id, { active: true }, { userId: 'u-rodny' }, { sendMessage: async (_to, text) => ctx.send(text) });
+  assert.equal(ctx.calls.length, 2);
+  assert.equal(result.agent.replied, true);
+  assert.equal(ctx.sent.at(-1).text, 'Sí, incluye el manual básico de uso.');
+  assert.equal(result.contact.botPausedAt, null);
+  // Si lo último ya lo respondió alguien, devolverla no dispara una respuesta.
+  await ctx.service.setBria(lead.id, { active: false }, {});
+  await ctx.service.setBria(lead.id, { active: true }, {}, { sendMessage: async (_to, text) => ctx.send(text) });
+  assert.equal(ctx.calls.length, 2);
+});
