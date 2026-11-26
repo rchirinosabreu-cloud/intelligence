@@ -48,9 +48,9 @@ const Bubble = ({ message }) => {
             <Megaphone className="h-3 w-3" /> {message.referral.headline ? `Desde el anuncio «${message.referral.headline}»` : 'Desde un anuncio de Meta'}
           </p>
         )}
-        {authorLabel(message) && <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{authorLabel(message)}</p>}
+        {authorLabel(message) && <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{authorLabel(message)}</p>}
         <p className="whitespace-pre-wrap break-words">{message.text}</p>
-        <p className="mt-0.5 flex items-center justify-end gap-1.5 text-[11px] text-zinc-400" title={formatDateTime(message.occurredAt)}>
+        <p className="mt-0.5 flex items-center justify-end gap-1.5 text-xs text-zinc-400" title={formatDateTime(message.occurredAt)}>
           {formatTime(message.occurredAt)}
           {mine && <DeliveryStatus status={message.status} />}
         </p>
