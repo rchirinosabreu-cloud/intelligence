@@ -63,4 +63,6 @@
 // 2.26 (21 de noviembre de 2026): la respuesta rápida de Bria en voz. Anthropic entra como encargado: recibe la
 // pregunta hablada ya transcrita, una parte acotada del diálogo, los pendientes de quien pregunta y los recuerdos
 // pertinentes, solo cuando el servicio tiene configurada esa API; lo que requiere consultar sigue con el modelo habitual.
-export const PRIVACY_POLICY_VERSION = '2.26 · 2026-11-21';
+// 2.27 (25 de noviembre de 2026): LinkedIn como encargado, para publicar las piezas aprobadas en las páginas de
+// empresa que su administrador conecta. La publicación en LinkedIn salió el 23 de noviembre sin este texto.
+export const PRIVACY_POLICY_VERSION = '2.27 · 2026-11-25';

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, KeyRound, Lock, Mail } from '@/components/ui/icons';
 import OtpCodeInput from '@/components/ui/OtpCodeInput';
+import ProductOverview from '@/components/public/ProductOverview';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 import {
   forgetTrustedDevice,
@@ -456,7 +457,7 @@ const Login = ({ onLogin }) => {
               )}
             </div>
 
-            <div className="mt-8 flex gap-6">
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2">
               <Link
                 to="/ayuda"
                 className="text-xs font-medium text-zinc-400 transition-colors hover:text-brand-green-deep dark:hover:text-brand-green"
@@ -479,12 +480,20 @@ const Login = ({ onLogin }) => {
                 to="/terminos"
                 className="text-xs font-medium text-zinc-400 transition-colors hover:text-indigo-600 dark:hover:text-indigo-300"
               >
-                Terminos
+                Términos
               </Link>
             </div>
+
+            <a
+              href="#producto"
+              className="mt-8 inline-flex min-h-11 items-center text-xs font-semibold text-brand-cyan-deep transition-colors hover:text-brand-cyan dark:text-brand-cyan"
+            >
+              ¿Qué es Brainstudio Intelligence?
+            </a>
           </div>
         </main>
       </div>
+      <ProductOverview />
     </div>
   );
 };
