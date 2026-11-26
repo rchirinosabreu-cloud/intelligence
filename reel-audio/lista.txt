@@ -1,0 +1,25 @@
+Audio del reel de Bria, ElevenLabs, voz original f7cQ8ytNqNE7hz0cNPBP, modelo eleven_v4_turbo, mp3 44,1 kHz
+vo-1.mp3	4.05 s
+vo-1a.mp3	3.40 s
+vo-1b.mp3	0.91 s
+vo-2.mp3	6.35 s
+vo-3.mp3	5.96 s
+vo-4.mp3	3.32 s
+vo-5.mp3	4.36 s
+vo-6.mp3	6.27 s
+vo-7.mp3	2.27 s
+vo-8.mp3	2.27 s
+sfx-ambiente-1.mp3	10.03 s
+sfx-ambiente-2.mp3	10.03 s
+sfx-aterrizaje-1.mp3	0.52 s
+sfx-aterrizaje-2.mp3	0.52 s
+sfx-chispa-1.mp3	0.84 s
+sfx-chispa-2.mp3	0.84 s
+sfx-cierre-1.mp3	2.04 s
+sfx-cierre-2.mp3	2.04 s
+sfx-clic-1.mp3	0.24 s
+sfx-clic-2.mp3	0.24 s
+sfx-salto-1.mp3	0.63 s
+sfx-salto-2.mp3	0.63 s
+sfx-tarjeta-1.mp3	0.52 s
+sfx-tarjeta-2.mp3	0.52 s
