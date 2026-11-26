@@ -4,8 +4,18 @@ import * as crmService from '../../services/crmService.js';
 import * as quotationDrafts from '../../services/quotationDraftService.js';
 import * as crmFollowUpAlerts from '../../services/crmFollowUpAlertService.js';
 
+// La conversación de WhatsApp de un prospecto (26 de noviembre de 2026). Se cargan al usarlas: el puente arrastra
+// el motor de Bria y el CRM no lo necesita para nada más.
+const defaultWhatsApp = {
+  prospects: async () => (await import('../../services/whatsappProspectService.js')).getWhatsAppProspectService(),
+  sendMessage: async () => {
+    const bridge = (await import('../../services/whatsappBridgeService.js')).getWhatsAppBridgeService();
+    return (to, text) => bridge.sendProspectText(to, text);
+  }
+};
+
 // Mounted in src/routes/index.js behind authenticateToken + requireModulePermission('crm').
-export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts, followUpAlerts = crmFollowUpAlerts, db = prisma } = {}) => {
+export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts, followUpAlerts = crmFollowUpAlerts, db = prisma, whatsapp = defaultWhatsApp } = {}) => {
   const router = express.Router();
 
   const send = (res, error, fallback) => {
@@ -93,6 +103,16 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
 
   router.post('/leads/:leadId/unarchive', handle('No pudimos desarchivar la oportunidad.', async (req, res) => {
     res.json(await service.unarchiveLead(db, req.params.leadId, req.user));
+  }));
+
+  router.get('/leads/:leadId/whatsapp', handle('No pudimos cargar la conversación de WhatsApp.', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(await (await whatsapp.prospects()).conversationForLead(req.params.leadId));
+  }));
+
+  router.post('/leads/:leadId/whatsapp', handle('No pudimos enviar el mensaje por WhatsApp.', async (req, res) => {
+    const prospects = await whatsapp.prospects();
+    res.status(201).json(await prospects.reply(req.params.leadId, req.body || {}, req.user, { sendMessage: await whatsapp.sendMessage() }));
   }));
 
   // Manual path: always a new BORRADOR in Cotizaciones, linked to the lead, built from its request (if any).

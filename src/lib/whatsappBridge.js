@@ -119,9 +119,11 @@ export const parseInboundMessages = (body) => {
         const timestamp = Number(message.timestamp);
         const replyId = replyIdOf(message);
         const media = mediaOf(message);
+        // `referral`: el anuncio o la publicación desde la que la persona abrió el chat (prospectos, 26 de noviembre de
+        // 2026). Va crudo; src/lib/whatsappProspects.js lo recorta antes de guardarlo.
         // Solo códigos numéricos para diagnosticar lo que Meta no entregó: nunca títulos, detalles ni cuerpos.
         const errorCodes = [...new Set((Array.isArray(message.errors) ? message.errors : []).map((error) => String(error?.code ?? '')).filter((code) => /^\d{1,9}$/.test(code)))].slice(0, 5);
-        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: media ? captionOf(message) : replyText(message, replyId), replyId, media, phoneNumberId, ...(errorCodes.length ? { errorCodes } : {}) });
+        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: media ? captionOf(message) : replyText(message, replyId), replyId, media, phoneNumberId, ...(errorCodes.length ? { errorCodes } : {}), ...(message.referral && typeof message.referral === 'object' ? { referral: message.referral } : {}) });
       }
     }
   }

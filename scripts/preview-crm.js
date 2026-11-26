@@ -108,7 +108,32 @@ export async function createCrmPreview({ port = 3100, cartera = false, now = nul
     req.user = { userId: crmDemoUser.id, role: crmDemoUser.role, modulePermissions: { ...crmDemoUser.modulePermissions, ...(cartera ? { financiero: true } : {}) } };
     next();
   });
-  api.use('/api/crm', createCrmRouter({ db }));
+  // La conversación de WhatsApp de ejemplo (26 de noviembre de 2026): un prospecto que llegó por un anuncio, con
+  // la bienvenida de Bria y una respuesta del equipo. Nada sale a Meta; responder la suma a la lista.
+  const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60 * 1000);
+  const waMessages = [
+    { id: 'wa-1', direction: 'IN', author: 'CONTACT', type: 'text', text: 'Hola, vi su anuncio. Quiero cotizar el manejo de redes para mi centro de estética.', referral: { sourceType: 'ad', headline: 'Redes que venden' }, occurredAt: minutesAgo(42) },
+    { id: 'wa-2', direction: 'OUT', author: 'BRIA', authorName: 'Bria', type: 'text', text: '¡Hola, Rous! Gracias por escribir a Brain Studio. Soy Bria, la asistente de la agencia.\n\nYa le avisé a nuestro equipo comercial y una persona te responde muy pronto. Mientras tanto, cuéntanos qué necesitas para tu marca y para cuándo.\n\nPara atenderte guardamos tu nombre, tu número y esta conversación según nuestra política de datos. ¿Nos autorizas?', status: 'READ', occurredAt: minutesAgo(42) },
+    { id: 'wa-2b', direction: 'IN', author: 'CONTACT', type: 'interactive', text: 'Acepto', occurredAt: minutesAgo(41) },
+    { id: 'wa-2c', direction: 'OUT', author: 'BRIA', authorName: 'Bria', type: 'text', text: '¡Gracias! Ya quedó registrado. Cuéntanos qué necesitas y una persona del equipo te responde.', status: 'READ', occurredAt: minutesAgo(41) },
+    { id: 'wa-3', direction: 'IN', author: 'CONTACT', type: 'image', text: '[Foto] Este es mi logo', occurredAt: minutesAgo(40) },
+    { id: 'wa-4', direction: 'OUT', author: 'TEAM', authorName: 'Francys Pérez', type: 'text', text: 'Hola Rous, soy Francys. ¿Te puedo llamar hoy a las 3 para entender lo que necesitas?', status: 'DELIVERED', occurredAt: minutesAgo(25) }
+  ];
+  const whatsapp = {
+    prospects: async () => ({
+      conversationForLead: async (leadId) => (leadId === 'lead-rous'
+        ? { contacts: [{ id: 'c1', phone: '+57 310 000 0004', profileName: 'Rous Ruiz', lastInboundAt: minutesAgo(40), canReply: true, authorizationPending: false, dataAuthorizedAt: minutesAgo(38), windowClosesAt: new Date(minutesAgo(40).getTime() + (24 * 60 - 15) * 60 * 1000) }], messages: waMessages, maxLength: 4096 }
+        : { contacts: [], messages: [], maxLength: 4096 }),
+      reply: async (leadId, payload) => {
+        const message = { id: `wa-${waMessages.length + 1}`, direction: 'OUT', author: 'TEAM', authorName: 'Francys Pérez', type: 'text', text: String(payload.text || '').trim(), status: 'SENT', occurredAt: new Date() };
+        if (!message.text) throw Object.assign(new Error('Escribe el mensaje antes de enviarlo.'), { statusCode: 400 });
+        waMessages.push(message);
+        return { message };
+      }
+    }),
+    sendMessage: async () => async () => null
+  };
+  api.use('/api/crm', createCrmRouter({ db, whatsapp }));
   // La banda de avisos importantes, con el servicio real sobre la misma memoria. El reloj se puede adelantar
   // (POST /api/__preview/clock?minutes=5) para ver salir el siguiente aviso sin esperar los cinco minutos.
   const notices = createImportantNoticeMemory(db, crmDemoUser.id, { cartera, now });
