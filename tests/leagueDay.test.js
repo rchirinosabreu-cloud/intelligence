@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { effortPoints } from '../src/lib/platformLeague.js';
-import { evaluateLeagueDay, isoWeekKey, isoWeekRange, previousWeekRange, openWindowOf, bogotaTimeOf, isProductionWork, workRecordFromTrace, MIN_MEASURED_MS, FORGOTTEN_SESSION_MS } from '../src/lib/leagueDay.js';
+import { evaluateLeagueDay, isoWeekKey, isoWeekRange, previousWeekRange, openWindowOf, bogotaTimeOf, isProductionWork, workRecordFromTrace, withPublicationEffort, MIN_MEASURED_MS, FORGOTTEN_SESSION_MS } from '../src/lib/leagueDay.js';
 
 const DAY = '2026-11-03';
 const task = (over = {}) => ({ id: 't1', title: 'Reel', completedAt: `${DAY}T20:10:00.000Z`, originalDueDate: `${DAY}T12:00:00.000Z`, measuredMs: 45 * 60_000, declared: false, documented: true, ...over });
@@ -32,7 +32,7 @@ test('Documentado only plays tasks delegated to someone else and not born from a
 test('a clean day earns the six points, each with its evidence in Spanish', () => {
   const out = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }], closedTasks: [task()], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
   assert.deepEqual(out.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.deepEqual(out.extras, { ESFUERZO: 1, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 45 }] }, 'the extras travel beside the habits, with the effort of the day and the tasks behind Reloj');
+  assert.deepEqual(out.extras, { ESFUERZO: 1, PUBLICAR: 0, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 45 }] }, 'the extras travel beside the habits, with the effort of the day and the tasks behind Reloj');
   assert.match(out.evidence.RELOJ, /1 tarea con reloj completo de 1/);
   assert.match(out.evidence.AL_DIA, /sin vencidas/);
   assert.match(out.evidence.TRABAJO_REGISTRADO, /Gestión de tareas/);
@@ -197,10 +197,13 @@ test('Reloj nombra la tarea a la que le faltó reloj', () => {
   assert.match(day.evidence.RELOJ, /Faltó tiempo: «Carrusel Villa» \(3 min de reloj, el mínimo es 10\)\.$/);
 });
 
-test('Reloj: lo que pasa directo a realizado no aplica, pero suma Esfuerzo; Publicar no cuenta en ninguno', () => {
+test('Reloj: lo que pasa directo a realizado no aplica, pero suma Esfuerzo; Publicar suma Esfuerzo y no aplica a Reloj', () => {
   const day = evaluateLeagueDay({ day: DAY, closedTasks: [task(), task({ title: 'Story', measuredMs: 0, declared: true }), task({ title: '[Publicar] Reel', measuredMs: 0 })], sessions: [session()], returnedToday: 0 });
   assert.equal(day.habits.RELOJ, true);
-  assert.equal(day.extras.ESFUERZO, 2);
+  // Rodny, 26 de noviembre de 2026: las tareas de publicar también suman al esfuerzo.
+  assert.equal(day.extras.ESFUERZO, 3);
+  assert.equal(day.extras.PUBLICAR, 1);
+  assert.match(day.evidence.ESFUERZO, /^3 tareas cerradas \(1 de publicar\)\.$/);
   assert.match(day.evidence.RELOJ, /1 pasó directo a realizado y no aplica/);
   assert.deepEqual(day.extras.RELOJ_TAREAS.map((row) => row.kind), ['ok', 'directo', 'publicar']);
   const none = evaluateLeagueDay({ day: DAY, closedTasks: [task({ measuredMs: 0 })], returnedToday: 0 });
@@ -245,4 +248,22 @@ test('a task delivered another day that comes back is judged by its first delive
   assert.match(result.evidence.A_TIEMPO, /2 de 2 a tiempo/);
   const sameDay = task({ completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-01T12:00:00.000Z', firstCompletedAt: `${DAY}T14:00:00.000Z` });
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [sameDay], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.A_TIEMPO, false, 'reclosing the same day changes nothing');
+});
+
+test('los días guardados antes del 26 de noviembre suman sus tareas de publicar al esfuerzo, una sola vez y sin tocar lo demás', () => {
+  const habits = { RELOJ: true, A_TIEMPO: false };
+  const mixed = { habits, extras: { ESFUERZO: 5, PROPORCION: { A_TIEMPO: 0.5 } }, evidence: { ESFUERZO: '5 tareas cerradas (sin contar 2 de publicar) · 1 gestión del CRM.', RELOJ: 'x' } };
+  const next = withPublicationEffort(mixed);
+  assert.equal(next.extras.ESFUERZO, 7);
+  assert.equal(next.extras.PUBLICAR, 2);
+  assert.deepEqual(next.extras.PROPORCION, { A_TIEMPO: 0.5 });
+  assert.equal(next.evidence.ESFUERZO, '7 tareas cerradas (2 de publicar) · 1 gestión del CRM.');
+  assert.equal(next.evidence.RELOJ, 'x');
+  assert.equal(withPublicationEffort({ habits, extras: next.extras, evidence: next.evidence }), null, 'repeating changes nothing');
+  const only = withPublicationEffort({ habits, extras: { ESFUERZO: 0, RELOJ_TAREAS: [{ kind: 'publicar' }, { kind: 'publicar' }, { kind: 'publicar' }] }, evidence: { ESFUERZO: 'Solo cerraste tareas de publicar, que no suman.' } });
+  assert.equal(only.extras.ESFUERZO, 3);
+  assert.equal(only.evidence.ESFUERZO, '3 tareas cerradas (3 de publicar).');
+  const none = withPublicationEffort({ habits, extras: { ESFUERZO: 4 }, evidence: { ESFUERZO: '4 tareas cerradas.' } });
+  assert.equal(none.extras.ESFUERZO, 4);
+  assert.equal(none.extras.PUBLICAR, 0, 'marked so the next start does not look again');
 });
