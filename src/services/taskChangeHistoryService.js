@@ -2,7 +2,7 @@
 // nunca se edita (catálogo de auditoría inmutable). Escribir el historial nunca tumba el cambio: si la tabla aún no
 // existe, se anota y se sigue.
 import prisma from '../lib/prisma.js';
-import { taskChangesBetween } from '../lib/taskChanges.js';
+import { CLIENT_DUE_DATE_KIND, taskChangesBetween } from '../lib/taskChanges.js';
 
 const HISTORY_LIMIT = 100;
 
@@ -22,6 +22,17 @@ export async function recordTaskChanges(db, { taskId, actorId = null, changes, a
 
 export const recordTaskDiff = (db, { taskId, actorId, before, after }) =>
   recordTaskChanges(db, { taskId, actorId, changes: taskChangesBetween(before, after) });
+
+/**
+ * La fecha la movió el cliente (Rodny, 26 de noviembre de 2026, por Francisco: «hay tareas que se vencen por el cliente y
+ * no es justo que no les dé punto si ellos las mueven»). Quien cambia la fecha lo marca al guardar; queda en el historial
+ * de la tarea, con su nombre, junto al cambio de fecha. Con esa marca, mover la fecha no resta en «Al día» ni en «A tiempo».
+ */
+export const recordClientDueDateMove = (db, { taskId, actorId, before, after, reason }) => {
+  if (reason !== 'CLIENTE') return 0;
+  const move = taskChangesBetween(before, after).find((change) => change.kind === 'DUE_DATE');
+  return move?.toValue ? recordTaskChanges(db, { taskId, actorId, changes: [{ ...move, kind: CLIENT_DUE_DATE_KIND }] }) : 0;
+};
 
 export const recordTaskCreated = (db, { taskId, actorId = null, assigneeId = null }) =>
   recordTaskChanges(db, { taskId, actorId, changes: [{ kind: 'CREATED', fromValue: null, toValue: assigneeId || null }] });

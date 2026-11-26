@@ -9,6 +9,7 @@
 import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
+import { CLIENT_DUE_DATE_KIND } from '../lib/taskChanges.js';
 import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace, withPublicationEffort } from '../lib/leagueDay.js';
 import { CAMERA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
@@ -118,10 +119,15 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       // Un primero anterior al reinicio no convierte al segundo en ganador.
       const opener = firstTrace === undefined ? undefined : firstTrace && new Date(firstTrace.occurredAt) >= startedAt ? (() => { const member = memberOfUser.get(firstTrace.actorId); return member ? { memberId: member.id, name: firstName(member.name), at: firstTrace.occurredAt } : null; })() : null;
       const closedIds = closed.map((task) => task.id);
-      const [states, taskSessions] = closedIds.length ? await Promise.all([
+      const [states, taskSessions, clientMoves] = closedIds.length ? await Promise.all([
         db.recognitionTaskState.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, originalDueDate: true, firstCompletedAt: true } }),
-        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } })
-      ]) : [[], []];
+        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } }),
+        // Las fechas que movió el cliente (Rodny, 26 de noviembre de 2026): «A tiempo» se mide contra la última de ellas.
+        typeof db.taskChangeEvent?.findMany === 'function'
+          ? db.taskChangeEvent.findMany({ where: { taskId: { in: closedIds }, kind: CLIENT_DUE_DATE_KIND, occurredAt: { lt: end } }, orderBy: { occurredAt: 'asc' }, select: { taskId: true, toValue: true } })
+          : []
+      ]) : [[], [], []];
+      const clientDue = new Map(clientMoves.filter((move) => /^\d{4}-\d{2}-\d{2}$/.test(String(move.toValue || ''))).map((move) => [move.taskId, move.toValue]));
       const originalDue = new Map(states.map((row) => [row.taskId, row.originalDueDate]));
       const firstClosed = new Map(states.map((row) => [row.taskId, row.firstCompletedAt]));
       const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, snapshotOverdueCount(person.metrics, dayKey)]));
@@ -150,7 +156,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const mine = taskSessions.filter((session) => session.taskId === task.id && session.workerId === task.assigneeId);
         const measuredMs = mine.filter((session) => session.closeReason !== 'DECLARED').reduce((sum, session) => sum + Number(session.durationMs || 0), 0);
         const declared = mine.some((session) => session.closeReason === 'DECLARED');
-        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, firstCompletedAt: firstClosed.get(task.id) || null, measuredMs, declared,
+        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, clientDueDate: clientDue.get(task.id) || null, firstCompletedAt: firstClosed.get(task.id) || null, measuredMs, declared,
           production: isProductionWork({ title: task.title, aiCategory: task.aiCategory }) || bucket.productionDays.length > 0 });
       }
       for (const session of daySessions) {

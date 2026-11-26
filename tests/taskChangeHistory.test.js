@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { taskChangesBetween, describeTaskChange } from '../src/lib/taskChanges.js';
-import { recordTaskDiff, recordTaskCreated, getTaskChangeHistory } from '../src/services/taskChangeHistoryService.js';
+import { recordTaskDiff, recordTaskCreated, getTaskChangeHistory, recordClientDueDateMove } from '../src/services/taskChangeHistoryService.js';
 import { AUDIT_TABLES } from '../src/lib/auditImmutability.js';
 
 const before = { assigneeId: 'kamila', status: 'PENDIENTE', dueDate: new Date('2026-11-18T12:00:00Z'), clientId: 'promo', title: '[Publicar] Reel', isPriority: false, priority: null };
@@ -63,4 +63,15 @@ test('el panel lo muestra a quien abre la tarea, discreto y plegado', () => {
   const view = readFileSync('src/components/modules/TaskChangeHistory.jsx', 'utf8');
   assert.match(view, /aria-expanded=\{expanded\}/);
   assert.match(view, /if \(!events\.length\) return null/);
+});
+
+test('«La fecha la movió el cliente» queda en el historial junto al cambio de fecha, y solo si la fecha cambió', async () => {
+  const rows = [];
+  const db = { taskChangeEvent: { createMany: async ({ data }) => { rows.push(...data); return { count: data.length }; } } };
+  const after = { ...before, dueDate: new Date('2026-11-21T12:00:00Z') };
+  assert.equal(await recordClientDueDateMove(db, { taskId: 't1', actorId: 'u1', before, after, reason: 'CLIENTE' }), 1);
+  assert.deepEqual(rows.map(({ kind, fromValue, toValue, actorId }) => ({ kind, fromValue, toValue, actorId })), [{ kind: 'DUE_DATE_CLIENT', fromValue: '2026-11-18', toValue: '2026-11-21', actorId: 'u1' }]);
+  assert.equal(await recordClientDueDateMove(db, { taskId: 't1', actorId: 'u1', before, after: { ...before }, reason: 'CLIENTE' }), 0, 'same date, nothing to mark');
+  assert.equal(await recordClientDueDateMove(db, { taskId: 't1', actorId: 'u1', before, after, reason: undefined }), 0, 'without the mark, nothing');
+  assert.equal(describeTaskChange({ kind: 'DUE_DATE_CLIENT', actorName: 'Sara' }), 'Sara indicó que la fecha la movió el cliente');
 });

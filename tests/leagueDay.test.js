@@ -267,3 +267,10 @@ test('los días guardados antes del 26 de noviembre suman sus tareas de publicar
   assert.equal(none.extras.ESFUERZO, 4);
   assert.equal(none.extras.PUBLICAR, 0, 'marked so the next start does not look again');
 });
+
+test('A tiempo se mide contra la última fecha que movió el cliente (Rodny, 26 de noviembre de 2026)', () => {
+  const byClient = task({ completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-01T12:00:00.000Z', clientDueDate: DAY });
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [byClient], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.A_TIEMPO, true);
+  const lateEvenSo = task({ completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-01T12:00:00.000Z', clientDueDate: '2026-11-02' });
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [lateEvenSo], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.A_TIEMPO, false, 'the client date is a date like any other: missing it is late');
+});

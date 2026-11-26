@@ -176,7 +176,7 @@ test('a date moved by an admin or a project manager on someone else\'s task does
   ];
   const task = (id, assigneeId) => ({ id, title: id, status: 'PENDIENTE', assigneeId, completedAt: null, dueDate: at('2026-11-26T12:00:00Z'), focusDeadlineAt: null, participants: [] });
   const tx = {
-    taskChangeEvent: { findMany: async ({ where }) => { assert.equal(where.kind, 'DUE_DATE'); return moves; } },
+    taskChangeEvent: { findMany: async ({ where }) => { assert.deepEqual(where.kind, { in: ['DUE_DATE', 'DUE_DATE_CLIENT'] }); return moves.map((move) => ({ kind: 'DUE_DATE', toValue: '2026-11-30', ...move })); } },
     task: { findMany: async () => [task('t-by-pm', 'm-dis'), task('t-by-admin', 'm-dis'), task('t-own', 'm-dis'), task('t-by-role', 'm-dis'), task('t-pm-own', 'm-pm'), task('t-both', 'm-dis')] }
   };
   const views = await closeViewsFor(tx, { day: '2026-11-23', memberIds: ['m-dis', 'm-pm'] });
@@ -184,4 +184,20 @@ test('a date moved by an admin or a project manager on someone else\'s task does
   assert.deepEqual(moved('m-dis'), { 't-by-pm': null, 't-by-admin': null, 't-own': '2026-11-23', 't-by-role': null, 't-both': null },
     'what the PM or the admin rescheduled is not held against her; her own move is; a later move from a future date never counts');
   assert.deepEqual(moved('m-pm'), { 't-pm-own': '2026-11-23' }, 'a project manager moving their own task is still moving dates');
+});
+
+// Rodny, 26 de noviembre de 2026 (por Francisco): «hay tareas que se vencen por el cliente y no es justo que no les dé
+// punto si ellos las mueven».
+test('a date marked as moved by the client does not cost Al día; the same move without the mark still does', async () => {
+  const { closeViewsFor } = await import('../src/services/caughtUpAtCloseService.js');
+  const designer = { role: 'EDITOR', teamMember: { id: 'm-dis', areas: ['DISENO'], role: 'Diseñadora' } };
+  const events = [
+    { taskId: 't-client', kind: 'DUE_DATE', fromValue: '2026-11-26', toValue: '2026-11-28', actor: designer },
+    { taskId: 't-client', kind: 'DUE_DATE_CLIENT', fromValue: '2026-11-26', toValue: '2026-11-28', actor: designer },
+    { taskId: 't-own', kind: 'DUE_DATE', fromValue: '2026-11-26', toValue: '2026-11-28', actor: designer },
+  ];
+  const task = (id) => ({ id, title: id, status: 'PENDIENTE', assigneeId: 'm-dis', completedAt: null, dueDate: at('2026-11-28T12:00:00Z'), focusDeadlineAt: null, participants: [] });
+  const tx = { taskChangeEvent: { findMany: async () => events }, task: { findMany: async () => [task('t-client'), task('t-own')] } };
+  const views = await closeViewsFor(tx, { day: '2026-11-26', memberIds: ['m-dis'] });
+  assert.deepEqual(Object.fromEntries(views.get('m-dis').map((view) => [view.title, view.movedFrom || null])), { 't-client': null, 't-own': '2026-11-26' });
 });

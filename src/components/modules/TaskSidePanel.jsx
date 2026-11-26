@@ -342,6 +342,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         referenceLinks: [],
         assetsLinks: []
     });
+    // La fecha cambió respecto de la guardada: solo entonces se ofrece decir que la movió el cliente.
+    const dueDateMoved = Boolean(formData.dueDate) && (formData.dueDate || '').split('T')[0] !== (formData.savedDueDate || '');
 
     const [newComment, setNewComment] = useState("");
     const [newCommentText, setNewCommentText] = useState("");
@@ -712,6 +714,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     status: taskData.status || 'PENDIENTE',
                     originalStatus: taskData.status,
                     dueDate: formattedDate,
+                    // La fecha guardada, para saber si se movió y ofrecer «la movió el cliente» (26 de noviembre de 2026).
+                    savedDueDate: formattedDate,
+                    dueDateByClient: false,
                     focusTime: focusTimeFromIso(taskData.focusDeadlineAt),
                     comments: taskData.comments || '',
                     creatorName: taskData.creator?.name || taskData.creatorName || 'Sistema',
@@ -985,6 +990,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 collaboratorIds: isEdition && formData.sharedProgress && !rosterChanged ? undefined : formData.assigneeId ? nextCollaborators : [],
                 expectedRosterVersion: rosterChanged ? formData.rosterVersion : undefined,
                 dueDate: isoDate,
+                dueDateReason: isEdition && dueDateMoved && formData.dueDateByClient ? 'CLIENTE' : undefined,
                 // Compromiso con hora: only managers may send it; a normal deadline sends null to clear any previous hour.
                 focusDeadlineAt: canSetFocusDeadline ? focusDeadlineIso(formData.dueDate, formData.focusTime) : undefined,
                 comments: '', // Removed general comments description completely
@@ -2377,6 +2383,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </>
                                     ) : null}
                                 </div>
+                                {/* Rodny, 26 de noviembre de 2026 (por Francisco): una fecha que se corre porque el cliente no
+                                    respondió no le resta a nadie en la liga. Solo aparece al cambiar la fecha de una tarea guardada. */}
+                                {isEdition && dueDateMoved && (
+                                    <label data-due-date-by-client className="flex cursor-pointer items-center gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(formData.dueDateByClient)}
+                                            onChange={(event) => setFormData({ ...formData, dueDateByClient: event.target.checked })}
+                                            className="h-4 w-4 shrink-0 rounded border-zinc-300 text-brand-cyan-deep focus:ring-brand-cyan dark:text-brand-cyan"
+                                        />
+                                        Movida por el cliente
+                                    </label>
+                                )}
                             </div>
 
                             {/* Estado Actual */}
