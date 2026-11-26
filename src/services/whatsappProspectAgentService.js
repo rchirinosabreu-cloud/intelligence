@@ -9,10 +9,13 @@ import { createNotification } from './notificationService.js';
 import { intakeRecipients } from './commercialRequestService.js';
 import { normalizeCompanyKey } from './crmService.js';
 import { formatLeadCode, bogotaDateKey } from '../lib/crmRules.js';
+import { AGENCY_ENTITY, factKey } from '../lib/briaAgencyFacts.js';
+import { createBriaAgencyFactRepository } from './briaAgencyFactRepository.js';
+import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canReplyFreely } from '../lib/whatsappProspects.js';
 import {
   PROSPECT_AGENT_USE_CASE, AGENT_OUTPUT_SCHEMA, AGENT_REPLY_MAX, HANDOFF_FALLBACK_TEXT,
-  agentInstructions, catalogText, agentMessages, turnNote, parseAgentOutput, mergeBrief, briefNote
+  agentInstructions, catalogText, agentMessages, turnNote, parseAgentOutput, mergeBrief, briefNote, publicInfoText, PUBLIC_FACT_TOPIC
 } from '../lib/whatsappProspectAgent.js';
 
 export const PROSPECT_AGENT_MODEL = 'claude-opus-5-5';
@@ -27,7 +30,7 @@ export const createProspectBrain = ({ env = process.env, fetchImpl = governedFet
   const model = env.WHATSAPP_PROSPECTS_MODEL || PROSPECT_AGENT_MODEL;
   return {
     model,
-    async reply({ instructions, catalog, note, messages }) {
+    async reply({ instructions, catalog, publicInfo = '', note, messages }) {
       let response = null;
       const client = new Client({
         apiKey, baseURL: 'https://api.anthropic.com', maxRetries: 1, timeout: timeoutMs,
@@ -39,10 +42,11 @@ export const createProspectBrain = ({ env = process.env, fetchImpl = governedFet
         const message = await client.beta.messages.stream({
           model, max_tokens: AGENT_MAX_TOKENS,
           betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-          output_config: { effort: env.WHATSAPP_PROSPECTS_EFFORT || 'low', format: { type: 'json_schema', schema: AGENT_OUTPUT_SCHEMA } },
+          // Esfuerzo medio: Bria razona sobre el catálogo y lo que la persona pide, sin volverse lenta en un chat.
+          output_config: { effort: env.WHATSAPP_PROSPECTS_EFFORT || 'medium', format: { type: 'json_schema', schema: AGENT_OUTPUT_SCHEMA } },
           system: [
             { type: 'text', text: instructions },
-            { type: 'text', text: `Catálogo de servicios:\n\n${catalog}`, cache_control: { type: 'ephemeral' } }
+            { type: 'text', text: `Información pública de la agencia (redes, portafolio, sitio):\n${publicInfo || '(el equipo todavía no la ha registrado)'}\n\nCatálogo de servicios:\n\n${catalog}`, cache_control: { type: 'ephemeral' } }
           ],
           messages: [...messages, { role: 'system', content: note }]
         }, { signal: AbortSignal.timeout(timeoutMs) }).finalMessage();
@@ -58,6 +62,12 @@ export const createProspectBrain = ({ env = process.env, fetchImpl = governedFet
   };
 };
 
+// Lo que el equipo dejó en la memoria de la agencia como información pública (tema «publico»), para compartir con
+// prospectos: redes, portafolio, sitio web. Se enseña a Bria en el chat: «guarda como dato público de la agencia…».
+const defaultPublicFacts = async () => (await createBriaAgencyFactRepository({ pool: getSidecarPool(), workspace: 'application' })
+  .search({ purposes: ['comercial'], restricted: [] }, { entity: AGENCY_ENTITY, limit: 60 }))
+  .filter((fact) => factKey(fact.topic) === PUBLIC_FACT_TOPIC);
+
 export const createProspectAgent = ({
   db = prisma,
   brain = undefined,
@@ -65,7 +75,8 @@ export const createProspectAgent = ({
   now = () => new Date(),
   notify = createNotification,
   recipientsFor = intakeRecipients,
-  logger = console
+  logger = console,
+  publicFacts = defaultPublicFacts
 } = {}) => {
   const model = () => (brain === undefined ? (brain = createProspectBrain({ env })) : brain);
   let catalogCache = null;
@@ -74,6 +85,15 @@ export const createProspectAgent = ({
     const services = await db.serviceCatalog.findMany({ where: { activo: true }, orderBy: [{ category: 'asc' }, { name: 'asc' }] });
     catalogCache = { at: now().getTime(), text: catalogText(services) };
     return catalogCache.text;
+  };
+  let publicCache = null;
+  const publicInfo = async () => {
+    if (publicCache && now().getTime() - publicCache.at < CATALOG_TTL_MS) return publicCache.text;
+    let text = '';
+    try { text = publicInfoText(await publicFacts()); }
+    catch (failure) { logger.warn?.(`[WhatsApp prospectos] No se pudo leer la información pública de la agencia: ${failure.message}`); }
+    publicCache = { at: now().getTime(), text };
+    return text;
   };
 
   const tellTeam = async (lead, message) => {
@@ -105,6 +125,7 @@ export const createProspectAgent = ({
       const result = await model().reply({
         instructions: agentInstructions(),
         catalog: await catalog(),
+        publicInfo: await publicInfo(),
         note: turnNote({ today: bogotaDateKey(at), contactName: contact.profileName, originDetail: lead.originDetail, justAuthorized }),
         messages
       });

@@ -31,6 +31,9 @@ test('las instrucciones fijan lo que Bria no hace y no cambian entre mensajes', 
   assert.match(text, /Eres Bria, la asistente de Agencia Uno/);
   assert.match(text, /Cierres un precio final, des descuentos, comprometas fechas/);
   assert.match(text, /handoff = true/);
+  // Razonar, no recitar (Rodny, 26 de noviembre de 2026): el catálogo es referencia y no se pasa al equipo por un dato que falte.
+  assert.match(text, /Razona con el catálogo: es tu referencia, no un guion/);
+  assert.match(text, /No la pases solo porque no sepas un dato/);
   assert.equal(text, agentInstructions({ agencyName: 'Agencia Uno' }));
   assert.deepEqual(AGENT_OUTPUT_SCHEMA.required, ['reply', 'handoff', 'handoffReason', 'brief']);
 });
@@ -87,6 +90,8 @@ test('el modelo se pide con esquema, catálogo reutilizable, respaldo ante recha
   assert.equal(params.fallbacks, 'default');
   assert.deepEqual(params.betas, ['server-side-fallback-2026-07-01']);
   assert.equal(params.output_config.format.type, 'json_schema');
+  assert.equal(params.output_config.effort, 'medium');
+  assert.match(params.system[1].text, /Información pública de la agencia[\s\S]*todavía no la ha registrado[\s\S]*Catálogo de servicios/);
   assert.deepEqual(params.system[1].cache_control, { type: 'ephemeral' });
   assert.deepEqual(params.messages.at(-1), { role: 'system', content: 'N' });
   assert.equal(governance.useCase, PROSPECT_AGENT_USE_CASE);
@@ -150,7 +155,10 @@ const build = ({ answers = [], fail = false, during = null } = {}) => {
   const notices = [];
   const brain = { model: 'claude-opus-5-5', async reply(input) { calls.push(input); if (fail) throw new Error('caída'); if (during) await during(db); return answers.shift() || { text: JSON.stringify({ reply: 'Claro, ¿para cuándo lo necesitas?', handoff: false, handoffReason: '', brief: { serviceInterest: 'Logo', company: 'Café Sol' } }) }; } };
   const common = { db, now: () => clock, notify: async (notice) => { notices.push(notice); }, recipientsFor: async () => ['u-francys', 'u-admin'], logger: { warn() {}, error() {}, info() {} } };
-  const agent = createProspectAgent({ ...common, brain });
+  const agent = createProspectAgent({ ...common, brain, publicFacts: async () => [
+    { statement: 'Instagram: instagram.com/agencia.uno', certainty: 'CONFIRMADO', sensitivity: 'normal' },
+    { statement: 'Idea sin confirmar', certainty: 'PROPUESTA', sensitivity: 'normal' }
+  ] });
   const service = createWhatsAppProspectService({ ...common, env: { APP_URL: 'https://labs.example.com' }, resolveOwner: async () => ({ id: 'tm-francys' }), prospectAgent: agent });
   const sent = [];
   const send = async (text, options) => { sent.push({ text, options }); return `wamid.out${sent.length}`; };
@@ -183,6 +191,7 @@ test('al aceptar, Bria agradece y sigue con lo que la persona ya contó; el brie
   assert.equal(calls.length, 1);
   assert.match(calls[0].note, /acaba de tocar «Acepto»/);
   assert.match(calls[0].catalog, /### Logo/);
+  assert.equal(calls[0].publicInfo, '- Instagram: instagram.com/agencia.uno', 'solo lo vigente de la información pública');
   assert.equal(calls[0].messages.at(-1).role, 'user');
   assert.equal(sent.at(-1).text, 'Claro, ¿para cuándo lo necesitas?');
   const [lead] = db.tables.leads;
