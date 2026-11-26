@@ -7,7 +7,8 @@ import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
 import { resolveIntakeOwner, intakeRecipients, DEFAULT_INTAKE_OWNER } from './commercialRequestService.js';
 import { addActivity } from './crmService.js';
-import { formatLeadCode } from '../lib/crmRules.js';
+import { formatLeadCode, bogotaDateKey } from '../lib/crmRules.js';
+import { LEGAL_ENTITY } from '../components/public/legalEntity.js';
 import { displayPhone } from '../lib/whatsappBridge.js';
 import {
   parseReferral, originDetailFor, phoneKey, leadPhone, welcomeText, shouldWelcome, shouldNotify, inboundTextFor,
@@ -16,7 +17,6 @@ import {
 import { SERVICE_WINDOW_MS, WINDOW_MARGIN_MS } from '../lib/whatsappAlerts.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
-const bogotaDay = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 const MESSAGES_SHOWN = 300;
 
 const serializeMessage = (row) => ({
@@ -57,7 +57,7 @@ export const createWhatsAppProspectService = ({
   logger = console
 } = {}) => {
   const privacyUrl = () => {
-    const base = String(env.APP_URL || 'https://labs.brainstudioagencia.com').trim().replace(/\/+$/, '');
+    const base = String(env.APP_URL || LEGAL_ENTITY.platformUrl).trim().replace(/\/+$/, '');
     return /^https:\/\//.test(base) ? `${base}/privacidad` : null;
   };
 
@@ -103,7 +103,7 @@ export const createWhatsAppProspectService = ({
             stage: 'POR_GESTIONAR',
             ownerId: owner?.id || null,
             nextAction: 'Responder por WhatsApp',
-            nextFollowUpAt: new Date(`${bogotaDay(at)}T00:00:00.000Z`),
+            nextFollowUpAt: new Date(`${bogotaDateKey(at)}T00:00:00.000Z`),
             createdById: null
           }
         });

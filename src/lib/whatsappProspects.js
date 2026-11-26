@@ -5,6 +5,7 @@
 // (src/services/whatsappProspectService.js) guarda y avisa.
 import { isWindowOpen } from './whatsappAlerts.js';
 import { normalizeWaId, isBsuid } from './whatsappBridge.js';
+import { AGENCY_ENTITY } from './briaAgencyFacts.js';
 
 /** Si la misma persona vuelve a escribir tras este silencio, se le avisa otra vez a quien la atiende. */
 export const PROSPECT_RENOTIFY_AFTER_MS = 12 * 60 * 60 * 1000;
@@ -65,10 +66,10 @@ export const leadPhone = (value) => {
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 
 /** La primera respuesta, apenas escribe. Dice quién responde, que una persona sigue y dónde está la política de datos. */
-export const welcomeText = ({ name = null, privacyUrl = null } = {}) => {
+export const welcomeText = ({ name = null, privacyUrl = null, agencyName = AGENCY_ENTITY } = {}) => {
   const hello = firstName(name) ? `¡Hola, ${firstName(name)}!` : '¡Hola!';
   return [
-    `${hello} Gracias por escribir a Brain Studio. Soy Bria, la asistente de la agencia.`,
+    `${hello} Gracias por escribir a ${agencyName}. Soy Bria, la asistente de la agencia.`,
     'Ya le avisé a nuestro equipo comercial y una persona te responde muy pronto. Mientras tanto, cuéntanos qué necesitas para tu marca y para cuándo.',
     privacyUrl ? `Tratamos tus datos según nuestra política: ${privacyUrl}` : null
   ].filter(Boolean).join('\n\n');

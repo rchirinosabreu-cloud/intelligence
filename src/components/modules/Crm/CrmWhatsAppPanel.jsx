@@ -5,11 +5,12 @@ import { MessageCircle, SendMessage, Check, AlertCircle, Loader2, Megaphone, Clo
 import { cn } from '@/lib/utils';
 import { useCrmWhatsApp, useSendWhatsApp } from './crmApi';
 import { formatDateTime } from './crmPresentation';
+import { CRM_TIMEZONE } from '@/lib/crmRules';
 
 // La conversación de WhatsApp de un prospecto (26 de noviembre de 2026): lo que escribió, la bienvenida de Bria y lo
 // que respondió el equipo, con su estado de entrega. Se responde aquí mismo dentro de las 24 horas que deja Meta.
 
-const timeFormatter = new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' });
+const timeFormatter = new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: CRM_TIMEZONE });
 const formatTime = value => (value ? timeFormatter.format(new Date(value)) : '');
 
 /** ✓ enviado · ✓✓ entregado · ✓✓ en color leído · aviso si falló. */
