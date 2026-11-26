@@ -54,6 +54,8 @@ try {
     );
   `);
   await client.query(`ALTER TABLE "SocialPublication" ADD COLUMN IF NOT EXISTS "publishRequestedAt" TIMESTAMPTZ(3);`);
+  // TikTok (25 de noviembre de 2026): las respuestas que su pantalla obliga a pedir en cada publicación.
+  await client.query(`ALTER TABLE "SocialPublication" ADD COLUMN IF NOT EXISTS "options" JSONB;`);
   await client.query(`CREATE INDEX IF NOT EXISTS "SocialPublication_status_scheduledAt_idx" ON "SocialPublication"("status", "scheduledAt");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "SocialPublication_status_nextAttemptAt_idx" ON "SocialPublication"("status", "nextAttemptAt");`);
 

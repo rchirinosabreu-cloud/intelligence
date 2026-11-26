@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import axios from 'axios';
 import { MemoryRouter } from 'react-router-dom';
 import LinkedInCallback from '../../src/components/modules/LinkedInCallback';
+import TikTokCallback from '../../src/components/modules/TikTokCallback';
 import { ConfirmDialogProvider } from '../../src/components/ui/ConfirmDialog';
 import { BrainTimePicker } from '../../src/components/ui/BrainDatePicker';
 import SocialPublishingPanel from '../../src/components/modules/ContentPlan/SocialPublishingPanel';
@@ -23,6 +24,11 @@ const fbDead = { ...fb, isActive: false, lastError: 'La conexión con Meta venci
 const inDays = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 const li = { id: 'acc-li', clientId: 'c5', platform: 'LINKEDIN', externalId: '2414183', displayName: 'Titanes Cartagena S.A.S.', pageId: 'linkedin:2414183', isActive: true, lastError: null, authorization: { expiresAt: inDays(52), refreshExpiresAt: null, canRefresh: false } };
 const liExpiring = { ...li, id: 'acc-li2', externalId: '99', pageId: 'linkedin:99', displayName: 'Fundación Titanes por la Educación del Caribe', authorization: { expiresAt: inDays(4), refreshExpiresAt: null, canRefresh: false } };
+
+// TikTok (25 de noviembre de 2026): otra cuenta aparte, solo video, y con preguntas propias antes de programar.
+const tt = { id: 'acc-tt', clientId: 'c5', platform: 'TIKTOK', externalId: 'open-1', displayName: '@titanescartagena', pageId: 'tiktok:open-1', isActive: true, lastError: null, authorization: { expiresAt: inDays(1), refreshExpiresAt: inDays(300), canRefresh: true } };
+const ttCreator = { accountId: 'acc-tt', username: 'titanescartagena', nickname: 'Titanes Cartagena', avatarUrl: null, privacyLevelOptions: ['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'SELF_ONLY'], commentDisabled: false, duetDisabled: true, stitchDisabled: false, maxVideoDurationSeconds: 600 };
+const loadTikTokCreatorInfo = async () => ttCreator;
 
 const image = { id: 'a1', name: 'post-final.jpg', mimeType: 'image/jpeg', size: 2_400_000, storageKey: 'k/post.jpg' };
 const video = { id: 'v1', name: 'reel-final.mp4', mimeType: 'video/mp4', size: 48_000_000, storageKey: 'k/reel.mp4' };
@@ -50,8 +56,22 @@ const CASES = [
   { title: 'LinkedIn publicado; Instagram falló', item: { ...base, publications: [
     { id: 'p6', socialAccountId: 'acc-li', platform: 'LINKEDIN', status: 'PUBLISHED', publishedAt: new Date().toISOString(), permalink: 'https://www.linkedin.com/feed/update/urn:li:share:1/' },
     { id: 'p7', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'FAILED', attempts: 1, error: 'Instagram todavía no había terminado de procesar el archivo. El archivo está bien: pulsa «Reintentar».' }
-  ] }, accounts: [ig, fb, li] }
+  ] }, accounts: [ig, fb, li] },
+  { title: 'Reel con TikTok conectado', item: { ...base, id: 'item-tt', format: 'Reel', finalAssets: [video] }, accounts: [ig, fb, tt] },
+  { title: 'Post de imagen con TikTok conectado (TikTok solo recibe videos)', item: { ...base, id: 'item-tt2' }, accounts: [ig, fb, tt] },
+  { title: 'TikTok programado; Instagram publicado', item: { ...base, id: 'item-tt3', format: 'Reel', finalAssets: [video], publications: [
+    { id: 'p8', socialAccountId: 'acc-tt', platform: 'TIKTOK', status: 'SCHEDULED', scheduledAt: `${tomorrow}T15:30:00.000Z`, attempts: 0, options: { privacyLevel: 'PUBLIC_TO_EVERYONE', allowComment: true, commercial: true, yourBrand: true, consent: true } },
+    { id: 'p9', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'PUBLISHED', publishedAt: new Date().toISOString(), permalink: 'https://www.instagram.com/reel/x/' }
+  ] }, accounts: [ig, fb, tt] }
 ];
+
+// La pantalla a la que TikTok devuelve a la persona: se confirma la cuenta antes de guardarla.
+if (new URLSearchParams(window.location.search).has('tiktok')) {
+  axios.defaults.adapter = async (config) => ({
+    status: 200, statusText: 'OK', headers: {}, config,
+    data: { clientId: 'c5', clientName: 'Titanes Cartagena', pending: 'x', account: { username: 'titanescartagena', nickname: 'Titanes Cartagena', avatarUrl: null } }
+  });
+}
 
 // La pantalla a la que LinkedIn devuelve a la persona: el servidor contesta con las páginas que administra.
 if (new URLSearchParams(window.location.search).has('linkedin')) {
@@ -68,7 +88,7 @@ if (new URLSearchParams(window.location.search).has('linkedin')) {
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
 queryClient.setQueryData(['social-accounts', 'c1'], [fb, ig]);
 queryClient.setQueryData(['social-accounts', 'c2'], []);
-queryClient.setQueryData(['social-accounts', 'c5'], [{ ...fb, clientId: 'c5' }, { ...ig, clientId: 'c5' }, li, liExpiring]);
+queryClient.setQueryData(['social-accounts', 'c5'], [{ ...fb, clientId: 'c5' }, { ...ig, clientId: 'c5' }, li, liExpiring, tt]);
 queryClient.setQueryData(['social-accounts', 'c3'], [fbDead, ig]);
 // Un cliente con dos cuentas (2 de octubre de 2026): PromoGroup IPS, la primera que se conectó, y Endova.
 queryClient.setQueryData(['social-accounts', 'c4'], [
@@ -111,6 +131,7 @@ function Caso({ title, item, accounts }) {
         onSchedule={(id, platforms) => note(`Programar ${platforms.join(' y ')}`)}
         onCancel={(id) => note(`Cancelar ${id}`)}
         onRetry={(id) => note(`Reintentar ${id}`)}
+        loadTikTokCreatorInfo={loadTikTokCreatorInfo}
       />
       {log.length > 0 && <p className="px-6 pb-4 text-[11px] text-zinc-400">Acciones: {log.join(' · ')}</p>}
     </section>
@@ -128,6 +149,16 @@ function App() {
       </div>
     );
   }
+  if (new URLSearchParams(window.location.search).has('tiktok')) {
+    return (
+      <div className={dark ? 'dark' : ''}>
+        <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+          <MemoryRouter initialEntries={['/tiktok/callback?code=muestra&state=muestra']}><TikTokCallback /></MemoryRouter>
+        </div>
+      </div>
+    );
+  }
+  const only = new URLSearchParams(window.location.search).get('solo');
   return (
     <div className={dark ? 'dark' : ''}>
       <div className="min-h-screen bg-zinc-50 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
@@ -148,7 +179,7 @@ function App() {
             <SocialAccountsWidget clientId="c2" canManage />
             <SocialAccountsWidget clientId="c3" canManage={false} />
           </div>
-          {CASES.map((caso) => <Caso key={caso.title} {...caso} />)}
+          {CASES.filter((caso) => !only || caso.title.toLowerCase().includes(only.toLowerCase())).map((caso) => <Caso key={caso.title} {...caso} />)}
         </div>
       </div>
       <Toaster position="bottom-right" />

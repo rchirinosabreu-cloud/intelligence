@@ -289,6 +289,11 @@ export const PLATFORM_OPERATIONS = {
   'POST /social/linkedin/start': { que: 'Empieza a conectar la página de LinkedIn de un cliente: devuelve la dirección de LinkedIn donde su administrador autoriza.', campos: 'clientId' },
   'POST /social/linkedin/exchange': { que: 'Recibe el código con el que LinkedIn devuelve a la persona y lista las páginas donde puede publicar.', campos: 'code, state' },
   'POST /social/linkedin/link': { que: 'Conecta al cliente la página de LinkedIn elegida.', campos: 'pending, organizationId' },
+  'GET /social/tiktok/status': { que: 'Si la conexión con TikTok está configurada en el servidor.' },
+  'POST /social/tiktok/start': { que: 'Empieza a conectar la cuenta de TikTok de un cliente: devuelve la dirección de TikTok donde su dueño autoriza.', campos: 'clientId' },
+  'POST /social/tiktok/exchange': { que: 'Recibe el código con el que TikTok devuelve a la persona y dice qué cuenta autorizó.', campos: 'code, state' },
+  'POST /social/tiktok/link': { que: 'Conecta al cliente la cuenta de TikTok que se acaba de autorizar.', campos: 'pending' },
+  'GET /social/tiktok/creator-info': { que: 'Lo que una cuenta de TikTok conectada permite en este momento: quién puede ver el video, si deja comentar, dúo y pegar, y cuánto puede durar.', campos: 'accountId' },
   // Actividad y calendario
   'GET /activity/status': { que: 'Estado actual registrado de las personas del equipo en Actividad: reunión, ausencia, producción, foco o trabajo, con tarea y evento actuales. Combina tareas en curso y eventos vigentes del calendario. Describe lo registrado ahora, no certifica presencia física ni atención; una lista de pendientes o tiempos históricos no lo sustituye.' },
   'GET /activity/events': { que: 'Los eventos de Actividad en un rango.', campos: 'from, to (consulta)' },

@@ -79,6 +79,21 @@ Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catál
 - **Fuera de la plataforma:** una app en linkedin.com/developers asociada a la página de la agencia, con el producto *Community Management API* (primero acceso de desarrollo, luego estándar), URL de regreso `<dirección de la plataforma>/linkedin/callback` (la plataforma la arma con la dirección desde la que se usa, validada contra los orígenes permitidos; no depende de `APP_URL`), y en Railway `LINKEDIN_CLIENT_ID` y `LINKEDIN_CLIENT_SECRET` (opcionales: `LINKEDIN_API_VERSION`, hoy `202605`; `LINKEDIN_OAUTH_REDIRECT_URI`). Sin esas variables el botón dice qué falta y nada más cambia.
 - **Sin probar contra LinkedIn real** hasta que exista esa app: está construido contra la documentación y sus contratos (`tests/linkedinPublishing.test.js`). La primera publicación real hay que mirarla.
 
+
+## TikTok: cuentas de TikTok, solo video (Rodny, 25 de noviembre de 2026)
+
+«Listo, arranca», con **aplicación propia** de la plataforma en TikTok for Developers (no un intermediario). La cola, el cron, el lease, los reintentos y «nunca dos veces» son los mismos. Lo que cambia, leído en la documentación de TikTok el 24 de noviembre de 2026:
+
+- **No hay cuenta maestra.** Cada cuenta la autoriza su dueño iniciando sesión en TikTok (`tiktokAccountService.js`, regreso en `/tiktok/callback`). Como TikTok autoriza la sesión que el navegador tenga abierta, la pantalla de regreso **muestra la cuenta y pide confirmarla** antes de guardarla (`ClientSocialAccount`, `platform: 'TIKTOK'`, `pageId: 'tiktok:<open_id>'`). Ningún token llega al navegador.
+- **La llave dura 24 horas y se renueva sola** con el token de renovación, que dura un año (`tiktokTokenService.js`). Si TikTok está caído y la llave sigue vigente se publica con ella; si TikTok la rechaza, la cuenta se apaga pidiendo reconectar.
+- **Destino aparte y sin marcar**, como LinkedIn (`standaloneAccountsOf`).
+- **Solo video** (MP4, MOV o WebM, hasta 4 GB). Fotos y carruseles exigen que TikTok descargue desde un dominio verificado: quedan para después. Sin historias. La portada elegida y la música no viajan: `schedulingNotices` lo dice.
+- **TikTok dicta la pantalla de publicar** y con ella aprueba o rechaza la aplicación (`TikTokPostOptions.jsx`): nombre de la cuenta a la vista, «Quién puede verlo» **sin opción por defecto** y solo con lo que la cuenta permite, comentarios, dúo y pegar **apagados**, contenido comercial apagado y con su etiqueta, y la frase de consentimiento con el enlace a la Confirmación de uso de música. No simplificar esa pantalla sin leer antes las reglas de TikTok. Sin responderla, «Programar» no se enciende, y el servidor lo exige igual (`tiktokOptionProblems`).
+- **Lo respondido se guarda en la fila** (`SocialPublication.options`, columna aditiva en `scripts/ensure-social-publishing-schema.js`). Al salir se le vuelve a preguntar a TikTok qué permite la cuenta (`creator_info`): si ya no admite lo elegido, **no se envía** y el motivo lo dice.
+- **El video se sube por partes** (`tiktokService.js`, `tiktokChunkPlan`): de 10 MB, la última con el resto, leyendo el archivo por rangos. La orden de publicar queda registrada justo antes de la última parte; si después TikTok no confirma, la fila queda fallida sin reintento para que una persona mire el perfil.
+- **Fuera de la plataforma:** una app en developers.tiktok.com (organización Brain Studio, nombre «Brainstudio Intelligence») con *Login Kit* y *Content Posting API* (Direct Post), permisos `user.info.basic` y `video.publish`, URL de regreso `<dirección de la plataforma>/tiktok/callback`, y en Railway `TIKTOK_CLIENT_KEY` y `TIKTOK_CLIENT_SECRET` (opcional `TIKTOK_OAUTH_REDIRECT_URI`). TikTok verifica el dominio con el archivo `public/tiktok*.txt`: no borrarlo. **Hasta que TikTok audite la app**, lo publicado sale solo como privado, en cuentas privadas y con tope de cuentas por día.
+- **Sin probar contra TikTok real** hasta que existan esas llaves: construido contra la documentación (`tests/tiktokPublishing.test.js`). La primera publicación real hay que mirarla.
+
 ## Lo que hay que configurar fuera de la plataforma
 
 **Desde el 1 de octubre de 2026 la llave es de una persona, no del usuario del sistema (decisión de Rodny).** Cada cliente tiene su propio portfolio en Meta y quien tiene acceso a todos es Francisco Villa, el CEO, como persona. El usuario del sistema del portfolio Brain Studio solo veía la página de Brain Studio, y para llegar a páginas de otros negocios Meta exige hacerse «proveedor de tecnología» (verificación y revisión de la app). Con un token de usuario de alguien con rol en la app basta el acceso estándar.
@@ -98,7 +113,7 @@ Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catál
 - Programar un mes entero de una vez; hoy es pieza por pieza, a propósito, hasta ver el primer mes publicado.
 - Un interruptor general para pausar el publicador sin tocar el código.
 - LinkedIn: un enlace para que el **cliente** autorice su página sin tener usuario en la plataforma, cifras de LinkedIn en Reportes, y perfiles personales (hoy solo páginas de empresa).
-- TikTok: investigado el 23 de noviembre de 2026, sin construir.
+- TikTok: fotos y carruseles (exigen que TikTok descargue de un dominio verificado), revisar la duración del video antes de programar, un enlace para que el **cliente** autorice su cuenta, y cifras de TikTok en Reportes.
 
 ## Verificación
 

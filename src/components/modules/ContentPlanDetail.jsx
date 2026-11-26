@@ -1420,7 +1420,7 @@ const ContentPlanDetail = () => {
   };
   // Se programa por cuenta, no por red: un cliente puede tener varias cuentas (Rodny, 2 de octubre de 2026).
   const schedulePublicationMutation = useMutation({
-    mutationFn: async ({ itemId, accountIds }) => (await axios.post(`${getApiBaseUrl()}/api/social/publications`, { itemId, accountIds }, {
+    mutationFn: async ({ itemId, accountIds, tiktokOptions }) => (await axios.post(`${getApiBaseUrl()}/api/social/publications`, { itemId, accountIds, ...(tiktokOptions ? { tiktokOptions } : {}) }, {
       headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
     })).data,
     onSuccess: (rows) => {
@@ -1906,7 +1906,7 @@ const ContentPlanDetail = () => {
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
                 socialAccounts={plan?.client?.socialAccounts || []}
-                onSchedulePublication={(itemId, accountIds) => schedulePublicationMutation.mutate({ itemId, accountIds })}
+                onSchedulePublication={(itemId, accountIds, extra = {}) => schedulePublicationMutation.mutate({ itemId, accountIds, tiktokOptions: extra.tiktokOptions || null })}
                 onChangeSocialPages={(itemId, pageIds) => socialPagesMutation.mutate({ itemId, pageIds })}
                 onCancelPublication={(publicationId) => cancelPublicationMutation.mutate(publicationId)}
                 onRetryPublication={(publicationId) => retryPublicationMutation.mutate(publicationId)}

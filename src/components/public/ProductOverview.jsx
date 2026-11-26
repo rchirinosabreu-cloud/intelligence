@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock, CheckCircle, FileBarChart, LayoutGrid, ShieldCheck, Sparkles } from '@/components/ui/icons';
-import { FacebookLogo, InstagramLogo, LinkedinLogo } from '@/components/ui/SocialBrandLogos';
+import { FacebookLogo, InstagramLogo, LinkedinLogo, TiktokLogo } from '@/components/ui/SocialBrandLogos';
 import { LEGAL_ENTITY as E } from './legalEntity';
 
 // Presentación pública del producto (Rodny, 25 de noviembre de 2026). La dirección principal solo
@@ -23,7 +23,8 @@ const FEATURES = [
 const NETWORKS = [
   { Logo: InstagramLogo, name: 'Instagram' },
   { Logo: FacebookLogo, name: 'Facebook' },
-  { Logo: LinkedinLogo, name: 'LinkedIn' }
+  { Logo: LinkedinLogo, name: 'LinkedIn' },
+  { Logo: TiktokLogo, name: 'TikTok' }
 ];
 
 const CONNECTION_FACTS = [
