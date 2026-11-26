@@ -101,6 +101,7 @@ Las seis condiciones ya se evalúan en el servicio de servidor descrito abajo. L
 | On fire | Ocho tareas distintas completadas por la persona en el mismo día | Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas! |
 | Al día | Al cierre de la jornada (18:00 de Bogotá, días hábiles): cerró al menos una tarea ese día y no dejó nada vencido ni nada de ese día sin cerrar. Sustituye desde el 12 de noviembre de 2026 a «se puso al día con sus vencidas», que premiaba atrasarse | Cerraste el día sin dejar nada vencido, buen trabajo. |
 | Parrilla aprobada | Todas las piezas activas están aprobadas; destinatario: responsable de la parrilla | El cliente aprobó tu parrilla, mandemos a producción |
+| Parrilla terminada | La parrilla (noviembre de 2026 en adelante) tiene piezas y ninguna en borrador; una por parrilla; destinatario: responsable de la parrilla. Un repaso al arrancar y cada 15 minutos entrega las que se terminan por otro camino (hojas de MIO) | Terminaste de armar tu parrilla. Son horas de trabajo que suman |
 | Ya son 50 | Cincuenta tareas distintas cumplidas por la persona en la misma semana | Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades! |
 
 Precisiones de la implementación:

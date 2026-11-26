@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 const load = () => import('../src/lib/recognitionPresentation.js');
 const event = (overrides = {}) => ({ id: 'a', kind: 'FIRST_TASK', recipient: { id: 'rodny', name: 'Rodny Chirinos' }, occurredAt: '2026-09-10T14:00:00Z', description: 'Completó su primera tarea del día.', ...overrides });
 
-test('presentation recognizes only the six selected categories without inventing a score', async () => {
+test('presentation recognizes only the seven selected categories without inventing a score', async () => {
   const { recognitionLabels } = await load();
   assert.deepEqual(recognitionLabels, {
     FIRST_TASK: 'Buen comienzo', EARLY_DELIVERY: 'Entrega anticipada',
     DAILY_EIGHT: 'On fire', CAUGHT_UP: 'Al día',
-    PLAN_APPROVED: 'Parrilla aprobada', WEEKLY_FIFTY: 'Ya son 50',
+    PLAN_APPROVED: 'Parrilla aprobada', PLAN_FINISHED: 'Parrilla terminada', WEEKLY_FIFTY: 'Ya son 50',
   });
 });
 
@@ -39,6 +39,7 @@ test('copy runs as one paragraph (no forced line breaks) and distinguishes eight
     DAILY_EIGHT: 'Hoy completaste ocho tareas. ¡Qué manera de hacer avanzar las cosas!',
     CAUGHT_UP: 'Cerraste el día sin dejar nada vencido, buen trabajo.',
     PLAN_APPROVED: 'El cliente aprobó tu parrilla. ¡A producción!',
+    PLAN_FINISHED: 'Terminaste de armar tu parrilla. Son horas de trabajo que suman. ¡Bien hecho!',
     WEEKLY_FIFTY: 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!',
   });
 });

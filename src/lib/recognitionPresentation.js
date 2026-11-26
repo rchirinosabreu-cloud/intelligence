@@ -5,6 +5,7 @@ export const recognitionLabels = Object.freeze({
   DAILY_EIGHT: 'On fire',
   CAUGHT_UP: 'Al día',
   PLAN_APPROVED: 'Parrilla aprobada',
+  PLAN_FINISHED: 'Parrilla terminada',
   WEEKLY_FIFTY: 'Ya son 50',
 });
 
@@ -15,6 +16,7 @@ export const recognitionMessages = Object.freeze({
   // Desde el 12 de noviembre de 2026 se entrega al cierre de la jornada a quien terminó sin nada vencido.
   CAUGHT_UP: 'Cerraste el día sin dejar nada vencido, buen trabajo.',
   PLAN_APPROVED: 'El cliente aprobó tu parrilla. ¡A producción!',
+  PLAN_FINISHED: 'Terminaste de armar tu parrilla. Son horas de trabajo que suman. ¡Bien hecho!',
   WEEKLY_FIFTY: 'Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades!',
 });
 

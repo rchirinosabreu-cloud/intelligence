@@ -336,6 +336,19 @@ async function bootstrap() {
                 ]);
                 const retired = await applyRecognitionCorrections(prismaClient);
                 if (retired.length) console.log('[Reconocimientos] Retirados:', JSON.stringify(retired));
+                // «Parrilla terminada» (Rodny, 26 de noviembre de 2026): el primer repaso entrega las parrillas que ya
+                // estaban terminadas; los siguientes, las que se terminan sin pasar por el editor (hojas de MIO).
+                const { grantFinishedPlans } = await import('./src/services/recognitionService.js');
+                const sweep = async () => {
+                    try {
+                        const granted = await grantFinishedPlans(prismaClient);
+                        if (granted.length) console.log('[Reconocimientos] Parrilla terminada:', JSON.stringify(granted));
+                    } catch (sweepError) {
+                        console.error('[Reconocimientos] No se pudo repasar las parrillas terminadas:', sweepError.message);
+                    }
+                };
+                await sweep();
+                setInterval(sweep, 15 * 60 * 1000).unref?.();
             } catch (correctionError) {
                 console.error('[Reconocimientos] No se pudo aplicar la corrección:', correctionError.message);
             }
