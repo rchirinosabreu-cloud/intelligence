@@ -10,7 +10,7 @@
 // pruebas) no lee nada, y las parrillas solo se leen si quien crea el servicio pasa con qué: nunca se cae por defecto a la
 // base real.
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
-import { adBudgetsCheck, AREA_EQUITY_FROM, PRODUCTION_DAY_EFFORT, areaEquityActive, crmFollowUpCheck, crmNotesCheck, financialDay, financialOnTimeCheck, financialSupportCheck, financialVoidCheck, financeEffort, piecesOnTimeCheck, plansOverdueCheck, productionEvidenceOnTimeCheck, productionEvidencePendingCheck } from '../lib/leagueAreaChecks.js';
+import { adBudgetsCheck, AREA_EQUITY_FROM, PRODUCTION_DAY_EFFORT, areaEquityActive, crmFollowUpCheck, crmNotesCheck, financialDay, financialOnTimeCheck, financialSupportCheck, financialVoidCheck, financeEffort, RECEIVABLE_ISSUED_EFFORT, piecesOnTimeCheck, plansOverdueCheck, productionEvidenceOnTimeCheck, productionEvidencePendingCheck } from '../lib/leagueAreaChecks.js';
 import { memberHasArea } from '../lib/teamAreas.js';
 import { isBusinessDay } from '../lib/colombiaBusinessDays.js';
 
@@ -59,22 +59,26 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
    * pagar registrados ese día (A tiempo) y lo que otra persona le anuló o revirtió ese día (Sin devolución).
    */
   const readFinance = async ({ start, end, userIds }) => {
-    if (!userIds.length) return { payments: [], registered: [], voided: [] };
+    if (!userIds.length) return { payments: [], registered: [], voided: [], issued: [] };
     const created = { gte: start, lt: end };
     const mine = { in: userIds };
-    const [payments, collected, voidedPayables, reversedPayments, reversedCollections] = await Promise.all([
+    const [payments, collected, voidedPayables, reversedPayments, reversedCollections, issued] = await Promise.all([
       can(db.payablePayment) ? attempt('los pagos de cuentas por pagar', () => db.payablePayment.findMany({ where: { createdAt: created, createdById: mine, reversedAt: null, kind: 'PAGO' },
         select: { createdById: true, paidAt: true, financialRecordId: true, payable: { select: { dueDate: true } } } }), []) : [],
       can(db.receivablePayment) ? attempt('los abonos de cartera', () => db.receivablePayment.findMany({ where: { createdAt: created, createdById: mine }, select: { createdById: true, financialRecordId: true } }), []) : [],
       can(db.accountsPayable) ? attempt('las cuentas por pagar anuladas', () => db.accountsPayable.findMany({ where: { voidedAt: created, createdById: mine }, select: { createdById: true, voidedById: true } }), []) : [],
       can(db.payablePayment) ? attempt('los pagos revertidos', () => db.payablePayment.findMany({ where: { reversedAt: created, createdById: mine }, select: { createdById: true, reversedById: true } }), []) : [],
-      can(db.receivablePayment) ? attempt('los abonos revertidos', () => db.receivablePayment.findMany({ where: { reversedAt: created, createdById: mine }, select: { createdById: true, reversedById: true } }), []) : []
+      can(db.receivablePayment) ? attempt('los abonos revertidos', () => db.receivablePayment.findMany({ where: { reversedAt: created, createdById: mine }, select: { createdById: true, reversedById: true } }), []) : [],
+      // Cuentas de cobro emitidas ese día (Elisa, 27 de noviembre de 2026: «estoy con las cuentas de cobro de este mes,
+      // porque no me da puntos eso»). Emitir una le pone número y genera el PDF: es trabajo de la persona que la emite.
+      can(db.accountsReceivable) ? attempt('las cuentas de cobro emitidas', () => db.accountsReceivable.findMany({ where: { issuedAt: created, issuedById: mine }, select: { issuedById: true } }), []) : []
     ]);
     const byOther = (row, who) => Boolean(row[who]) && row[who] !== row.createdById;
     return {
       payments,
       // Un pago o un abono con su movimiento ya se cuenta por el movimiento: el mismo trabajo no suma dos veces.
       registered: [...payments, ...collected].filter((row) => !row.financialRecordId).map((row) => row.createdById),
+      issued: issued.map((row) => row.issuedById),
       voided: [...voidedPayables.filter((row) => byOther(row, 'voidedById')), ...reversedPayments.filter((row) => byOther(row, 'reversedById')), ...reversedCollections.filter((row) => byOther(row, 'reversedById'))].map((row) => row.createdById)
     };
   };
@@ -183,6 +187,8 @@ export const createLeagueAreaSources = ({ db = {}, listOverduePlans = null, desc
             lateSupport: lateSupport.filter((id) => id === userId).length
           });
           if (worked) effort.push(worked);
+          const billed = money.issued.filter((id) => id === userId).length;
+          if (billed) effort.push({ source: 'Cuentas de cobro', units: billed * RECEIVABLE_ISSUED_EFFORT, text: `${billed} ${billed === 1 ? 'cuenta de cobro emitida' : 'cuentas de cobro emitidas'}` });
           checks.A_TIEMPO.push(financialOnTimeCheck(money.payments.filter((row) => row.createdById === userId)
             .map((row) => ({ doneOn: financialDay(row.paidAt), dueOn: row.payable?.dueDate ? financialDay(row.payable.dueDate) : null }))));
           checks.SIN_DEVOLUCION.push(financialVoidCheck({

@@ -122,6 +122,8 @@ test('from 23 November: Elisa plays Al día, A tiempo and Sin devolución with F
     return [{ recordId: 'old-1', record: { createdById: 'u-elisa', documents: [] } }, { recordId: 'old-1', record: { createdById: 'u-elisa', documents: [] } }, { recordId: 'old-2', record: { createdById: 'u-elisa', documents: [{ id: 'd0' }] } }]; } };
   db.accountsPayableDocument = { findMany: async () => [] };
   db.receivablePayment = { findMany: async ({ where }) => { assert.deepEqual(where.createdById, { in: ['u-elisa'] }, 'only Administrativa is read'); return []; } };
+  db.accountsReceivable = { findMany: async ({ where }) => { assert.deepEqual(where.issuedById, { in: ['u-elisa'] }); assert.equal(where.issuedAt.gte.getTime(), from.getTime());
+    return [{ issuedById: 'u-elisa' }, { issuedById: 'u-elisa' }]; } };
   db.productionDay = { findMany: async ({ where }) => where.evidenceAt
     ? (assert.equal(where.evidenceAt.gte.toISOString(), '2026-11-20T23:05:00.000Z', 'from the close of the previous business day, so a weekend upload counts on Monday'),
       [{ title: 'Verona', date: '2026-11-21', evidenceUrl: 'https://drive', evidenceAt: new Date('2026-11-21T22:00:00Z'), event: { memberIds: ['m-brayan'] } }])
@@ -132,7 +134,8 @@ test('from 23 November: Elisa plays Al día, A tiempo and Sin devolución with F
   assert.deepEqual(elisa.AL_DIA, [], 'overdue payables do not play');
   assert.deepEqual(elisa.A_TIEMPO, [{ source: 'Financiero', ok: false, text: '1 de 2 pagos hechos en su fecha.' }]);
   assert.deepEqual(elisa.SIN_DEVOLUCION, [{ source: 'Financiero', ok: false, text: '1 registro anulado por otra persona.' }], 'correcting her own record does not count');
-  assert.deepEqual(elisa.effort, [{ source: 'Financiero', units: 3.5, text: '4 registros en Financiero, 2 con soporte y 1 soporte agregado a un registro anterior' }],
+  assert.deepEqual(elisa.effort, [{ source: 'Financiero', units: 3.5, text: '4 registros en Financiero, 2 con soporte y 1 soporte agregado a un registro anterior' },
+    { source: 'Cuentas de cobro', units: 2, text: '2 cuentas de cobro emitidas' }],
     'with support: one movement and the payment without its own movement (1 each); without: one movement and one payable (half each); plus half for the support added to an older record');
   assert.deepEqual(Object.keys(elisa), ['AL_DIA', 'A_TIEMPO', 'DOCUMENTADO', 'SIN_DEVOLUCION'], 'effort travels apart from the habits');
   const brayan = checks.get('m-brayan');

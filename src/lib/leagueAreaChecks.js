@@ -101,6 +101,8 @@ export const PM_RETURN_MIN_CREATED = 5;
  * Las cuentas por pagar vencidas NO juegan Al día: «no debería contar si no es por culpa de Elisa».
  */
 export const FINANCE_RECORD_EFFORT = 0.5;
+/** Cada cuenta de cobro emitida suma un punto de esfuerzo, como una tarea cerrada (Elisa, 27 de noviembre de 2026). */
+export const RECEIVABLE_ISSUED_EFFORT = 1;
 export function financeEffort({ withSupport = 0, withoutSupport = 0, lateSupport = 0 } = {}) {
   const units = withSupport + (withoutSupport + lateSupport) * FINANCE_RECORD_EFFORT;
   if (!units) return null;
