@@ -15,7 +15,13 @@ export const isDialogueModel = (model) => /^eleven_v[34]/.test(String(model || '
 export const withoutAudioTags = (text) => String(text || '').replace(/[[\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 export const VOICE_TAIL = 'Lo demás te lo dejé escrito en el chat.';
 // Escuchar: se considera voz por encima de SPEECH, silencio por debajo de QUIET; tras hablar, este silencio cierra el turno.
-export const VOICE_SPEECH_LEVEL = 0.16, VOICE_QUIET_LEVEL = 0.08, VOICE_SILENCE_MS = 900, VOICE_MIN_SPEECH_MS = 350;
+// El silencio bajó de 900 a 600 ms el 27 de noviembre de 2026 (informe «Por qué Bria tarda en responder»): eran 0,9 s
+// fijos de cada turno. Si corta a la persona en sus pausas, subirlo de nuevo hacia 750.
+export const VOICE_SPEECH_LEVEL = 0.16, VOICE_QUIET_LEVEL = 0.08, VOICE_SILENCE_MS = 600, VOICE_MIN_SPEECH_MS = 350;
+// El audio que se pide a ElevenLabs: MP3 a 44,1 kHz y 64 kbps. Antes iba a 128 kbps; la guía de ElevenLabs advierte que
+// los formatos de más calidad tardan más, y en el celular cada frase baja en la mitad de bytes. Para una voz hablada
+// la diferencia no se oye; la frecuencia se deja igual para no apagar la voz.
+export const VOICE_OUTPUT_FORMAT = 'mp3_44100_64';
 
 /** Lo que se dice en voz: la respuesta sin formato, sin enlaces, sin tablas ni código, en frases corridas. */
 export const speakableText = (markdown, { max = VOICE_MAX_CHARS } = {}) => {
