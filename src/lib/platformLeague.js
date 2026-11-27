@@ -75,16 +75,19 @@ export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_
  * cerraba una tarea y quien cerraba seis sumaban lo mismo (Brayan y Melissa, 13 de noviembre: 1 y 5 cierres, 20 y 20).
  */
 export const EFFORT_POINTS_PER_TASK = 1;
-export const EFFORT_DAILY_CAP = 10;
+// Sin tope desde el 27 de noviembre de 2026 (Rodny: «necesito que retires el tope por esfuerzo y hagas el reajuste a
+// todos»): el tope de 10 dejaba sin premio a quien cerraba más. Como cada día guarda su esfuerzo completo, quitarlo
+// recalcula todo el mes sin tocar la base. `null` = sin tope.
+export const EFFORT_DAILY_CAP = null;
 /** Lo que el día guarda en `extras` además de los extras de una sola persona: el esfuerzo y la parte cumplida de un hábito. */
 export const EFFORT_KEY = 'ESFUERZO';
 export const PROPORTION_KEY = 'PROPORCION';
 
-/** Los puntos de esfuerzo de un día: un punto por tarea cerrada con reloj, con techo. */
+/** Los puntos de esfuerzo de un día: un punto por tarea cerrada y por cada unidad de trabajo del área, sin techo. */
 export function effortPoints(entry) {
   const tasks = Number(entry?.extras?.[EFFORT_KEY]);
   // Los registros de Financiero sin soporte valen medio punto: el día se redondea al punto para que el puntaje siga entero.
-  return Number.isFinite(tasks) && tasks > 0 ? Math.round(Math.min(tasks, EFFORT_DAILY_CAP) * EFFORT_POINTS_PER_TASK) : 0;
+  return Number.isFinite(tasks) && tasks > 0 ? Math.round((EFFORT_DAILY_CAP ? Math.min(tasks, EFFORT_DAILY_CAP) : tasks) * EFFORT_POINTS_PER_TASK) : 0;
 }
 
 /**

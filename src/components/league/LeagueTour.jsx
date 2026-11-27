@@ -21,7 +21,7 @@ const steps = [
     text: 'Desde el lunes 23 hay reglas nuevas. Te las contamos en un minuto.', next: 'Ver lo nuevo' },
   { id: 'area', eyebrow: 'Nuevo', title: 'Tu área también suma', pose: CELEBRATE, tone: 'bg-brand-green/10',
     cast: people([['elisa', 'Elisa'], ['brayan', 'Brayan'], ['francys', 'Francys']]),
-    text: 'El trabajo de cada área ya cuenta como esfuerzo, con el mismo tope de 10 puntos al día.',
+    text: 'El trabajo de cada área ya cuenta como esfuerzo, igual que las tareas y sin tope al día.',
     chips: [['Registro en Financiero', '+½'], ['Con su soporte', '+1'], ['Gestión en el CRM', '+1'], ['Jornada con evidencia', `+${PRODUCTION_DAY_EFFORT}`]] },
   { id: 'cierre', eyebrow: 'Cambia', title: 'Al día cierra a las 5:00 p. m.', pose: WAVE, tone: 'bg-brand-yellow/15',
     cast: people([['david', 'David'], ['kamila', 'Kamila']]),
