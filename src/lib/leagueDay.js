@@ -351,3 +351,25 @@ export function withPublicationEffort(row) {
     evidence: { ...(row?.evidence || {}), [EFFORT_KEY]: `${effortTaskText(closed, published)}${rest || '.'}` },
   };
 }
+
+/**
+ * Cuentas de cobro en los días ya guardados (Rodny, 27 de noviembre de 2026: «haz el reajuste para que Elisa tenga sus
+ * puntos»). Los días calculados desde el 27 ya las cuentan en su esfuerzo de área; los guardados hasta el 26 reciben,
+ * una sola vez, las que la persona emitió ese día. `COBRO` marca que el día ya se revisó, emitiera o no.
+ */
+export const RECEIVABLE_EFFORT_KEY = 'COBRO';
+export const RECEIVABLE_EFFORT_UNTIL = '2026-11-26';
+export function withReceivableEffort(row, issued = 0) {
+  const extras = row?.extras || {};
+  if (extras[RECEIVABLE_EFFORT_KEY] !== undefined) return null;
+  const count = Math.max(0, Number(issued) || 0);
+  const nextExtras = { ...extras, [RECEIVABLE_EFFORT_KEY]: count };
+  if (!count) return { extras: nextExtras, evidence: row?.evidence || {} };
+  const part = `${count} ${count === 1 ? 'cuenta de cobro emitida' : 'cuentas de cobro emitidas'}`;
+  const text = String(row?.evidence?.[EFFORT_KEY] || '').trim();
+  const nextText = !text || text === 'Ninguna tarea cerrada.' ? `${part}.` : `${text.replace(/\.$/, '')} · ${part}.`;
+  return {
+    extras: { ...nextExtras, [EFFORT_KEY]: (Number(extras[EFFORT_KEY]) || 0) + count },
+    evidence: { ...(row?.evidence || {}), [EFFORT_KEY]: nextText },
+  };
+}

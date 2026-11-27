@@ -547,3 +547,30 @@ test('al arrancar, los días guardados suman sus tareas de publicar al esfuerzo 
   assert.equal(repo.days.get('2026-11-24:m-rodny').extras.ESFUERZO, 2);
   assert.equal(await service.countPublicationEffort(), 0, 'the second start finds nothing left');
 });
+
+test('al arrancar, los días guardados hasta el 26 de noviembre suman las cuentas de cobro emitidas, una sola vez (Rodny, 27 de noviembre de 2026)', async () => {
+  const repo = fakeRepo();
+  await repo.saveDays([
+    { day_key: '2026-11-25', member_id: 'm-elisa', habits: { DOCUMENTADO: true }, extras: { ESFUERZO: 2 }, evidence: { ESFUERZO: '2 registros en Financiero, 2 con soporte.' } },
+    { day_key: '2026-11-26', member_id: 'm-elisa', habits: {}, extras: {}, evidence: { ESFUERZO: 'Ninguna tarea cerrada.' } },
+    { day_key: '2026-11-26', member_id: 'm-rodny', habits: {}, extras: { ESFUERZO: 3 }, evidence: { ESFUERZO: '3 tareas cerradas.' } },
+  ]);
+  repo.daysWithoutReceivableEffort = async (until) => [...repo.days.values()].filter((row) => row.day_key <= until && !('COBRO' in (row.extras || {})));
+  const db = fakeDb();
+  db.accountsReceivable = { findMany: async () => [
+    { issuedById: 'u-elisa', issuedAt: new Date('2026-11-25T15:00:00Z') },
+    { issuedById: 'u-elisa', issuedAt: new Date('2026-11-27T03:00:00Z') }, // 26 de noviembre a las 10 p. m. en Bogotá
+    { issuedById: 'u-elisa', issuedAt: new Date('2026-11-26T16:00:00Z') },
+  ] };
+  db.teamMember.findMany = async () => [{ id: 'm-elisa', userId: 'u-elisa' }];
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`), logger: { info() {}, error() {} } });
+  assert.equal(await service.countReceivableEffort(), 3);
+  assert.equal(repo.days.get('2026-11-25:m-elisa').extras.ESFUERZO, 3);
+  assert.equal(repo.days.get('2026-11-25:m-elisa').evidence.ESFUERZO, '2 registros en Financiero, 2 con soporte · 1 cuenta de cobro emitida.');
+  assert.equal(repo.days.get('2026-11-26:m-elisa').extras.ESFUERZO, 2);
+  assert.equal(repo.days.get('2026-11-26:m-elisa').evidence.ESFUERZO, '2 cuentas de cobro emitidas.');
+  assert.deepEqual(repo.days.get('2026-11-25:m-elisa').habits, { DOCUMENTADO: true });
+  assert.equal(repo.days.get('2026-11-26:m-rodny').extras.ESFUERZO, 3);
+  assert.equal(repo.days.get('2026-11-26:m-rodny').extras.COBRO, 0);
+  assert.equal(await service.countReceivableEffort(), 0, 'the second start finds nothing left');
+});
