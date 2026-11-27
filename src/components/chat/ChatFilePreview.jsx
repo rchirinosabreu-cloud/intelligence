@@ -22,6 +22,10 @@ export default function ChatFilePreview({
   onPrevious,
   onNext,
   position,
+  previousLabel = "Evidencia anterior",
+  nextLabel = "Evidencia siguiente",
+  // Above another dialog that already sits higher than the usual layer (the announcement preview).
+  elevated = false,
 }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
@@ -88,8 +92,8 @@ export default function ChatFilePreview({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="z-[111] flex max-h-[calc(100dvh-2rem)] max-w-4xl flex-col overflow-hidden p-4 text-foreground"
-        overlayClassName="z-[110]"
+        className={`${elevated ? "z-[151]" : "z-[111]"} flex max-h-[calc(100dvh-2rem)] max-w-4xl flex-col overflow-hidden p-4 text-foreground`}
+        overlayClassName={elevated ? "z-[150]" : "z-[110]"}
         closeLabel="Cerrar vista previa"
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft" && onPrevious) onPrevious();
@@ -118,7 +122,7 @@ export default function ChatFilePreview({
                 type="button"
                 onClick={onPrevious}
                 disabled={!onPrevious}
-                aria-label="Evidencia anterior"
+                aria-label={previousLabel}
                 className="grid h-11 w-11 place-items-center rounded-lg hover:bg-muted disabled:opacity-40"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -132,7 +136,7 @@ export default function ChatFilePreview({
                 type="button"
                 onClick={onNext}
                 disabled={!onNext}
-                aria-label="Evidencia siguiente"
+                aria-label={nextLabel}
                 className="grid h-11 w-11 place-items-center rounded-lg hover:bg-muted disabled:opacity-40"
               >
                 <ChevronRight className="h-4 w-4" />

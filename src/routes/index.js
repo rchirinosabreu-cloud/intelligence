@@ -1,4 +1,5 @@
 import express from 'express';
+import { serveAnnouncementImage } from '../services/announcementImageService.js';
 import { receivesFiles } from '../lib/uploadMarker.js';
 import { createTaskDeliverableRouter } from './api/taskDeliverables.js';
 import * as authController from '../controllers/authController.js';
@@ -153,6 +154,11 @@ router.post('/activity/google-calendar/webhook', async (req, res) => {
 // --- Protected Routes ---
 // Scoped media tickets validate user, session and exact message/attachment on every request.
 router.use('/team-chat-media', createTeamChatMediaRouter());
+// Imágenes de los anuncios: el pase de la dirección solo abre esa imagen para esa persona.
+router.get('/announcement-images/:id', (req, res) => serveAnnouncementImage(req, res).catch((error) => {
+    console.error('[AnnouncementImages] No se pudo entregar la imagen:', error.message);
+    if (!res.headersSent) res.status(error?.$metadata?.httpStatusCode === 404 || error?.name === 'NoSuchKey' ? 404 : 500).json({ error: 'No se pudo abrir la imagen.' });
+}));
 router.use(authenticateToken);
 // Quién y desde qué módulo, para el registro de uso de IA del control de salida.
 router.use(aiRequestContextMiddleware);

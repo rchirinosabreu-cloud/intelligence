@@ -2350,6 +2350,27 @@ model GlobalAnnouncement {
   @@index([authorId, createdAt])
 }
 
+// Imágenes de los anuncios del dashboard (generales y personales). Sin claves foráneas: un anuncio personal es una
+// Notification y uno general un GlobalAnnouncement; `scope` dice cuál. El barrido diario las borra (ver
+// src/services/announcementImageService.js).
+model AnnouncementImage {
+  id             String    @id
+  storageKey     String    @unique
+  name           String
+  mimeType       String
+  size           Int
+  uploadedById   String?
+  scope          String?
+  announcementId String?
+  position       Int       @default(0)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  attachedAt     DateTime? @db.Timestamptz(6)
+  purgedAt       DateTime? @db.Timestamptz(6)
+
+  @@index([scope, announcementId])
+  @@index([createdAt])
+}
+
 model AnnouncementDelivery {
   id String @id @default(uuid())
   announcementId String

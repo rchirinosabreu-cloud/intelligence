@@ -1,5 +1,6 @@
 import { syncClientPlanOwners } from './planOwnerService.js';
 import { publishAnnouncement, changeAnnouncement, archiveAnnouncement } from './announcementDeliveryService.js';
+import { assertAnnouncementImagesAttachable, releaseAnnouncementImages, setAnnouncementImages, withAnnouncementImages } from './announcementImageService.js';
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
 import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js';
@@ -872,7 +873,7 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
     : [];
   const authorsById = new Map(authors.map((author) => [author.id, author]));
 
-  return [
+  return withAnnouncementImages(db, [
     ...globalAnnouncements.map((announcement) => ({
       id: announcement.id,
       scope: 'GLOBAL',
@@ -896,23 +897,33 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
       isRead: announcement.isRead,
       author: authorsById.get(announcement.relatedId) || null
     }))
-  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), userId);
+};
+
+// Un anuncio puede ser solo imágenes: basta con texto o con al menos una imagen.
+const assertAnnouncementHasBody = (cleanContent, imageIds) => {
+  if (hasAnnouncementText(cleanContent) || (Array.isArray(imageIds) && imageIds.length > 0)) return;
+  const error = new Error('El anuncio no puede estar vacio.');
+  error.statusCode = 400;
+  throw error;
 };
 
 export const createDashboardAnnouncement = async (
-  { requester, scope, content, targetUserId, requestId },
+  { requester, scope, content, targetUserId, requestId, imageIds },
   { db = prisma, notificationCreator = createNotification } = {}
 ) => {
   assertDashboardManagerAccess(requester);
 
   const cleanContent = sanitizeDashboardAnnouncementContent(content);
-  if (!hasAnnouncementText(cleanContent)) {
-    const error = new Error('El anuncio no puede estar vacio.');
-    error.statusCode = 400;
-    throw error;
-  }
+  assertAnnouncementHasBody(cleanContent, imageIds);
+  // Se revisan antes de publicar: si una imagen ya no sirve, no sale un anuncio a medias.
+  if (['GLOBAL', 'MEMBER'].includes(scope)) await assertAnnouncementImagesAttachable(db, { imageIds, scope });
 
-  if (scope === 'GLOBAL') return publishAnnouncement(db, { content: cleanContent, requestId }, requester);
+  if (scope === 'GLOBAL') {
+    const announcement = await publishAnnouncement(db, { content: cleanContent, requestId }, requester);
+    await setAnnouncementImages(db, { imageIds, scope, announcementId: announcement.id });
+    return announcement;
+  }
 
   if (scope === 'MEMBER') {
     if (!targetUserId || !await findActiveTeamUser(db, targetUserId)) {
@@ -921,7 +932,7 @@ export const createDashboardAnnouncement = async (
       throw error;
     }
 
-    return notificationCreator({
+    const notification = await notificationCreator({
       userId: targetUserId,
       message: cleanContent,
       type: 'TEAM_ANNOUNCEMENT',
@@ -929,6 +940,8 @@ export const createDashboardAnnouncement = async (
       resourceId: 'dashboard',
       url: '/'
     }, { db });
+    if (notification?.id) await setAnnouncementImages(db, { imageIds, scope, announcementId: notification.id });
+    return notification;
   }
 
   const error = new Error('Alcance de anuncio no soportado.');
@@ -961,24 +974,31 @@ const findMemberAnnouncement = async (db, id) => {
   return announcement;
 };
 
-export const updateDashboardAnnouncement = async ({ requester, scope, id, content, expectedRevision }, { db = prisma } = {}) => {
+export const updateDashboardAnnouncement = async ({ requester, scope, id, content, expectedRevision, imageIds }, { db = prisma } = {}) => {
   assertDashboardManagerAccess(requester);
   assertSupportedAnnouncementScope(scope);
 
   const cleanContent = sanitizeDashboardAnnouncementContent(content);
-  if (!hasAnnouncementText(cleanContent)) {
-    const error = new Error('El anuncio no puede estar vacio.');
-    error.statusCode = 400;
-    throw error;
+  // Sin `imageIds` (cliente viejo) las imágenes no cambian, así que se cuentan las que ya tiene.
+  const keptImages = imageIds === undefined
+    ? (await db.announcementImage?.findMany({ where: { scope, announcementId: id, purgedAt: null }, select: { id: true } }) || []).map(row => row.id)
+    : imageIds;
+  assertAnnouncementHasBody(cleanContent, keptImages);
+  await assertAnnouncementImagesAttachable(db, { imageIds, scope, announcementId: id });
+
+  if (scope === 'GLOBAL') {
+    const announcement = await changeAnnouncement(db, id, { content: cleanContent, expectedRevision }, requester);
+    await setAnnouncementImages(db, { imageIds, scope, announcementId: id });
+    return announcement;
   }
 
-  if (scope === 'GLOBAL') return changeAnnouncement(db, id, { content: cleanContent, expectedRevision }, requester);
-
   await findMemberAnnouncement(db, id);
-  return db.notification.update({
+  const notification = await db.notification.update({
     where: { id },
     data: { message: cleanContent }
   });
+  await setAnnouncementImages(db, { imageIds, scope, announcementId: id });
+  return notification;
 };
 
 export const deleteDashboardAnnouncement = async ({ requester, scope, id, expectedRevision }, { db = prisma } = {}) => {
@@ -988,7 +1008,10 @@ export const deleteDashboardAnnouncement = async ({ requester, scope, id, expect
   if (scope === 'GLOBAL') return archiveAnnouncement(db, id, { expectedRevision }, requester);
 
   await findMemberAnnouncement(db, id);
-  return db.notification.delete({ where: { id } });
+  const deleted = await db.notification.delete({ where: { id } });
+  // Sus imágenes quedan sueltas y el barrido las borra al día siguiente.
+  if (db.announcementImage) await releaseAnnouncementImages(db, { scope, announcementId: id });
+  return deleted;
 };
 
 export const assignClientOwner = async ({ requester, clientId, memberId }) => {

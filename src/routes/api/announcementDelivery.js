@@ -1,6 +1,7 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 import * as announcements from '../../services/announcementDeliveryService.js';
+import { withAnnouncementImages } from '../../services/announcementImageService.js';
 
 export function createAnnouncementDeliveryRouter({ db = prisma, service = announcements } = {}) {
   const router = express.Router();
@@ -16,7 +17,11 @@ export function createAnnouncementDeliveryRouter({ db = prisma, service = announ
       res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar o consultar el anuncio.' });
     }
   };
-  router.get('/:id/preview', handle(req => service.previewAnnouncement(db, req.params.id, req.user)));
+  router.get('/:id/preview', handle(async req => {
+    const preview = await service.previewAnnouncement(db, req.params.id, req.user);
+    const [withImages] = await withAnnouncementImages(db, [{ ...preview, scope: 'GLOBAL' }], req.user.userId);
+    return withImages;
+  }));
   router.get('/:id/history', handle(req => service.announcementHistory(db, req.params.id, req.user)));
   router.post('/:id/response', handle(req => service.respondAnnouncement(db, req.params.id, req.body || {}, req.user)));
   return router;

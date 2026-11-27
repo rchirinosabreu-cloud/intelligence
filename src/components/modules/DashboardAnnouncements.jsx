@@ -1,6 +1,6 @@
 import Select from '@/components/ui/Select';
 import React, { useEffect, useRef, useState } from 'react';
-import { Edit2, History, Loader2, Megaphone, Plus, Send, Trash2, X } from '@/components/ui/icons';
+import { AlertCircle, Edit2, History, ImageIcon, Loader2, Megaphone, Plus, Send, Trash2, X } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import DateDivider from '@/components/ui/DateDivider';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,6 +13,14 @@ import { cn } from '@/lib/utils';
 import { announcementsInWeek, getAnnouncementWeek } from '@/lib/announcementWeek';
 import { openAnnouncementPreview } from '@/lib/announcementApi';
 import AnnouncementResponses from '@/components/notifications/AnnouncementResponses';
+import AnnouncementImages from '@/components/notifications/AnnouncementImages';
+import {
+  ANNOUNCEMENT_IMAGE_ACCEPT,
+  ANNOUNCEMENT_IMAGE_LIMIT,
+  announcementImageProblem,
+  announcementImageSrc,
+  uploadAnnouncementImage
+} from '@/lib/announcementImages';
 
 const formatAnnouncementDate = (value) => {
   if (!value) return '';
@@ -109,6 +117,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
       )}>
         <RichCommentContent content={announcement.content} />
       </div>
+      <AnnouncementImages images={announcement.images} compact={compact} />
       {!isPersonal && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <span className="text-zinc-500">{announcement.archivedAt ? 'Archivado' : announcement.openedAt ? (announcement.openedRevision === announcement.revision ? 'Abriste este anuncio' : 'Abriste una versión anterior') : announcement.dismissedAt ? 'Aviso cerrado sin abrir' : 'Sin apertura registrada'}</span>
         <button type="button" onClick={() => openAnnouncementPreview(announcement.id)} className="min-h-11 font-semibold text-primary">Ver anuncio</button>
@@ -140,6 +149,11 @@ const DashboardAnnouncements = ({
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
   const [responsesId, setResponsesId] = useState(null);
+  // Las imágenes del anuncio que se escribe: se suben al elegirlas y se publican con el anuncio.
+  const [images, setImages] = useState([]);
+  const [imageNotice, setImageNotice] = useState('');
+  const fileInputRef = useRef(null);
+  const localUrls = useRef(new Set());
   const requestId = useRef(crypto.randomUUID());
   const [announcementWeek, setAnnouncementWeek] = useState(() => getAnnouncementWeek());
 
@@ -163,12 +177,24 @@ const DashboardAnnouncements = ({
   }, []);
 
   const activeMembers = teamMembers.filter((member) => member.userId && member.isActive !== false);
-  const canPublish = plainText.trim() && (editingAnnouncement || scope === 'GLOBAL' || targetUserId);
+  const readyImages = images.filter(image => image.status === 'ready');
+  const isUploading = images.some(image => image.status === 'uploading');
+  const hasBody = Boolean(plainText.trim()) || readyImages.length > 0;
+  const canPublish = hasBody && !isUploading && (editingAnnouncement || scope === 'GLOBAL' || targetUserId);
   const announcementGroups = groupAnnouncementsByDate(announcements);
   const weeklyAnnouncements = announcementsInWeek(announcements.filter(row => !row.archivedAt), announcementWeek);
 
+  const forgetLocalUrls = () => {
+    localUrls.current.forEach(url => URL.revokeObjectURL(url));
+    localUrls.current.clear();
+  };
+  useEffect(() => forgetLocalUrls, []);
+
   const resetComposer = () => {
     requestId.current = crypto.randomUUID();
+    forgetLocalUrls();
+    setImages([]);
+    setImageNotice('');
     setContent('');
     setPlainText('');
     setTargetUserId('');
@@ -189,6 +215,11 @@ const DashboardAnnouncements = ({
     setScope(announcement.scope);
     setContent(announcement.content);
     setPlainText(announcement.content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').trim());
+    forgetLocalUrls();
+    setImages((announcement.images || []).filter(image => !image.removed && image.url).map(image => ({
+      key: image.id, id: image.id, name: image.name, src: announcementImageSrc(image.url), status: 'ready'
+    })));
+    setImageNotice('');
     setShowEmojiPicker(false);
     setIsComposerOpen(true);
   };
@@ -196,6 +227,46 @@ const DashboardAnnouncements = ({
   const openHistory = (compose = false) => {
     setIsOpen(true);
     if (compose && canManage) startCreating();
+  };
+
+  const addImages = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const room = ANNOUNCEMENT_IMAGE_LIMIT - images.filter(image => image.status !== 'error').length;
+    const problems = [];
+    if (files.length > room) problems.push(`Un anuncio lleva hasta ${ANNOUNCEMENT_IMAGE_LIMIT} imágenes.`);
+    const accepted = [];
+    for (const file of files.slice(0, Math.max(0, room))) {
+      const problem = announcementImageProblem(file);
+      if (problem) problems.push(problem);
+      else accepted.push(file);
+    }
+    setImageNotice(problems.join(' '));
+    const pending = accepted.map(file => {
+      const src = URL.createObjectURL(file);
+      localUrls.current.add(src);
+      return { key: crypto.randomUUID(), name: file.name, src, status: 'uploading', file };
+    });
+    setImages(current => [...current, ...pending.map(({ file, ...image }) => image)]);
+    await Promise.all(pending.map(async ({ key, file }) => {
+      try {
+        const uploaded = await uploadAnnouncementImage(file);
+        setImages(current => current.map(image => image.key === key ? { ...image, id: uploaded.id, status: 'ready' } : image));
+      } catch (uploadError) {
+        setImages(current => current.map(image => image.key === key ? { ...image, status: 'error', error: uploadError.message } : image));
+      }
+    }));
+  };
+
+  const removeImage = (key) => {
+    setImages(current => {
+      const image = current.find(row => row.key === key);
+      if (image && localUrls.current.has(image.src)) {
+        URL.revokeObjectURL(image.src);
+        localUrls.current.delete(image.src);
+      }
+      return current.filter(row => row.key !== key);
+    });
   };
 
   const handleSubmit = async () => {
@@ -208,7 +279,8 @@ const DashboardAnnouncements = ({
           id: editingAnnouncement.id,
           scope: editingAnnouncement.scope,
           expectedRevision: editingAnnouncement.revision,
-          content
+          content,
+          imageIds: readyImages.map(image => image.id)
         });
       } else {
         if (!onCreate) return;
@@ -216,7 +288,8 @@ const DashboardAnnouncements = ({
           scope,
           requestId: requestId.current,
           targetUserId: scope === 'MEMBER' ? targetUserId : undefined,
-          content
+          content,
+          imageIds: readyImages.map(image => image.id)
         });
       }
       resetComposer();
@@ -384,6 +457,18 @@ const DashboardAnnouncements = ({
                     onSend={handleSubmit}
                     placeholder={editingAnnouncement ? 'Actualiza el contenido del anuncio...' : scope === 'GLOBAL' ? 'Escribe un anuncio para todo el equipo...' : 'Escribe un anuncio personal...'}
                     teamMembers={activeMembers}
+                    attachmentAction={(
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={images.length >= ANNOUNCEMENT_IMAGE_LIMIT}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-200 hover:text-primary dark:hover:bg-zinc-800 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                        title="Añadir imágenes"
+                        aria-label="Añadir imágenes al anuncio"
+                      >
+                        <ImageIcon className="w-[18px] h-[18px]" />
+                      </button>
+                    )}
                     emojiAction={(
                       <button
                         type="button"
@@ -432,6 +517,58 @@ const DashboardAnnouncements = ({
                     </div>
                   )}
                 </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ANNOUNCEMENT_IMAGE_ACCEPT}
+                  multiple
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(event) => {
+                    addImages(event.target.files);
+                    event.target.value = '';
+                  }}
+                />
+
+                {images.length > 0 && (
+                  <div className="space-y-2">
+                    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label="Imágenes del anuncio">
+                      {images.map((image) => (
+                        <li key={image.key} className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+                          <img src={image.src} alt={image.name} className={cn('h-full w-full object-cover', image.status !== 'ready' && 'opacity-50')} />
+                          {image.status === 'uploading' && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-white/40 dark:bg-black/40" role="status" aria-label={`Subiendo ${image.name}`}>
+                              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                            </span>
+                          )}
+                          {image.status === 'error' && (
+                            <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-destructive/90 px-1.5 py-1 text-[11px] font-semibold leading-tight text-white" title={image.error}>
+                              <AlertCircle className="w-3 h-3 shrink-0" /> No se subió
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeImage(image.key)}
+                            className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                            aria-label={`Quitar ${image.name}`}
+                            title="Quitar imagen"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Hasta {ANNOUNCEMENT_IMAGE_LIMIT} imágenes JPG, PNG, GIF o WebP de 10 MB. Se guardan 30 días y luego se borran solas.
+                    </p>
+                  </div>
+                )}
+                {images.find(image => image.status === 'error') && (
+                  <p className="text-xs font-semibold text-destructive">{images.find(image => image.status === 'error').error} Quítala o vuelve a añadirla.</p>
+                )}
+                {imageNotice && <p className="text-xs font-semibold text-destructive">{imageNotice}</p>}
 
                 {error && <p className="text-xs font-semibold text-destructive">{error.message}</p>}
               </div>

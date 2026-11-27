@@ -6,6 +6,19 @@ import { LEAGUE_ROSTER, leagueDemoRecognitions } from '../tests/fixtures/leagueP
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
+const DEMO_IMAGE_STYLES = [
+  ['#0f3d5e', '#22d3ee', 'Reunión 2:00 pm'],
+  ['#3b1d6e', '#f472b6', 'Bienvenida, Franci'],
+  ['#14532d', '#facc15', 'Equipo comercial'],
+  ['#7c2d12', '#fb923c', '¡Ya eres Brain!'],
+  ['#1e293b', '#60a5fa', 'Almuerzo del viernes']
+];
+const demoAnnouncementImage = (id) => {
+  const index = [...id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % DEMO_IMAGE_STYLES.length;
+  const [from, to, label] = id === 'demo-agenda' ? DEMO_IMAGE_STYLES[0] : DEMO_IMAGE_STYLES[index];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="1200" height="760" fill="url(#g)"/><circle cx="980" cy="160" r="220" fill="#fff" opacity=".12"/><circle cx="160" cy="680" r="260" fill="#000" opacity=".12"/><text x="80" y="420" font-family="Arial, sans-serif" font-size="92" font-weight="700" fill="#fff">${label}</text><text x="84" y="500" font-family="Arial, sans-serif" font-size="40" fill="#fff" opacity=".8">Brain Studio · imagen de ejemplo</text></svg>`;
+};
+
 export async function createDashboardPreview({ port = 3200 } = {}) {
   const server = await createServer({
     configFile: false,
@@ -40,6 +53,27 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             });
             return;
           }
+          // Imágenes de los anuncios (27 de noviembre de 2026): carteles de ejemplo dibujados aquí, sin archivos ni bucket.
+          const announcementImage = pathname.match(/^\/api\/announcement-images\/([^/]+)$/);
+          if (announcementImage) {
+            res.setHeader('Content-Type', 'image/svg+xml');
+            res.setHeader('Cache-Control', 'private, max-age=3600');
+            res.end(demoAnnouncementImage(announcementImage[1]));
+            return;
+          }
+          if (req.method === 'POST' && pathname === '/api/dashboard/announcements/images') {
+            req.resume();
+            req.on('end', () => {
+              const id = `demo-subida-${Date.now()}`;
+              setTimeout(() => {
+                res.statusCode = 201;
+                res.end(JSON.stringify({ id, name: 'Imagen.png', mimeType: 'image/png', size: 1, removed: false, url: `/api/announcement-images/${id}?access_token=demo` }));
+              }, 900);
+            });
+            return;
+          }
+          // Abrir un anuncio en la muestra: se responde como el servidor, sin guardar nada.
+          if (req.method === 'POST' && /^\/api\/dashboard\/announcements\/[^/]+\/response$/.test(pathname)) { req.resume(); req.on('end', () => res.end('{}')); return; }
           if (req.method !== 'GET') {
             res.statusCode = 403;
             res.end(JSON.stringify({ error: 'Laboratorio de solo lectura: no se guardan cambios ni se contacta producción.' }));
@@ -72,6 +106,13 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             const person = (Array.isArray(dashboardDemoTeam) ? dashboardDemoTeam : []).find((row) => (row.userId || row.user?.id) === otherDashboard[1]);
             const base = dashboardDemoDashboard();
             res.end(JSON.stringify({ ...base, crmAttention: { enabled: false, counts: {}, items: [] }, member: { ...base.member, id: person?.id || 'member-other', userId: otherDashboard[1], name: person?.name || 'Persona del equipo', accountRole: 'EDITOR', modulePermissions: { gestion: true, minutas: true } } }));
+            return;
+          }
+          const announcementPreview = pathname.match(/^\/api\/dashboard\/announcements\/([^/]+)\/preview$/);
+          if (announcementPreview) {
+            const row = dashboardDemoDashboard().announcements.find((entry) => entry.id === announcementPreview[1]);
+            if (!row) { res.statusCode = 404; res.end(JSON.stringify({ error: 'El anuncio no existe.' })); return; }
+            res.end(JSON.stringify({ id: row.id, content: row.content, author: row.author?.name || 'Equipo Brainstudio', createdAt: row.createdAt, revision: 1, archivedAt: null, images: row.images || [] }));
             return;
           }
           const routes = {
