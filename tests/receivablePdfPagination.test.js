@@ -93,3 +93,16 @@ test('la tabla envuelve conceptos largos, conserva todos los importes y repite l
     assert.equal(values, items.length, 'cada importe aparece una sola vez');
     assert.ok(text.includes(issuer.RECEIVABLE_ISSUER_EMAIL), 'la firma sigue después de la tabla');
 });
+
+test('una cuenta que no cabe por poco se ajusta a una sola hoja en vez de mandar el cierre a otra página', async () => {
+    // Fundación Grit, 27 de noviembre de 2026: un párrafo y ocho viñetas largas dejaban el periodo, la consignación y
+    // la firma solos en una segunda página.
+    const bullets = Array.from({ length: 8 }, (_, index) =>
+        `<li><p>Servicio de prueba ${index + 1}: planeación, producción, edición y publicación de contenidos institucionales, educativos y promocionales del periodo.</p></li>`).join('');
+    const concept = `<p>${'Acompañamiento estratégico, creativo y operativo de las actividades del cliente de prueba. '.repeat(3)}</p><ul>${bullets}</ul>`;
+    const pages = await readPdf({ ...invoice, concept, items: [] });
+    assert.equal(pages.length, 1, 'cabe en una hoja');
+    const text = normalize(pages[0].items.map(item => item.str).join(' '));
+    for (const expected of ['Periodo: Octubre de 2026', 'Cordialmente,', issuer.RECEIVABLE_ISSUER_EMAIL]) assert.ok(text.includes(expected), `falta ${expected}`);
+    assertInsideMargins(pages);
+});

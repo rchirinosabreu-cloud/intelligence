@@ -275,8 +275,8 @@ export const layoutConceptLines = (doc, runs, { width, size, charSpace, heading 
  * palabras —salvo la última de cada párrafo y los títulos—, así el texto con negritas
  * queda tan alineado como el que no las tiene. Devuelve la altura siguiente.
  */
-const drawConceptBlock = (doc, runs, startY, { left, width, size, charSpace, heading = false }) => {
-    const lineHeight = size * 0.42 + CONCEPT_TYPOGRAPHY.lineGap;
+const drawConceptBlock = (doc, runs, startY, { left, width, size, charSpace, lineGap = CONCEPT_TYPOGRAPHY.lineGap, heading = false }) => {
+    const lineHeight = size * 0.42 + lineGap;
     let y = startY;
     const lines = layoutConceptLines(doc, runs, { width, size, charSpace, heading });
     for (const [index, line] of lines.entries()) {
@@ -313,12 +313,39 @@ const drawConceptBlock = (doc, runs, startY, { left, width, size, charSpace, hea
  * El PDF de una cuenta de cobro emitida. Devuelve el buffer; quien llama decide si lo
  * guarda o lo sirve, porque el documento se congela al emitir.
  */
+/**
+ * Cuánto aire lleva el documento. Una cuenta de cobro es una hoja (Elisa, 27 de noviembre de 2026, con la 0426 de
+ * Fundación Grit: «ya no me queda incompleta, sino que me aparecen dos»): el concepto cabía, pero el cierre —periodo,
+ * consignación y firma— no se parte, y saltaba entero a una segunda página casi vacía. Antes de abrir otra hoja se
+ * prueba con menos espacio entre bloques y, en último caso, con la letra del concepto medio punto menor y el
+ * interlineado más cerrado. La firma conserva siempre su espacio. Si ni así cabe, el documento va en dos páginas con el aire de siempre.
+ */
+// La firma escaneada mide 15 mm: su hueco nunca se recorta.
+const SIGNATURE_GAP = 22;
+
+export const RECEIVABLE_LAYOUTS = [
+    { name: 'normal', gap: 1, conceptSize: CONCEPT_TYPOGRAPHY.size, lineGap: CONCEPT_TYPOGRAPHY.lineGap },
+    { name: 'compacto', gap: 0.7, conceptSize: CONCEPT_TYPOGRAPHY.size, lineGap: 0.8 },
+    { name: 'ajustado', gap: 0.5, conceptSize: 9, lineGap: 0.6 }
+];
+
 export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     const model = buildReceivableDocumentModel(receivable, env);
     if (!model.amountInWords) {
         throw new Error('El importe de la cuenta de cobro no se puede escribir en letras.');
     }
+    let first = null;
+    for (const layout of RECEIVABLE_LAYOUTS) {
+        const doc = drawReceivable(receivable, model, layout);
+        if (doc.getNumberOfPages() === 1) return Buffer.from(doc.output('arraybuffer'));
+        first ||= doc;
+    }
+    return Buffer.from(first.output('arraybuffer'));
+};
+
+const drawReceivable = (receivable, model, layout) => {
     const doc = newReceivableDocument();
+    const gap = (value) => value * layout.gap;
 
     // Marca arriba a la derecha, como en el documento de Word.
     drawDocumentLogo(doc);
@@ -326,31 +353,31 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     let y = PAGE.top + 4;
     setText(doc, { size: 10.5 });
     doc.text(model.place, PAGE.left, y);
-    y += 11;
+    y += gap(11);
     setText(doc, { size: 10.5 });
     doc.text('Cuenta de cobro ', PAGE.left, y);
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text(formatReceivableNumber(receivable.number), PAGE.left + doc.getTextWidth('Cuenta de cobro '), y);
 
-    y += 16;
+    y += gap(16);
     y = centered(doc, model.debtorName, y, { size: 11, style: 'bold' });
     // Sin documento en la ficha no hay línea que imprimir: emitir ya no lo exige.
     if (model.debtorDocument) y = centered(doc, model.debtorDocument, y, { size: 10.5 });
-    y += 6;
+    y += gap(6);
     y = centered(doc, 'Debe a:', y, { size: 10.5 });
-    y += 5;
+    y += gap(5);
     y = centered(doc, model.issuer.name, y, { size: 11, style: 'bold' });
     y = centered(doc, model.issuer.documentLabel, y, { size: 10.5 });
-    y += 6;
+    y += gap(6);
     y = centered(doc, 'La suma de:', y, { size: 10.5 });
     y = centered(doc, model.amountInWords, y, { size: 11, style: 'bold' });
     y = centered(doc, model.amountInFigures, y, { size: 11, style: 'bold' });
 
-    y += 8;
+    y += gap(8);
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text('Por concepto de:', PAGE.left, y);
-    y += 7;
-    const concept = CONCEPT_TYPOGRAPHY;
+    y += Math.max(5, gap(7));
+    const concept = { ...CONCEPT_TYPOGRAPHY, size: layout.conceptSize, lineGap: layout.lineGap };
     for (const [index, block] of model.concept.entries()) {
         // Un título abre sección: lleva aire por encima para no pegarse a la lista anterior.
         if (block.kind === 'heading' && index > 0) y += 3;
@@ -372,6 +399,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
             width: CONTENT_WIDTH - indent,
             size: heading ? concept.headingSizes[block.level] || concept.headingSizes[3] : concept.size,
             charSpace: concept.charSpace,
+            lineGap: concept.lineGap,
             heading
         });
         y += block.kind === 'bullet' ? 0.4 : heading ? 1.6 : 1.2;
@@ -429,9 +457,9 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     setText(doc, { size: 9.5, color: COLORS.muted });
     const signatureLines = [model.issuer.role, model.issuer.signatureLine, model.issuer.email]
         .flatMap(line => doc.splitTextToSize(line, CONTENT_WIDTH));
-    const closingHeight = 22 + nameLines.length * 5 + signatureLines.length * 4.6;
-    const footerHeight = (periodLines.length - 1) * bodyLineHeight + 10 + bankLines.length * bodyLineHeight + 10 + closingHeight;
-    y += 9;
+    const closingHeight = SIGNATURE_GAP + nameLines.length * 5 + signatureLines.length * 4.6;
+    const footerHeight = (periodLines.length - 1) * bodyLineHeight + gap(10) + bankLines.length * bodyLineHeight + gap(10) + closingHeight;
+    y += gap(9);
     y = ensureSpace(doc, y, footerHeight);
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text('Periodo:', PAGE.left, y);
@@ -439,10 +467,10 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     periodLines.forEach((line, index) => doc.text(line, PAGE.left + periodLabelWidth, y + index * bodyLineHeight));
     y += (periodLines.length - 1) * bodyLineHeight;
 
-    y += 10;
+    y += gap(10);
     y = paragraph(doc, model.bankLine, y);
 
-    y += 10;
+    y += gap(10);
     setText(doc, { size: 10.5 });
     doc.text('Cordialmente,', PAGE.left, y);
     // La firma escaneada va sobre el nombre. Sin ella el hueco queda en blanco, para
@@ -458,7 +486,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
         }
         doc.addImage(signature, 'PNG', PAGE.left, y + 3, SIGNATURE_HEIGHT_MM * ratio, SIGNATURE_HEIGHT_MM, undefined, 'FAST');
     }
-    y += 22;
+    y += SIGNATURE_GAP;
     setText(doc, { size: 10.5, style: 'bold' });
     for (const line of nameLines) {
         doc.text(line, PAGE.left, y);
@@ -470,7 +498,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
         y += 4.6;
     }
 
-    return Buffer.from(doc.output('arraybuffer'));
+    return doc;
 };
 
 export const RECEIVABLE_PDF_MIME = 'application/pdf';
