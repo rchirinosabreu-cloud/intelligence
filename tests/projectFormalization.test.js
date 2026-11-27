@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    advanceState, exceptionProblem, formalizationEnabledText, formalizationRequestText, formalizationState, missingText
+    advanceState, contractExtensionProblem, exceptionProblem, formalizationEnabledText, formalizationRequestText, formalizationState, missingText
 } from '../src/lib/projectFormalization.js';
 import { receivableDueDate } from '../src/lib/receivableCollections.js';
 import {
-    attachFormalizationDocument, canManageFormalizations, voidFormalizationDocument, linkFormalizationAdvance, listFormalizations, quotationInstallments,
+    attachFormalizationDocument, canManageFormalizations, extendContractFromDocument, voidFormalizationDocument, linkFormalizationAdvance, listFormalizations, quotationInstallments,
     refreshFormalization, refreshFormalizationsForReceivable, registerFormalizationException, setFormalizationRequirements, startFormalization, sweepFormalizations
 } from '../src/services/projectFormalizationService.js';
 
@@ -33,9 +33,9 @@ const quotationFixture = (over = {}) => ({
     ...over
 });
 
-const fakeDb = ({ quotation = quotationFixture(), lead = { id: 'lead-1', clientId: null }, clients = [], people = team } = {}) => {
+const fakeDb = ({ quotation = quotationFixture(), lead = { id: 'lead-1', clientId: null }, clients = [], people = team, contracts = [] } = {}) => {
     const db = {
-        rows: { formalizations: [], receivables: [], documents: [], clients: [...clients], audits: [], crmActivities: [], projects: [] },
+        rows: { formalizations: [], receivables: [], documents: [], clients: [...clients], audits: [], crmActivities: [], projects: [], contracts: contracts.map((item) => ({ ...item })) },
         lead: lead ? { ...lead } : null,
         quotations: [quotation],
         $transaction: async (fn) => fn(db),
@@ -79,7 +79,16 @@ const fakeDb = ({ quotation = quotationFixture(), lead = { id: 'lead-1', clientI
                 return { count: rows.length };
             }
         },
+        clientContract: {
+            findMany: async ({ where }) => db.rows.contracts.filter((item) => (where.clientId?.in ? where.clientId.in.includes(item.clientId) : item.clientId === where.clientId)).map((item) => ({ ...item })),
+            updateMany: async ({ where, data }) => {
+                const rows = db.rows.contracts.filter((item) => item.id === where.id && (!where.updatedAt || item.updatedAt === where.updatedAt));
+                rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date(row.updatedAt.getTime() + 1000) }));
+                return { count: rows.length };
+            }
+        },
         projectFormalizationDocument: {
+            update: async ({ where, data }) => Object.assign(db.rows.documents.find((item) => item.id === where.id), data),
             create: async ({ data }) => { const row = { id: `d-${db.rows.documents.length + 1}`, uploadedAt: NOW, ...data }; db.rows.documents.push(row); return row; },
             findMany: async ({ where }) => db.rows.documents.filter((item) => item.formalizationId === where.formalizationId),
             findFirst: async ({ where }) => db.rows.documents.find((item) => item.id === where.id && item.formalizationId === where.formalizationId) || null,
@@ -354,4 +363,52 @@ test('el reloj abre la formalización que no se abrió al aprobar y no toca coti
     db.quotation.findMany = async ({ where }) => db.quotations.filter((item) => item.status === where.status && item.accepted_at >= where.accepted_at.gte);
     await sweepFormalizations(db, { now: NOW, ...collect() });
     assert.deepEqual(db.rows.formalizations.map((item) => item.quotationId), ['q-1']);
+});
+
+test('un otrosí extiende el contrato del cliente: al subirlo o después, y nunca hacia atrás', async () => {
+    // Elisa, 27 de noviembre de 2026: subió el otrosí de FoobeSpain «y no hay forma de modificar la fecha».
+    const contract = { id: 'k-1', clientId: 'c-1', startDate: '2026-01-01', endDate: '2026-10-31', status: 'ACTIVO', renewalDecision: 'PENDIENTE', createdAt: NOW, updatedAt: NOW };
+    const client = { id: 'c-1', name: 'Foobespain', slug: 'foobespain' };
+    const db = fakeDb({ lead: { id: 'lead-1', clientId: 'c-1' }, clients: [client], contracts: [contract] });
+    const { notify, log } = collect();
+    const formalization = await startFormalization(db, 'q-1', null, { now: NOW, notify, log });
+
+    // Al subirlo: el documento y la fecha quedan amarrados y la ficha cambia en el acto.
+    await attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'OTROSI', note: 'Se extiende', extendsContractUntil: '2026-12-31' }, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    assert.equal(db.rows.contracts[0].endDate, '2026-12-31');
+    assert.equal(db.rows.contracts[0].updatedById, 'u-elisa');
+    assert.equal(db.rows.documents[0].extendsContractUntil, '2026-12-31');
+    assert.equal(db.rows.documents[0].previousContractEnd, '2026-10-31');
+    assert.ok(db.rows.audits.some((item) => item.after?.operation === 'CONTRACT_EXTENSION' && item.after.previousEndDate === '2026-10-31'));
+    const { items } = await listFormalizations(db);
+    assert.equal(items[0].contract.endDate, '2026-12-31', 'la lista dice hasta cuándo va el contrato');
+    assert.equal(items[0].documents[0].extendsContractUntil, '2026-12-31');
+
+    // Un otrosí ya subido sin fecha, como el de FoobeSpain, se extiende después; el mismo no extiende dos veces.
+    const late = await attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'OTROSI' }, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    const lateId = db.rows.documents.at(-1).id;
+    assert.ok(late);
+    await assert.rejects(extendContractFromDocument(db, formalization.id, lateId, '2026-11-30', {}, { now: NOW }), { statusCode: 400 }, 'no acorta el contrato');
+    const extended = await extendContractFromDocument(db, formalization.id, lateId, '2027-03-31', { userId: 'u-francisco' }, { now: NOW });
+    assert.equal(extended.extendsContractUntil, '2027-03-31');
+    assert.equal(db.rows.contracts[0].endDate, '2027-03-31');
+    await assert.rejects(extendContractFromDocument(db, formalization.id, lateId, '2027-06-30', {}, { now: NOW }), { statusCode: 409 });
+
+    // Un anexo no extiende, y una fecha mala no deja el archivo suelto.
+    const before = db.rows.documents.length;
+    await assert.rejects(attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'ANEXO', extendsContractUntil: '2027-12-31' }, {}, { now: NOW, notify, log }), { statusCode: 400 });
+    await assert.rejects(attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'OTROSI', extendsContractUntil: '2027-02-30' }, {}, { now: NOW, notify, log }), { statusCode: 400 });
+    assert.equal(db.rows.documents.length, before);
+});
+
+test('la regla de extender: sin contrato, terminado o con decisión de no renovar se corrige en la ficha', () => {
+    const contract = { startDate: '2026-01-01', endDate: '2026-10-31', status: 'ACTIVO', renewalDecision: 'PENDIENTE' };
+    assert.equal(contractExtensionProblem({ until: '2026-12-31', contract }, '2026-11-27'), null);
+    assert.equal(contractExtensionProblem({ until: '2026-12-31', contract: { ...contract, endDate: null } }, '2026-11-27'), null, 'sin fecha de fin, se le pone');
+    assert.match(contractExtensionProblem({ until: '', contract }), /Elige la nueva fecha/);
+    assert.match(contractExtensionProblem({ until: '2026-12-31', contract: null }), /no tiene contrato/);
+    assert.match(contractExtensionProblem({ until: '2026-12-31', contract: { ...contract, status: 'TERMINADO' } }), /terminado/);
+    assert.match(contractExtensionProblem({ until: '2026-12-31', contract: { ...contract, renewalDecision: 'NO_RENOVAR' } }), /no renovar/);
+    assert.match(contractExtensionProblem({ until: '2026-10-31', contract }), /31 de octubre de 2026/);
+    assert.match(contractExtensionProblem({ until: '2026-11-20', contract: { ...contract, endDate: null } }, '2026-11-27'), /pasado/);
 });

@@ -20,8 +20,9 @@ import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { pesosFromRate } from '../lib/receivableCurrency.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import { ensureProjectOperation } from './projectOperationsService.js';
+import { CONTRACT_ORDER, selectedContract } from '../lib/clientContractSelection.js';
 import {
-    FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, documentUploadProblem, documentVoidProblem, exceptionProblem, requirementsProblem,
+    FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, contractDayLabel, contractExtensionProblem, documentUploadProblem, documentVoidProblem, exceptionProblem, requirementsProblem,
     formalizationEnabledText, formalizationRequestText, formalizationState, quotationCode
 } from '../lib/projectFormalization.js';
 
@@ -289,10 +290,42 @@ export const refreshFormalizationsForReceivable = async (db = prisma, receivable
 
 const serializeDocument = (document) => ({
     id: document.id, name: document.name, mimeType: document.mimeType, size: Number(document.size), uploadedAt: document.uploadedAt,
-    kind: document.kind || 'CONTRATO', note: document.note || null, voidedAt: document.voidedAt || null, voidReason: document.voidReason || null
+    kind: document.kind || 'CONTRATO', note: document.note || null, voidedAt: document.voidedAt || null, voidReason: document.voidReason || null,
+    extendsContractUntil: document.extendsContractUntil || null, previousContractEnd: document.previousContractEnd || null
 });
 
-const serializeFormalization = (formalization, { quotation, client, documents, advance, clientReceivables }) => {
+// El contrato de la ficha del cliente que hoy cuenta: el mismo que miran la ficha, los avisos y el semáforo.
+const CONTRACT_FIELDS = { id: true, clientId: true, startDate: true, endDate: true, status: true, renewalDecision: true, createdAt: true, updatedAt: true };
+const clientContractFor = async (db, clientId, now) => {
+    if (!clientId) return null;
+    const contracts = await db.clientContract.findMany({ where: { clientId }, orderBy: CONTRACT_ORDER, select: CONTRACT_FIELDS });
+    return selectedContract(contracts, bogotaDay(now));
+};
+const serializeContract = (contract) => (contract ? { endDate: contract.endDate || null, status: contract.status, renewalDecision: contract.renewalDecision } : null);
+
+/**
+ * Extiende el contrato del cliente con un otrosí (27 de noviembre de 2026): cambia «Fin del contrato» en su ficha y
+ * deja en el documento la fecha nueva y la anterior. Va dentro de la transacción de quien llama.
+ */
+const extendContractWithDocument = async (tx, formalization, document, until, actor, now) => {
+    if ((document.kind || 'CONTRATO') !== 'OTROSI') throw httpError(400, 'Solo un otrosí extiende el contrato.');
+    if (document.voidedAt) throw httpError(409, 'Ese otrosí está anulado.');
+    if (document.extendsContractUntil) throw httpError(409, `Este otrosí ya extendió el contrato hasta el ${contractDayLabel(document.extendsContractUntil)}.`);
+    const contract = await clientContractFor(tx, formalization.clientId, now);
+    const problem = contractExtensionProblem({ until, contract }, bogotaDay(now));
+    if (problem) throw httpError(contract ? 400 : 409, problem);
+    const day = String(until).trim();
+    const previousEnd = contract.endDate || null;
+    const changed = await tx.clientContract.updateMany({ where: { id: contract.id, updatedAt: contract.updatedAt }, data: { endDate: day, updatedById: actorIdOf(actor) } });
+    if (changed.count !== 1) throw httpError(409, 'El contrato del cliente cambió mientras guardabas. Vuelve a intentarlo.');
+    const updated = await tx.projectFormalizationDocument.update({ where: { id: document.id }, data: { extendsContractUntil: day, previousContractEnd: previousEnd } });
+    await audit(tx, formalization.id, 'UPDATE', {
+        operation: 'CONTRACT_EXTENSION', documentId: document.id, clientId: formalization.clientId, contractId: contract.id, previousEndDate: previousEnd, endDate: day
+    }, actor);
+    return updated;
+};
+
+const serializeFormalization = (formalization, { quotation, client, contract = null, documents, advance, clientReceivables }) => {
     const state = formalizationState({ documents, advance, ...stateInput(formalization) });
     return {
         id: formalization.id,
@@ -307,6 +340,7 @@ const serializeFormalization = (formalization, { quotation, client, documents, a
             acceptedAt: quotation.accepted_at, emisor: quotation.emisor_type
         } : null,
         client: client ? { id: client.id, name: client.name, slug: client.slug, projectManager: client.projectManager?.name || null } : null,
+        contract: serializeContract(contract),
         documents: documents.map(serializeDocument),
         advance: advance ? { id: advance.id, amount: Number(advance.amount) || 0, status: advance.status, number: advance.number, currency: advance.currency, foreignAmount: advance.foreignAmount == null ? null : Number(advance.foreignAmount) } : null,
         exception: formalization.exceptionAt ? {
@@ -329,10 +363,13 @@ export const listFormalizations = async (db = prisma) => {
     const rows = await db.projectFormalization.findMany({ orderBy: [{ status: 'desc' }, { requestedAt: 'desc' }], take: 200 });
     const quotationIds = rows.map((row) => row.quotationId);
     const clientIds = [...new Set(rows.map((row) => row.clientId).filter(Boolean))];
-    const [quotations, clients] = await Promise.all([
+    const [quotations, clients, contracts] = await Promise.all([
         quotationIds.length ? db.quotation.findMany({ where: { id: { in: quotationIds } }, select: { id: true, consecutive: true, uuid_slug: true, client_name: true, client_company: true, total_amount: true, currency: true, accepted_at: true, emisor_type: true } }) : [],
-        clientIds.length ? db.client.findMany({ where: { id: { in: clientIds } }, select: { id: true, name: true, slug: true, projectManager: { select: { name: true } } } }) : []
+        clientIds.length ? db.client.findMany({ where: { id: { in: clientIds } }, select: { id: true, name: true, slug: true, projectManager: { select: { name: true } } } }) : [],
+        clientIds.length ? db.clientContract.findMany({ where: { clientId: { in: clientIds } }, orderBy: CONTRACT_ORDER, select: CONTRACT_FIELDS }) : []
     ]);
+    const today = bogotaDay(new Date());
+    const contractByClient = new Map(clientIds.map((clientId) => [clientId, selectedContract(contracts.filter((item) => item.clientId === clientId), today)]));
     const quotationById = new Map(quotations.map((item) => [item.id, item]));
     const clientById = new Map(clients.map((item) => [item.id, item]));
     const items = [];
@@ -345,7 +382,7 @@ export const listFormalizations = async (db = prisma) => {
                 select: { id: true, amount: true, number: true, notes: true, concept: true, period: true }
             })).map((item) => ({ id: item.id, amount: Number(item.amount) || 0, number: item.number, label: item.concept || item.notes || null, period: item.period }))
             : [];
-        items.push(serializeFormalization(row, { quotation: quotationById.get(row.quotationId), client: clientById.get(row.clientId), documents, advance, clientReceivables }));
+        items.push(serializeFormalization(row, { quotation: quotationById.get(row.quotationId), client: clientById.get(row.clientId), contract: contractByClient.get(row.clientId) || null, documents, advance, clientReceivables }));
     }
     return { items };
 };
@@ -365,6 +402,14 @@ export const attachFormalizationDocument = async (db, storage, id, file, details
     const kind = String(details.kind || 'CONTRATO').trim().toUpperCase();
     const problem = documentUploadProblem({ kind, note: details.note });
     if (problem) throw httpError(400, problem);
+    const now = options.now || new Date();
+    const until = String(details.extendsContractUntil ?? '').trim();
+    if (until && kind !== 'OTROSI') throw httpError(400, 'Solo un otrosí extiende el contrato.');
+    // La fecha se revisa antes de guardar el archivo: un otrosí que no puede extender no deja un archivo suelto.
+    if (until) {
+        const extension = contractExtensionProblem({ until, contract: await clientContractFor(db, formalization.clientId, now) }, bogotaDay(now));
+        if (extension) throw httpError(400, extension);
+    }
     const meta = inspectFinancialDocument(file);
     const key = `formalizations/${formalization.id}/${randomUUID()}${meta.extension}`;
     await storage.upload({ key, body: meta.buffer, mimeType: meta.mimeType, size: meta.size, name: meta.name });
@@ -378,7 +423,7 @@ export const attachFormalizationDocument = async (db, storage, id, file, details
             }
         });
         await audit(tx, formalization.id, 'UPDATE', { operation: 'DOCUMENT', documentId: created.id, kind, name: created.name, sha256: created.sha256 }, actor);
-        return created;
+        return until ? extendContractWithDocument(tx, formalization, created, until, actor, now) : created;
     });
     const refreshed = await refreshFormalization(db, formalization.id, options);
     return { document: serializeDocument(document), status: refreshed?.status || formalization.status };
@@ -403,6 +448,15 @@ export const voidFormalizationDocument = async (db, id, documentId, reason, acto
         return serializeDocument({ ...document, ...data });
     });
 };
+
+/** Extiende el contrato con un otrosí ya subido, como el de FoobeSpain, que se cargó antes de que esto existiera. */
+export const extendContractFromDocument = async (db, id, documentId, until, actor = {}, { now = new Date() } = {}) => db.$transaction(async (tx) => {
+    await lockFormalization(tx, id);
+    const formalization = await loadFormalization(tx, id);
+    const document = await tx.projectFormalizationDocument.findFirst({ where: { id: String(documentId || ''), formalizationId: formalization.id } });
+    if (!document) throw httpError(404, 'El documento no pertenece a esta formalización o no existe.');
+    return serializeDocument(await extendContractWithDocument(tx, formalization, document, until, actor, now));
+});
 
 export const openFormalizationDocument = async (db, storage, id, documentId) => {
     const document = await db.projectFormalizationDocument.findFirst({ where: { id: String(documentId || ''), formalizationId: String(id || '') } });

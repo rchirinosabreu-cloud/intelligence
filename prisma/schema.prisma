@@ -3573,6 +3573,9 @@ model ProjectFormalizationDocument {
   voidedAt        DateTime? @db.Timestamptz()
   voidReason      String?
   voidedById      String?
+  // Un otrosí que extendió el contrato del cliente (27 de noviembre de 2026): la nueva fecha de fin y la que tenía.
+  extendsContractUntil String?
+  previousContractEnd  String?
 
   @@index([formalizationId, uploadedAt], map: "ProjectFormalizationDocument_formalization_idx")
 }

@@ -70,7 +70,7 @@ import { readCollectionSettings, saveCollectionSettings } from '../../services/c
 import { listCollectionActivities, recordCollectionActivity } from '../../services/collectionActivityService.js';
 import { contentDisposition } from '../../controllers/financialRecordController.js';
 import {
-    attachFormalizationDocument, canManageFormalizations, linkFormalizationAdvance, listFormalizations, openFormalizationDocument,
+    attachFormalizationDocument, canManageFormalizations, extendContractFromDocument, linkFormalizationAdvance, listFormalizations, openFormalizationDocument,
     registerFormalizationException, requireFormalizationAccess, setFormalizationRequirements, voidFormalizationDocument
 } from '../../services/projectFormalizationService.js';
 
@@ -237,10 +237,18 @@ router.get('/formalizations', requireFinancialAccess, formalizationAccess, async
 router.post('/formalizations/:id/documents', requireFinancialAccess, formalizationAccess, receiveFinancialDocument, async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'Selecciona el documento: PDF, JPG o PNG.', message: 'Selecciona el documento: PDF, JPG o PNG.' });
-        const details = { kind: req.body?.kind, note: req.body?.note };
+        const details = { kind: req.body?.kind, note: req.body?.note, extendsContractUntil: req.body?.extendsContractUntil };
         res.status(201).json(await attachFormalizationDocument(prisma, financialEvidenceStorage(), req.params.id, req.file, details, req.user));
     } catch (error) {
         formalizationError(res, error, 'No pudimos guardar el documento.');
+    }
+});
+// Un otrosí ya subido extiende el contrato del cliente hasta una fecha (27 de noviembre de 2026).
+router.post('/formalizations/:id/documents/:documentId/extend-contract', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        res.json(await extendContractFromDocument(prisma, req.params.id, req.params.documentId, req.body?.until, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos extender el contrato.');
     }
 });
 router.post('/formalizations/:id/documents/:documentId/void', requireFinancialAccess, formalizationAccess, async (req, res) => {

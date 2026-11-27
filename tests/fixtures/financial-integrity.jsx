@@ -149,7 +149,10 @@ const formalizations = [
 // Un cliente de siempre que suma un servicio (29 de octubre de 2026): ahí se ajusta lo que se pide.
 formalizations.splice(2, 0, { id: 'f-foobe', status: 'PENDIENTE', requestedAt: '2026-10-29T13:00:00Z', enabledAt: null, projectManagerNotified: false,
   quotation: { id: 'q-44', code: 'COT-0044', clientName: 'Equipo Foobespain', company: 'Foobespain', total: 1800000, currency: 'COP', acceptedAt: '2026-10-29T13:00:00Z' },
-  client: { id: 'c-foobe', name: 'Foobespain', slug: 'foobespain', projectManager: 'Kamila del Toro' }, documents: [],
+  client: { id: 'c-foobe', name: 'Foobespain', slug: 'foobespain', projectManager: 'Kamila del Toro' },
+  // El otrosí que subió Elisa el 27 de noviembre de 2026, sin fecha: el contrato de la ficha seguía en octubre.
+  contract: { endDate: '2026-11-30', status: 'ACTIVO', renewalDecision: 'PENDIENTE' },
+  documents: [{ id: 'fd-foobe-otrosi', kind: 'OTROSI', note: 'Se extiende hasta el 31 de dic', name: 'OTROS SI ACEPTACIÓN PROPUESTA FOOBESPAIN.pdf', mimeType: 'application/pdf', size: 1, uploadedAt: '2026-11-27T15:00:00Z', voidedAt: null }],
   advance: { id: 'r-foobe-1', amount: 900000, status: 'DEBE', number: null, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] });
 for (const item of formalizations) item.requirements ||= { requiresContract: true, requiresAdvance: true, note: null, changedAt: null, changedByName: null };
 const serializeFormalization = (item) => ({ ...item, state: formalizationState({ documents: item.documents, advance: item.advance, exceptionAt: item.exception?.at || null, ...item.requirements }) });
@@ -215,9 +218,18 @@ axios.defaults.adapter = async config => {
     const item = formalizations.find((row) => path.includes(row.id));
     const form = config.data instanceof FormData ? config.data : null;
     const file = form?.get('file');
-    item.documents = [...item.documents, { id: `fd-${Date.now()}`, kind: form?.get('kind') || 'CONTRATO', note: form?.get('note') || null, name: file?.name || 'contrato.pdf', mimeType: 'application/pdf', size: file?.size || 1, uploadedAt: '2026-10-29T15:00:00Z', voidedAt: null }];
+    const until = form?.get('extendsContractUntil') || null;
+    item.documents = [...item.documents, { id: `fd-${Date.now()}`, kind: form?.get('kind') || 'CONTRATO', note: form?.get('note') || null, name: file?.name || 'contrato.pdf', mimeType: 'application/pdf', size: file?.size || 1, uploadedAt: '2026-10-29T15:00:00Z', voidedAt: null,
+      extendsContractUntil: until, previousContractEnd: until ? item.contract?.endDate || null : null }];
+    if (until) item.contract = { ...item.contract, endDate: until };
     enableIfReady(item);
     data = { document: item.documents.at(-1), status: item.status };
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/extend-contract')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    const document = item.documents.find((row) => path.includes(`/documents/${row.id}/`));
+    Object.assign(document, { extendsContractUntil: body.until, previousContractEnd: item.contract?.endDate || null });
+    item.contract = { ...item.contract, endDate: body.until };
+    data = document;
   } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/void')) {
     const item = formalizations.find((row) => path.includes(row.id));
     const document = item.documents.find((row) => path.includes(`/documents/${row.id}/`));

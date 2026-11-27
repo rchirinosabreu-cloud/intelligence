@@ -76,10 +76,11 @@ export const fetchReceivablePaymentDocumentBlob = async (paymentId, document) =>
 const formalizationUrl = (formalizationId, path = '') => `${getApiBaseUrl()}/api/financials/formalizations/${encodeURIComponent(formalizationId)}${path}`;
 
 // El contrato, un otrosí o un anexo, con su nota opcional.
-export const uploadFormalizationDocument = async (formalizationId, file, { kind, note } = {}) => {
+export const uploadFormalizationDocument = async (formalizationId, file, { kind, note, extendsContractUntil } = {}) => {
     const body = new FormData();
     body.append('kind', kind || 'CONTRATO');
     if (note) body.append('note', note);
+    if (kind === 'OTROSI' && extendsContractUntil) body.append('extendsContractUntil', extendsContractUntil);
     body.append('file', file, file.name);
     const { data } = await axios.post(formalizationUrl(formalizationId, '/documents'), body, { headers: authHeaders() });
     return data?.document;
@@ -87,6 +88,11 @@ export const uploadFormalizationDocument = async (formalizationId, file, { kind,
 
 export const voidFormalizationDocument = async (formalizationId, documentId, reason) => (
     (await axios.post(formalizationUrl(formalizationId, `/documents/${encodeURIComponent(documentId)}/void`), { reason }, { headers: authHeaders() })).data
+);
+
+// Un otrosí ya subido extiende el contrato del cliente hasta `until` (AAAA-MM-DD).
+export const extendContractWithFormalizationDocument = async (formalizationId, documentId, until) => (
+    (await axios.post(formalizationUrl(formalizationId, `/documents/${encodeURIComponent(documentId)}/extend-contract`), { until }, { headers: authHeaders() })).data
 );
 
 export const fetchFormalizationContractBlob = async (formalizationId, document) => {
