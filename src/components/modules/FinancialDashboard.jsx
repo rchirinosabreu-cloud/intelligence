@@ -179,6 +179,8 @@ const FinancialDashboard = () => {
     // de 2026: «voy a nómina y veo todo eso enredado. Así como los de cartera»).
     const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
     const [payrollPeriods, setPayrollPeriods] = useState(null);
+    // Lo que «Generar nómina» no pudo crear solo, por contrato, para decirlo en la fila de cada persona.
+    const [payrollGenerationReview, setPayrollGenerationReview] = useState({ key: '', items: [] });
     const [payrollDeductions, setPayrollDeductions] = useState(null);
     const [payrollAdditions, setPayrollAdditions] = useState(null);
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
@@ -1058,9 +1060,12 @@ await invalidateFinancialQueries(queryClient);
                 month: payrollMonth
             }, { headers: { Authorization: `Bearer ${token}` } });
             await invalidatePayroll();
-            if (generated.requiresPeriodReview?.length) setNoticeError(generated.requiresPeriodReview.map(item => `${item.name}: ${item.reason}`).join(' '));
+            const review = generated.requiresPeriodReview || [];
+            setPayrollGenerationReview({ key: `${selectedYear}-${payrollMonth}`, items: review });
+            // El detalle va en la fila de cada persona; arriba solo se dice cuántas quedaron por revisar.
+            if (review.length) setNoticeError(`${review.length === 1 ? `${review[0].name} necesita` : `${review.length} personas necesitan`} revisión: mira el aviso en su fila de Nómina.`);
             setIsPayrollGenerationConfirmOpen(false);
-            setNoticeSuccess(generated.createdCount > 0 ? `Se ${generated.createdCount === 1 ? 'creó 1 borrador' : `crearon ${generated.createdCount} borradores`}.` : `No se crearon borradores. ${generated.existingCount || 0} liquidaciones mensuales ya están registradas.${generated.requiresPeriodReview?.length ? ' Revisa los casos indicados.' : ''}`);
+            setNoticeSuccess(generated.createdCount > 0 ? `Se ${generated.createdCount === 1 ? 'creó 1 borrador' : `crearon ${generated.createdCount} borradores`}.` : `No se crearon borradores. ${generated.existingCount || 0} liquidaciones ya están registradas.`);
         } catch (error) {
             console.error('Error generating payroll period:', error.response?.data || error);
             setNoticeError(error.response?.data?.message || 'No fue posible generar la nómina mensual.');
@@ -1766,6 +1771,15 @@ await invalidateFinancialQueries(queryClient);
                                                         {open ? 'Ocultar' : 'Ver períodos'}{open ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
                                                     </button></td>
                                                 </tr>
+                                                {payrollGenerationReview.key === `${selectedYear}-${payrollMonth}` && payrollGenerationReview.items.filter(item => person.contracts.some(contract => contract.id === item.contractId)).map(item => {
+                                                    const contract = person.contracts.find(row => row.id === item.contractId);
+                                                    return <tr key={`review-${item.contractId}`} data-payroll-generation-review={item.contractId}><td colSpan={6} className="px-5 pb-3 pt-0">
+                                                        <div className="sticky left-5 flex max-w-[calc(100vw-7rem)] flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 lg:max-w-none">
+                                                            <p className="brain-type-body min-w-0 flex-[1_1_15rem]"><strong className="font-semibold">No se generó.</strong> {item.reason}</p>
+                                                            {canWriteFinancials && contract && <button type="button" data-payroll-create-range onClick={() => setPayrollPeriods({ ...contract, ...(item.suggested ? { createRange: item.suggested } : {}) })} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/30 px-3 text-sm font-medium text-primary hover:bg-primary/10">{item.suggested ? 'Crear este tramo' : 'Revisar períodos'}</button>}
+                                                        </div>
+                                                    </td></tr>;
+                                                })}
                                                 {expandedPayrollPeople[person.id] && <>
                                                 <tr><td colSpan={6} className="bg-zinc-50/60 px-5 py-3 dark:bg-white/[0.02]"><div className="space-y-3">{person.contracts.map(contract=><div key={contract.id} className="flex flex-wrap items-center justify-between gap-3"><div><p className="brain-type-section">Contrato · {new Date(contract.startDate).toLocaleDateString('es-CO',{timeZone:'UTC'})} – {contract.endDate ? new Date(contract.endDate).toLocaleDateString('es-CO',{timeZone:'UTC'}) : 'Sin terminación'}</p><p className="brain-type-help mt-1">Mensual: {formatCurrency(Number(contract.baseSalary)+Number(contract.socialSecurity))}</p></div><div className="flex flex-wrap items-center gap-4"><button className="min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>setPayrollPeriods(contract)}>Períodos e historial</button>{canWriteFinancials && <button className="min-h-11 text-sm font-medium text-primary hover:underline" onClick={()=>openPayrollContractEditor(contract)}>Editar contrato</button>}</div></div>)}</div></td></tr>
                                                 {person.rows.filter(row=>row.transaction || (String(row.startDate||'').slice(0,10)<=payrollMonthRange(selectedYear,payrollMonth).end && (!row.endDate || String(row.endDate).slice(0,10)>=payrollMonthRange(selectedYear,payrollMonth).start))).map((collab) => {
