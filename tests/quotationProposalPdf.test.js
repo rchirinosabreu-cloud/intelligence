@@ -18,3 +18,12 @@ test('rich service content flows across pages without dropping the last paragrap
   const { text, total } = await reader.getText(); await reader.destroy();
   assert.match(text, /ÚLTIMO ENTREGABLE VERIFICADO/); assert.ok(total > 3);
 });
+test('a plain service longer than a page or with a long name flows across pages without cutting (27 de noviembre de 2026)', async () => {
+  const name = 'Servicio con un nombre muy largo que describe el alcance completo del acompañamiento estratégico y creativo del cliente';
+  const description = 'Entregable descrito en texto plano para el servicio. '.repeat(260) + 'CIERRE DEL SERVICIO';
+  const data = { ...proposalDemo, proposal_details: null, items: [{ name, description, quantity: 1, price: 1000, billingType: 'ONE_TIME' }] };
+  const reader = new PDFParse({ data: generateQuotationPdfBuffer(data, issuer) });
+  const { text, total } = await reader.getText(); await reader.destroy();
+  const flat = text.replace(/\s+/g, ' ');
+  assert.match(flat, /CIERRE DEL SERVICIO/); assert.match(flat, /acompañamiento estratégico y creativo del cliente/); assert.ok(total > 2);
+});

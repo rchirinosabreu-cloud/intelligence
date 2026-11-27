@@ -432,13 +432,27 @@ const drawReceivable = (receivable, model, layout) => {
         // repite y conserva juntos la última fila y su total.
         y = ensureSpace(doc, y, header.height + rows[0].height);
         drawRow(header);
+        const pageBottom = PAGE.height - PAGE.bottom;
+        const linesHeight = count => 7 + (count - 1) * rowLineHeight;
+        const newPage = () => { doc.addPage(); y = PAGE.top + 4; drawRow(header); };
         for (const [index, row] of rows.entries()) {
-            const needed = row.height + (index === rows.length - 1 ? total.height : 0);
-            if (y + needed > PAGE.height - PAGE.bottom) {
-                y = ensureSpace(doc, y, header.height + needed);
-                drawRow(header);
+            const reserve = index === rows.length - 1 ? total.height : 0;
+            if (y + row.height + reserve <= pageBottom) { drawRow(row); continue; }
+            if (PAGE.top + 4 + header.height + row.height + reserve <= pageBottom) { newPage(); drawRow(row); continue; }
+            // Un concepto más largo que una página (sin límite de caracteres desde el 27 de
+            // noviembre de 2026) sigue en la siguiente con la cabecera repetida; el valor va en
+            // su primer tramo y la última línea nunca queda sola con el total.
+            let lines = row.lines;
+            let first = true;
+            while (lines.length) {
+                const all = linesHeight(lines.length) + reserve <= pageBottom - y;
+                const fit = all ? lines.length : Math.min(Math.floor((pageBottom - y - 7) / rowLineHeight) + 1, lines.length - 1);
+                if (fit < 2 && !all) { newPage(); continue; }
+                drawRow({ ...row, lines: lines.slice(0, fit), value: first ? row.value : '', height: linesHeight(fit) });
+                lines = lines.slice(fit);
+                first = false;
+                if (lines.length) newPage();
             }
-            drawRow(row);
         }
         drawRow(total);
     }

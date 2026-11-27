@@ -7,7 +7,9 @@ export const RECEIVABLE_CONCEPT_DEFAULT = 'Prestación de servicios para el dise
 
 export const RECEIVABLE_ITEM_MAX = 40;
 export const RECEIVABLE_CONCEPT_MAX = 4000;
-export const RECEIVABLE_ITEM_DESCRIPTION_MAX = 300;
+// Rodny, 27 de noviembre de 2026: «que la plataforma no me limite los caracteres por servicio».
+// Antes eran 300. Este tope solo protege al servidor de un texto absurdo; nadie lo alcanza escribiendo.
+export const RECEIVABLE_ITEM_DESCRIPTION_MAX = 20000;
 export const RECEIVABLE_SERVICE_PERIOD_MAX = 120;
 
 /**
