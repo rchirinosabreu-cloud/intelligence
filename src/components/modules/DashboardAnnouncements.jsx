@@ -1,6 +1,6 @@
 import Select from '@/components/ui/Select';
 import React, { useEffect, useRef, useState } from 'react';
-import { Edit2, History, Loader2, Megaphone, Plus, Send, Trash2, X } from '@/components/ui/icons';
+import { AlertCircle, Edit2, FileText, History, Loader2, Megaphone, Paperclip, Plus, Send, Trash2, X } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import DateDivider from '@/components/ui/DateDivider';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,6 +13,15 @@ import { cn } from '@/lib/utils';
 import { announcementsInWeek, getAnnouncementWeek } from '@/lib/announcementWeek';
 import { openAnnouncementPreview } from '@/lib/announcementApi';
 import AnnouncementResponses from '@/components/notifications/AnnouncementResponses';
+import AnnouncementFiles from '@/components/notifications/AnnouncementFiles';
+import {
+  ANNOUNCEMENT_FILE_LIMIT,
+  announcementFileLabel,
+  announcementFileProblem,
+  announcementFileSrc,
+  isAnnouncementImage,
+  uploadAnnouncementFile
+} from '@/lib/announcementFiles';
 
 const formatAnnouncementDate = (value) => {
   if (!value) return '';
@@ -109,6 +118,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
       )}>
         <RichCommentContent content={announcement.content} />
       </div>
+      <AnnouncementFiles files={announcement.attachments} compact={compact} />
       {!isPersonal && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <span className="text-zinc-500">{announcement.archivedAt ? 'Archivado' : announcement.openedAt ? (announcement.openedRevision === announcement.revision ? 'Abriste este anuncio' : 'Abriste una versión anterior') : announcement.dismissedAt ? 'Aviso cerrado sin abrir' : 'Sin apertura registrada'}</span>
         <button type="button" onClick={() => openAnnouncementPreview(announcement.id)} className="min-h-11 font-semibold text-primary">Ver anuncio</button>
@@ -140,6 +150,11 @@ const DashboardAnnouncements = ({
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
   const [responsesId, setResponsesId] = useState(null);
+  // Los archivos del anuncio que se escribe: se suben al elegirlos y se publican con el anuncio.
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentNotice, setAttachmentNotice] = useState('');
+  const fileInputRef = useRef(null);
+  const localUrls = useRef(new Set());
   const requestId = useRef(crypto.randomUUID());
   const [announcementWeek, setAnnouncementWeek] = useState(() => getAnnouncementWeek());
 
@@ -163,12 +178,25 @@ const DashboardAnnouncements = ({
   }, []);
 
   const activeMembers = teamMembers.filter((member) => member.userId && member.isActive !== false);
-  const canPublish = plainText.trim() && (editingAnnouncement || scope === 'GLOBAL' || targetUserId);
+  const readyAttachments = attachments.filter(attachment => attachment.status === 'ready');
+  const isUploading = attachments.some(attachment => attachment.status === 'uploading');
+  const failedAttachment = attachments.find(attachment => attachment.status === 'error');
+  const hasBody = Boolean(plainText.trim()) || readyAttachments.length > 0;
+  const canPublish = hasBody && !isUploading && (editingAnnouncement || scope === 'GLOBAL' || targetUserId);
   const announcementGroups = groupAnnouncementsByDate(announcements);
   const weeklyAnnouncements = announcementsInWeek(announcements.filter(row => !row.archivedAt), announcementWeek);
 
+  const forgetLocalUrls = () => {
+    localUrls.current.forEach(url => URL.revokeObjectURL(url));
+    localUrls.current.clear();
+  };
+  useEffect(() => forgetLocalUrls, []);
+
   const resetComposer = () => {
     requestId.current = crypto.randomUUID();
+    forgetLocalUrls();
+    setAttachments([]);
+    setAttachmentNotice('');
     setContent('');
     setPlainText('');
     setTargetUserId('');
@@ -189,6 +217,11 @@ const DashboardAnnouncements = ({
     setScope(announcement.scope);
     setContent(announcement.content);
     setPlainText(announcement.content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').trim());
+    forgetLocalUrls();
+    setAttachments((announcement.attachments || []).filter(file => !file.removed && file.url).map(file => ({
+      key: file.id, id: file.id, name: file.name, mimeType: file.mimeType, size: file.size, src: announcementFileSrc(file.url), status: 'ready'
+    })));
+    setAttachmentNotice('');
     setShowEmojiPicker(false);
     setIsComposerOpen(true);
   };
@@ -196,6 +229,47 @@ const DashboardAnnouncements = ({
   const openHistory = (compose = false) => {
     setIsOpen(true);
     if (compose && canManage) startCreating();
+  };
+
+  const addAttachments = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const room = ANNOUNCEMENT_FILE_LIMIT - attachments.filter(attachment => attachment.status !== 'error').length;
+    const problems = [];
+    if (files.length > room) problems.push(`Un anuncio lleva hasta ${ANNOUNCEMENT_FILE_LIMIT} archivos.`);
+    const accepted = [];
+    for (const file of files.slice(0, Math.max(0, room))) {
+      const problem = announcementFileProblem(file);
+      if (problem) problems.push(problem);
+      else accepted.push(file);
+    }
+    setAttachmentNotice(problems.join(' '));
+    const pending = accepted.map(file => {
+      // Solo las imágenes llevan miniatura local; los documentos se ven con su icono.
+      const src = isAnnouncementImage(file) ? URL.createObjectURL(file) : null;
+      if (src) localUrls.current.add(src);
+      return { key: crypto.randomUUID(), name: file.name, mimeType: file.type, size: file.size, src, status: 'uploading', file };
+    });
+    setAttachments(current => [...current, ...pending.map(({ file, ...attachment }) => attachment)]);
+    await Promise.all(pending.map(async ({ key, file }) => {
+      try {
+        const uploaded = await uploadAnnouncementFile(file);
+        setAttachments(current => current.map(attachment => attachment.key === key ? { ...attachment, id: uploaded.id, mimeType: uploaded.mimeType || attachment.mimeType, status: 'ready' } : attachment));
+      } catch (uploadError) {
+        setAttachments(current => current.map(attachment => attachment.key === key ? { ...attachment, status: 'error', error: uploadError.message } : attachment));
+      }
+    }));
+  };
+
+  const removeAttachment = (key) => {
+    setAttachments(current => {
+      const attachment = current.find(row => row.key === key);
+      if (attachment?.src && localUrls.current.has(attachment.src)) {
+        URL.revokeObjectURL(attachment.src);
+        localUrls.current.delete(attachment.src);
+      }
+      return current.filter(row => row.key !== key);
+    });
   };
 
   const handleSubmit = async () => {
@@ -208,7 +282,8 @@ const DashboardAnnouncements = ({
           id: editingAnnouncement.id,
           scope: editingAnnouncement.scope,
           expectedRevision: editingAnnouncement.revision,
-          content
+          content,
+          fileIds: readyAttachments.map(attachment => attachment.id)
         });
       } else {
         if (!onCreate) return;
@@ -216,7 +291,8 @@ const DashboardAnnouncements = ({
           scope,
           requestId: requestId.current,
           targetUserId: scope === 'MEMBER' ? targetUserId : undefined,
-          content
+          content,
+          fileIds: readyAttachments.map(attachment => attachment.id)
         });
       }
       resetComposer();
@@ -384,6 +460,18 @@ const DashboardAnnouncements = ({
                     onSend={handleSubmit}
                     placeholder={editingAnnouncement ? 'Actualiza el contenido del anuncio...' : scope === 'GLOBAL' ? 'Escribe un anuncio para todo el equipo...' : 'Escribe un anuncio personal...'}
                     teamMembers={activeMembers}
+                    attachmentAction={(
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={attachments.length >= ANNOUNCEMENT_FILE_LIMIT}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-200 hover:text-primary dark:hover:bg-zinc-800 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                        title="Adjuntar imágenes o archivos"
+                        aria-label="Adjuntar imágenes o archivos al anuncio"
+                      >
+                        <Paperclip className="w-[18px] h-[18px]" />
+                      </button>
+                    )}
                     emojiAction={(
                       <button
                         type="button"
@@ -432,6 +520,67 @@ const DashboardAnnouncements = ({
                     </div>
                   )}
                 </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(event) => {
+                    addAttachments(event.target.files);
+                    event.target.value = '';
+                  }}
+                />
+
+                {attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label="Archivos del anuncio">
+                      {attachments.map((attachment) => (
+                        <li key={attachment.key} className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+                          {attachment.src ? (
+                            <img src={attachment.src} alt={attachment.name} className={cn('h-full w-full object-cover', attachment.status !== 'ready' && 'opacity-50')} />
+                          ) : (
+                            <div className={cn('flex h-full w-full flex-col items-center justify-center gap-1.5 px-2 pt-3 text-center', attachment.status !== 'ready' && 'opacity-50')}>
+                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+                                <FileText className="h-[18px] w-[18px]" />
+                              </span>
+                              <span className="line-clamp-2 w-full break-words [overflow-wrap:anywhere] text-xs font-semibold leading-tight text-zinc-800 dark:text-zinc-100">{attachment.name}</span>
+                              <span className="text-xs text-zinc-500 dark:text-zinc-400">{announcementFileLabel(attachment)}</span>
+                            </div>
+                          )}
+                          {attachment.status === 'uploading' && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-white/40 dark:bg-black/40" role="status" aria-label={`Subiendo ${attachment.name}`}>
+                              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                            </span>
+                          )}
+                          {attachment.status === 'error' && (
+                            <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-destructive/90 px-1.5 py-1 text-xs font-semibold leading-tight text-white" title={attachment.error}>
+                              <AlertCircle className="w-3 h-3 shrink-0" /> No se subió
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(attachment.key)}
+                            className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                            aria-label={`Quitar ${attachment.name}`}
+                            title="Quitar archivo"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Hasta {ANNOUNCEMENT_FILE_LIMIT} imágenes o archivos de 25 MB. Se guardan 30 días y luego se borran solos.
+                    </p>
+                  </div>
+                )}
+                {failedAttachment && (
+                  <p className="text-xs font-semibold text-destructive">{failedAttachment.error} Quítalo o vuelve a añadirlo.</p>
+                )}
+                {attachmentNotice && <p className="text-xs font-semibold text-destructive">{attachmentNotice}</p>}
 
                 {error && <p className="text-xs font-semibold text-destructive">{error.message}</p>}
               </div>

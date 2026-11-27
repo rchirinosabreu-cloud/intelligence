@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import RichCommentContent from '@/components/ui/RichCommentContent';
 import { announcementRequest } from '@/lib/announcementApi';
+import AnnouncementFiles from '@/components/notifications/AnnouncementFiles';
 
 // Vive fuera de la tarjeta: confirmar la apertura retira la banda, nunca esta ventana.
 export default function AnnouncementPreview() {
@@ -41,7 +42,7 @@ export default function AnnouncementPreview() {
     return () => { active = false; cancelAnimationFrame(frame); };
   }, [data, queryClient]);
   return <Dialog open={Boolean(id)} onOpenChange={open => { if (!open) setId(null); }}>
-    <DialogContent className="z-[141] max-w-[720px] rounded-2xl bg-white p-6 sm:p-8 dark:bg-zinc-950" overlayClassName="z-[140] bg-black/20 backdrop-blur-sm"
+    <DialogContent className="z-[141] max-h-[calc(100dvh-2rem)] max-w-[720px] overflow-y-auto rounded-2xl bg-white p-6 sm:p-8 dark:bg-zinc-950" overlayClassName="z-[140] bg-black/20 backdrop-blur-sm"
       onCloseAutoFocus={event => {
         event.preventDefault();
         if (origin.current?.isConnected) origin.current.focus({ preventScroll: true });
@@ -52,6 +53,7 @@ export default function AnnouncementPreview() {
         <DialogDescription>{data ? `${data.author} · ${new Date(data.createdAt).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'long', year: 'numeric' })}${data.archivedAt ? ' · Archivado' : ''}` : 'Cargando anuncio…'}</DialogDescription>
       </DialogHeader>
       {data && <div className="break-words text-base leading-7 [&_a]:underline" data-announcement-content><RichCommentContent content={data.content} /></div>}
+      {data && <AnnouncementFiles files={data.attachments} elevated className="mt-0" />}
       {error && <div role="alert" className="text-sm text-destructive brain-destructive-text">{error}
         <button type="button" className="ml-2 min-h-11 underline" onClick={() => setAttempt(value => value + 1)}>Volver a intentar</button>
       </div>}

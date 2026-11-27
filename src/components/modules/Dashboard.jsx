@@ -202,7 +202,7 @@ const Dashboard = () => {
   const updateAnnouncementMutation = useMutation({
     mutationFn: (announcement) => sendJson(`${baseUrl}/api/dashboard/announcements/${announcement.scope}/${announcement.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ content: announcement.content, expectedRevision: announcement.expectedRevision })
+      body: JSON.stringify({ content: announcement.content, expectedRevision: announcement.expectedRevision, fileIds: announcement.fileIds })
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });

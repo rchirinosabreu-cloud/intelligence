@@ -2350,6 +2350,27 @@ model GlobalAnnouncement {
   @@index([authorId, createdAt])
 }
 
+// Archivos de los anuncios del dashboard (generales y personales). Sin claves foráneas: un anuncio personal es una
+// Notification y uno general un GlobalAnnouncement; `scope` dice cuál. El barrido diario los borra (ver
+// src/services/announcementFileService.js).
+model AnnouncementFile {
+  id             String    @id
+  storageKey     String    @unique
+  name           String
+  mimeType       String
+  size           Int
+  uploadedById   String?
+  scope          String?
+  announcementId String?
+  position       Int       @default(0)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  attachedAt     DateTime? @db.Timestamptz(6)
+  purgedAt       DateTime? @db.Timestamptz(6)
+
+  @@index([scope, announcementId])
+  @@index([createdAt])
+}
+
 model AnnouncementDelivery {
   id String @id @default(uuid())
   announcementId String
