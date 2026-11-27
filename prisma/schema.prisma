@@ -2350,10 +2350,10 @@ model GlobalAnnouncement {
   @@index([authorId, createdAt])
 }
 
-// Imágenes de los anuncios del dashboard (generales y personales). Sin claves foráneas: un anuncio personal es una
-// Notification y uno general un GlobalAnnouncement; `scope` dice cuál. El barrido diario las borra (ver
-// src/services/announcementImageService.js).
-model AnnouncementImage {
+// Archivos de los anuncios del dashboard (generales y personales). Sin claves foráneas: un anuncio personal es una
+// Notification y uno general un GlobalAnnouncement; `scope` dice cuál. El barrido diario los borra (ver
+// src/services/announcementFileService.js).
+model AnnouncementFile {
   id             String    @id
   storageKey     String    @unique
   name           String

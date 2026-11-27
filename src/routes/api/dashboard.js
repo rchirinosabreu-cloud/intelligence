@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
-import { MAX_ANNOUNCEMENT_IMAGE_BYTES, uploadAnnouncementImage } from '../../services/announcementImageService.js';
+import { MAX_ANNOUNCEMENT_FILE_BYTES, uploadAnnouncementFile } from '../../services/announcementFileService.js';
 import { createAnnouncementDeliveryRouter } from './announcementDelivery.js';
 import {
   assignClientOwnerHandler,
@@ -15,20 +15,20 @@ import { getOperationalTraceHandler } from '../../controllers/operationalTraceCo
 import { requireRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
-const imageUpload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: MAX_ANNOUNCEMENT_IMAGE_BYTES, files: 1 } }).single('image');
+const fileUpload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: MAX_ANNOUNCEMENT_FILE_BYTES, files: 1 } }).single('file');
 
-// Imágenes del anuncio que se está escribiendo (quedan sueltas hasta publicar; ver announcementImageService).
-router.post('/announcements/images', (req, res) => imageUpload(req, res, async (uploadError) => {
+// Archivos del anuncio que se está escribiendo (quedan sueltos hasta publicar; ver announcementFileService).
+router.post('/announcements/files', (req, res) => fileUpload(req, res, async (uploadError) => {
   if (uploadError) {
     const tooBig = uploadError.code === 'LIMIT_FILE_SIZE';
-    return res.status(tooBig ? 413 : 400).json({ error: tooBig ? 'La imagen pesa más de 10 MB. Expórtala más liviana y vuelve a subirla.' : 'No se pudo leer la imagen.' });
+    return res.status(tooBig ? 413 : 400).json({ error: tooBig ? 'El archivo pesa más de 25 MB. Compártelo por Drive y pon el enlace en el anuncio.' : 'No se pudo leer el archivo.' });
   }
   try {
-    return res.status(201).json(await uploadAnnouncementImage({ file: req.file, requester: req.user }));
+    return res.status(201).json(await uploadAnnouncementFile({ file: req.file, requester: req.user }));
   } catch (error) {
     const status = error.statusCode || 500;
-    if (status >= 500) console.error('[Dashboard] Imagen de anuncio:', error);
-    return res.status(status).json({ error: error.message || 'No se pudo subir la imagen.' });
+    if (status >= 500) console.error('[Dashboard] Archivo de anuncio:', error);
+    return res.status(status).json({ error: error.message || 'No se pudo subir el archivo.' });
   }
 }));
 router.use('/announcements', createAnnouncementDeliveryRouter());

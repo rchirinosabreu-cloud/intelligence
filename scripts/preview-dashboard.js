@@ -6,6 +6,25 @@ import { LEAGUE_ROSTER, leagueDemoRecognitions } from '../tests/fixtures/leagueP
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
+// Un PDF mínimo de una página, para ver el visor de documentos en la muestra.
+const DEMO_PDF = (() => {
+  const text = 'Brief de la reunion - Brain Studio (documento de ejemplo)';
+  const stream = `BT /F1 20 Tf 60 760 Td (${text}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets = objects.map((object, index) => { const at = body.length; body += `${index + 1} 0 obj\n${object}\nendobj\n`; return at; });
+  const xref = body.length;
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map(at => `${String(at).padStart(10, '0')} 00000 n \n`).join('')}`;
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return body;
+})();
+
 const DEMO_IMAGE_STYLES = [
   ['#0f3d5e', '#22d3ee', 'Reunión 2:00 pm'],
   ['#3b1d6e', '#f472b6', 'Bienvenida, Franci'],
@@ -13,7 +32,7 @@ const DEMO_IMAGE_STYLES = [
   ['#7c2d12', '#fb923c', '¡Ya eres Brain!'],
   ['#1e293b', '#60a5fa', 'Almuerzo del viernes']
 ];
-const demoAnnouncementImage = (id) => {
+const demoAnnouncementFile = (id) => {
   const index = [...id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % DEMO_IMAGE_STYLES.length;
   const [from, to, label] = id === 'demo-agenda' ? DEMO_IMAGE_STYLES[0] : DEMO_IMAGE_STYLES[index];
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="1200" height="760" fill="url(#g)"/><circle cx="980" cy="160" r="220" fill="#fff" opacity=".12"/><circle cx="160" cy="680" r="260" fill="#000" opacity=".12"/><text x="80" y="420" font-family="Arial, sans-serif" font-size="92" font-weight="700" fill="#fff">${label}</text><text x="84" y="500" font-family="Arial, sans-serif" font-size="40" fill="#fff" opacity=".8">Brain Studio · imagen de ejemplo</text></svg>`;
@@ -53,21 +72,32 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             });
             return;
           }
-          // Imágenes de los anuncios (27 de noviembre de 2026): carteles de ejemplo dibujados aquí, sin archivos ni bucket.
-          const announcementImage = pathname.match(/^\/api\/announcement-images\/([^/]+)$/);
-          if (announcementImage) {
-            res.setHeader('Content-Type', 'image/svg+xml');
-            res.setHeader('Cache-Control', 'private, max-age=3600');
-            res.end(demoAnnouncementImage(announcementImage[1]));
+          // Archivos de los anuncios (27 de noviembre de 2026): carteles y documentos de ejemplo hechos aquí, sin bucket.
+          const announcementFile = pathname.match(/^\/api\/announcement-files\/([^/]+)$/);
+          if (announcementFile && announcementFile[1] === 'demo-brief') {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.end(DEMO_PDF);
             return;
           }
-          if (req.method === 'POST' && pathname === '/api/dashboard/announcements/images') {
+          if (announcementFile && announcementFile[1] === 'demo-guion') {
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''Guion.docx");
+            res.end('documento de ejemplo');
+            return;
+          }
+          if (announcementFile) {
+            res.setHeader('Content-Type', 'image/svg+xml');
+            res.setHeader('Cache-Control', 'private, max-age=3600');
+            res.end(demoAnnouncementFile(announcementFile[1]));
+            return;
+          }
+          if (req.method === 'POST' && pathname === '/api/dashboard/announcements/files') {
             req.resume();
             req.on('end', () => {
               const id = `demo-subida-${Date.now()}`;
               setTimeout(() => {
                 res.statusCode = 201;
-                res.end(JSON.stringify({ id, name: 'Imagen.png', mimeType: 'image/png', size: 1, removed: false, url: `/api/announcement-images/${id}?access_token=demo` }));
+                res.end(JSON.stringify({ id, name: 'Archivo', size: 1, removed: false, url: `/api/announcement-files/${id}?access_token=demo` }));
               }, 900);
             });
             return;
@@ -112,7 +142,7 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
           if (announcementPreview) {
             const row = dashboardDemoDashboard().announcements.find((entry) => entry.id === announcementPreview[1]);
             if (!row) { res.statusCode = 404; res.end(JSON.stringify({ error: 'El anuncio no existe.' })); return; }
-            res.end(JSON.stringify({ id: row.id, content: row.content, author: row.author?.name || 'Equipo Brainstudio', createdAt: row.createdAt, revision: 1, archivedAt: null, images: row.images || [] }));
+            res.end(JSON.stringify({ id: row.id, content: row.content, author: row.author?.name || 'Equipo Brainstudio', createdAt: row.createdAt, revision: 1, archivedAt: null, attachments: row.attachments || [] }));
             return;
           }
           const routes = {

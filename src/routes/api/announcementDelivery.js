@@ -1,7 +1,7 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 import * as announcements from '../../services/announcementDeliveryService.js';
-import { withAnnouncementImages } from '../../services/announcementImageService.js';
+import { withAnnouncementFiles } from '../../services/announcementFileService.js';
 
 export function createAnnouncementDeliveryRouter({ db = prisma, service = announcements } = {}) {
   const router = express.Router();
@@ -19,8 +19,8 @@ export function createAnnouncementDeliveryRouter({ db = prisma, service = announ
   };
   router.get('/:id/preview', handle(async req => {
     const preview = await service.previewAnnouncement(db, req.params.id, req.user);
-    const [withImages] = await withAnnouncementImages(db, [{ ...preview, scope: 'GLOBAL' }], req.user.userId);
-    return withImages;
+    const [withFiles] = await withAnnouncementFiles(db, [{ ...preview, scope: 'GLOBAL' }], req.user.userId);
+    return withFiles;
   }));
   router.get('/:id/history', handle(req => service.announcementHistory(db, req.params.id, req.user)));
   router.post('/:id/response', handle(req => service.respondAnnouncement(db, req.params.id, req.body || {}, req.user)));

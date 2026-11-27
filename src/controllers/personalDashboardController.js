@@ -32,7 +32,7 @@ export const createDashboardAnnouncementHandler = async (req, res) => {
       content: req.body.content,
       targetUserId: req.body.targetUserId,
       requestId: req.body.requestId,
-      imageIds: req.body.imageIds
+      fileIds: req.body.fileIds
     });
     return res.status(201).json(announcement);
   } catch (error) {
@@ -54,7 +54,7 @@ export const updateDashboardAnnouncementHandler = async (req, res) => {
       id: req.params.id,
       content: req.body.content,
       expectedRevision: req.body.expectedRevision,
-      imageIds: req.body.imageIds
+      fileIds: req.body.fileIds
     });
     return res.json(announcement);
   } catch (error) {

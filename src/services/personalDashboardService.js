@@ -1,6 +1,6 @@
 import { syncClientPlanOwners } from './planOwnerService.js';
 import { publishAnnouncement, changeAnnouncement, archiveAnnouncement } from './announcementDeliveryService.js';
-import { assertAnnouncementImagesAttachable, releaseAnnouncementImages, setAnnouncementImages, withAnnouncementImages } from './announcementImageService.js';
+import { assertAnnouncementFilesAttachable, releaseAnnouncementFiles, setAnnouncementFiles, withAnnouncementFiles } from './announcementFileService.js';
 import { activeTaskSourceWhere } from '../lib/taskRetirement.js';
 import prisma from '../lib/prisma.js';
 import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js';
@@ -873,7 +873,7 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
     : [];
   const authorsById = new Map(authors.map((author) => [author.id, author]));
 
-  return withAnnouncementImages(db, [
+  return withAnnouncementFiles(db, [
     ...globalAnnouncements.map((announcement) => ({
       id: announcement.id,
       scope: 'GLOBAL',
@@ -900,28 +900,28 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), userId);
 };
 
-// Un anuncio puede ser solo imágenes: basta con texto o con al menos una imagen.
-const assertAnnouncementHasBody = (cleanContent, imageIds) => {
-  if (hasAnnouncementText(cleanContent) || (Array.isArray(imageIds) && imageIds.length > 0)) return;
+// Un anuncio puede ser solo archivos: basta con texto o con al menos un archivo.
+const assertAnnouncementHasBody = (cleanContent, fileIds) => {
+  if (hasAnnouncementText(cleanContent) || (Array.isArray(fileIds) && fileIds.length > 0)) return;
   const error = new Error('El anuncio no puede estar vacio.');
   error.statusCode = 400;
   throw error;
 };
 
 export const createDashboardAnnouncement = async (
-  { requester, scope, content, targetUserId, requestId, imageIds },
+  { requester, scope, content, targetUserId, requestId, fileIds },
   { db = prisma, notificationCreator = createNotification } = {}
 ) => {
   assertDashboardManagerAccess(requester);
 
   const cleanContent = sanitizeDashboardAnnouncementContent(content);
-  assertAnnouncementHasBody(cleanContent, imageIds);
-  // Se revisan antes de publicar: si una imagen ya no sirve, no sale un anuncio a medias.
-  if (['GLOBAL', 'MEMBER'].includes(scope)) await assertAnnouncementImagesAttachable(db, { imageIds, scope });
+  assertAnnouncementHasBody(cleanContent, fileIds);
+  // Se revisan antes de publicar: si un archivo ya no sirve, no sale un anuncio a medias.
+  if (['GLOBAL', 'MEMBER'].includes(scope)) await assertAnnouncementFilesAttachable(db, { fileIds, scope });
 
   if (scope === 'GLOBAL') {
     const announcement = await publishAnnouncement(db, { content: cleanContent, requestId }, requester);
-    await setAnnouncementImages(db, { imageIds, scope, announcementId: announcement.id });
+    await setAnnouncementFiles(db, { fileIds, scope, announcementId: announcement.id });
     return announcement;
   }
 
@@ -940,7 +940,7 @@ export const createDashboardAnnouncement = async (
       resourceId: 'dashboard',
       url: '/'
     }, { db });
-    if (notification?.id) await setAnnouncementImages(db, { imageIds, scope, announcementId: notification.id });
+    if (notification?.id) await setAnnouncementFiles(db, { fileIds, scope, announcementId: notification.id });
     return notification;
   }
 
@@ -974,21 +974,21 @@ const findMemberAnnouncement = async (db, id) => {
   return announcement;
 };
 
-export const updateDashboardAnnouncement = async ({ requester, scope, id, content, expectedRevision, imageIds }, { db = prisma } = {}) => {
+export const updateDashboardAnnouncement = async ({ requester, scope, id, content, expectedRevision, fileIds }, { db = prisma } = {}) => {
   assertDashboardManagerAccess(requester);
   assertSupportedAnnouncementScope(scope);
 
   const cleanContent = sanitizeDashboardAnnouncementContent(content);
-  // Sin `imageIds` (cliente viejo) las imágenes no cambian, así que se cuentan las que ya tiene.
-  const keptImages = imageIds === undefined
-    ? (await db.announcementImage?.findMany({ where: { scope, announcementId: id, purgedAt: null }, select: { id: true } }) || []).map(row => row.id)
-    : imageIds;
-  assertAnnouncementHasBody(cleanContent, keptImages);
-  await assertAnnouncementImagesAttachable(db, { imageIds, scope, announcementId: id });
+  // Sin `fileIds` (cliente viejo) las imágenes no cambian, así que se cuentan las que ya tiene.
+  const keptFiles = fileIds === undefined
+    ? (await db.announcementFile?.findMany({ where: { scope, announcementId: id, purgedAt: null }, select: { id: true } }) || []).map(row => row.id)
+    : fileIds;
+  assertAnnouncementHasBody(cleanContent, keptFiles);
+  await assertAnnouncementFilesAttachable(db, { fileIds, scope, announcementId: id });
 
   if (scope === 'GLOBAL') {
     const announcement = await changeAnnouncement(db, id, { content: cleanContent, expectedRevision }, requester);
-    await setAnnouncementImages(db, { imageIds, scope, announcementId: id });
+    await setAnnouncementFiles(db, { fileIds, scope, announcementId: id });
     return announcement;
   }
 
@@ -997,7 +997,7 @@ export const updateDashboardAnnouncement = async ({ requester, scope, id, conten
     where: { id },
     data: { message: cleanContent }
   });
-  await setAnnouncementImages(db, { imageIds, scope, announcementId: id });
+  await setAnnouncementFiles(db, { fileIds, scope, announcementId: id });
   return notification;
 };
 
@@ -1010,7 +1010,7 @@ export const deleteDashboardAnnouncement = async ({ requester, scope, id, expect
   await findMemberAnnouncement(db, id);
   const deleted = await db.notification.delete({ where: { id } });
   // Sus imágenes quedan sueltas y el barrido las borra al día siguiente.
-  if (db.announcementImage) await releaseAnnouncementImages(db, { scope, announcementId: id });
+  if (db.announcementFile) await releaseAnnouncementFiles(db, { scope, announcementId: id });
   return deleted;
 };
 
