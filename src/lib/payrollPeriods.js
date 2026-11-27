@@ -26,6 +26,7 @@ const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 
 const keyOf = (date) => date.toISOString().slice(0, 10);
 const shiftDays = (day, count) => keyOf(new Date(new Date(`${day}T12:00:00Z`).getTime() + count * DAY_MS));
 const clampDay = (year, month, day) => keyOf(new Date(Date.UTC(year, month - 1, Math.min(day, new Date(Date.UTC(year, month, 0)).getUTCDate()), 12)));
+const daysBetween = (start, end) => Math.round((new Date(`${end}T12:00:00Z`) - new Date(`${start}T12:00:00Z`)) / DAY_MS) + 1;
 const spoken = (day) => `${Number(day.slice(8, 10))} de ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
 
 /**
@@ -62,18 +63,49 @@ export function nextPayrollPeriod({ year, month, contractStart, contractEnd = nu
   const end = shiftDays(clampDay(after[0], after[1], anchorDay), -1);
   // `start` y `end` viajan también con `done`: el servicio mira primero si ese tramo ya existe, para devolverlo
   // en vez de crearlo dos veces, y solo después da el contrato por terminado.
-  if (lastDay && latestEnd && latestEnd >= lastDay) return { done: true, start, end };
+  if (lastDay && latestEnd && latestEnd >= lastDay) {
+    // Si el último tramo empezó en este mes, ese es el tramo de este mes: el servicio lo devuelve como existente.
+    const last = known.find(row => row.end === latestEnd);
+    const own = last && Number(last.start.slice(0, 4)) === year && Number(last.start.slice(5, 7)) === month;
+    return own ? { done: true, start: last.start, end: last.end } : { done: true, start, end };
+  }
   // El período de este mes es anterior al contrato (la persona todavía no empezaba) o empezaría cuando el
   // contrato ya terminó (su último tramo es del mes anterior): no hay nada que generar.
   if (end < firstDay || (lastDay && start > lastDay)) return { done: true, start, end };
   const span = `del ${spoken(start)} al ${spoken(end)}`;
+  /*
+   * El último tramo del contrato (Elisa, 27 de noviembre de 2026: el contrato de quien iba del 16 al 15 terminó el
+   * 31 de octubre para pasar a mes calendario, y «Generar» en octubre no creaba nada; Rodny: «sí»). Si el contrato
+   * empieza a tiempo y termina a mitad del ciclo, el período va del ancla al fin del contrato y su valor sugerido es
+   * proporcional a los días del ciclo (`proratedPayroll`). Queda en borrador: se revisa antes de aprobar.
+   */
+  if (firstDay <= start && lastDay && lastDay < end) {
+    const tranche = { start, end: lastDay };
+    if (known.some(row => payrollPeriodsOverlap(tranche.start, tranche.end, row.start, row.end))) {
+      return { start, end: lastDay, problem: `Ya hay días del último tramo del contrato (del ${spoken(start)} al ${spoken(lastDay)}) incluidos en otra liquidación. Revisa «Períodos e historial» antes de crear otra.` };
+    }
+    return { start, end: lastDay, anchorDay, lastTranche: { cycleStart: start, cycleEnd: end, days: daysBetween(start, lastDay), cycleDays: daysBetween(start, end) } };
+  }
   if (firstDay > start || (lastDay && lastDay < end)) {
-    return { start, end, problem: `El contrato cubre solo una parte del período (${span}). Define sus fechas e importe en «Períodos e historial».` };
+    const suggested = { start: firstDay > start ? firstDay : start, end: lastDay && lastDay < end ? lastDay : end };
+    return { start, end, suggested, problem: `El contrato cubre solo una parte del período (${span}). Define sus fechas e importe en «Períodos e historial».` };
   }
   if (known.some(row => payrollPeriodsOverlap(start, end, row.start, row.end))) {
     return { start, end, problem: `Ya hay días de este período (${span}) incluidos en otra liquidación. Revisa «Períodos e historial» antes de crear otra.` };
   }
   return { start, end, anchorDay };
+}
+/**
+ * El valor sugerido de un tramo corto: el mensual del contrato por los días del tramo sobre los días del ciclo, en
+ * centavos y redondeado. Base y seguridad social se reparten igual. Es una sugerencia: la persona lo revisa.
+ */
+export function proratedPayroll({ baseSalary, socialSecurity = 0, days, cycleDays }) {
+  const base = financialCents(baseSalary), security = financialCents(socialSecurity ?? 0);
+  if (base === null || security === null || !(days > 0) || !(cycleDays >= days)) return null;
+  // En pesos enteros: un tramo de 16 días de 31 sobre $ 1.000.000 sugiere $ 516.129.
+  const part = (cents) => Math.round((cents * days) / cycleDays / 100) * 100;
+  const baseCents = part(base), securityCents = part(security);
+  return { baseSalary: financialAmountFromCents(baseCents), socialSecurity: financialAmountFromCents(securityCents), grossAmount: financialAmountFromCents(baseCents + securityCents) };
 }
 export function payrollMonthRange(year, month) {
   return { start: new Date(Date.UTC(year, month - 1, 1, 12)).toISOString().slice(0, 10), end: new Date(Date.UTC(year, month, 0, 12)).toISOString().slice(0, 10) };

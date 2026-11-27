@@ -124,8 +124,13 @@ test('períodos y descuentos: PostgreSQL local, pagos e historial nativos', { sk
     const person = await db.financialCollaborator.create({ data: { displayName: 'Contrato parcial', normalizedName: randomUUID() } });
     const contract = await db.payrollContract.create({ data: { collaboratorId: person.id, baseSalary: 750000, socialSecurity: 0, startDate: new Date('2026-11-16'), endDate: new Date('2026-11-30') } });
     const generated = await generatePayrollPeriod(db, { year: 2026, month: 11 }, actor);
-    assert.equal(await db.payrollTransaction.count({ where: { contractId: contract.id } }), 0);
-    assert.ok(generated.requiresPeriodReview.some(row => row.contractId === contract.id));
+    // Desde el 27 de noviembre de 2026 el tramo corto se crea como borrador proporcional, nunca por el mes completo.
+    const rows = await db.payrollTransaction.findMany({ where: { contractId: contract.id } });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].status, 'DRAFT');
+    assert.equal(Number(rows[0].netAmount), 375000, '15 días de 30 del ciclo');
+    assert.notEqual(rows[0].periodKey, 'MONTHLY');
+    assert.ok(!generated.requiresPeriodReview.some(row => row.contractId === contract.id));
   });
   await t.test('descuentos: monto, titular, autorización vigente, precisión y período cerrado', async () => {
     const row = await seed(); await row.identify();

@@ -25,6 +25,13 @@ const jesu = await createPayrollContract(db, {name:'Jesu · muestra local',start
 const old = await db.payrollTransaction.create({data:{contractId:jesu.id,month:11,year:2026,periodKey:'october-service',serviceStart:new Date('2026-10-16'),serviceEnd:new Date('2026-10-31'),baseSalary:750000,grossAmount:750000,netAmount:750000,status:'APPROVED'}});
 await payPayrollTransaction(db,old.id,{amount:750000,paidAt:'2026-11-09',accountId:first.id},actor);
 await updatePayrollContract(db,jesu.id,{startDate:'2026-11-01',endDate:'2026-12-31',baseSalary:1500000,monthlyTotal:1500000},actor);
+// Elisa, 27 de noviembre de 2026: iba del 16 al 15 y su contrato termina el 31 de octubre para pasar a mes calendario.
+const corte = await createPayrollContract(db, {name:'Mari · muestra local',startDate:'2026-09-16',endDate:'2026-10-31',baseSalary:1000000},actor);
+await db.payrollTransaction.create({data:{contractId:corte.id,month:9,year:2026,periodKey:'septiembre',serviceStart:new Date('2026-09-16T12:00:00Z'),serviceEnd:new Date('2026-10-15T12:00:00Z'),baseSalary:1000000,grossAmount:1000000,netAmount:1000000,status:'APPROVED'}});
+// Un contrato que empieza a mitad del ciclo: «Generar» no lo crea solo y lo dice en su fila con «Crear este tramo».
+const tarde = await createPayrollContract(db, {name:'Laura · muestra local',startDate:'2026-09-01',endDate:'2026-09-30',baseSalary:900000},actor);
+await db.payrollTransaction.create({data:{contractId:tarde.id,month:9,year:2026,periodKey:'septiembre',serviceStart:new Date('2026-09-01T12:00:00Z'),serviceEnd:new Date('2026-09-30T12:00:00Z'),baseSalary:900000,grossAmount:900000,netAmount:900000,status:'APPROVED'}});
+await updatePayrollContract(db,tarde.id,{startDate:'2026-10-10',endDate:null,baseSalary:900000,monthlyTotal:900000},actor);
 const app = express(); app.use(express.json());
 app.get('/', (_req, res) => res.redirect('/tests/fixtures/payroll-periods.html?year=2026&month=11&tab=nomina&contractFlow=1'));
 app.use('/preview-api', async (req, res) => {
@@ -35,11 +42,12 @@ app.use('/preview-api', async (req, res) => {
     match = route.match(/^\/payroll-contracts\/([^/]+)$/);
     if (match && method === 'PATCH') return res.json({contract:await updatePayrollContract(db, match[1], req.body, actor)});
     if (route === '/payroll-contracts' && method === 'POST') return res.json({contract:await createPayrollContract(db,req.body,actor)});
-    match = route.match(/^\/payroll-transactions\/([^/]+)\/(service-period|sync-contract|reverse-period|loan-deductions|approve|pay)$/);
+    match = route.match(/^\/payroll-transactions\/([^/]+)\/(service-period|sync-contract|reprice|reverse-period|loan-deductions|approve|pay)$/);
     if (match) {
       const [_, id, action] = match;
       const result = action === 'loan-deductions' ? await (method === 'GET' ? periods.readPayrollDeductions(db, id, actor) : periods.createPayrollDeduction(db, id, req.body, actor))
         : action === 'sync-contract' ? await periods.syncPayrollPeriod(db,id,req.body,actor)
+        : action === 'reprice' ? await periods.repricePayrollPeriod(db,id,req.body,actor)
         : action === 'service-period' ? await periods.identifyPayrollPeriod(db, id, req.body, actor)
           : action === 'reverse-period' ? await periods.reversePayrollPeriod(db, id, req.body, actor)
             : action === 'approve' ? await approvePayrollTransaction(db, id, actor) : await payPayrollTransaction(db, id, req.body, actor);

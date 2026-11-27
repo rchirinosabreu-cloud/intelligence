@@ -7,7 +7,7 @@ import {
 } from './financialRecordService.js';
 import { financialAmountFromCents, financialCents } from '../utils/financialMoney.js';
 import { LIVE_PAYROLL_CONTRACT } from './financialQueryFilters.js';
-import { nextPayrollPeriod, payrollServiceRange, payrollUnknownMayOverlap } from '../lib/payrollPeriods.js';
+import { nextPayrollPeriod, payrollServiceRange, payrollUnknownMayOverlap, proratedPayroll } from '../lib/payrollPeriods.js';
 import { withPayrollMonthlyBasis } from './payrollMonthlyBasis.js';
 
 const toNumber = (value) => {
@@ -68,16 +68,22 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
       // Dos contratos de la misma persona ven el mismo tramo: se cuenta una sola vez.
       if (covered) { if (!transactions.some(row => row.id === covered.id)) { transactions.push(covered); existingCount++; } continue; }
       if (next.done) continue;
-      if (next.problem) { requiresPeriodReview.push({ contractId: contract.id, name, reason: next.problem }); continue; }
+      // El aviso viaja con el contrato y, si hay un tramo que se puede crear a mano, con sus fechas sugeridas: la
+      // pantalla lo pone en la fila de la persona con «Crear este tramo» (27 de noviembre de 2026).
+      if (next.problem) { requiresPeriodReview.push({ contractId: contract.id, name, reason: next.problem, ...(next.suggested ? { suggested: next.suggested } : {}) }); continue; }
       if (live.some(row => payrollUnknownMayOverlap(row, next.start, next.end, contract.id))) {
         requiresPeriodReview.push({ contractId: contract.id, name, reason: 'Hay liquidaciones anteriores con fechas por precisar. Identifícalas antes de generar un período nuevo.' }); continue;
       }
       const serviceStart = new Date(`${next.start}T12:00:00Z`), serviceEnd = new Date(`${next.end}T12:00:00Z`);
-      const baseSalary = toNumber(contract.baseSalary);
-      const socialSecurity = toNumber(contract.socialSecurity);
-      const grossAmount = baseSalary + socialSecurity;
-      // A reversed or explicitly redated monthly row keeps its key and history.
-      const periodKey = existingPeriods.some(row => row.periodKey === 'MONTHLY') ? randomUUID() : 'MONTHLY';
+      // El último tramo corto del contrato lleva un valor proporcional a sus días del ciclo, como sugerencia para
+      // revisar antes de aprobar («Cambiar valor»); el mes completo, el del contrato.
+      const prorated = next.lastTranche ? proratedPayroll({ baseSalary: contract.baseSalary, socialSecurity: contract.socialSecurity, ...next.lastTranche }) : null;
+      if (next.lastTranche && !prorated) { requiresPeriodReview.push({ contractId: contract.id, name, reason: 'Revisa los importes del contrato antes de generar su último tramo.' }); continue; }
+      const baseSalary = prorated ? prorated.baseSalary : toNumber(contract.baseSalary);
+      const socialSecurity = prorated ? prorated.socialSecurity : toNumber(contract.socialSecurity);
+      const grossAmount = prorated ? prorated.grossAmount : baseSalary + socialSecurity;
+      // A reversed or explicitly redated monthly row keeps its key and history. Un tramo corto no es «el mes».
+      const periodKey = next.lastTranche || existingPeriods.some(row => row.periodKey === 'MONTHLY') ? randomUUID() : 'MONTHLY';
       const transaction = await tx.payrollTransaction.upsert({
         where: { contractId_month_year_periodKey: { contractId: contract.id, month, year, periodKey } },
         update: {},
@@ -94,7 +100,8 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
           grossAmount,
           deductions: 0,
           netAmount: grossAmount,
-          status: 'DRAFT'
+          status: 'DRAFT',
+          ...(next.lastTranche ? { periodDetails: { lastTranche: { ...next.lastTranche, monthlyBase: toNumber(contract.baseSalary), monthlySecurity: toNumber(contract.socialSecurity) } } } : {})
         }
       });
       transactions.push(transaction);

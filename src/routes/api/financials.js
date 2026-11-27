@@ -342,6 +342,7 @@ router.get('/payroll-contracts/:id/periods', requireFinancialAccess, payrollPeri
 router.post('/payroll-contracts/:id/periods', requireFinancialWrite, payrollPeriodHandler('create'));
 router.patch('/payroll-transactions/:id/service-period', requireFinancialApproval, payrollPeriodHandler('identify'));
 router.post('/payroll-transactions/:id/sync-contract', requireFinancialWrite, payrollPeriodHandler('sync'));
+router.post('/payroll-transactions/:id/reprice', requireFinancialWrite, payrollPeriodHandler('reprice'));
 router.post('/payroll-transactions/:id/reverse-period', requireFinancialApproval, payrollPeriodHandler('reverse'));
 router.get('/payroll-transactions/:id/loan-deductions', requireFinancialAccess, payrollPeriodHandler('deductions'));
 router.post('/payroll-transactions/:id/loan-deductions', requireFinancialApproval, payrollPeriodHandler('deduct'));

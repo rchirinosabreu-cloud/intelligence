@@ -81,6 +81,35 @@ export async function createPayrollPeriod(db, contractId, input, actor) {
   });
 }
 
+/**
+ * Cambiar el valor de un borrador (27 de noviembre de 2026): el último tramo corto sale con un valor proporcional y
+ * a veces lo acordado es otro (Elisa: «15 días»). Solo un borrador sin pagos, descuentos ni adicionales; las fechas
+ * no cambian y el valor anterior queda en el historial.
+ */
+export async function repricePayrollPeriod(db, id, input, actor) {
+  const { reason, requestId } = request(input), fingerprint = hash({ id, input });
+  const base = financialCents(input.baseSalary), security = financialCents(input.socialSecurity ?? 0);
+  if (base === null || security === null || base < 0 || security < 0 || base + security <= 0 || !Number.isSafeInteger(base + security)) throw fail('PAYROLL_PERIOD_INVALID', 'Indica importes válidos con un máximo de dos decimales.', 400);
+  return atomic(db, async tx => {
+    const user = await authorize(tx, actor, 'write'), row = await payroll(tx, id);
+    const prior = row.periodDetails?.reprice;
+    if (prior?.requestId === requestId) {
+      if (prior.fingerprint !== fingerprint || prior.actorId !== user.id) throw conflict();
+      return { transaction: row, replayed: true };
+    }
+    if (row.voidedAt || row.status !== 'DRAFT' || row.financialRecordId || row.payments.some(p => !p.reversedAt) || row.adjustments.some(a => !a.reversedAt) || Number(row.deductions)) throw fail('PAYROLL_DRAFT_REQUIRED', 'Solo se cambia el valor de un borrador sin pagos, descuentos ni adicionales. Las liquidaciones aprobadas y pagadas conservan sus valores.');
+    const ctx = await load(tx, input.reviewContractId || row.contractId);
+    if (!ctx.rows.some(item => item.id === id)) throw conflict();
+    if (ctx.revision !== input.expectedRevision) throw conflict();
+    await openPayrollPeriod(tx, row);
+    const amounts = { baseSalary: financialAmountFromCents(base), socialSecurity: financialAmountFromCents(security), grossAmount: financialAmountFromCents(base + security), netAmount: financialAmountFromCents(base + security) };
+    const transaction = await tx.payrollTransaction.update({ where: { id }, data: { ...amounts,
+      periodDetails: clone({ ...row.periodDetails, reprice: { requestId, fingerprint, reason, actorId: user.id, actorName: user.name, before: { baseSalary: row.baseSalary, socialSecurity: row.socialSecurity, netAmount: row.netAmount } } }) } });
+    await audit(tx, 'PayrollTransaction', id, row, { operation: 'PERIOD_REPRICED', transaction, reason }, user);
+    return { transaction };
+  });
+}
+
 export async function identifyPayrollPeriod(db, id, input, actor) {
   const { reason, requestId } = request(input), start = payrollDay(input.start), end = payrollDay(input.end);
   if (end < start) throw fail('PAYROLL_PERIOD_INVALID', 'La fecha final no puede ser anterior al inicio.', 400);

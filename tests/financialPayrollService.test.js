@@ -108,3 +108,33 @@ test('payPayrollTransaction refuses unapproved payroll', async () => {
     (error) => error.code === 'PAYROLL_NOT_APPROVED'
   );
 });
+
+test('generar crea el último tramo corto del contrato como borrador con valor proporcional (Elisa, 27 de noviembre de 2026)', async () => {
+  // Iba del 16 al 15; el contrato terminó el 31 de octubre para pasar a mes calendario. Antes «Generar» no creaba nada.
+  const september = { id: 'p-sep', contractId: 'c-1', month: 9, year: 2026, periodKey: 'MONTHLY', serviceStart: new Date('2026-09-16T12:00:00Z'), serviceEnd: new Date('2026-10-15T12:00:00Z'), voidedAt: null };
+  const upserts = [];
+  let rows = [september];
+  const tx = {
+    financialPeriod: { findUnique: async () => ({ status: 'OPEN' }) },
+    payrollContract: { findMany: async () => [{ id: 'c-1', userId: null, startDate: new Date('2026-09-16T12:00:00Z'), endDate: new Date('2026-10-31T12:00:00Z'), baseSalary: 1000000, socialSecurity: 0, collaborator: { displayName: 'Persona de prueba' } }] },
+    payrollTransaction: {
+      findMany: async ({ where }) => (where.month ? rows.filter(row => row.month === where.month && row.year === where.year) : rows),
+      upsert: async (args) => { upserts.push(args); const row = { id: `p-${upserts.length}`, ...args.create }; rows = [...rows, row]; return row; }
+    },
+    financialAuditEvent: { create: async () => ({}), findMany: async () => [] }
+  };
+  const db = { $transaction: async (callback) => callback(tx) };
+  const result = await generatePayrollPeriod(db, { year: 2026, month: 10 }, { id: 'u-1' });
+  assert.equal(result.createdCount, 1);
+  assert.deepEqual(result.requiresPeriodReview, []);
+  const created = upserts[0].create;
+  assert.deepEqual([created.serviceStart.toISOString().slice(0, 10), created.serviceEnd.toISOString().slice(0, 10)], ['2026-10-16', '2026-10-31']);
+  assert.equal(created.netAmount, 516129, '16 días de 31 sobre el mensual');
+  assert.equal(created.status, 'DRAFT');
+  assert.notEqual(created.periodKey, 'MONTHLY', 'un tramo corto no es el mes');
+  assert.deepEqual(created.periodDetails.lastTranche, { cycleStart: '2026-10-16', cycleEnd: '2026-11-15', days: 16, cycleDays: 31, monthlyBase: 1000000, monthlySecurity: 0 });
+  // Volver a generar devuelve el mismo tramo; no crea otro.
+  const again = await generatePayrollPeriod(db, { year: 2026, month: 10 }, { id: 'u-1' });
+  assert.equal(again.createdCount, 0);
+  assert.equal(again.existingCount, 1);
+});

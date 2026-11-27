@@ -79,11 +79,13 @@ test('lo que no se sabe se dice, nunca se inventa: solapes y contrato que no cub
   const solapado = periods.nextPayrollPeriod({ year: 2026, month: 10, ...MARICETH, periods: [primero, segundo] });
   assert.match(solapado.problem, /Ya hay días de este período \(del 14 de octubre al 13 de noviembre\)/);
 
-  // Enero 14 → febrero 13 se pasa del fin del contrato (9 de febrero): el último tramo se define a mano, y se dice en enero.
+  // Enero 14 → febrero 13 se pasa del fin del contrato (9 de febrero): el último tramo va del 14 de enero al 9 de
+  // febrero, en enero, con su parte del ciclo para sugerir el valor (27 de noviembre de 2026).
   const final = periods.nextPayrollPeriod({ year: 2027, month: 1, ...MARICETH,
     periods: [{ start: '2026-12-14', end: '2027-01-13' }] });
-  assert.match(final.problem, /cubre solo una parte del período \(del 14 de enero al 13 de febrero\)/);
-  assert.match(final.problem, /Períodos e historial/);
+  assert.equal(final.problem, undefined);
+  assert.deepEqual([final.start, final.end], ['2027-01-14', '2027-02-09']);
+  assert.deepEqual(final.lastTranche, { cycleStart: '2027-01-14', cycleEnd: '2027-02-13', days: 27, cycleDays: 31 });
   // En febrero el período empezaría el 14, con el contrato ya terminado: nada que generar.
   assert.equal(periods.nextPayrollPeriod({ year: 2027, month: 2, ...MARICETH, periods: [{ start: '2026-12-14', end: '2027-01-13' }] }).done, true);
 
@@ -101,14 +103,33 @@ test('un ancla a fin de mes no deja días sueltos entre períodos', () => {
   assert.equal(feb.end, '2026-03-27');
 });
 
-test('un contrato que no completa un ciclo se dice, nunca se cobra entero ni se calla', () => {
-  // Del 16 al 30 de noviembre: no es un mes. Se dice en noviembre, que es donde empieza.
+test('un contrato que no completa un ciclo se genera como tramo corto, nunca se cobra entero ni se calla', () => {
+  // Del 16 al 30 de noviembre: no es un mes. Sale en noviembre con sus 15 días de 30.
   const parcial = periods.nextPayrollPeriod({ year: 2026, month: 11, contractStart: '2026-11-16', contractEnd: '2026-11-30', periods: [] });
   assert.equal(parcial.done, undefined);
-  assert.match(parcial.problem, /cubre solo una parte del período/);
-  assert.match(parcial.problem, /Períodos e historial/);
+  assert.equal(parcial.problem, undefined);
+  assert.deepEqual([parcial.start, parcial.end], ['2026-11-16', '2026-11-30']);
+  assert.deepEqual(parcial.lastTranche, { cycleStart: '2026-11-16', cycleEnd: '2026-12-15', days: 15, cycleDays: 30 });
   // En diciembre ya terminó: nada que generar ni de qué quejarse.
   assert.equal(periods.nextPayrollPeriod({ year: 2026, month: 12, contractStart: '2026-11-16', contractEnd: '2026-11-30', periods: [] }).done, true);
   // Quien empieza el 14 de octubre no tiene nada en septiembre.
   assert.equal(periods.nextPayrollPeriod({ year: 2026, month: 9, contractStart: '2026-10-14', contractEnd: '2027-02-09', periods: [] }).done, true);
+});
+
+test('el último tramo del contrato (Elisa, 27 de noviembre de 2026): del 16 al 31 de octubre y luego mes calendario', () => {
+  const contract = { contractStart: '2026-09-16', contractEnd: '2026-10-31' };
+  const septiembre = { start: '2026-09-16', end: '2026-10-15' };
+  const octubre = periods.nextPayrollPeriod({ year: 2026, month: 10, ...contract, periods: [septiembre] });
+  assert.deepEqual([octubre.start, octubre.end], ['2026-10-16', '2026-10-31']);
+  assert.deepEqual(periods.proratedPayroll({ baseSalary: 1000000, socialSecurity: 0, ...octubre.lastTranche }),
+    { baseSalary: 516129, socialSecurity: 0, grossAmount: 516129 }, '16 días de 31, en pesos enteros');
+  // Pagado el tramo, el contrato termina: noviembre no genera nada con este contrato.
+  assert.equal(periods.nextPayrollPeriod({ year: 2026, month: 11, ...contract, periods: [septiembre, { start: '2026-10-16', end: '2026-10-31' }] }).done, true);
+  // El contrato nuevo desde el 1 de noviembre sigue del 1 al 30, porque lo último pagado terminó el 31.
+  const nuevo = periods.nextPayrollPeriod({ year: 2026, month: 11, contractStart: '2026-11-01', contractEnd: null, periods: [septiembre, { start: '2026-10-16', end: '2026-10-31' }] });
+  assert.deepEqual([nuevo.start, nuevo.end, nuevo.problem], ['2026-11-01', '2026-11-30', undefined]);
+  // Un contrato que empieza tarde sigue pidiendo el tramo a mano, con las fechas sugeridas para crearlo.
+  const tarde = periods.nextPayrollPeriod({ year: 2026, month: 12, contractStart: '2026-12-20', contractEnd: null, periods: [{ start: '2026-11-01', end: '2026-11-30' }] });
+  assert.match(tarde.problem, /cubre solo una parte/);
+  assert.deepEqual(tarde.suggested, { start: '2026-12-20', end: '2026-12-31' });
 });
