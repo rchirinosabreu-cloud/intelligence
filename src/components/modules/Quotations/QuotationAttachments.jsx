@@ -47,7 +47,7 @@ export default function QuotationAttachments({ value = [], onChange, onBusyChang
         const accepted = chosen.slice(0, Math.max(0, room));
         if (accepted.length < chosen.length) toast.error(`Una propuesta lleva hasta ${MAX_QUOTATION_FILES} adjuntos.`);
         const tooBig = accepted.filter(file => file.size > MAX_QUOTATION_FILE_BYTES);
-        tooBig.forEach(file => toast.error(`«${file.name}» pesa más de ${formatFileSize(MAX_QUOTATION_FILE_BYTES)}. Compártelo por Drive y pon el enlace en la propuesta.`, { duration: 8000 }));
+        tooBig.forEach(file => toast.error(`«${file.name}» pesa más de ${formatFileSize(MAX_QUOTATION_FILE_BYTES)}. Compártelo por Drive.`, { duration: 8000 }));
         const queue = accepted.filter(file => file.size <= MAX_QUOTATION_FILE_BYTES);
         if (!queue.length) return;
         setUploading(current => [...current, ...queue.map(file => file.name)]);
