@@ -29,6 +29,7 @@ import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import { syncLeadStageFromQuotation, supersedeSiblingDrafts } from '../services/quotationDraftService.js';
 import { linkQuotationParty, readQuotationParty } from '../services/quotationPartyService.js';
 import { emailQuotation, sendQuotationByChannel } from '../services/quotationDeliveryService.js';
+import { assertQuotationFilesAttachable, listQuotationFiles, publicQuotationFile, setQuotationFiles } from '../services/quotationFileService.js';
 
 // A quotation born from the CRM moves its opportunity forward; a CRM hiccup never undoes the quotation itself.
 const syncLeadStage = async (quotation, event) => {
@@ -129,6 +130,10 @@ const sendQuotationError = (res, error, fallbackMessage) => {
     if (error?.code === 'P2025') {
         return res.status(404).json({ error: 'Cotización no encontrada' });
     }
+    // Los adjuntos dicen su problema en palabras (archivo de otra propuesta, ya borrado, demasiados).
+    if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+        return res.status(error.statusCode).json({ error: error.message });
+    }
     return res.status(500).json({ error: fallbackMessage });
 };
 
@@ -218,6 +223,7 @@ export const createQuotation = async (req, res) => {
 
         // 6. Persistence
         const proposalDetails = normalizeProposalDetails(req.body.proposal_details, { issue: !isDraft, totalsByScenario: quotationProposalTotals(preparedItems, is_tax_exempt, { durationMonths, ...discount }) });
+        const fileIds = await assertQuotationFilesAttachable(prisma, { fileIds: req.body.file_ids });
         const quotation = await prisma.quotation.create({
             data: {
                 uuid_slug,
@@ -246,6 +252,9 @@ export const createQuotation = async (req, res) => {
             }
         });
 
+        if (fileIds?.length) await setQuotationFiles(prisma, { fileIds, quotationId: quotation.id });
+        const attachments = (await listQuotationFiles(prisma, quotation.id)).map(row => publicQuotationFile(row));
+
         // Format for response if needed
         const formattedConsecutive = `COT-${String(quotation.consecutive).padStart(4, '0')}`;
         const party = await linkParty(quotation, req.user);
@@ -259,6 +268,7 @@ export const createQuotation = async (req, res) => {
             ...(party ? { lead_id: party.leadId } : {}),
             party,
             delivery,
+            attachments,
             consecutive_formatted: formattedConsecutive
         });
     } catch (error) {
@@ -350,6 +360,7 @@ export const updateQuotation = async (req, res) => {
             : existing.terms_and_conditions;
 
         const proposalDetails = normalizeProposalDetails(Object.hasOwn(req.body, 'proposal_details') ? req.body.proposal_details : existing.proposal_details, { issue: !isDraft, totalsByScenario: quotationProposalTotals(preparedItems, is_tax_exempt, { durationMonths, ...discount }) });
+        await assertQuotationFilesAttachable(prisma, { fileIds: req.body.file_ids, quotationId: id });
 
         const quotation = await prisma.quotation.update({
             where: { id, status: { not: 'APROBADA' }, updated_at: existing.updated_at },
@@ -378,6 +389,10 @@ export const updateQuotation = async (req, res) => {
             }
         });
 
+        // Los adjuntos antes del correo: salen con la propuesta que se acaba de emitir.
+        await setQuotationFiles(prisma, { fileIds: req.body.file_ids, quotationId: quotation.id });
+        const attachments = (await listQuotationFiles(prisma, quotation.id)).map(row => publicQuotationFile(row));
+
         // Ligar antes de mover la etapa: una propuesta que se emite por primera vez también avanza su oportunidad.
         const party = await linkParty(quotation, req.user);
         const linked = { ...quotation, lead_id: party?.leadId || quotation.lead_id };
@@ -392,6 +407,7 @@ export const updateQuotation = async (req, res) => {
             ...(party ? { lead_id: party.leadId } : {}),
             party,
             delivery,
+            attachments,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`
         });
 
@@ -426,9 +442,11 @@ export const getPublicQuotation = async (req, res) => {
         const isExpired = quotation.status === 'ACTIVA' && now > quotation.expires_at;
 
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
+        const attachments = (await listQuotationFiles(prisma, quotation.id)).map(row => publicQuotationFile(row, { slug: quotation.uuid_slug }));
 
         res.json({
             ...publicQuotation,
+            attachments,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             emisor_data,
             isExpired
@@ -451,9 +469,11 @@ export const acceptPublicQuotation = async (req, res) => {
         if (!alreadyAccepted) await afterAcceptance(quotation, null);
         const publicQuotation = serializePublicQuotation(quotation);
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
+        const attachments = (await listQuotationFiles(prisma, quotation.id)).map(row => publicQuotationFile(row, { slug: quotation.uuid_slug }));
 
         res.json({
             ...publicQuotation,
+            attachments,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             emisor_data,
             isExpired: false,
@@ -536,9 +556,12 @@ export const getQuotation = async (req, res) => {
             return null;
         });
 
+        const attachments = (await listQuotationFiles(prisma, quotation.id)).map(row => publicQuotationFile(row));
+
         res.json({
             ...normalizedQuotation,
             party,
+            attachments,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at,
             profitability: calculateQuotationEconomics(quotation.items || [], {

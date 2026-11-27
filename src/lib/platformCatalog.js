@@ -83,6 +83,8 @@ export const PLATFORM_OPERATIONS = {
   'POST /quotations/:id/accept': { que: 'Registra que el cliente aprobó la cotización por fuera de su enlace (WhatsApp, correo, reunión) y abre la formalización del proyecto.', campos: 'scenarioId (si tiene escenarios), expectedUpdatedAt' },
   'POST /quotations/:id/send': { que: 'Reenvía una propuesta emitida por correo al cliente con el enlace para aceptar y el PDF, o registra que se mandó por WhatsApp.', campos: 'channel (CORREO o WHATSAPP)' },
   'GET /quotations/:id/pdf': { que: 'El PDF de una cotización (archivo).' },
+  'POST /quotations/files': { que: 'Sube un archivo adjunto para la propuesta que se está escribiendo; se liga al guardar con file_ids.', campos: 'file (multipart)' },
+  'GET /quotations/:id/files/:fileId': { que: 'Descarga un adjunto de una cotización (archivo).' },
   'GET /quotations/:id': { que: 'Una cotización con sus líneas y escenarios.' },
   'GET /quotations': { que: 'La lista de cotizaciones.' },
   'GET /services': { que: 'Los servicios del catálogo.' },

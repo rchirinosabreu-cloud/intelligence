@@ -8,6 +8,9 @@ import { generateQuotationPdfBuffer } from './quotationPdfService.js';
 import { addActivity } from './crmService.js';
 import { DEMO_CONNECTION_MESSAGE, isDemoMode } from '../lib/demoMode.js';
 import { DELIVERY_CHANNELS, QUOTATION_SENDER, QUOTATION_SENDER_ADDRESS, proposalEmail, quotationCode, quotationPublicUrl } from '../lib/quotationDelivery.js';
+import { splitEmailAttachments } from '../lib/quotationAttachments.js';
+import { listQuotationFiles, publicQuotationFile, readQuotationFileBuffers } from './quotationFileService.js';
+import { LEGAL_ENTITY } from '../components/public/legalEntity.js';
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
@@ -34,17 +37,26 @@ export const recordProposalSent = async (db, quotation, channel, actor = {}, now
  * El correo al cliente con el enlace y el PDF. Devuelve qué pasó en palabras: enviado, sin correo del cliente, o el
  * motivo por el que no salió. Nunca lanza: la emisión ya ocurrió.
  */
-export const emailQuotation = async (db, quotation, issuer, { send = sendEmail, pdf = generateQuotationPdfBuffer, actor = {}, now = new Date(), baseUrl } = {}) => {
+export const emailQuotation = async (db, quotation, issuer, { send = sendEmail, pdf = generateQuotationPdfBuffer, files = listQuotationFiles, readFiles = readQuotationFileBuffers, actor = {}, now = new Date(), baseUrl } = {}) => {
     const to = String(quotation?.client_email || '').trim();
     if (!to) return { sent: false, reason: 'sin-correo', message: 'La cotización no tiene correo del cliente.' };
     const link = quotationPublicUrl(quotation.uuid_slug, baseUrl);
-    const email = proposalEmail({
-        consecutive: quotation.consecutive, clientName: quotation.client_name, clientCompany: quotation.client_company,
-        link, issuerName: issuerName(quotation, issuer), expiresAt: quotation.expires_at
-    });
+    let linkedNames = [];
     try {
         const buffer = await pdf(quotation, issuer);
-        const result = await send({ to, from: QUOTATION_SENDER, replyTo: QUOTATION_SENDER_ADDRESS, subject: email.subject, text: email.text, html: email.html, attachments: [{ filename: email.attachmentName, content: buffer, contentType: 'application/pdf' }] });
+        // Los adjuntos de la propuesta: los que caben en el correo van adjuntos; el resto, como enlace de descarga.
+        const rows = await files(db, quotation.id);
+        const { attached, linked } = splitEmailAttachments(rows, { pdfBytes: buffer.length });
+        const origin = String(baseUrl || LEGAL_ENTITY.platformUrl).replace(/\/+$/, '');
+        linkedNames = linked.map(row => row.name);
+        const downloads = linked.map(row => ({ name: row.name, size: row.size, url: `${origin}${publicQuotationFile(row, { slug: quotation.uuid_slug }).url}` }));
+        const extra = (await readFiles(attached)).map(({ row, content }) => ({ filename: row.name, content, contentType: row.mimeType || 'application/octet-stream' }));
+        const email = proposalEmail({
+            consecutive: quotation.consecutive, clientName: quotation.client_name, clientCompany: quotation.client_company,
+            link, issuerName: issuerName(quotation, issuer), expiresAt: quotation.expires_at,
+            attachedNames: attached.map(row => row.name), downloads
+        });
+        const result = await send({ to, from: QUOTATION_SENDER, replyTo: QUOTATION_SENDER_ADDRESS, subject: email.subject, text: email.text, html: email.html, attachments: [{ filename: email.attachmentName, content: buffer, contentType: 'application/pdf' }, ...extra] });
         if (!result?.sent) {
             // En la demo no hay correo: se dice con calma que depende de una conexión real (13 de noviembre de 2026).
             const notConfigured = result?.reason === 'smtp-not-configured';
@@ -55,7 +67,8 @@ export const emailQuotation = async (db, quotation, issuer, { send = sendEmail, 
         return { sent: false, reason: 'error', message: `El correo no salió: ${String(error?.message || error).slice(0, 160)}` };
     }
     await recordProposalSent(db, quotation, 'CORREO', actor, now);
-    return { sent: true, to, link, message: `Propuesta enviada por correo a ${to}.` };
+    const asLinks = linkedNames.length ? ` ${linkedNames.length === 1 ? `«${linkedNames[0]}» fue` : `${linkedNames.length} archivos fueron`} como enlace de descarga.` : '';
+    return { sent: true, to, link, linked: linkedNames, message: `Propuesta enviada por correo a ${to}.${asLinks}` };
 };
 
 /** Lo que registra la pantalla cuando la persona manda la propuesta por WhatsApp desde su teléfono. */

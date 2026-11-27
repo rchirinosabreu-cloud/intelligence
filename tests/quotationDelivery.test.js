@@ -138,3 +138,29 @@ test('reenviar exige una propuesta emitida; WhatsApp solo registra la gestión, 
     assert.equal(resent.sent, true);
     assert.equal(db.activities.length, 2);
 });
+
+test('los adjuntos de la propuesta van en el correo y los que no caben van como enlace de descarga (Rodny, 27 de noviembre de 2026)', async () => {
+    const MB = 1024 * 1024;
+    const rows = [
+        { id: 'f1', name: 'Portafolio.pdf', mimeType: 'application/pdf', size: 4 * MB, storageKey: 'quotations/f1.pdf' },
+        { id: 'f2', name: 'Video del caso.mp4', mimeType: 'video/mp4', size: 30 * MB, storageKey: 'quotations/f2.mp4' },
+        { id: 'f3', name: 'Ficha técnica.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 2 * MB, storageKey: 'quotations/f3.docx' }
+    ];
+    const sent = [];
+    const read = [];
+    const result = await emailQuotation(makeDb(), quotation, issuers.BRAIN_STUDIO, {
+        send: async (mail) => { sent.push(mail); return { sent: true }; },
+        pdf: async () => Buffer.from('pdf'),
+        files: async (_db, id) => (id === 'q1' ? rows : []),
+        readFiles: async (picked) => { read.push(...picked.map(row => row.id)); return picked.map(row => ({ row, content: Buffer.from(row.id) })); },
+        now: NOW
+    });
+    assert.equal(result.sent, true);
+    assert.deepEqual(read, ['f1', 'f3'], 'solo se leen del bucket los que van adjuntos');
+    assert.deepEqual(sent[0].attachments.map(file => file.filename), ['Propuesta_COT-0042.pdf', 'Portafolio.pdf', 'Ficha técnica.docx']);
+    assert.match(sent[0].text, /Video del caso\.mp4: https:\/\/labs\.brainstudioagencia\.com\/api\/quotations\/public\/abc-123\/files\/f2/);
+    assert.match(sent[0].html, /href="https:\/\/labs\.brainstudioagencia\.com\/api\/quotations\/public\/abc-123\/files\/f2"/);
+    assert.match(sent[0].html, /junto con estos archivos: Portafolio\.pdf, Ficha técnica\.docx/);
+    assert.deepEqual(result.linked, ['Video del caso.mp4']);
+    assert.match(result.message, /«Video del caso\.mp4» fue como enlace de descarga/);
+});

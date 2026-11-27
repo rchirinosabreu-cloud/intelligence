@@ -7,7 +7,9 @@ import {
     Calendar,
     CheckCircle2,
     Clock,
+    Download,
     FileText,
+    Paperclip,
     Mail,
     MessageCircle,
     ShieldCheck,
@@ -18,6 +20,7 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { calculateQuotationTotals, groupQuotationScenarios } from '@/services/quotationDomainService';
 import { parseContractTermsText } from '@/services/quotationContractTerms';
 import { formatExecution, paymentPlanForScenario } from '@/services/quotationProposalDetails';
+import { formatFileSize } from '@/lib/quotationAttachments';
 import { ProposalRichText, ProposalPayments, ProposalTimeline, ProposalClosing } from '@/components/modules/Quotations/ProposalContent';
 
 const WHATSAPP_NUMBER = '573004329276';
@@ -325,7 +328,7 @@ const PublicQuotation = () => {
                             <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
                                 <p className="text-xs font-medium text-zinc-400">Contacto</p>
                                 <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Mail className="h-4 w-4" /> {quotation.client_email || 'No proporcionado'}</p>
-                                <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Smartphone className="h-4 w-4" /> {quotation.client_phone}</p>
+                                {quotation.client_phone && <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Smartphone className="h-4 w-4" /> {quotation.client_phone}</p>}
                             </div>
                         </div>
 
@@ -376,6 +379,25 @@ const PublicQuotation = () => {
                     </div>
                 </section>
 
+                {/* Adjuntos de la propuesta (27 de noviembre de 2026): el cliente los baja aquí aunque la abra desde WhatsApp. */}
+                {Array.isArray(quotation.attachments) && quotation.attachments.length > 0 && (
+                    <section className="px-5 pb-12 sm:px-8 sm:pb-16" aria-labelledby="proposal-attachments" data-public-attachments>
+                        <div className="mx-auto max-w-4xl">
+                            <h2 id="proposal-attachments" className="flex items-center gap-2 text-2xl font-semibold"><Paperclip className="h-5 w-5 text-violet-600" />Archivos adjuntos</h2>
+                            <ul className="mt-5 divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+                                {quotation.attachments.map(file => (
+                                    <li key={file.id}>
+                                        <a href={`${getApiBaseUrl()}${file.url}`} download={file.name} className="flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-violet-50 dark:hover:bg-violet-950/30">
+                                            <FileText className="h-5 w-5 shrink-0 text-zinc-400" />
+                                            <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium">{file.name}</span><span className="block text-xs text-zinc-500">{formatFileSize(file.size)}</span></span>
+                                            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-violet-700 dark:text-violet-300"><Download className="h-4 w-4" /><span className="hidden sm:inline">Descargar</span></span>
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </section>
+                )}
                 <ProposalClosing details={details} />
                 <section className="border-t border-zinc-200 bg-white px-5 py-12 dark:border-zinc-800 dark:bg-zinc-900 sm:px-8 sm:py-16">
                     <div className="mx-auto max-w-4xl">
