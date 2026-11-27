@@ -99,14 +99,14 @@ test('today’s points, the track scale, the month label and the ordinal', () =>
 
 // Rodny, 18 de noviembre de 2026: con los mismos hábitos, quien cerró cinco tareas sumaba lo mismo que quien cerró una,
 // y 3 de 4 a tiempo valía lo mismo que 0 de 4.
-test('a lost habit pays its done part, rounded, and effort pays one point per task up to twenty a day', () => {
+test('a lost habit pays its done part, rounded, and effort pays one point per task, with no daily cap', () => {
   const entry = { habits: { RELOJ: true, AL_DIA: true, A_TIEMPO: false, DOCUMENTADO: null, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true },
     extras: { ESFUERZO: 4, PROPORCION: { A_TIEMPO: 0.75 }, PRIMERO_EN_ABRIR: false } };
   assert.equal(habitPoints(entry, 'A_TIEMPO'), 4);
   assert.equal(habitPoints(entry, 'RELOJ'), 5);
   assert.equal(habitPoints(entry, 'DOCUMENTADO'), 0);
   assert.equal(effortPoints(entry), 4);
-  assert.equal(effortPoints({ extras: { ESFUERZO: 37 } }), 10);
+  assert.equal(effortPoints({ extras: { ESFUERZO: 37 } }), 37, 'sin tope desde el 27 de noviembre de 2026');
   assert.equal(todayPoints(entry).points, 5 + 5 + 4 + 5 + 5 + 4);
   assert.equal(summarizeDays([entry, entry]).points, 2 * 28);
   assert.equal(summarizeDays([entry]).earned, 4, 'a partial habit is not an earned habit for badges and full days');
