@@ -57,12 +57,12 @@ const fakeConversations = ({ answer = 'Hoy tienes **dos** pendientes.', extra = 
   return service;
 };
 
-const build = ({ repository = fakeRepository(), conversations = fakeConversations(), users = {}, env = ENV, fetchImpl, now = () => new Date('2026-10-20T20:00:00Z'), random } = {}) => {
+const build = ({ repository = fakeRepository(), conversations = fakeConversations(), users = {}, env = ENV, fetchImpl, now = () => new Date('2026-10-20T20:00:00Z'), random, options = {} } = {}) => {
   const sent = [];
   const fetchFn = fetchImpl || (async (url, options) => { sent.push({ url, body: JSON.parse(options.body), auth: options.headers.Authorization }); return { ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.out' }] }) }; });
   const db = { user: { findUnique: async ({ where }) => users[where.id] || null } };
   const work = [];
-  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env, fetchImpl: fetchFn, now, random, logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => work.push(fn), signSession: (row) => `sesion-corta-de-${row.id}-v${row.sessionVersion}`, batchWindowMs: 0 });
+  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env, fetchImpl: fetchFn, now, random, logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => work.push(fn), signSession: (row) => `sesion-corta-de-${row.id}-v${row.sessionVersion}`, batchWindowMs: 0, ...options });
   const drain = async () => { while (work.length) await work.shift()(); };
   return { service, sent, repository, conversations, drain };
 };
@@ -164,6 +164,27 @@ test('un vínculo vivo manda el mensaje al motor de Bria con la identidad de la 
   // Un aviso repetido de Meta no se responde dos veces.
   assert.deepEqual(await service.processMessage({ messageId: 'm2', from: '573001234567', type: 'text', text: 'Crear pendiente' }), { skipped: 'duplicate' });
   assert.equal(conversations.calls.length, 2);
+});
+
+test('si Bria tarda, avisa una vez que está revisando, vuelve el «escribiendo…» y la respuesta llega después; si responde pronto, no hay aviso', async () => {
+  const timers = [], cleared = [];
+  const options = { slowNoticeMs: 7000, setTimer: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimer: (id) => cleared.push(id) };
+  const slow = fakeConversations({ answer: 'Listo, ya lo revisé.' });
+  const send = slow.send.bind(slow);
+  // Mientras el motor piensa, se cumple el plazo.
+  slow.send = async (args) => { await timers.at(-1).fn(); return send(args); };
+  const repository = fakeRepository();
+  repository.links.set('u-camila', { userId: 'u-camila', waId: '573001234567', profileName: 'Camila', conversationId: null, linkedAt: new Date(), lastMessageAt: null });
+  const { service, sent } = build({ repository, conversations: slow, users: { 'u-camila': camila }, options });
+  assert.equal((await service.processMessage({ messageId: 'm1', from: '573001234567', type: 'text', text: '¿Cómo va Aristea?' })).outcome, 'answered');
+  assert.equal(timers[0].ms, 7000);
+  assert.deepEqual(sent.map((row) => row.body.typing_indicator ? 'escribiendo' : row.body.text?.body), ['escribiendo', REPLIES.working, 'escribiendo', 'Listo, ya lo revisé.']);
+  assert.deepEqual(cleared, [1]);
+
+  const quick = fakeConversations({ answer: 'Hola, Camila.' });
+  const fast = build({ repository, conversations: quick, users: { 'u-camila': camila }, options });
+  await fast.service.processMessage({ messageId: 'm2', from: '573001234567', type: 'text', text: 'Hola' });
+  assert.deepEqual(fast.sent.map((row) => row.body.typing_indicator ? 'escribiendo' : row.body.text?.body), ['escribiendo', 'Hola, Camila.'], 'sin aviso cuando responde antes del plazo');
 });
 
 test('sin sesión corta Bria sigue respondiendo y sigue sabiendo que habla por WhatsApp', async () => {

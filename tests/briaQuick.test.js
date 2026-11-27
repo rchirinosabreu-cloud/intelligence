@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { quickInstructions, quickMessages, quickTurn, QUICK_HANDOFF, QUICK_TOOL } from '../src/lib/briaQuick.js';
+import { quickInstructions, quickMessages, quickTurn, quickChannels, QUICK_HANDOFF, QUICK_TOOL } from '../src/lib/briaQuick.js';
 import { runAssistant } from '../src/lib/briaAssistant.js';
 import { createQuickBrain, QUICK_MODEL } from '../src/services/briaQuickBrain.js';
 import { createGovernedFetch } from '../src/services/aiEgress.js';
@@ -41,6 +41,9 @@ test('sin la clave de la API de Claude, o con BRIA_QUICK=off, la vía rápida no
   assert.equal(createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k', BRIA_QUICK: 'off' } }), null);
   assert.equal(createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k' } }).model, 'claude-haiku-5-5');
   assert.equal(createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k', BRIA_QUICK_MODEL: 'otro' } }).model, 'otro');
+  assert.deepEqual(createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k' } }).channels, ['voz', 'whatsapp', 'plataforma']);
+  assert.deepEqual(createQuickBrain({ env: { ANTHROPIC_API_KEY: 'k', BRIA_QUICK_CHANNELS: ' Voz , nada' } }).channels, ['voz']);
+  assert.deepEqual(quickChannels('nada'), ['voz', 'whatsapp', 'plataforma'], 'sin ningún canal válido quedan los tres');
 });
 
 test('responde por la salida gobernada: destino inventariado, sin pensar, una sola herramienta y un renglón de uso con sus tokens', async () => {
@@ -96,21 +99,25 @@ test('los mensajes empiezan por la persona, alternan y llevan lo leído antes de
   assert.deepEqual(quickMessages({ history: [{ role: 'user', text: 'Hola' }], question: 'Sigo' }), [{ role: 'user', content: 'Hola\n\nSigo' }]);
   const system = quickInstructions({ person: { name: 'Rodny', jobTitle: 'Director' }, today: '2026-11-21' });
   assert.match(system, /hablada/); assert.match(system, new RegExp(QUICK_HANDOFF)); assert.match(system, /Hablas con Rodny, Director\.$/);
+  const written = quickInstructions({ person: { name: 'Rodny' }, today: '2026-11-27', channel: 'whatsapp' });
+  assert.match(written, /WhatsApp/); assert.doesNotMatch(written, /hablada/);
+  assert.match(quickInstructions({ person: { name: 'Rodny' }, today: '2026-11-27', channel: 'plataforma' }), /por escrito/);
   assert.deepEqual(QUICK_TOOL.input_schema.properties, {});
 });
 
-test('va por la vía rápida un turno hablado sin borrador en curso, aunque la conversación tenga historia', () => {
+test('va por la vía rápida un turno sin borrador en curso en los canales encendidos, aunque la conversación tenga historia', () => {
   const quick = { answer: async () => ({}) };
   assert.equal(quickTurn({ channel: 'voz', context: { quick } }), true);
   assert.equal(quickTurn({ channel: 'voz', context: {} }), false);
-  assert.equal(quickTurn({ channel: 'plataforma', context: { quick } }), false);
+  for (const channel of ['plataforma', 'whatsapp']) assert.equal(quickTurn({ channel, context: { quick } }), true, channel);
+  assert.equal(quickTurn({ channel: 'whatsapp', context: { quick: { ...quick, channels: ['voz'] } } }), false, 'BRIA_QUICK_CHANNELS=voz la deja solo en voz');
   // En una conversación guardada siempre hay `selectionTurn`, y suele haber un seguimiento y archivos viejos.
   assert.equal(quickTurn({ channel: 'voz', context: { quick, selectionTurn: 'c1:4', investigation: { id: 'i1' }, pendingAction: null } }), true);
   for (const busy of ['pendingAction', 'reviewRequested']) assert.equal(quickTurn({ channel: 'voz', context: { quick, [busy]: { id: 1 } } }), false, busy);
 });
 
-const turn = ({ quick, generate, events = [], lines = [], question = '¿Qué tengo hoy?', history = [], tools = [] }) => runAssistant({
-  question, history, person: { name: 'Rodny' }, user: { id: 'u1' }, today: '2026-11-21', channel: 'voz', tools,
+const turn = ({ quick, generate, events = [], lines = [], question = '¿Qué tengo hoy?', history = [], tools = [], channel = 'voz' }) => runAssistant({
+  question, history, person: { name: 'Rodny' }, user: { id: 'u1' }, today: '2026-11-21', channel, tools,
   ai: { generate: generate || (async () => { throw new Error('el modelo grande no debía correr'); }) },
   onEvent: event => events.push(event), logger: { info: line => lines.push(line), error: () => {}, warn: () => {} },
   context: { quick, dayBrief: async () => ({ data: { tareas: [{ id: 't1', titulo: 'Propuesta de Aristea', valor: 4500000 }] }, sources: [{ kind: 'tarea', id: 't1', label: 'Propuesta de Aristea' }] }) }
@@ -128,6 +135,16 @@ test('lo que se contesta con lo ya leído sale de la vía rápida, sin tocar el 
   assert.deepEqual(asked[0].messages.map(message => message.role), ['user', 'assistant', 'user']);
   assert.match(asked[0].messages.at(-1).content, /Propuesta de Aristea[\s\S]*¿Qué tengo hoy\?$/);
   assert.match(lines.find(line => /Tiempos/.test(line)), /canal=voz total=\d+ms previo=\d+ms rapida=\d+ms $/);
+});
+
+test('por escrito la vía rápida responde con el estilo del canal y con espacio para una lista', async () => {
+  for (const [channel, style, tokens] of [['whatsapp', /WhatsApp/, 1200], ['plataforma', /por escrito/, 1600], ['voz', /hablada/, 600]]) {
+    const asked = [], lines = [];
+    const result = await turn({ channel, lines, quick: { answer: async (request) => { asked.push(request); return { text: 'Tienes la propuesta de Aristea.', handoff: false }; } } });
+    assert.equal(result.answer, 'Tienes la propuesta de Aristea.', channel);
+    assert.match(asked[0].system, style, channel); assert.equal(asked[0].maxTokens, tokens, channel);
+    assert.match(lines.find(line => /Tiempos/.test(line)), new RegExp(`canal=${channel} .* rapida=\\d+ms`), channel);
+  }
 });
 
 test('si pide consultar, falla, se queda vacía, inventa una cifra, pide confirmar o promete responder después, sigue el camino completo y la persona oye que Bria va a mirar', async () => {
@@ -151,7 +168,7 @@ test('si pide consultar, falla, se queda vacía, inventa una cifra, pide confirm
   }
 });
 
-test('el servicio solo ofrece la vía rápida en voz y cuando existe', async () => {
+test('el servicio ofrece la vía rápida en voz, WhatsApp y chat escrito cuando existe, y solo en los canales encendidos', async () => {
   const asked = [];
   const quick = { answer: async () => { asked.push(1); return { text: 'Hola, Rodny.', handoff: false }; } };
   const db = { user: { findUnique: async () => ({ id: 'u1', name: 'Rodny', role: 'ADMIN', isActive: true, modulePermissions: { bria: true }, sessionVersion: 0, teamMember: { id: 'm1', name: 'Rodny', role: 'Director', isActive: true } }) } };
@@ -162,7 +179,11 @@ test('el servicio solo ofrece la vía rápida en voz y cuando existe', async () 
   const voice = await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola', session: { channel: 'voz' } });
   assert.equal(voice.answer, 'Hola, Rodny.'); assert.equal(generated.length, 0);
   const written = await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola' });
-  assert.equal(written.answer, 'Hola desde el modelo grande.'); assert.equal(asked.length, 1, 'el chat escrito no pasa por la vía rápida');
+  assert.equal(written.answer, 'Hola, Rodny.', 'el chat escrito también pasa por la vía rápida');
+  const phone = await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola', session: { channel: 'whatsapp' } });
+  assert.equal(phone.answer, 'Hola, Rodny.'); assert.equal(generated.length, 0); assert.equal(asked.length, 3);
+  const onlyVoice = await createBriaAssistantService({ ...base, quick: () => ({ ...quick, channels: ['voz'] }) }).ask({ user: user(), question: 'Hola' });
+  assert.equal(onlyVoice.answer, 'Hola desde el modelo grande.', 'con BRIA_QUICK_CHANNELS=voz el chat escrito va por el camino completo');
   // Como llega de una conversación guardada: con su turno, un archivo viejo del chat y la última operación.
   const saved = { session: { channel: 'voz' }, selectionTurn: 'c1:7', lastOperation: { id: 'a1', type: 'TASK_UPDATE', status: 'DONE', title: 'Cambio', result: 'Listo.' }, attachments: [{ id: 'f1', name: 'viejo.pdf', current: false, status: 'READ', text: 'x' }] };
   assert.equal((await createBriaAssistantService({ ...base, quick: () => quick }).ask({ user: user(), question: 'Hola', ...saved })).answer, 'Hola, Rodny.');

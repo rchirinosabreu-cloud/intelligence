@@ -1,11 +1,12 @@
 // El modelo de la vía rápida de la voz (ver `src/lib/briaQuick.js`): la API de Claude, por el SDK oficial y por la
 // misma salida gobernada que el resto de la IA (inventario de destinos, registro de uso sin contenido). Apagada
-// mientras no exista ANTHROPIC_API_KEY en el servicio; `BRIA_QUICK=off` la apaga aunque la clave exista.
+// mientras no exista ANTHROPIC_API_KEY en el servicio; `BRIA_QUICK=off` la apaga aunque la clave exista y
+// `BRIA_QUICK_CHANNELS` (por ejemplo «voz») la deja solo en esos canales.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { governedFetch } from './aiEgress.js';
 import { ASSISTANT_USE_CASE } from '../lib/briaAssistant.js';
-import { QUICK_HANDOFF, QUICK_TOOL } from '../lib/briaQuick.js';
+import { QUICK_HANDOFF, QUICK_TOOL, quickChannels } from '../lib/briaQuick.js';
 
 export const QUICK_MODEL = 'claude-haiku-5-5';
 const QUICK_TIMEOUT_MS = 8000;
@@ -17,8 +18,9 @@ export const createQuickBrain = ({ env = process.env, fetchImpl = governedFetch,
   const model = env.BRIA_QUICK_MODEL || QUICK_MODEL;
   return {
     model,
+    channels: quickChannels(env.BRIA_QUICK_CHANNELS),
     /** Devuelve el texto, o `handoff` con el motivo cuando el turno debe seguir por el camino completo. */
-    async answer({ system, messages, tools = [], onTextDelta }) {
+    async answer({ system, messages, tools = [], onTextDelta, maxTokens = QUICK_MAX_TOKENS }) {
       let response = null;
       // Un cliente por turno: así el renglón de uso de esta respuesta se cierra con sus propios tokens.
       const client = new Client({
@@ -27,7 +29,7 @@ export const createQuickBrain = ({ env = process.env, fetchImpl = governedFetch,
       });
       try {
         const stream = client.messages.stream({
-          model, max_tokens: QUICK_MAX_TOKENS,
+          model, max_tokens: maxTokens,
           // Sin pensar y con el esfuerzo mínimo: aquí lo que cuenta es el primer sonido.
           thinking: { type: 'disabled' }, output_config: { effort: 'low' },
           system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],

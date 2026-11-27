@@ -29,7 +29,7 @@ import { liveDayMessage } from './briaLiveDay.js';
 import { decisionMemoryMessage } from './briaDecisionMemory.js';
 import { pmSessionMessage } from './briaPmSession.js';
 import { operationModelMessage } from './briaOperationModel.js';
-import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS } from './briaQuick.js';
+import { quickInstructions, quickMessages, quickTurn, quickDefers, QUICK_READS, QUICK_MAX_READ_ROUNDS, QUICK_MAX_TOKENS } from './briaQuick.js';
 export { humanDate } from './briaDate.js';
 
 export const MAX_TOOL_ROUNDS = 6;
@@ -438,7 +438,7 @@ export const runAssistant = async ({
     }
   };
 
-  // La vía rápida de la voz (21 de noviembre de 2026): un modelo pequeño responde primero con lo ya leído y con las
+  // La vía rápida (voz desde el 21 de noviembre de 2026; WhatsApp y chat escrito desde el 27): un modelo pequeño responde primero con lo ya leído y con las
   // consultas de solo lectura de la persona, por el mismo ejecutor y con sus mismos permisos. Si hace falta cambiar algo
   // o mirar más, si falla, se corta, promete responder después, da una cifra sin fuente o pide confirmar, lo que
   // alcanzó a escribirse se borra y el turno sigue por el camino completo, que no cambia. Nunca tumba la respuesta.
@@ -451,10 +451,10 @@ export const runAssistant = async ({
       for (let step = 0; !reason; step++) {
         if (step > QUICK_MAX_READ_ROUNDS) { reason = 'rondas'; break; }
         // La primera frase se retiene: la voz no puede decir nada antes de una frase entera, y así un «déjame
-        // consultarlo» nunca llega a oírse.
+        // consultarlo» nunca llega a oírse ni a leerse.
         let held = '', released = false, silenced = false;
         const callStartedAt = Date.now();
-        const reply = await context.quick.answer({ system: quickInstructions({ person, today, tools: reads }), messages, tools: reads,
+        const reply = await context.quick.answer({ system: quickInstructions({ person, today, tools: reads, channel }), messages, tools: reads, maxTokens: QUICK_MAX_TOKENS[channel],
           ...(onEvent ? { onTextDelta: (text) => {
             if (silenced) return;
             if (released) return emit({ type: 'delta', text });
@@ -493,7 +493,7 @@ export const runAssistant = async ({
     }
     timings.quick = `${reason}:${Date.now() - startedAt}ms${quickCalls.length ? ` consultas=${quickCalls.join(',')}` : ''}`;
     if (streamed) emit({ type: 'reset' });
-    // La persona oye «déjame mirar» mientras el camino completo consulta.
+    // La persona oye o lee «déjame mirar» mientras el camino completo consulta.
     emit({ type: 'status', label: toolProgressLabel() });
   }
 

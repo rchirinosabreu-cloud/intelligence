@@ -20,14 +20,25 @@ export const QUICK_TOOL = {
 // guarde o cambie algo entra aquí: eso sigue siendo del camino completo.
 export const QUICK_READS = new Set(['buscar_cliente', 'mis_tareas', 'tareas_de_cliente', 'buscar_pendientes', 'parrilla_de_cliente', 'operacion_de_cliente', 'memoria_de_reuniones', 'ritmo_del_equipo', 'carga_del_equipo', 'publicaciones_programadas', 'memoria_de_la_agencia']);
 export const QUICK_MAX_READ_ROUNDS = 2;
+// También por escrito (27 de noviembre de 2026, Rodny aprobó el informe «Por qué Bria tarda en responder»): en
+// WhatsApp los turnos tardaban de 8 a 18 segundos y en el chat de la plataforma hasta 9, todos por el modelo grande.
+// La misma vía rápida responde primero en los tres canales. `BRIA_QUICK_CHANNELS` la deja solo en los que se nombren.
+export const QUICK_CHANNELS = Object.freeze(['voz', 'whatsapp', 'plataforma']);
+// Por escrito cabe una lista de pendientes; en voz, tres frases.
+export const QUICK_MAX_TOKENS = Object.freeze({ voz: 600, whatsapp: 1200, plataforma: 1600 });
+const QUICK_STYLE = {
+  voz: 'Esta conversación es hablada: la persona te oye, no te lee. Responde en español de Latinoamérica, de tú, como en una charla: una a tres frases cortas, empezando por lo que importa; sin listas, tablas, encabezados, enlaces ni símbolos. Las fechas con su día de la semana y su mes, en hora de Bogotá. Si hay muchos resultados, di cuántos son y nombra los dos o tres que más importan.',
+  whatsapp: 'Esta conversación es por WhatsApp y se lee en el celular. Responde en español de Latinoamérica, de tú: ve a lo esencial en pocas líneas, párrafos de una o dos frases, sin tablas ni encabezados; una lista corta solo si son varios elementos. Las fechas con su día de la semana y su mes, en hora de Bogotá. Si hay mucho que contar, da lo esencial y ofrece ampliar.',
+  plataforma: 'Esta conversación es por escrito en el chat de la plataforma. Responde en español de Latinoamérica, de tú, directo y claro, empezando por lo que importa; puedes usar listas cortas y negritas cuando ayuden, sin tablas largas. Las fechas con su día de la semana y su mes, en hora de Bogotá.'
+};
 
 const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 /** Una respuesta que promete mirar o dice que no puede ver: eso no se dice, se pasa el turno. */
 export const quickDefers = (text) => /\b(?:no lo tengo|no la tengo|no los tengo|no las tengo|no tengo (?:aqui|ese|esa|esos|esas|acceso|forma|como|a la mano)|no puedo (?:ver|consultar|revisar|acceder|mirar|saber)|no me es posible|necesito (?:consultar|revisar|mirar|buscar)|tendria que (?:consultar|revisar|mirar|buscar)|tengo que (?:consultar|revisar|mirar|buscar)|voy a (?:consultar|revisar|mirar|buscar)|dejame (?:consultar|revisar|mirar|buscar|ver)|permiteme (?:consultar|revisar|mirar|buscar)|te (?:respondo|confirmo|aviso|cuento) (?:luego|despues|en un momento|enseguida|ahora)|a fondo|lo consulto|lo reviso|consultare)/.test(fold(text));
 
-export const quickInstructions = ({ person, today, tools = [] }) => [
+export const quickInstructions = ({ person, today, tools = [], channel = 'voz' }) => [
   'Eres Bria, la asistente de la plataforma interna de la agencia. Hablas con una persona del equipo como una colega que conoce la agencia y que tiene la plataforma abierta delante.',
-  'Esta conversación es hablada: la persona te oye, no te lee. Responde en español de Latinoamérica, de tú, como en una charla: una a tres frases cortas, empezando por lo que importa; sin listas, tablas, encabezados, enlaces ni símbolos. Las fechas con su día de la semana y su mes, en hora de Bogotá. Si hay muchos resultados, di cuántos son y nombra los dos o tres que más importan.',
+  QUICK_STYLE[channel] || QUICK_STYLE.voz,
   tools.length
     ? `Sabes lo que está en esta conversación, lo que la plataforma te pone delante del mensaje (pendientes de la persona, memoria de la agencia, cuaderno del día) y lo que consultes ahora mismo con tus herramientas de lectura: ${tools.map(tool => tool.name).join(', ')}. Si la respuesta necesita un dato de la plataforma, consúltalo de inmediato, sin escribir nada antes y sin pedir permiso, y responde con lo que devuelva. Para una persona o un cliente, búscalo por el nombre que te dijeron.`
     : 'Sabes lo que está en esta conversación y lo que la plataforma te pone delante del mensaje (pendientes de la persona, memoria de la agencia, cuaderno del día).',
@@ -54,8 +65,15 @@ export const quickMessages = ({ history = [], notes = [], question }) => {
 };
 
 /**
- * Solo un turno hablado sin borrador en curso ni revisión pendiente. Quién ofrece `quick` (el servicio) ya descartó
- * los turnos con un archivo recién adjuntado. La primera versión también miraba `selectionTurn` y los adjuntos de
- * contexto, que en una conversación guardada existen siempre: en producción la vía rápida no corrió ni una vez.
+ * Un turno sin borrador en curso ni revisión pendiente, en un canal donde la vía rápida está encendida. Quién ofrece
+ * `quick` (el servicio) ya descartó los turnos con un archivo recién adjuntado. La primera versión también miraba
+ * `selectionTurn` y los adjuntos de contexto, que en una conversación guardada existen siempre: en producción la vía
+ * rápida no corrió ni una vez.
  */
-export const quickTurn = ({ channel, context = {} }) => Boolean(context.quick) && channel === 'voz' && !context.pendingAction && !context.reviewRequested;
+export const quickTurn = ({ channel, context = {} }) => Boolean(context.quick) && (context.quick.channels || QUICK_CHANNELS).includes(channel) && !context.pendingAction && !context.reviewRequested;
+
+/** Los canales de `BRIA_QUICK_CHANNELS` («voz,whatsapp»); sin la variable o sin ninguno válido, los tres. */
+export const quickChannels = (value) => {
+  const chosen = String(value || '').split(',').map(item => item.trim().toLowerCase()).filter(item => QUICK_CHANNELS.includes(item));
+  return chosen.length ? [...new Set(chosen)] : [...QUICK_CHANNELS];
+};
