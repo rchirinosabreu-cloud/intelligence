@@ -546,8 +546,8 @@ const DashboardAnnouncements = ({
                               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
                                 <FileText className="h-[18px] w-[18px]" />
                               </span>
-                              <span className="line-clamp-2 w-full break-words [overflow-wrap:anywhere] text-[11px] font-semibold leading-tight text-zinc-800 dark:text-zinc-100">{attachment.name}</span>
-                              <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{announcementFileLabel(attachment)}</span>
+                              <span className="line-clamp-2 w-full break-words [overflow-wrap:anywhere] text-xs font-semibold leading-tight text-zinc-800 dark:text-zinc-100">{attachment.name}</span>
+                              <span className="text-xs text-zinc-500 dark:text-zinc-400">{announcementFileLabel(attachment)}</span>
                             </div>
                           )}
                           {attachment.status === 'uploading' && (
@@ -556,7 +556,7 @@ const DashboardAnnouncements = ({
                             </span>
                           )}
                           {attachment.status === 'error' && (
-                            <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-destructive/90 px-1.5 py-1 text-[11px] font-semibold leading-tight text-white" title={attachment.error}>
+                            <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-destructive/90 px-1.5 py-1 text-xs font-semibold leading-tight text-white" title={attachment.error}>
                               <AlertCircle className="w-3 h-3 shrink-0" /> No se subió
                             </span>
                           )}
