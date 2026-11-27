@@ -10,7 +10,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { CLIENT_DUE_DATE_KIND } from '../lib/taskChanges.js';
-import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace, withPublicationEffort } from '../lib/leagueDay.js';
+import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace, withPublicationEffort, withReceivableEffort, RECEIVABLE_EFFORT_UNTIL } from '../lib/leagueDay.js';
 import { CAMERA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
@@ -58,6 +58,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
   const snaps = snapshots || createDailyReadingRepository({ pool: getSidecarPool() });
   // Una vez por arranque: los días guardados antes del 26 de noviembre suman sus tareas de «Publicar» (`countPublicationEffort`).
   let publicationEffortCounted = !repo.daysWithoutPublicationEffort;
+  // Igual con las cuentas de cobro de los días guardados hasta el 26 de noviembre (`countReceivableEffort`).
+  let receivableEffortCounted = !repo.daysWithoutReceivableEffort;
   // Las fuentes de cada área (Rodny, 12 de noviembre de 2026). Parrillas y Pautas se leen con sus reglas de siempre solo
   // con la base real; una base inyectada (las pruebas) nunca cae por defecto a Operación, que lee la base de `.env`.
   const area = areaSources || (db === prisma
@@ -219,10 +221,41 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       return added;
     },
 
+    /**
+     * Rodny, 27 de noviembre de 2026: «haz el reajuste para que Elisa tenga sus puntos». Suma al esfuerzo de los días ya
+     * guardados las cuentas de cobro que cada persona emitió ese día; solo eso del día.
+     */
+    async countReceivableEffort() {
+      const rows = await repo.daysWithoutReceivableEffort(RECEIVABLE_EFFORT_UNTIL);
+      if (!rows.length) return 0;
+      const days = rows.map((row) => row.day_key).sort();
+      const issued = db.accountsReceivable?.findMany ? await db.accountsReceivable.findMany({
+        where: { issuedById: { not: null }, issuedAt: { gte: dayWindow(days[0]).start, lt: dayWindow(days.at(-1)).end } },
+        select: { issuedById: true, issuedAt: true } }) : [];
+      const people = issued.length ? await db.teamMember.findMany({ where: { userId: { in: [...new Set(issued.map((row) => row.issuedById))] } }, select: { id: true, userId: true } }) : [];
+      const memberOf = new Map(people.map((member) => [member.userId, member.id]));
+      const count = new Map();
+      for (const row of issued) {
+        const key = `${bogotaDate(row.issuedAt)}:${memberOf.get(row.issuedById)}`;
+        count.set(key, (count.get(key) || 0) + 1);
+      }
+      const updated = rows.map((row) => ({ row, n: count.get(`${row.day_key}:${row.member_id}`) || 0 }))
+        .map(({ row, n }) => ({ row, n, next: withReceivableEffort(row, n) })).filter((item) => item.next);
+      if (!updated.length) return 0;
+      await repo.saveDays(updated.map(({ row, next }) => ({ day_key: row.day_key, member_id: row.member_id, habits: row.habits, extras: next.extras, evidence: next.evidence })));
+      const added = updated.reduce((sum, { n }) => sum + n, 0);
+      logger.info(`[Liga] Cuentas de cobro sumadas al esfuerzo de ${updated.length} días guardados: ${added} en total.`);
+      return added;
+    },
+
     async runAutomatic() {
       if (!publicationEffortCounted) {
         try { await this.countPublicationEffort(); publicationEffortCounted = true; }
         catch (error) { logger.error('[Liga] No se pudieron sumar las tareas de publicar:', error?.message || error); }
+      }
+      if (!receivableEffortCounted) {
+        try { await this.countReceivableEffort(); receivableEffortCounted = true; }
+        catch (error) { logger.error('[Liga] No se pudieron sumar las cuentas de cobro:', error?.message || error); }
       }
       const at = now();
       const today = bogotaDate(at), monthKey = monthOf(today);

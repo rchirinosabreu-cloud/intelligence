@@ -25,6 +25,12 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
     return rows;
   },
 
+  /** Los días guardados hasta `until` que aún no dicen si sumaron sus cuentas de cobro (`withReceivableEffort`). */
+  async daysWithoutReceivableEffort(until) {
+    const { rows } = await pool.query(`SELECT day_key, member_id, habits, extras, evidence FROM bria_memory.league_run_days WHERE run_id = $1 AND day_key <= $2 AND NOT (COALESCE(extras, '{}'::jsonb) ? 'COBRO') ORDER BY day_key`, [LEAGUE_RUN_ID, until]);
+    return rows;
+  },
+
   /** Los días de un mes que ya tienen cálculo. */
   async computedDays(monthKey) {
     const { rows } = await pool.query('SELECT DISTINCT day_key FROM bria_memory.league_run_days WHERE day_key LIKE $1 AND run_id = $2 ORDER BY day_key', [`${monthKey}-%`, LEAGUE_RUN_ID]);
