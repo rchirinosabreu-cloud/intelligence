@@ -48,7 +48,7 @@ test('la salida a ElevenLabs pasa por la puerta de egreso: destino inventariado,
   const response = await client.speak({ text: 'Hola' });
   assert.equal(await response.text(), 'audio');
   assert.deepEqual([decision.provider, decision.model, decision.useCase], ['elevenlabs', 'eleven_flash_v2_5', 'bria.voice']);
-  assert.equal(sent.url, 'https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream?output_format=mp3_44100_128');
+  assert.equal(sent.url, 'https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream?output_format=mp3_44100_64');
   assert.equal(sent.options.headers['xi-api-key'], 'clave-de-prueba'); assert.equal(sent.options.governanceContext, undefined);
   assert.deepEqual(JSON.parse(sent.options.body), { text: 'Hola', model_id: 'eleven_flash_v2_5', language_code: 'es' });
   const blocked = createElevenLabsClient({ config: () => voiceConfig(env), usageLog: quietLog, governance: { assertEgress: async () => { throw Object.assign(new Error('no'), { code: 'AI_SCOPE_REQUIRED', status: 403 }); } }, fetchImpl: async () => { throw new Error('no debe salir'); } });
@@ -160,7 +160,7 @@ test('hablar mientras escribe: los trozos salen en fin de frase, el primero pron
   const rest = nextSpeech(text, first.to, { final: true });
   assert.equal(first.text + rest.text, text, 'nada se pierde ni se repite'); assert.equal(rest.to, text.length);
   assert.equal(nextSpeech(text, text.length, { final: true }), null);
-  assert.ok(VOICE_SILENCE_MS <= 1000, 'el turno se cierra con menos de un segundo de silencio');
+  assert.ok(VOICE_SILENCE_MS <= 650, 'el turno se cierra con menos de dos tercios de segundo de silencio');
 });
 
 test('el canal de voz llega a las instrucciones como último renglón y pide respuestas habladas y cortas', async () => {

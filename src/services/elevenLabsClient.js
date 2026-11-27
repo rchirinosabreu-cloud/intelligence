@@ -1,7 +1,7 @@
 // La salida a ElevenLabs para la voz de Bria (20 de noviembre de 2026). Pasa por la misma puerta de egreso que el resto
 // de la IA (`aiEgress`): queda en el registro de uso, sin el contenido, y respeta el gobierno de IA. Solo texto a voz.
 import { createGovernedFetch } from './aiEgress.js';
-import { VOICE_FALLBACK_MODEL, isDialogueModel, voiceConfig, withoutAudioTags } from '../lib/briaVoice.js';
+import { VOICE_FALLBACK_MODEL, VOICE_OUTPUT_FORMAT, isDialogueModel, voiceConfig, withoutAudioTags } from '../lib/briaVoice.js';
 
 export class VoiceError extends Error {
   constructor(message, { status = 502, code = 'VOICE_FAILED' } = {}) { super(message); this.name = 'VoiceError'; this.status = status; this.code = code; }
@@ -13,7 +13,7 @@ export const createElevenLabsClient = ({ config = voiceConfig, fetchImpl, govern
   let dialogueDownUntil = 0; // si el modelo de diálogo falló, se usa el de respaldo unos minutos sin volver a intentar cada frase
   const request = ({ apiKey, voiceId, model, text, signal }) => {
     const dialogue = isDialogueModel(model);
-    return send(`https://api.elevenlabs.io/v1/${dialogue ? 'text-to-dialogue/stream' : `text-to-speech/${voiceId}/stream`}?output_format=mp3_44100_128`, {
+    return send(`https://api.elevenlabs.io/v1/${dialogue ? 'text-to-dialogue/stream' : `text-to-speech/${voiceId}/stream`}?output_format=${VOICE_OUTPUT_FORMAT}`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
       body: JSON.stringify(dialogue ? { inputs: [{ text: withoutAudioTags(text), voice_id: voiceId }], model_id: model, language_code: 'es' } : { text, model_id: model, language_code: 'es' }),
