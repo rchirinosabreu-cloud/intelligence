@@ -166,8 +166,9 @@ export const createQuotation = async (req, res) => {
 
         validateQuotationEnums({ emisorType: emisor_type, currency, status });
         const isDraft = status === 'BORRADOR';
-        if (!isDraft && (!client_name || !client_phone || !Array.isArray(items) || items.length === 0)) {
-            return res.status(400).json({ error: "Faltan campos obligatorios" });
+        // Para emitir basta saber a quién va y qué se cotiza; el celular es opcional (Rodny, 27 de noviembre de 2026: «no necesito tantos frenos»).
+        if (!isDraft && ((!String(client_name || '').trim() && !String(client_company || '').trim()) || !Array.isArray(items) || items.length === 0)) {
+            return res.status(400).json({ error: !Array.isArray(items) || items.length === 0 ? 'Agrega al menos un servicio para emitir.' : 'Escribe el nombre del cliente o de la empresa para emitir.' });
         }
 
         const rawItems = Array.isArray(items) ? items : [];
@@ -306,8 +307,10 @@ export const updateQuotation = async (req, res) => {
         validateQuotationEnums({ emisorType: targetEmisor, currency: targetCurrency, status: targetStatus });
 
         const isDraft = targetStatus === 'BORRADOR';
-        if (!isDraft && (!client_name || !client_phone || rawItems.length === 0)) {
-            return res.status(400).json({ error: "Faltan campos obligatorios para emitir" });
+        const targetName = client_name ?? existing.client_name;
+        const targetCompany = client_company ?? existing.client_company;
+        if (!isDraft && ((!String(targetName || '').trim() && !String(targetCompany || '').trim()) || rawItems.length === 0)) {
+            return res.status(400).json({ error: rawItems.length === 0 ? 'Agrega al menos un servicio para emitir.' : 'Escribe el nombre del cliente o de la empresa para emitir.' });
         }
 
         const catalogServices = await findCatalogServicesForItems(rawItems);

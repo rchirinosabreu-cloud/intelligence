@@ -429,10 +429,9 @@ const QuotationForm = () => {
             }, 50);
             return;
         }
-        if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
-            toast.error("Por favor completa los campos obligatorios para emitir");
-            return;
-        }
+        // Para emitir basta a quién va y qué se cotiza; el celular y el correo son opcionales (Rodny, 27 de noviembre de 2026).
+        if (targetStatus === 'ACTIVA' && selectedItems.length === 0) { toast.error('Agrega al menos un servicio para emitir.'); return; }
+        if (targetStatus === 'ACTIVA' && !String(clientName || '').trim() && !String(clientCompany || '').trim()) { toast.error('Escribe el nombre del cliente o de la empresa para emitir.'); return; }
         if (currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
             toast.error('Registra una tasa USD/COP válida antes de guardar');
             return;

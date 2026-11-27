@@ -77,7 +77,9 @@ test('the catalog modal input keeps the rich version and derives the plain text 
   assert.deepEqual(resolveCatalogDescriptionInput({ descriptionHtml: '<p></p>' }), { description: '', description_html: null });
   assert.deepEqual(resolveCatalogDescriptionInput({ description: 'Incluye: a, b y c.' }), { description: 'Incluye:\n- A\n- B\n- C', description_html: null });
   assert.deepEqual(resolveCatalogDescriptionInput({}), {});
-  assert.throws(() => resolveCatalogDescriptionInput({ descriptionHtml: 'x'.repeat(20001) }), error => error.statusCode === 400);
+  // Desde el 27 de noviembre de 2026 una descripción larga pasa; solo un texto absurdo se rechaza.
+  assert.ok(resolveCatalogDescriptionInput({ descriptionHtml: `<p>${'x'.repeat(20001)}</p>` }).description.length > 20000);
+  assert.throws(() => resolveCatalogDescriptionInput({ descriptionHtml: 'x'.repeat(500001) }), error => error.statusCode === 400);
 });
 test('a quotation item starts from the rich version when the service has one, otherwise from the rendered text', () => {
   assert.equal(catalogServiceHtml({ description: 'Incluye:\n- A', descriptionHtml: '<p><em>Propio</em></p>' }), '<p><em>Propio</em></p>');

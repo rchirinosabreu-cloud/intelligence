@@ -94,6 +94,13 @@ import { clearReceivableDraft, readReceivableDraft, receivableDraftFingerprint, 
 // «hice click afuera, y se me borró todo»). Se cierra con Cancelar, la X o Escape.
 const keepOpenOnOutsideClick = (event) => event.preventDefault();
 
+// El concepto de una cuenta de cobro crece con su texto, sin límite de caracteres (Rodny, 27 de noviembre de 2026).
+const growToFit = (element) => {
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = `${element.scrollHeight + 2}px`;
+};
+
 const draftSavedTime = (savedAt) => {
     const date = new Date(savedAt);
     if (Number.isNaN(date.getTime())) return '';
@@ -2146,10 +2153,11 @@ await invalidateFinancialQueries(queryClient);
                             <ul className="space-y-2">
                                 {issueForm.items.map((item, index) => (
                                     <li key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_auto]">
-                                        <input required maxLength={300} value={item.description} aria-label={`Descripción del concepto ${index + 1}`}
-                                            onChange={(event) => setIssueItem(index, { description: event.target.value })}
+                                        <textarea required rows={1} value={item.description} aria-label={`Descripción del concepto ${index + 1}`}
+                                            ref={growToFit}
+                                            onChange={(event) => { growToFit(event.target); setIssueItem(index, { description: event.target.value }); }}
                                             placeholder="Fee mensual"
-                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                            className="block max-h-72 min-h-[2.75rem] w-full resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm leading-5 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                         <MoneyInput required min="0.01" value={item.amount} aria-label={`Valor del concepto ${index + 1}`}
                                             onChange={(amount) => setIssueItem(index, { amount })}
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />

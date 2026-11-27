@@ -38,3 +38,15 @@ test('approved quotation rejects edits to all proposal blocks', async t => {
   const res = response(); await updateQuotation({ params: { id: 'demo' }, body }, res);
   assert.equal(res.code, 409);
 });
+
+test('emitir no exige celular: basta el cliente o la empresa y un servicio (Rodny, 27 de noviembre de 2026)', async t => {
+  t.mock.method(prisma.quotation, 'create', async ({ data }) => ({ ...data, consecutive: 2 }));
+  const sinCelular = { ...body, client_phone: '' }; delete sinCelular.proposal_details;
+  const res = response(); await createQuotation({ body: sinCelular }, res);
+  assert.equal(res.code, 201);
+  const soloEmpresa = { ...sinCelular, client_name: '', client_company: 'FoobeSpain' };
+  const company = response(); await createQuotation({ body: soloEmpresa }, company);
+  assert.equal(company.code, 201);
+  const nadie = response(); await createQuotation({ body: { ...soloEmpresa, client_company: '' } }, nadie);
+  assert.equal(nadie.code, 400); assert.match(nadie.data.error, /nombre del cliente o de la empresa/);
+});

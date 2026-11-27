@@ -29,7 +29,9 @@ test('safe formatting survives while scripts, styles, images and unsafe links ar
   const html = call('sanitizeProposalHtml', '<h2>Título</h2><p><strong>Claro</strong> <u>subrayado</u><a href="javascript:alert(1)">no</a><a href="https://brainstudio.co/">Caso</a><img src=x onerror=alert(1)><script>alert(1)</script></p>');
   assert.match(html, /<strong>Claro<\/strong>/); assert.match(html, /<u>subrayado<\/u>/);
   assert.match(html, /href="https:\/\/brainstudio.co\/"/); assert.doesNotMatch(html, /javascript:|script|<img|onerror/);
-  assert.throws(() => call('sanitizeProposalHtml', 'x'.repeat(20001)), /límite/);
+  // Sin frenos para escribir (Rodny, 27 de noviembre de 2026): 50.000 caracteres pasan; solo un texto absurdo se rechaza.
+  assert.equal(call('sanitizeProposalHtml', `<p>${'x'.repeat(50000)}</p>`).length, 50007);
+  assert.throws(() => call('sanitizeProposalHtml', 'x'.repeat(500001)), /límite/);
 });
 test('rich text blocks preserve bold, underline, links and bullet paragraphs for PDF', () => {
   const blocks = call('proposalRichTextBlocks', '<h2>Entregables</h2><ul><li><p><strong>CRM</strong> con <u>trazabilidad</u> y <a href="https://example.com/">demo</a></p></li></ul>');
@@ -91,4 +93,13 @@ test('malformed nested values produce a validation error, not an internal except
   for (const payload of [{ version: 1, phases: [null] }, { version: 1, paymentPlans: [null] }, { version: 1, paymentPlans: [{ mode: 'FIXED', installments: [null] }] }]) {
     assert.throws(() => call('normalizeProposalDetails', payload), error => error.statusCode === 400);
   }
+});
+
+test('un servicio admite nombre y descripción largos sin cortarlos (Rodny, 27 de noviembre de 2026)', () => {
+  const name = 'Desarrollo de identidad, estrategia y contenidos '.repeat(8);
+  const description = 'Entregable detallado del servicio. '.repeat(400);
+  const [item] = prepareQuotationItems([{ name, description, descriptionHtml: `<p>${description}</p>`, group: 'Fase de lanzamiento y acompañamiento '.repeat(8), quantity: 1, price: 100, billingType: 'ONE_TIME' }], [], []);
+  assert.equal(item.name, name.trim());
+  assert.ok(item.description.length > 13000);
+  assert.ok(item.group.length > 200);
 });

@@ -106,3 +106,23 @@ test('una cuenta que no cabe por poco se ajusta a una sola hoja en vez de mandar
     for (const expected of ['Periodo: Octubre de 2026', 'Cordialmente,', issuer.RECEIVABLE_ISSUER_EMAIL]) assert.ok(text.includes(expected), `falta ${expected}`);
     assertInsideMargins(pages);
 });
+
+test('un concepto más largo que una página sigue en la siguiente sin perder texto ni importes (sin límite de caracteres, 27 de noviembre de 2026)', async () => {
+    const long = Array.from({ length: 90 }, (_, index) => `Entregable ${index + 1}: diseño, producción y publicación de piezas para redes del periodo.`).join(' ');
+    const items = [{ description: 'Fee mensual', amount: 1000000 }, { description: long, amount: 2500000 }, { description: 'Pauta administrada', amount: 300000 }];
+    assert.ok(long.length > 6000);
+    const pages = await readPdf({ ...invoice, amount: 3800000, concept: 'Servicios del periodo de prueba.', items });
+    const text = normalize(pages.flatMap(page => page.items.map(item => item.str)).join(' '));
+    assert.ok(pages.length > 1);
+    // Sin la cabecera repetida ni los importes, el concepto se lee completo y en orden.
+    const body = normalize(pages.flatMap(page => page.items.map(item => item.str)).filter(str => !['Descripción', 'Valor'].includes(str.trim()) && !str.trim().startsWith('$')).join(' '));
+    assert.ok(body.includes(long), 'el concepto largo sale completo');
+    assertInsideMargins(pages);
+    const amounts = pages.flatMap(page => page.items).map(item => item.str.replace(/\s/g, ''));
+    for (const value of ['$1.000.000', '$2.500.000', '$300.000', '$3.800.000']) assert.equal(amounts.filter(row => row === value).length, 1, `${value} una sola vez`);
+    for (const page of pages) {
+        const pageText = normalize(page.items.map(item => item.str).join(' '));
+        if (/Entregable \d+:/.test(pageText)) assert.ok(pageText.includes('Descripción') && pageText.includes('Valor'), `cabecera en página ${page.number}`);
+    }
+    assert.ok(text.includes(issuer.RECEIVABLE_ISSUER_EMAIL), 'la firma sigue después de la tabla');
+});

@@ -4,7 +4,8 @@ export class ProposalValidationError extends Error {
   constructor(message) { super(message); this.name = 'ProposalValidationError'; this.statusCode = 400; }
 }
 const fail = message => { throw new ProposalValidationError(message); };
-const text = (value, max = 200) => {
+// Rodny, 27 de noviembre de 2026: «no necesito tantos frenos». Los topes solo protegen al servidor de un texto absurdo.
+const text = (value, max = 5000) => {
   const result = String(value ?? '').trim();
   if (result.length > max) fail(`El texto supera el límite de ${max} caracteres`);
   return result;
@@ -19,7 +20,7 @@ export const safeProposalLink = value => {
   try { const url = new URL(String(value)); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; } catch { return null; }
 };
 export const sanitizeProposalHtml = value => {
-  const html = text(value, 20000);
+  const html = text(value, 500000);
   const fragment = DOMPurify.sanitize(html, {
     // `mark` es el resaltado de la barra del editor y `start` deja que una lista numerada siga en «2.» después de
     // un párrafo: sin ellos el formato se perdía al guardar (Rodny, 23 de noviembre de 2026: «el resaltado no sirve»).
@@ -84,7 +85,7 @@ export const normalizeExecution = value => {
   if (!value) return null;
   const min = Number(value.min), max = Number(value.max ?? value.min);
   if (!Number.isInteger(min) || min < 1 || !Number.isInteger(max) || max < min || max > 3650 || !['DAYS', 'WEEKS', 'MONTHS'].includes(value.unit)) fail('La duración de ejecución no es válida');
-  return { min, max, unit: value.unit, startNote: text(value.startNote, 500) };
+  return { min, max, unit: value.unit, startNote: text(value.startNote, 5000) };
 };
 export const formatExecution = value => value ? `${value.min}${value.max !== value.min ? `–${value.max}` : ''} ${{ DAYS: 'días', WEEKS: 'semanas', MONTHS: 'meses' }[value.unit]}${value.startNote ? ` · ${value.startNote}` : ''}` : '';
 export const normalizeProposalItemFields = item => ({
@@ -127,18 +128,18 @@ export const formatInstallmentDue = row => row.dueType === 'DATE' ? row.date?.sp
 export const normalizeProposalDetails = (value, { issue = false, totalsByScenario } = {}) => {
   if (value === null || value === undefined) return null;
   if (typeof value !== 'object' || Array.isArray(value) || value.version !== 1) fail('Versión de propuesta no compatible');
-  if (JSON.stringify(value).length > 120000) fail('La propuesta supera el límite de contenido');
+  if (JSON.stringify(value).length > 3000000) fail('La propuesta supera el límite de contenido');
   const phases = list(value.phases, 20).map(phase => ({
     id: text(phase.id, 100), title: text(phase.title), execution: normalizeExecution(phase.execution),
     starts: ['AT_START', 'AFTER_PREVIOUS', 'PARALLEL'].includes(phase.starts) ? phase.starts : 'AFTER_PREVIOUS',
-    descriptionHtml: sanitizeProposalHtml(phase.descriptionHtml), completion: text(phase.completion, 500)
+    descriptionHtml: sanitizeProposalHtml(phase.descriptionHtml), completion: text(phase.completion, 5000)
   }));
   if (phases.some(phase => !phase.id || (issue && !phase.title))) fail('Cada etapa necesita nombre e identificador');
   unique(phases);
   const paymentPlans = list(value.paymentPlans, 10).map(plan => {
     if (!['PERCENTAGE', 'FIXED'].includes(plan.mode)) fail('Modalidad de cuotas inválida');
     const installments = list(plan.installments, 24).map(row => {
-      const parsed = { id: text(row.id, 100), label: text(row.label), value: Number(row.value || 0), dueType: row.dueType, date: text(row.date, 10), days: Number(row.days || 0), milestone: text(row.milestone, 500) };
+      const parsed = { id: text(row.id, 100), label: text(row.label), value: Number(row.value || 0), dueType: row.dueType, date: text(row.date, 10), days: Number(row.days || 0), milestone: text(row.milestone, 5000) };
       if (!parsed.id || !Number.isFinite(parsed.value) || parsed.value < 0 || Math.abs(parsed.value * 100 - Math.round(parsed.value * 100)) > 0.001) fail('Cuota inválida; usa hasta dos decimales');
       if (!['DATE', 'MILESTONE', 'AFTER_START'].includes(parsed.dueType)) fail('Vencimiento de cuota inválido');
       if (issue) {

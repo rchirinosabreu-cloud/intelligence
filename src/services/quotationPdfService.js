@@ -138,6 +138,7 @@ const drawService = (doc, item, index, y, formatMoney) => {
   const { body: description, serviceTime } = splitServiceTime(item.description);
   const note = String(item.note || '').trim();
   setText(doc, { size: 11, style: 'bold' });
+  const fullTitleLines = doc.splitTextToSize(String(item.name || 'Servicio'), PDF_LAYOUT.serviceTitleWidth).length;
   const titleLines = limitServiceTitleLines(
     doc.splitTextToSize(String(item.name || 'Servicio'), PDF_LAYOUT.serviceTitleWidth)
   );
@@ -158,6 +159,9 @@ const drawService = (doc, item, index, y, formatMoney) => {
     descriptionLineCount
   });
   const noteHeight = note ? 12 + noteLines.length * 4.8 : 0;
+  // Sin límite de caracteres (27 de noviembre de 2026): un nombre de más de dos líneas o una tarjeta más
+  // alta que la hoja van en el formato de propuesta, que sigue en la página siguiente sin cortar nada.
+  if (fullTitleLines > titleLines.length || cardHeight + noteHeight + 7 > PAGE.height - PAGE.bottom - PAGE.top - 4) return drawRichService(doc, item, index, y, formatMoney);
   y = ensureSpace(doc, y, cardHeight + noteHeight + 7);
   const { descriptionY } = getServiceTextLayout(y, titleLines.length);
 
