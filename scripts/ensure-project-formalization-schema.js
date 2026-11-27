@@ -47,6 +47,9 @@ try {
     ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidedAt" TIMESTAMPTZ;
     ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidReason" TEXT;
     ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidedById" TEXT;
+    -- Un otrosí que extiende el contrato del cliente (27 de noviembre de 2026).
+    ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "extendsContractUntil" TEXT;
+    ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "previousContractEnd" TEXT;
     -- Qué se pide en cada proyecto (29 de octubre de 2026). Lo que ya existía pedía las dos cosas.
     ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requiresContract" BOOLEAN NOT NULL DEFAULT true;
     ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requiresAdvance" BOOLEAN NOT NULL DEFAULT true;

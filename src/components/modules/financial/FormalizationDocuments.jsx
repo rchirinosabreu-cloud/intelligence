@@ -1,35 +1,59 @@
 import React, { useRef, useState } from 'react';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FileText, Paperclip } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
-    FINANCIAL_DOCUMENT_ACCEPT, fetchFormalizationContractBlob, financialDocumentProblem, uploadFormalizationDocument, voidFormalizationDocument
+    FINANCIAL_DOCUMENT_ACCEPT, extendContractWithFormalizationDocument, fetchFormalizationContractBlob, financialDocumentProblem,
+    uploadFormalizationDocument, voidFormalizationDocument
 } from '@/lib/financialDocumentsClient';
 import {
-    FORMALIZATION_DOCUMENT_KINDS, FORMALIZATION_NOTE_MAX, FORMALIZATION_REASON_MAX, documentUploadProblem, documentVoidProblem,
-    formalizationDocumentKindLabel
+    FORMALIZATION_DOCUMENT_KINDS, FORMALIZATION_NOTE_MAX, FORMALIZATION_REASON_MAX, contractDayLabel, contractExtensionProblem,
+    documentUploadProblem, documentVoidProblem, formalizationDocumentKindLabel
 } from '@/lib/projectFormalization';
 
 // Los documentos de una formalización (Rodny, 29 de octubre de 2026): el contrato, los otrosí y los anexos, cada uno con
 // su tipo, su fecha y su nota. Nada se borra: un archivo subido por error se anula con motivo y queda aparte.
 const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
 const day = (value) => (value ? new Date(value).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const todayKey = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+// Lo que dice hoy la ficha del cliente, para elegir la fecha nueva sabiendo la que había.
+const currentEndText = (contract) => (contract?.endDate ? `Hoy el contrato termina el ${contractDayLabel(contract.endDate)}.` : 'Hoy el contrato no tiene fecha de fin en la ficha del cliente.');
 
-function UploadDialog({ formalizationId, defaultKind, onClose, onSaved }) {
-    const [form, setForm] = useState({ kind: defaultKind, note: '' });
+/**
+ * La nueva fecha de fin que trae un otrosí (Elisa, 27 de noviembre de 2026, FoobeSpain: subió el otrosí «y no hay forma
+ * de modificar la fecha»). Al guardar se cambia «Fin del contrato» en la ficha del cliente: el documento y la fecha
+ * quedan amarrados.
+ */
+function ContractEndField({ contract, value, onChange }) {
+    return (
+        <div className="space-y-1.5 text-sm" data-formalization-extension>
+            <span className="block">Nueva fecha de fin del contrato <span className="text-zinc-400">(si el otrosí lo extiende)</span></span>
+            <BrainDatePicker ariaLabel="Nueva fecha de fin del contrato" isClearable placeholder="Sin cambio de fecha" value={value} onChange={onChange}
+                min={contract?.endDate || undefined} className="rounded-lg py-2.5" />
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{currentEndText(contract)} Al guardar, la ficha del cliente queda con la fecha nueva.</p>
+        </div>
+    );
+}
+
+function UploadDialog({ formalizationId, defaultKind, contract, onClose, onSaved }) {
+    const [form, setForm] = useState({ kind: defaultKind, note: '', extendsContractUntil: '' });
     const [file, setFile] = useState(null);
     const [problem, setProblem] = useState('');
     const [saving, setSaving] = useState(false);
     const input = useRef(null);
     const save = async () => {
-        const invalid = documentUploadProblem(form) || (file ? financialDocumentProblem(file) : 'Elige el archivo: PDF, JPG o PNG.');
+        const extending = form.kind === 'OTROSI' && form.extendsContractUntil;
+        const invalid = documentUploadProblem(form)
+            || (extending ? contractExtensionProblem({ until: form.extendsContractUntil, contract }, todayKey()) : null)
+            || (file ? financialDocumentProblem(file) : 'Elige el archivo: PDF, JPG o PNG.');
         if (invalid) { setProblem(invalid); return; }
         setSaving(true);
         try {
             await uploadFormalizationDocument(formalizationId, file, form);
-            await onSaved(`${formalizationDocumentKindLabel(form.kind)} guardado`);
+            await onSaved(extending ? `Otrosí guardado. El contrato va hasta el ${contractDayLabel(form.extendsContractUntil)}` : `${formalizationDocumentKindLabel(form.kind)} guardado`);
         } catch (error) {
             console.error('[Formalización] Documento no guardado:', error.response?.data || error.message);
             setProblem(error.response?.data?.error || 'No pudimos guardar el documento.');
@@ -55,6 +79,15 @@ function UploadDialog({ formalizationId, defaultKind, onClose, onSaved }) {
                             placeholder="Por ejemplo: otrosí 1, se suman 4 reels al mes"
                             onChange={(event) => { setForm((current) => ({ ...current, note: event.target.value })); setProblem(''); }} />
                     </label>
+                    {form.kind === 'OTROSI' && contract && (
+                        <ContractEndField contract={contract} value={form.extendsContractUntil}
+                            onChange={(value) => { setForm((current) => ({ ...current, extendsContractUntil: value })); setProblem(''); }} />
+                    )}
+                    {form.kind === 'OTROSI' && !contract && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400" data-formalization-no-contract>
+                            Este cliente no tiene contrato en su ficha, así que el otrosí no puede cambiar la fecha de fin. Cárgalo en Clientes y después extiéndelo desde aquí.
+                        </p>
+                    )}
                     <div className="space-y-1.5 text-sm">
                         <span className="block">Archivo</span>
                         <input ref={input} type="file" className="sr-only" accept={FINANCIAL_DOCUMENT_ACCEPT} data-formalization-file
@@ -71,6 +104,48 @@ function UploadDialog({ formalizationId, defaultKind, onClose, onSaved }) {
                     <button type="button" onClick={save} disabled={saving} data-formalization-upload-save
                         className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
                         {saving ? 'Guardando…' : 'Guardar'}
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// Para un otrosí que se subió sin fecha, como el de FoobeSpain.
+function ExtendDialog({ formalizationId, document, contract, onClose, onSaved }) {
+    const [until, setUntil] = useState('');
+    const [problem, setProblem] = useState('');
+    const [saving, setSaving] = useState(false);
+    const save = async () => {
+        const invalid = contractExtensionProblem({ until, contract }, todayKey());
+        if (invalid) { setProblem(invalid); return; }
+        setSaving(true);
+        try {
+            await extendContractWithFormalizationDocument(formalizationId, document.id, until);
+            await onSaved(`Contrato extendido hasta el ${contractDayLabel(until)}`);
+        } catch (error) {
+            console.error('[Formalización] Contrato no extendido:', error.response?.data || error.message);
+            setProblem(error.response?.data?.error || 'No pudimos extender el contrato.');
+        } finally {
+            setSaving(false);
+        }
+    };
+    return (
+        <Dialog open onOpenChange={(next) => !next && !saving && onClose()}>
+            {/* Sin foco inicial en la fecha: el calendario se abriría solo y en el celular tapa el botón. */}
+            <DialogContent data-formalization-extend className="sm:max-w-md dark:bg-zinc-900"
+                onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
+                <DialogHeader>
+                    <DialogTitle>Extender el contrato</DialogTitle>
+                    <DialogDescription>Con el otrosí {document.name}.</DialogDescription>
+                </DialogHeader>
+                <ContractEndField contract={contract} value={until} onChange={(value) => { setUntil(value); setProblem(''); }} />
+                {problem && <p role="alert" className="brain-destructive-text text-destructive text-sm">{problem}</p>}
+                <DialogFooter>
+                    <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" onClick={save} disabled={saving} data-formalization-extend-save
+                        className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                        {saving ? 'Guardando…' : 'Extender'}
                     </button>
                 </DialogFooter>
             </DialogContent>
@@ -120,14 +195,16 @@ function VoidDialog({ formalizationId, document, onClose, onSaved }) {
     );
 }
 
-export default function FormalizationDocuments({ formalizationId, documents = [], onSaved, onError }) {
+export default function FormalizationDocuments({ formalizationId, documents = [], contract = null, onSaved, onError }) {
     const [uploading, setUploading] = useState(false);
     const [voiding, setVoiding] = useState(null);
+    const [extending, setExtending] = useState(null);
     const [preview, setPreview] = useState(null);
     const [showVoided, setShowVoided] = useState(false);
     const current = documents.filter((document) => !document.voidedAt);
     const voided = documents.filter((document) => document.voidedAt);
-    const hasContract = current.some((document) => document.kind === 'CONTRATO');
+    // Un otrosí también es un acuerdo firmado: después de él, lo que se sube suele ser otro otrosí o un anexo.
+    const hasContract = current.some((document) => ['CONTRATO', 'OTROSI'].includes(document.kind));
 
     const closePreview = () => setPreview((open) => { if (open?.url) URL.revokeObjectURL(open.url); return null; });
     const open = async (document, download = false) => {
@@ -153,7 +230,10 @@ export default function FormalizationDocuments({ formalizationId, documents = []
             onError?.(error.response?.data?.error || 'No fue posible abrir el documento.');
         }
     };
-    const saved = async (message) => { setUploading(false); setVoiding(null); await onSaved?.(message); };
+    const saved = async (message) => { setUploading(false); setVoiding(null); setExtending(null); await onSaved?.(message); };
+    // Se ofrece extender con un otrosí sin fecha mientras el contrato de la ficha se pueda alargar.
+    const canExtend = (document) => document.kind === 'OTROSI' && !document.extendsContractUntil && contract
+        && contract.status !== 'TERMINADO' && contract.renewalDecision !== 'NO_RENOVAR';
 
     return (
         <div className="space-y-2" data-formalization-documents>
@@ -167,8 +247,18 @@ export default function FormalizationDocuments({ formalizationId, documents = []
                                 <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{document.name}</span>
                             </button>
                             <span className="text-zinc-500 dark:text-zinc-400">{day(document.uploadedAt)}</span>
+                            {canExtend(document) && (
+                                <button type="button" onClick={() => setExtending(document)} data-formalization-extend-open
+                                    className="min-h-8 rounded-md px-1 font-medium text-primary hover:underline">Extender el contrato</button>
+                            )}
                             <button type="button" onClick={() => setVoiding(document)} data-formalization-void-open
                                 className="brain-destructive-text min-h-8 rounded-md px-1 font-medium text-destructive">Anular</button>
+                            {document.extendsContractUntil && (
+                                <p className="basis-full font-medium text-emerald-700 dark:text-emerald-400" data-formalization-extended>
+                                    Extendió el contrato hasta el {contractDayLabel(document.extendsContractUntil)}
+                                    {document.previousContractEnd ? ` (antes, ${contractDayLabel(document.previousContractEnd)})` : ''}
+                                </p>
+                            )}
                             {document.note && <p className="basis-full text-zinc-600 dark:text-zinc-300">{document.note}</p>}
                         </li>
                     ))}
@@ -195,7 +285,8 @@ export default function FormalizationDocuments({ formalizationId, documents = []
                     )}
                 </div>
             )}
-            {uploading && <UploadDialog formalizationId={formalizationId} defaultKind={hasContract ? 'OTROSI' : 'CONTRATO'} onClose={() => setUploading(false)} onSaved={saved} />}
+            {uploading && <UploadDialog formalizationId={formalizationId} defaultKind={hasContract ? 'OTROSI' : 'CONTRATO'} contract={contract} onClose={() => setUploading(false)} onSaved={saved} />}
+            {extending && <ExtendDialog formalizationId={formalizationId} document={extending} contract={contract} onClose={() => setExtending(null)} onSaved={saved} />}
             {voiding && <VoidDialog formalizationId={formalizationId} document={voiding} onClose={() => setVoiding(null)} onSaved={saved} />}
             {preview && <ChatFilePreview file={preview.file} url={preview.url} data={preview.data} onClose={closePreview} onDownload={() => open(preview.document, true)} />}
         </div>

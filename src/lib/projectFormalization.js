@@ -78,6 +78,33 @@ export const missingText = (missing = []) => {
     return `Falta ${parts.length === 2 ? `${parts[0]} y ${parts[1]}` : parts[0]}`;
 };
 
+const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+/** «31 de diciembre de 2026» a partir de AAAA-MM-DD. */
+export const contractDayLabel = (key) => {
+    const [year, month, day] = String(key || '').split('-').map(Number);
+    return year && month && day ? `${day} de ${MONTH_NAMES[month - 1]} de ${year}` : '';
+};
+
+/**
+ * Un otrosí que extiende el contrato del cliente (Elisa, 27 de noviembre de 2026: subió el otrosí de FoobeSpain «y no
+ * hay forma de modificar la fecha»; Rodny: «Sí, hazlo»). El documento y la nueva fecha de fin quedan amarrados: se
+ * cambia «Fin del contrato» en la ficha del cliente, sin pasar por Clientes. Solo alarga la vigencia; un contrato
+ * terminado o con decisión de no renovar se corrige en su ficha. Devuelve el problema o null.
+ */
+export const contractExtensionProblem = ({ until, contract } = {}, today) => {
+    const day = String(until ?? '').trim();
+    if (!DAY.test(day) || Number.isNaN(Date.parse(`${day}T12:00:00Z`)) || new Date(`${day}T12:00:00Z`).toISOString().slice(0, 10) !== day) {
+        return 'Elige la nueva fecha de fin del contrato.';
+    }
+    if (!contract) return 'Este cliente no tiene contrato en su ficha. Cárgalo en Clientes y después extiéndelo con el otrosí.';
+    if (contract.status === 'TERMINADO') return 'El contrato de este cliente está terminado. Renuévalo desde su ficha en Clientes.';
+    if (contract.renewalDecision === 'NO_RENOVAR') return 'Este contrato tiene la decisión de no renovar. Corrígela en la ficha del cliente antes de extenderlo.';
+    if (contract.endDate && day <= contract.endDate) return `La nueva fecha tiene que ser posterior al fin actual del contrato (${contractDayLabel(contract.endDate)}).`;
+    if (contract.startDate && day <= contract.startDate) return 'La nueva fecha tiene que ser posterior al inicio del contrato.';
+    if (today && day < today) return 'La nueva fecha de fin no puede estar en el pasado.';
+    return null;
+};
+
 /** El tipo y la nota de un documento que se sube: el tipo es obligatorio y la nota opcional. Devuelve el problema o null. */
 export const documentUploadProblem = ({ kind, note } = {}) => {
     if (!isFormalizationDocumentKind(kind)) return 'Elige si es el contrato, un otrosí o un anexo.';

@@ -219,7 +219,7 @@ function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onExcept
                 <Step done={state.contract} title="Contrato firmado">
                     {!state.requiresContract && !state.signed && <p className="text-xs text-zinc-500 dark:text-zinc-400">No se pide en este proyecto.</p>}
                     {state.requiresContract && !state.signed && <p className="text-xs text-zinc-500 dark:text-zinc-400">El contrato firmado o un otrosí: PDF, JPG o PNG. Los anexos se suben aparte.</p>}
-                    <FormalizationDocuments formalizationId={item.id} documents={item.documents} onSaved={onSaved} onError={onError} />
+                    <FormalizationDocuments formalizationId={item.id} documents={item.documents} contract={item.contract} onSaved={onSaved} onError={onError} />
                 </Step>
                 <Step done={state.advanceCovered} title="Anticipo">
                     {!state.requiresAdvance && <p className="text-xs text-zinc-500 dark:text-zinc-400" data-formalization-advance-not-required>No se pide en este proyecto.</p>}
