@@ -2371,6 +2371,24 @@ model AnnouncementFile {
   @@index([createdAt])
 }
 
+// Adjuntos de una propuesta (27 de noviembre de 2026). Sin FK: un archivo suelto (quotationId nulo) espera a que se
+// guarde la propuesta; el barrido diario borra los sueltos de más de un día. Ver src/services/quotationFileService.js.
+model QuotationFile {
+  id           String    @id
+  storageKey   String    @unique
+  name         String
+  mimeType     String
+  size         Int
+  uploadedById String?
+  quotationId  String?
+  position     Int       @default(0)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  attachedAt   DateTime? @db.Timestamptz(6)
+
+  @@index([quotationId])
+  @@index([createdAt])
+}
+
 model AnnouncementDelivery {
   id String @id @default(uuid())
   announcementId String

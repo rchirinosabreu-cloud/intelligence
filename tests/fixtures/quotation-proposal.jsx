@@ -34,12 +34,19 @@ const listRows = [
   listRow({ id: 'q-35', uuid_slug: 'bahia-35', consecutive_formatted: 'COT-0035', client_name: 'Marta Ruiz', client_company: 'Hotel Bahía', total_amount: 6000000, status: 'APROBADA', accepted_at: '2026-10-24T15:00:00Z' })
 ];
 window.__quotationDemoCalls = () => saveCalls.slice();
+// Adjuntos (27 de noviembre de 2026): la subida devuelve el archivo con su peso real; nada sale de la pestaña.
+const uploadedFiles = new Map((saved.attachments || []).map(file => [file.id, file]));
 window.fetch = async (input, config = {}) => {
   const path = new URL(String(input), location.origin).pathname;
   if (['POST', 'PUT'].includes(config.method) && path.includes('/quotations')) saveCalls.push(`${config.method} ${path.replace(/^.*\/api/, '/api')}`);
   let data = saved, status = 200;
   try {
-    if (path.endsWith('/catalog')) data = [];
+    if (path.endsWith('/api/quotations/files') && config.method === 'POST') {
+      const file = config.body.get('file');
+      const row = { id: `adj-${uploadedFiles.size + 1}`, name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream', url: `/api/quotations/local/files/adj-${uploadedFiles.size + 1}` };
+      uploadedFiles.set(row.id, row); data = row; status = 201;
+    }
+    else if (path.endsWith('/catalog')) data = [];
     // `?view=list` (29 de octubre de 2026): el historial con «Registrar aprobación».
     else if (path.endsWith('/api/quotations') && !config.method) data = listRows;
     else if (/\/api\/quotations\/q-\d+\/accept$/.test(path)) {
@@ -58,12 +65,12 @@ window.fetch = async (input, config = {}) => {
       const options = { durationMonths: body.duration_months, discountType: body.discount_type, discountValue: body.discount_value };
       const details = normalizeProposalDetails(body.proposal_details, { issue: body.status === 'ACTIVA', totalsByScenario: quotationProposalTotals(items, body.is_tax_exempt, options) });
       const totals = calculateQuotationTotals(items, body.is_tax_exempt, options);
-      saved = { ...saved, ...body, items, proposal_details: details, terms_and_conditions: termsWithProposalPayments(body.terms_and_conditions, Boolean(details?.paymentPlans?.length)), subtotal: totals.subtotal, tax_amount: totals.taxAmount, total_amount: totals.totalAmount };
+      saved = { ...saved, ...body, attachments: (body.file_ids || []).map(id => uploadedFiles.get(id)).filter(Boolean), items, proposal_details: details, terms_and_conditions: termsWithProposalPayments(body.terms_and_conditions, Boolean(details?.paymentPlans?.length)), subtotal: totals.subtotal, tax_amount: totals.taxAmount, total_amount: totals.totalAmount };
       // Como el servidor (23 de octubre de 2026): al guardar, la cotización queda ligada a su tercero; aquí, un cliente potencial nuevo.
       const partyName = body.client_type === 'EMPRESA' ? body.client_company || body.client_name : body.client_name;
       if (!saved.party && partyName) saved.party = { kind: 'CLIENTE_POTENCIAL', label: 'Cliente potencial', name: partyName, clientId: null, leadId: 'lead-local', leadCode: 'CRM-0187' };
       sessionStorage.setItem('quotation-proposal-demo', JSON.stringify(saved)); data = saved;
-    } else if (path.includes('/public/')) data = { ...serializePublicQuotation({ ...saved, status: saved.status === 'APROBADA' ? 'APROBADA' : 'ACTIVA' }), consecutive_formatted: saved.consecutive_formatted, emisor_data: { razonSocial: 'Brainstudio · muestra', nit: 'DEMO' } };
+    } else if (path.includes('/public/')) data = { ...serializePublicQuotation({ ...saved, status: saved.status === 'APROBADA' ? 'APROBADA' : 'ACTIVA' }), attachments: (saved.attachments || []).map(file => ({ ...file, url: `/api/quotations/public/local/files/${file.id}` })), consecutive_formatted: saved.consecutive_formatted, emisor_data: { razonSocial: 'Brainstudio · muestra', nit: 'DEMO' } };
     else if (!path.includes('/quotations/')) throw new Error('Conexión externa bloqueada en esta muestra');
   } catch (error) { status = 400; data = { error: error.message }; }
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });

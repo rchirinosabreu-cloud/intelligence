@@ -16,6 +16,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useBackToOrigin, useOriginState } from '@/components/layout/BackToOrigin';
 import SuccessModal from './SuccessModal';
 import QuotationTermsEditor from './QuotationTermsEditor';
+import QuotationAttachments from './QuotationAttachments';
 import ServiceCatalogModal from './ServiceCatalogModal';
 import ProposalDetailsEditor, { ExecutionEditor, ProposalRichField, proposalInput } from './ProposalDetailsEditor';
 import { normalizeProposalDetails, plainTextToProposalHtml } from '@/services/quotationProposalDetails';
@@ -49,6 +50,7 @@ const emptyQuotationForm = () => ({
     quotationMode: 'STANDARD',
     scenarios: [],
     activeScenarioId: null,
+    attachments: [],
 });
 
 const QuotationForm = () => {
@@ -91,6 +93,7 @@ const QuotationForm = () => {
     // La cotización que este formulario creó en su primer guardado: desde ahí se actualiza.
     // El tercero de la cotización: el cliente que ya existe o su ficha de cliente potencial (lo decide el servidor).
     const savingRef = useRef(false);
+    const uploadingAttachmentsRef = useRef(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -155,7 +158,8 @@ const QuotationForm = () => {
                 exchangeRateDate: data.exchange_rate_date || null, contractTermsText: data.terms_and_conditions || '',
                 proposalDetails: data.proposal_details || null, party: data.party || null, selectedItems: parsedItems,
                 quotationMode: loadedScenarios.length ? 'SCENARIOS' : 'STANDARD', scenarios: loadedScenarios,
-                activeScenarioId: loadedScenarios[0]?.id || null
+                activeScenarioId: loadedScenarios[0]?.id || null,
+                attachments: Array.isArray(data.attachments) ? data.attachments : []
             }, { fingerprint: JSON.stringify([data.updated_at, data.status, data.accepted_at, data.items, data.proposal_details, data.terms_and_conditions]) });
         } catch (error) {
             if (signal.aborted) return;
@@ -416,6 +420,7 @@ const QuotationForm = () => {
 
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
         if (localDraft.conflict) return;
+        if (uploadingAttachmentsRef.current) { toast.error('Espera a que terminen de subir los adjuntos.'); return; }
         if (calculationIssue) { toast.error(`${calculationIssue}. Corrígelo antes de guardar.`); return; }
         // Un servicio sin nombre lo rechaza el servidor, y el aviso pasaba inadvertido (Francys, 23 de noviembre de
         // 2026: pulsó «Guardar como Borrador» y creyó que había quedado). Se dice antes de enviar y se lleva al campo.
@@ -493,7 +498,8 @@ const QuotationForm = () => {
                     exchange_rate_date: currency === 'USD' ? exchangeRateDate : null,
                     status: targetStatus,
                     is_tax_exempt: effectiveTaxExempt,
-                    terms_and_conditions: contractTermsText
+                    terms_and_conditions: contractTermsText,
+                    file_ids: (Array.isArray(draftForm.attachments) ? draftForm.attachments : []).map(file => file.id)
                 })
             });
 
@@ -515,7 +521,8 @@ const QuotationForm = () => {
             localDraft.commit({ ...draftForm, savedQuotationId: savedQuotationId || data.id || null,
                 party: data.party || party, wasExpired: false, issuedAt: data.issued_at || issuedAt,
                 exchangeRate: data.exchange_rate ? Number(data.exchange_rate) : '',
-                exchangeRateSource: data.exchange_rate_source || null, exchangeRateDate: data.exchange_rate_date || null
+                exchangeRateSource: data.exchange_rate_source || null, exchangeRateDate: data.exchange_rate_date || null,
+                attachments: Array.isArray(data.attachments) ? data.attachments : (draftForm.attachments || [])
             }, { fingerprint: isEditing ? JSON.stringify([data.updated_at, data.status, data.accepted_at, data.items, data.proposal_details, data.terms_and_conditions]) : null });
             toast.success(
                 wasReactivated
@@ -526,7 +533,7 @@ const QuotationForm = () => {
             );
             // Al emitir sale sola por correo (reunión del 4 de noviembre de 2026); si no salió, se dice y queda «Reenviar».
             if (data.delivery) {
-                if (data.delivery.sent) toast.success('Enviada por correo al cliente con el PDF');
+                if (data.delivery.sent) toast.success(data.delivery.linked?.length ? data.delivery.message : 'Enviada por correo al cliente con el PDF', { duration: data.delivery.linked?.length ? 8000 : 4000 });
                 else if (data.delivery.reason !== 'sin-correo') toast.error(data.delivery.message || 'El correo al cliente no salió');
             }
             if (!id && data.id) navigate(`/cotizaciones/editar/${data.id}`, { replace: true, state: location.state });
@@ -944,6 +951,11 @@ const QuotationForm = () => {
                             </div>
 
                             <ProposalDetailsEditor value={proposalDetails} onChange={setProposalDetails} totalsByScenario={proposalTotals} currency={currency} />
+                            <QuotationAttachments
+                                value={draftForm.attachments || []}
+                                onChange={value => setDraftForm(current => ({ ...current, attachments: typeof value === 'function' ? value(current.attachments || []) : value }))}
+                                onBusyChange={busy => { uploadingAttachmentsRef.current = busy; }}
+                            />
                             <QuotationTermsEditor
                                 key={`${id || 'new'}:${localDraft.revision}`}
                                 paymentPlanEnabled={Boolean(proposalDetails?.paymentPlans?.length)}

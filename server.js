@@ -11,6 +11,7 @@ import { startTaskAttachmentRetention } from './src/services/taskAttachmentReten
 import { startDeliveryCleanup } from './src/services/deliveryCleanupService.js';
 import { startTempUploadSweep } from './src/services/tempUploadRetentionService.js';
 import { startAnnouncementFileSweep } from './src/services/announcementFileService.js';
+import { startQuotationFileSweep } from './src/services/quotationFileService.js';
 import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSyncScheduler.js';
 import { initAutomatedMinutesScheduler } from './src/services/automatedMinutesScheduler.js';
 import { initBriaMemoryScheduler } from './src/services/briaMemoryScheduler.js';
@@ -284,6 +285,7 @@ async function bootstrap() {
         startDeliveryCleanup();
         startTempUploadSweep();
         startAnnouncementFileSweep();
+        startQuotationFileSweep();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
         console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);

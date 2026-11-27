@@ -43,7 +43,9 @@ const summaryRow = (label, value) => `
                 <td style="padding:6px 0;font-family:${EMAIL.font};font-size:15px;font-weight:700;color:${EMAIL.text};vertical-align:top;">${value}</td>
               </tr>`;
 
-const proposalEmailHtml = ({ code, name, recipient, link, issuerName, until }) => {
+const downloadsHtml = (downloads, paragraph) => downloads.length ? paragraph(`Estos archivos pesan demasiado para ir adjuntos; descárgalos aquí:<br>${downloads.map(file => `<a href="${escapeHtml(file.url)}" target="_blank" style="color:${EMAIL.cyanDeep};">${escapeHtml(file.name)}</a>`).join('<br>')}`) : '';
+
+const proposalEmailHtml = ({ code, name, recipient, link, issuerName, until, attachedNames = [], downloads = [] }) => {
     const href = escapeHtml(link);
     const paragraph = (content, extra = '') => `<p style="margin:0 0 16px;font-family:${EMAIL.font};font-size:16px;line-height:1.55;color:${EMAIL.text};${extra}">${content}</p>`;
     const rows = [
@@ -92,7 +94,8 @@ const proposalEmailHtml = ({ code, name, recipient, link, issuerName, until }) =
               </tr>
             </table>
             ${paragraph(`¿El botón no abre? Copia este enlace en tu navegador:<br><a href="${href}" target="_blank" style="color:${EMAIL.cyanDeep};word-break:break-all;">${href}</a>`, `font-size:13px;color:${EMAIL.muted};`)}
-            ${paragraph('Adjuntamos también el PDF por si prefieres leerla así.')}
+            ${paragraph(attachedNames.length ? `Adjuntamos también el PDF por si prefieres leerla así, junto con ${attachedNames.length === 1 ? 'este archivo' : 'estos archivos'}: ${attachedNames.map(escapeHtml).join(', ')}.` : 'Adjuntamos también el PDF por si prefieres leerla así.')}
+            ${downloadsHtml(downloads, paragraph)}
             ${paragraph(`Cualquier duda, respóndenos a este correo o <a href="${AGENCY_WHATSAPP}" target="_blank" style="color:${EMAIL.cyanDeep};">escríbenos por WhatsApp</a>.`)}
             ${paragraph(`Un saludo,<br><strong>${escapeHtml(issuerName)}</strong>`, 'margin-bottom:28px;')}
           </td>
@@ -112,7 +115,7 @@ const proposalEmailHtml = ({ code, name, recipient, link, issuerName, until }) =
 };
 
 /** Lo que recibe el cliente: saludo por su nombre, el enlace para ver y aceptar, y el PDF adjunto. */
-export const proposalEmail = ({ consecutive, clientName, clientCompany, link, issuerName = 'Brain Studio', expiresAt = null }) => {
+export const proposalEmail = ({ consecutive, clientName, clientCompany, link, issuerName = 'Brain Studio', expiresAt = null, attachedNames = [], downloads = [] }) => {
     const code = quotationCode(consecutive);
     const name = firstName(clientName);
     const company = String(clientCompany || '').trim();
@@ -125,14 +128,15 @@ export const proposalEmail = ({ consecutive, clientName, clientCompany, link, is
         `Te compartimos la propuesta ${code}${who}. Puedes verla y aceptarla en este enlace:`,
         link,
         '',
-        'Adjuntamos también el PDF por si prefieres leerla así.',
+        attachedNames.length ? `Adjuntamos también el PDF por si prefieres leerla así, junto con: ${attachedNames.join(', ')}.` : 'Adjuntamos también el PDF por si prefieres leerla así.',
+        ...(downloads.length ? ['', 'Estos archivos pesan demasiado para ir adjuntos; descárgalos aquí:', ...downloads.map(file => `${file.name}: ${file.url}`)] : []),
         until ? `La propuesta tiene vigencia hasta el ${until}.` : null,
         '',
         'Cualquier duda, respóndenos a este correo o escríbenos por WhatsApp.',
         '',
         `${issuerName}`
     ].filter((line) => line !== null);
-    const html = proposalEmailHtml({ code, name, recipient: company || String(clientName || '').trim(), link, issuerName, until });
+    const html = proposalEmailHtml({ code, name, recipient: company || String(clientName || '').trim(), link, issuerName, until, attachedNames, downloads });
     return { subject, text: lines.join('\n'), html, attachmentName: `Propuesta_${code}.pdf` };
 };
 
