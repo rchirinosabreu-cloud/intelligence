@@ -141,7 +141,8 @@ export const createBriaAssistantService = ({
       // misma herramienta y los mismos permisos, para no gastar una ronda del modelo en ir a buscarlos.
       const ownTasks = channel === 'voz' ? allTools.find(tool => tool.name === 'mis_tareas' && tool.allowed(user)) : null;
       // Un archivo recién adjuntado necesita el camino completo; los archivos viejos del chat no frenan la vía rápida.
-      const quickBrain = channel === 'voz' && !attachments.some(file => file.current !== false) ? (typeof quick === 'function' ? quick() : quick) : null;
+      // Desde el 27 de noviembre de 2026 corre en los tres canales; `quickTurn` mira cuáles deja encendidos el entorno.
+      const quickBrain = !attachments.some(file => file.current !== false) ? (typeof quick === 'function' ? quick() : quick) : null;
       // El estado vivo: las tareas del equipo, con la misma herramienta y los permisos de quien pregunta, una vez por minuto.
       const teamTasks = allTools.find(tool => tool.name === 'buscar_pendientes' && tool.allowed(user));
       const readings = isManagerRole(user?.role) ? (typeof dailyReading === 'function' ? dailyReading() : dailyReading) : null;
@@ -176,7 +177,7 @@ export const createBriaAssistantService = ({
         context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, agencyFacts: facts, knowledge: remembered, logger,
           ...(facts?.recall ? { recallMemory: ({ question: current, history: turns }) => facts.recall(user, { texto: [...turns.slice(-2).map(turn => turn.text), current].join('\n') }) } : {}),
           ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
-          // La vía rápida solo existe en voz y solo si el servicio tiene la clave de la API de Claude.
+          // La vía rápida existe solo si el servicio tiene la clave de la API de Claude.
           ...(quickBrain ? { quick: quickBrain } : {}),
           ...(teamTasks ? { liveState: () => liveCache(person.userId, readLive) } : {}),
           // El libro de decisiones va delante de quien dirige: lo propuesto, lo decidido y lo que pasó.

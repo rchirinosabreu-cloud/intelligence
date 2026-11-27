@@ -52,8 +52,9 @@ export const signAnnouncementFileTicket = ({ fileId, userId }, { now = Date.now(
   return jwt.sign({ fileId, userId, exp }, ticketSecret(secret), { audience: TICKET_AUDIENCE, algorithm: 'HS256', noTimestamp: true });
 };
 
-export const verifyAnnouncementFileTicket = (ticket, { secret } = {}) =>
-  jwt.verify(String(ticket || ''), ticketSecret(secret), { audience: TICKET_AUDIENCE, algorithms: ['HS256'] });
+// `now` existe para las pruebas: con una hora fija, el pase no vence según el reloj de quien las corre.
+export const verifyAnnouncementFileTicket = (ticket, { secret, now = Date.now() } = {}) =>
+  jwt.verify(String(ticket || ''), ticketSecret(secret), { audience: TICKET_AUDIENCE, algorithms: ['HS256'], clockTimestamp: Math.floor(now / 1000) });
 
 const announcementFileUrl = (fileId, userId, options) =>
   `/api/announcement-files/${encodeURIComponent(fileId)}?access_token=${encodeURIComponent(signAnnouncementFileTicket({ fileId, userId }, options))}`;

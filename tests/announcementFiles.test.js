@@ -101,11 +101,12 @@ test('al editar quedan exactamente las imágenes enviadas, en su orden; sin list
 test('el pase abre solo esa imagen, para esa persona, y es el mismo durante su ventana', () => {
   const ticket = signAnnouncementFileTicket({ fileId: 'img', userId: 'u1' }, { now: AHORA.getTime() });
   assert.equal(signAnnouncementFileTicket({ fileId: 'img', userId: 'u1' }, { now: AHORA.getTime() + 60_000 }), ticket, 'el refresco de cada minuto no cambia la dirección');
-  const payload = verifyAnnouncementFileTicket(ticket);
+  const payload = verifyAnnouncementFileTicket(ticket, { now: AHORA.getTime() });
   assert.equal(payload.fileId, 'img');
   assert.equal(payload.userId, 'u1');
   assert.ok(payload.exp * 1000 - AHORA.getTime() >= 3 * 3600 * 1000, 'nunca vale menos de tres horas');
-  assert.throws(() => verifyAnnouncementFileTicket(ticket, { secret: 'otro-secreto' }));
+  assert.throws(() => verifyAnnouncementFileTicket(ticket, { secret: 'otro-secreto', now: AHORA.getTime() }));
+  assert.throws(() => verifyAnnouncementFileTicket(ticket, { now: AHORA.getTime() + 7 * 3600 * 1000 }), /jwt expired/, 'pasada su ventana, vence');
 });
 
 test('el barrido: sueltas al día siguiente, las de un anuncio a los 30 días, y ante la duda conserva', () => {

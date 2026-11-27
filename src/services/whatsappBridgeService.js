@@ -19,6 +19,10 @@ import {
 } from '../lib/whatsappBridge.js';
 /** Cuánto se espera a que la persona termine de mandar lo que manda seguido (la foto y luego el texto). */
 export const WHATSAPP_BATCH_WINDOW_MS = 2500;
+// Si Bria no ha respondido en este tiempo, avisa que está revisando (27 de noviembre de 2026, informe «Por qué Bria
+// tarda en responder»: en WhatsApp los turnos lentos tardaban de 8 a 18 segundos sin ninguna señal). Lo que se
+// responde con la vía rápida llega antes y no lleva aviso.
+export const WHATSAPP_SLOW_NOTICE_MS = 7000;
 import {
   ALERT_KINDS, ALERT_ACTIONS, isWindowOpen, alertsEnabled, withinAlertHours, isAlertCurrent, parseAlertReplyId, alertOptions, templateMessagePayload
 } from '../lib/whatsappAlerts.js';
@@ -56,7 +60,10 @@ export const createWhatsAppBridgeService = ({
   signSession = signWhatsAppSession,
   // Lo que alguien manda seguido (la foto y enseguida «regístralo») se junta en una sola respuesta.
   batchWindowMs = WHATSAPP_BATCH_WINDOW_MS,
-  delay = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); })
+  delay = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
+  slowNoticeMs = WHATSAPP_SLOW_NOTICE_MS,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout
 } = {}) => {
   const act = { ...defaultActions, ...actions };
   const config = () => ({
@@ -301,7 +308,19 @@ export const createWhatsAppBridgeService = ({
       // Meta o el guardado final fallan, un «sí» posterior no puede confirmar un resumen que nunca llegó.
       // También vale para un chat ya activo; si no podemos invalidarlo, no llamamos al motor.
       await repository.setConversation(link.userId, null);
-      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, files, session: sessionFor(row), expectedRevision: chat.revision }));
+      // El aviso sale una sola vez, y tras él vuelve el «escribiendo…», que Meta quita al llegar un mensaje.
+      let notice = null;
+      const timer = slowNoticeMs > 0 ? setTimer(() => {
+        notice = sendText(replyTo(message), REPLIES.working).then(() => markRead(message.messageId))
+          .catch((failure) => logger.warn?.(`[WhatsApp] No se pudo avisar que Bria está revisando: ${failure.message}`));
+      }, slowNoticeMs) : null;
+      try {
+        saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, files, session: sessionFor(row), expectedRevision: chat.revision }));
+      } finally {
+        if (timer) clearTimer(timer);
+        // La respuesta nunca se adelanta al aviso.
+        await notice;
+      }
     } catch (failure) {
       if (failure.code === 'BRIA_CONVERSATION_STALE') { await sendText(replyTo(message), failure.message); return { outcome: 'stale-conversation' }; }
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
