@@ -39,6 +39,9 @@ test('las instrucciones fijan lo que Bria no hace y no cambian entre mensajes', 
   assert.match(text, /en qué etapa está la marca/);
   assert.match(text, /no como una ficha del catálogo/);
   assert.doesNotMatch(text, /negrita\* de WhatsApp para el nombre de un servicio/);
+  // Conversacional también al dar precios, y dentro de lo que establece el catálogo (Rodny, 28 de noviembre de 2026).
+  assert.match(text, /Los precios y lo que incluyen van en prosa, nunca en viñetas/);
+  assert.match(text, /nunca por debajo ni por encima de lo que establece/);
   assert.equal(text, agentInstructions({ agencyName: 'Agencia Uno' }));
   assert.deepEqual(AGENT_OUTPUT_SCHEMA.required, ['reply', 'handoff', 'handoffReason', 'brief']);
 });
