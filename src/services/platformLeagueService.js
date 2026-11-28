@@ -10,7 +10,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { CLIENT_DUE_DATE_KIND } from '../lib/taskChanges.js';
-import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace, withPublicationEffort, withReceivableEffort, RECEIVABLE_EFFORT_UNTIL } from '../lib/leagueDay.js';
+import { evaluateLeagueDay, isProductionWork, isoWeekKey, isoWeekRange, openWindowOf, previousWeekRange, workRecordFromTrace, withPublicationEffort, withReceivableEffort, RECEIVABLE_EFFORT_UNTIL, withClockHours, cleanClockMs, HOUR_MS } from '../lib/leagueDay.js';
 import { CAMERA_POINTS, KUDOS_WEEKLY, MEETING_POINTS, MEETING_WINNERS_PER_WEEK, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, recognitionPoints, recognitionPointsById, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, leagueWeekLabel, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
@@ -60,6 +60,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
   let publicationEffortCounted = !repo.daysWithoutPublicationEffort;
   // Igual con las cuentas de cobro de los días guardados hasta el 26 de noviembre (`countReceivableEffort`).
   let receivableEffortCounted = !repo.daysWithoutReceivableEffort;
+  // Y con las horas con reloj de los días guardados antes del 28 de noviembre (`countClockHours`).
+  let clockHoursCounted = !repo.daysWithoutClockHours;
   // Las fuentes de cada área (Rodny, 12 de noviembre de 2026). Parrillas y Pautas se leen con sus reglas de siempre solo
   // con la base real; una base inyectada (las pruebas) nunca cae por defecto a Operación, que lee la base de `.env`.
   const area = areaSources || (db === prisma
@@ -123,7 +125,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const closedIds = closed.map((task) => task.id);
       const [states, taskSessions, clientMoves] = closedIds.length ? await Promise.all([
         db.recognitionTaskState.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, originalDueDate: true, firstCompletedAt: true } }),
-        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } }),
+        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true, isOverlapping: true } }),
         // Las fechas que movió el cliente (Rodny, 26 de noviembre de 2026): «A tiempo» se mide contra la última de ellas.
         typeof db.taskChangeEvent?.findMany === 'function'
           ? db.taskChangeEvent.findMany({ where: { taskId: { in: closedIds }, kind: CLIENT_DUE_DATE_KIND, occurredAt: { lt: end } }, orderBy: { occurredAt: 'asc' }, select: { taskId: true, toValue: true } })
@@ -158,7 +160,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         const mine = taskSessions.filter((session) => session.taskId === task.id && session.workerId === task.assigneeId);
         const measuredMs = mine.filter((session) => session.closeReason !== 'DECLARED').reduce((sum, session) => sum + Number(session.durationMs || 0), 0);
         const declared = mine.some((session) => session.closeReason === 'DECLARED');
-        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, clientDueDate: clientDue.get(task.id) || null, firstCompletedAt: firstClosed.get(task.id) || null, measuredMs, declared,
+        const clockMs = cleanClockMs(mine);
+        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, clientDueDate: clientDue.get(task.id) || null, firstCompletedAt: firstClosed.get(task.id) || null, measuredMs, clockMs, declared,
           production: isProductionWork({ title: task.title, aiCategory: task.aiCategory }) || bucket.productionDays.length > 0 });
       }
       for (const session of daySessions) {
@@ -248,6 +251,32 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       return added;
     },
 
+    /**
+     * Rodny, 28 de noviembre de 2026: las tareas grandes valen más «por tiempo con reloj». Suma al esfuerzo de los días
+     * ya guardados una hora por cada hora entera medida con reloj limpio en las tareas que la persona cerró ese día.
+     */
+    async countClockHours() {
+      const rows = await repo.daysWithoutClockHours();
+      if (!rows.length) return 0;
+      const days = rows.map((row) => row.day_key).sort();
+      const tasks = await db.task.findMany({ where: { status: 'REALIZADA', assigneeId: { not: null }, completedAt: { gte: dayWindow(days[0]).start, lt: dayWindow(days.at(-1)).end } }, select: { id: true, assigneeId: true, completedAt: true } });
+      const sessions = tasks.length ? await db.taskWorkSession.findMany({ where: { taskId: { in: tasks.map((task) => task.id) } }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true, isOverlapping: true } }) : [];
+      const hours = new Map();
+      for (const task of tasks) {
+        const whole = Math.floor(cleanClockMs(sessions.filter((session) => session.taskId === task.id && session.workerId === task.assigneeId)) / HOUR_MS);
+        if (!whole) continue;
+        const key = `${bogotaDate(task.completedAt)}:${task.assigneeId}`;
+        hours.set(key, (hours.get(key) || 0) + whole);
+      }
+      const updated = rows.map((row) => ({ row, n: hours.get(`${row.day_key}:${row.member_id}`) || 0 }))
+        .map(({ row, n }) => ({ row, n, next: withClockHours(row, n) })).filter((item) => item.next);
+      if (!updated.length) return 0;
+      await repo.saveDays(updated.map(({ row, next }) => ({ day_key: row.day_key, member_id: row.member_id, habits: row.habits, extras: next.extras, evidence: next.evidence })));
+      const added = updated.reduce((sum, { n }) => sum + n, 0);
+      logger.info(`[Liga] Horas con reloj sumadas al esfuerzo de ${updated.length} días guardados: ${added} en total.`);
+      return added;
+    },
+
     async runAutomatic() {
       if (!publicationEffortCounted) {
         try { await this.countPublicationEffort(); publicationEffortCounted = true; }
@@ -256,6 +285,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       if (!receivableEffortCounted) {
         try { await this.countReceivableEffort(); receivableEffortCounted = true; }
         catch (error) { logger.error('[Liga] No se pudieron sumar las cuentas de cobro:', error?.message || error); }
+      }
+      if (!clockHoursCounted) {
+        try { await this.countClockHours(); clockHoursCounted = true; }
+        catch (error) { logger.error('[Liga] No se pudieron sumar las horas con reloj:', error?.message || error); }
       }
       const at = now();
       const today = bogotaDate(at), monthKey = monthOf(today);

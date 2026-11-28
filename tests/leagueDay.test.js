@@ -32,7 +32,7 @@ test('Documentado only plays tasks delegated to someone else and not born from a
 test('a clean day earns the six points, each with its evidence in Spanish', () => {
   const out = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }], closedTasks: [task()], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
   assert.deepEqual(out.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
-  assert.deepEqual(out.extras, { ESFUERZO: 1, PUBLICAR: 0, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 45 }] }, 'the extras travel beside the habits, with the effort of the day and the tasks behind Reloj');
+  assert.deepEqual(out.extras, { ESFUERZO: 1, PUBLICAR: 0, HORAS: 0, PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 45 }] }, 'the extras travel beside the habits, with the effort of the day and the tasks behind Reloj');
   assert.match(out.evidence.RELOJ, /1 tarea con reloj completo de 1/);
   assert.match(out.evidence.AL_DIA, /sin vencidas/);
   assert.match(out.evidence.TRABAJO_REGISTRADO, /Gestión de tareas/);
@@ -273,4 +273,22 @@ test('A tiempo se mide contra la última fecha que movió el cliente (Rodny, 26 
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [byClient], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.A_TIEMPO, true);
   const lateEvenSo = task({ completedAt: `${DAY}T20:00:00.000Z`, originalDueDate: '2026-11-01T12:00:00.000Z', clientDueDate: '2026-11-02' });
   assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [lateEvenSo], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 }).habits.A_TIEMPO, false, 'the client date is a date like any other: missing it is late');
+});
+
+test('horas con reloj: cada hora entera medida con reloj limpio en una tarea cerrada suma un punto de esfuerzo (Rodny, 28 de noviembre de 2026)', async () => {
+  const { evaluateLeagueDay, cleanClockMs, withClockHours } = await import('../src/lib/leagueDay.js');
+  const H = 60 * 60 * 1000;
+  assert.equal(cleanClockMs([
+    { durationMs: 2.5 * H }, { durationMs: H, closeReason: 'DECLARED' }, { durationMs: H, isOverlapping: true }, { durationMs: 9 * H },
+  ]), 2.5 * H, 'declared, overlapping and forgotten sessions do not count');
+  const day = evaluateLeagueDay({ day: '2026-11-27', closedTasks: [
+    { id: 'a', title: 'Parrilla de diciembre', measuredMs: 3.2 * H, clockMs: 3.2 * H },
+    { id: 'b', title: 'Ajuste', measuredMs: 0.5 * H, clockMs: 0.5 * H },
+  ] });
+  assert.equal(day.extras.HORAS, 3);
+  assert.equal(day.extras.ESFUERZO, 5);
+  assert.match(day.evidence.ESFUERZO, /^2 tareas cerradas · \+3 por 3 horas con reloj\.$/);
+  const saved = withClockHours({ extras: { ESFUERZO: 4 }, evidence: { ESFUERZO: '4 tareas cerradas.' } }, 1);
+  assert.deepEqual(saved, { extras: { ESFUERZO: 5, HORAS: 1 }, evidence: { ESFUERZO: '4 tareas cerradas · +1 por una hora con reloj.' } });
+  assert.equal(withClockHours({ extras: { HORAS: 0 } }, 2), null, 'a day already reviewed is not touched again');
 });

@@ -126,7 +126,7 @@ function Habits({ today }) {
     })}
       <li className="py-3" data-race-today-effort={effortPoints(today)}>
         <div className="flex items-center gap-2"><Flame className={cn('h-4 w-4', effortPoints(today) ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">Esfuerzo</span><span className={cn('text-xs', effortPoints(today) ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{effortPoints(today) ? `+${effortPoints(today)} hoy` : 'Sin sumar hoy'}</span></div>
-        <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>Un punto por cada tarea que cierras y por el trabajo de tu área, sin tope al día. Las de publicar también suman.</p>
+        <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>Un punto por cada tarea que cierras, uno más por cada hora que mediste con el reloj y por el trabajo de tu área, sin tope al día.</p>
         {today.evidence?.[EFFORT_KEY] && <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{today.evidence[EFFORT_KEY]}</p>}
       </li>
     </ul>
@@ -138,7 +138,7 @@ function Rules() {
     <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Cómo se cuentan los puntos<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
     <ul className={cn(surface, 'mt-2 list-disc space-y-2 p-4 pl-8 leading-5', muted)}>
       <li>Cada hábito cumplido en un día te suma {HABIT_POINTS} puntos. Si lo cumples en parte, sumas esa parte: 3 de 4 tareas a tiempo son 4 puntos. Trabajo registrado cuenta lo que registras en cualquier módulo: movimientos, gestiones, piezas, pautas, jornadas o tareas.</li>
-      <li>Esfuerzo: cada tarea que cierras suma 1 punto, sin tope al día. Las de publicar también suman. También suma el trabajo de tu área: cada registro de Financiero vale medio punto y uno entero con su soporte (si el soporte llega después, suma el medio que faltaba), cada cuenta de cobro emitida vale 1, cada gestión del CRM vale 1 y cada jornada de producción con su evidencia vale 5.</li>
+      <li>Esfuerzo: cada tarea que cierras suma 1 punto, sin tope al día. Las de publicar también suman. Cada hora entera que mediste con el reloj en una tarea cerrada suma 1 punto más (las sesiones olvidadas, encimadas o declaradas no cuentan). También suma el trabajo de tu área: cada registro de Financiero vale medio punto y uno entero con su soporte (si el soporte llega después, suma el medio que faltaba), cada cuenta de cobro emitida vale 1, cada gestión del CRM vale 1 y cada jornada de producción con su evidencia vale 5.</li>
       <li>Reloj mira solo las tareas en que usaste el reloj: cuenta si llegó a 10 minutos. Lo que pasa directo a realizado y las de publicar no aplican.</li>
       <li>Al día mira cómo terminas la jornada a las 5:00 pm, no cómo amaneces: si cierras lo vencido durante el día, lo ganas. Mover la fecha de algo vencido ese mismo día no lo saca de la cuenta. Si te queda algo, la plataforma te dice qué.</li>
       <li>Al día y Sin devolución se juegan los días en que cierras algo: sin entregas no suman ni restan.</li>

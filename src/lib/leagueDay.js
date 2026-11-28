@@ -14,6 +14,18 @@ export const RELOJ_LIST_KEY = 'RELOJ_TAREAS';
 export const MIN_MEASURED_MS = 10 * 60 * 1000;
 /** Una sesión de más de 8 horas es un reloj olvidado (la regla de Ritmo). */
 export const FORGOTTEN_SESSION_MS = 8 * 60 * 60 * 1000;
+/**
+ * Horas con reloj (Rodny, 28 de noviembre de 2026, eligió «Por tiempo con reloj» para que las tareas grandes valgan más,
+ * a pedido de Sara y Elisa): cada hora entera medida con el reloj en una tarea cerrada ese día suma un punto más de
+ * esfuerzo. Solo cuentan sesiones limpias: ni declaradas, ni encimadas, ni olvidadas (más de 8 horas).
+ */
+export const CLOCK_HOURS_KEY = 'HORAS';
+export const HOUR_MS = 60 * 60 * 1000;
+export const cleanClockMs = (sessions = []) => sessions
+  .filter((session) => session.closeReason !== 'DECLARED' && !session.isOverlapping && Number(session.durationMs || 0) <= FORGOTTEN_SESSION_MS)
+  .reduce((sum, session) => sum + Math.max(0, Number(session.durationMs || 0)), 0);
+export const clockHoursOf = (tasks = []) => tasks.reduce((sum, task) => sum + Math.floor(Math.max(0, Number(task.clockMs || 0)) / HOUR_MS), 0);
+const hoursText = (hours) => (hours ? `+${hours} por ${hours === 1 ? 'una hora' : `${hours} horas`} con reloj` : '');
 
 const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
 /** El día de Bogotá de un instante, sin depender de Intl: Bogotá es UTC-5 todo el año. */
@@ -131,10 +143,12 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
   // —registros de Financiero, gestiones del CRM, jornadas con evidencia—, con el mismo tope del día.
   const areaEffort = (areaChecks?.effort || []).filter((row) => Number(row?.units) > 0);
   const areaUnits = areaEffort.reduce((sum, row) => sum + Number(row.units), 0);
-  extras[EFFORT_KEY] = closedTasks.length + areaUnits;
+  const hours = clockHoursOf(closedTasks);
+  extras[EFFORT_KEY] = closedTasks.length + hours + areaUnits;
   extras[PUBLICATION_EFFORT_KEY] = published;
+  extras[CLOCK_HOURS_KEY] = hours;
   evidence[EFFORT_KEY] = closedTasks.length || areaUnits
-    ? `${[effortTaskText(closedTasks.length, published), ...areaEffort.map((row) => row.text)].filter(Boolean).join(' · ')}.`
+    ? `${[effortTaskText(closedTasks.length, published), hoursText(hours), ...areaEffort.map((row) => row.text)].filter(Boolean).join(' · ')}.`
     : 'Ninguna tarea cerrada.';
   const measuredOf = (task) => Number(task.measuredMs || 0);
   const kindOf = (task) => {
@@ -368,6 +382,21 @@ export function withReceivableEffort(row, issued = 0) {
   const part = `${count} ${count === 1 ? 'cuenta de cobro emitida' : 'cuentas de cobro emitidas'}`;
   const text = String(row?.evidence?.[EFFORT_KEY] || '').trim();
   const nextText = !text || text === 'Ninguna tarea cerrada.' ? `${part}.` : `${text.replace(/\.$/, '')} · ${part}.`;
+  return {
+    extras: { ...nextExtras, [EFFORT_KEY]: (Number(extras[EFFORT_KEY]) || 0) + count },
+    evidence: { ...(row?.evidence || {}), [EFFORT_KEY]: nextText },
+  };
+}
+
+/** Las horas con reloj de un día ya guardado (`countClockHours`): `HORAS` marca que el día ya se revisó. */
+export function withClockHours(row, hours = 0) {
+  const extras = row?.extras || {};
+  if (extras[CLOCK_HOURS_KEY] !== undefined) return null;
+  const count = Math.max(0, Math.floor(Number(hours) || 0));
+  const nextExtras = { ...extras, [CLOCK_HOURS_KEY]: count };
+  if (!count) return { extras: nextExtras, evidence: row?.evidence || {} };
+  const text = String(row?.evidence?.[EFFORT_KEY] || '').trim();
+  const nextText = !text || text === 'Ninguna tarea cerrada.' ? `${hoursText(count)}.` : `${text.replace(/\.$/, '')} · ${hoursText(count)}.`;
   return {
     extras: { ...nextExtras, [EFFORT_KEY]: (Number(extras[EFFORT_KEY]) || 0) + count },
     evidence: { ...(row?.evidence || {}), [EFFORT_KEY]: nextText },

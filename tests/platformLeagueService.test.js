@@ -295,13 +295,13 @@ test('a day is evaluated for every active person from the real sources, and save
   assert.match(evidence['m-rodny'].TRABAJO_REGISTRADO, /Financiero/, 'the financial record and the collection activity count as work (the league gift does not)');
   assert.doesNotMatch(evidence['m-rodny'].TRABAJO_REGISTRADO, /Liga/);
   const extras = Object.fromEntries(rows.map((row) => [row.memberId, row.extras]));
-  assert.deepEqual(extras['m-helen'], { ESFUERZO: 1, PUBLICAR: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Caption', kind: 'directo', minutes: 0 }] }, 'the first human trace from 8:00 was hers; a closing passed straight to done is still effort');
-  assert.deepEqual(extras['m-rodny'], { ESFUERZO: 1, PUBLICAR: 0, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 50 }] });
+  assert.deepEqual(extras['m-helen'], { ESFUERZO: 1, PUBLICAR: 0, HORAS: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Caption', kind: 'directo', minutes: 0 }] }, 'the first human trace from 8:00 was hers; a closing passed straight to done is still effort');
+  assert.deepEqual(extras['m-rodny'], { ESFUERZO: 1, PUBLICAR: 0, HORAS: 0, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 50 }] });
   await service.computeAndSave(DAY);
   assert.equal(repo.days.size, 3);
   assert.match(repo.days.get(`${DAY}:m-helen`).evidence.A_TIEMPO, /0 de 1 a tiempo/);
   assert.match(repo.days.get(`${DAY}:m-rodny`).evidence.PRIMERO_EN_ABRIR, /Helen abrió primero, a las 08:04/);
-  assert.deepEqual(repo.days.get(`${DAY}:m-helen`).extras, { ESFUERZO: 1, PUBLICAR: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Caption', kind: 'directo', minutes: 0 }] }, 'the extras are saved beside the habits');
+  assert.deepEqual(repo.days.get(`${DAY}:m-helen`).extras, { ESFUERZO: 1, PUBLICAR: 0, HORAS: 0, PRIMERO_EN_ABRIR: true, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Caption', kind: 'directo', minutes: 0 }] }, 'the extras are saved beside the habits');
 });
 
 test('the automatic run computes today from 18:05 on business days and backfills the missing days of the month, never a weekend', async () => {
@@ -331,7 +331,7 @@ test('the league of a person: the month so far plus today live, the lanes of the
   assert.equal(league.score, 61, 'five habits on the 2nd and six today at 5 each, one task closed with its time, plus one gift at 5');
   assert.deepEqual(league.today.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true, TRABAJO_REGISTRADO: true });
   assert.deepEqual({ earned: league.today.earned, possible: league.today.possible, extrasEarned: league.today.extrasEarned, points: league.today.points }, { earned: 6, possible: 6, extrasEarned: [], points: 36 });
-  assert.deepEqual(league.today.extras, { ESFUERZO: 1, PUBLICAR: 0, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 50 }] }, 'the extras object survives beside today’s points');
+  assert.deepEqual(league.today.extras, { ESFUERZO: 1, PUBLICAR: 0, HORAS: 0, PRIMERO_EN_ABRIR: false, PRIMERO_EN_REUNION: null, RELOJ_TAREAS: [{ title: 'Reel', kind: 'ok', minutes: 50 }] }, 'the extras object survives beside today’s points');
   assert.equal(league.streak.days, 2);
   assert.equal(league.kudos.score, 5);
   assert.equal(league.kudos.received[0].from, 'Helen');
@@ -536,7 +536,7 @@ test('al arrancar, los días guardados suman sus tareas de publicar al esfuerzo 
   const repo = fakeRepo();
   await repo.saveDays([
     { day_key: '2026-11-24', member_id: 'm-sara', habits: { RELOJ: true }, extras: { ESFUERZO: 3 }, evidence: { ESFUERZO: '3 tareas cerradas (sin contar 4 de publicar).' } },
-    { day_key: '2026-11-24', member_id: 'm-rodny', habits: {}, extras: { ESFUERZO: 2, PUBLICAR: 0 }, evidence: { ESFUERZO: '2 tareas cerradas.' } },
+    { day_key: '2026-11-24', member_id: 'm-rodny', habits: {}, extras: { ESFUERZO: 2, PUBLICAR: 0, HORAS: 0 }, evidence: { ESFUERZO: '2 tareas cerradas.' } },
   ]);
   repo.daysWithoutPublicationEffort = async () => [...repo.days.values()].filter((row) => !('PUBLICAR' in (row.extras || {})));
   const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`), logger: { info() {}, error() {} } });
@@ -573,4 +573,33 @@ test('al arrancar, los días guardados hasta el 26 de noviembre suman las cuenta
   assert.equal(repo.days.get('2026-11-26:m-rodny').extras.ESFUERZO, 3);
   assert.equal(repo.days.get('2026-11-26:m-rodny').extras.COBRO, 0);
   assert.equal(await service.countReceivableEffort(), 0, 'the second start finds nothing left');
+});
+
+test('al arrancar, los días guardados suman sus horas con reloj una sola vez (Rodny, 28 de noviembre de 2026)', async () => {
+  const H = 60 * 60 * 1000;
+  const repo = fakeRepo();
+  await repo.saveDays([
+    { day_key: '2026-11-26', member_id: 'm-sara', habits: { RELOJ: true }, extras: { ESFUERZO: 3 }, evidence: { ESFUERZO: '3 tareas cerradas.' } },
+    { day_key: '2026-11-26', member_id: 'm-rodny', habits: {}, extras: { ESFUERZO: 1 }, evidence: { ESFUERZO: '1 tarea cerrada.' } },
+  ]);
+  repo.daysWithoutClockHours = async () => [...repo.days.values()].filter((row) => !('HORAS' in (row.extras || {})));
+  const db = fakeDb();
+  db.task = { ...db.task, findMany: async () => [
+    { id: 't1', assigneeId: 'm-sara', completedAt: new Date('2026-11-26T20:00:00Z') },
+    { id: 't2', assigneeId: 'm-sara', completedAt: new Date('2026-11-27T02:00:00Z') },
+    { id: 't3', assigneeId: 'm-rodny', completedAt: new Date('2026-11-26T15:00:00Z') },
+  ] };
+  db.taskWorkSession = { findMany: async () => [
+    { taskId: 't1', workerId: 'm-sara', durationMs: 2.4 * H },
+    { taskId: 't2', workerId: 'm-sara', durationMs: 1.1 * H },
+    { taskId: 't2', workerId: 'm-rodny', durationMs: 5 * H },
+    { taskId: 't3', workerId: 'm-rodny', durationMs: 10 * H },
+  ] };
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`), logger: { info() {}, error() {} } });
+  assert.equal(await service.countClockHours(), 3);
+  assert.equal(repo.days.get('2026-11-26:m-sara').extras.ESFUERZO, 6);
+  assert.equal(repo.days.get('2026-11-26:m-sara').evidence.ESFUERZO, '3 tareas cerradas · +3 por 3 horas con reloj.');
+  assert.equal(repo.days.get('2026-11-26:m-rodny').extras.ESFUERZO, 1, 'a forgotten clock of 10 hours does not count');
+  assert.equal(repo.days.get('2026-11-26:m-rodny').extras.HORAS, 0);
+  assert.equal(await service.countClockHours(), 0, 'the second start finds nothing left');
 });
