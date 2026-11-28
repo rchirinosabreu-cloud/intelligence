@@ -19,7 +19,17 @@ test('el aviso de cierre aparece el mismo día en que se puede confirmar el cier
   assert.equal(before.acknowledge, true);
   const closing = plan(client(), '2026-11-11').find(n => n.kind === 'OPERACION_CICLO');
   assert.ok(closing.subjectId.endsWith(':CIERRE'));
-  assert.equal(closing.acknowledge, undefined);
+  // Revisarlo lo cierra para esa persona (Rodny, 28 de noviembre de 2026).
+  assert.equal(closing.acknowledge, true);
+  assert.equal(notices.operationalNoticeAcknowledges(closing), true);
+});
+test('el día del corte el aviso vuelve con otro asunto y solo se va al confirmar el cierre', () => {
+  const cut = plan(client(), '2026-11-14').find(n => n.kind === 'OPERACION_CICLO' && n.subjectId.includes(':2026-10-15:'));
+  assert.ok(cut.subjectId.endsWith(':CORTE'));
+  assert.equal(cut.acknowledge, undefined);
+  assert.equal(notices.operationalNoticeAcknowledges(cut), false);
+  const late = plan(client(), '2026-11-16').find(n => n.kind === 'OPERACION_CICLO' && n.subjectId.includes(':2026-10-15:'));
+  assert.ok(late.subjectId.endsWith(':CORTE'));
 });
 test('precierre reúne informe y revisión; un cierre registrado no vuelve a pedir cierre', () => {
   const rows = plan(client(), '2026-11-12');

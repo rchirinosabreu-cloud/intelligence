@@ -57,7 +57,7 @@ test('el resumen de parrillas conserva otras cuentas con un rótulo actualizado'
   assert.match(result.notice.message,/1 período tiene/);
 });
 
-test('abrir la revisión de mitad de ciclo la anota como vista y no vuelve en ese ciclo; el cierre sí vuelve',async()=>{
+test('abrir la revisión de mitad de ciclo la anota como vista y no vuelve en ese ciclo; el cierre también se acusa y vuelve el día del corte',async()=>{
   const {db,data,actor}=fixture();
   const mid=new Date('2026-11-02T15:00:00Z'); // ciclo 15 oct–14 nov: mitad desde el 30 de octubre
   const {notice}=await currentImportantNotice(db,actor.id,mid);
@@ -70,6 +70,12 @@ test('abrir la revisión de mitad de ciclo la anota como vista y no vuelve en es
   assert.equal(JSON.stringify(data.client),before,'acusar no registra cierre ni informe');
   const closing=(await currentImportantNotice(db,actor.id,new Date('2026-11-11T15:00:00Z'))).notice;
   assert.match(closing?.label || '',/^Cierre del/,'el cierre llega como aviso nuevo');
-  assert.equal(closing.acknowledge,false);
-  await assert.rejects(acknowledgeOperationalNotice(db,closing.id,actor,{now:new Date('2026-11-11T15:00:00Z')}),/registro de origen/);
+  // Revisar el aviso del cierre también lo cierra (Rodny, 28 de noviembre de 2026); el día del corte vuelve y ya no se acusa.
+  assert.equal(closing.acknowledge,true);
+  await acknowledgeOperationalNotice(db,closing.id,actor,{now:new Date('2026-11-11T15:00:00Z')});
+  assert.equal((await currentImportantNotice(db,actor.id,new Date('2026-11-13T15:00:00Z'))).notice,null,'revisado, no vuelve antes del corte');
+  const cut=(await currentImportantNotice(db,actor.id,new Date('2026-11-14T15:00:00Z'))).notice;
+  assert.match(cut?.label || '',/^Cierre del/,'el día del corte vuelve si el cierre sigue sin confirmar');
+  assert.equal(cut.acknowledge,false);
+  await assert.rejects(acknowledgeOperationalNotice(db,cut.id,actor,{now:new Date('2026-11-14T15:00:00Z')}),/registro de origen/);
 });
