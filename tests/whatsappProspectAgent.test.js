@@ -34,6 +34,14 @@ test('las instrucciones fijan lo que Bria no hace y no cambian entre mensajes', 
   // Razonar, no recitar (Rodny, 26 de noviembre de 2026): el catálogo es referencia y no se pasa al equipo por un dato que falte.
   assert.match(text, /Razona con el catálogo: es tu referencia, no un guion/);
   assert.match(text, /No la pases solo porque no sepas un dato/);
+  // No vender precio (Francisco y Rodny, 28 de noviembre de 2026): primero el negocio, y el precio en conversación.
+  assert.match(text, /Primero el negocio, después el precio/);
+  assert.match(text, /en qué etapa está la marca/);
+  assert.match(text, /no como una ficha del catálogo/);
+  assert.doesNotMatch(text, /negrita\* de WhatsApp para el nombre de un servicio/);
+  // Conversacional también al dar precios, y dentro de lo que establece el catálogo (Rodny, 28 de noviembre de 2026).
+  assert.match(text, /Los precios y lo que incluyen van en prosa, nunca en viñetas/);
+  assert.match(text, /nunca por debajo ni por encima de lo que establece/);
   assert.equal(text, agentInstructions({ agencyName: 'Agencia Uno' }));
   assert.deepEqual(AGENT_OUTPUT_SCHEMA.required, ['reply', 'handoff', 'handoffReason', 'brief']);
 });
