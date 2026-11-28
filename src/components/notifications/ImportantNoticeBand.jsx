@@ -114,8 +114,10 @@ function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightCha
   // Cierre de mes para Administrativa (Elisa, 13 de noviembre de 2026: «que me invadan la pantalla, en la campanita si
   // no entro no lo veo»): facturación y renovación. «Ya la revisé» es un acuse personal; no emite ni renueva nada.
   const isCycle = policy?.family === 'CYCLE';
-  // Solo la mitad de ciclo se acusa con el botón principal; el cierre se resuelve en la ficha (el servidor lo dice en `acknowledge`).
+  // La mitad de ciclo y el aviso del cierre se acusan con el botón principal; el del día del corte se resuelve en la ficha
+  // (el servidor lo dice en `acknowledge`), y su texto no puede prometer que abrirlo lo deja revisado.
   const isMidCycle = notice.kind === 'OPERACION_CICLO' && notice.acknowledge === true;
+  const explanation = notice.kind === 'OPERACION_CICLO' && !isMidCycle ? 'Hoy es el corte: este aviso se quita cuando confirmes el cierre en la ficha del cliente.' : policy?.explanation;
   const selectOutcome = (value, action) => {
     // Descartar es una decisión directa pedida por Comercial; conserva revisión e historial nativos.
     if (value === 'DESCARTADO') {
@@ -222,7 +224,7 @@ function NoticeBody({ notice, leaving = false, onDecided, onRefresh, onHeightCha
               </a>
             ) : notice.message}
           </p>
-          {mode === 'base' && !isAnnouncement && policy?.explanation && <p className="mb-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300" data-notice-effect>{policy.explanation}</p>}
+          {mode === 'base' && !isAnnouncement && explanation && <p className="mb-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300" data-notice-effect>{explanation}</p>}
           {mode === 'channels' && <p className="mb-3 text-sm font-medium">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
           {mode === 'snooze' && <p className="mb-3 text-sm font-medium">¿Cuándo te lo recuerdo?</p>}
           {mode === 'close' && <p className="mb-3 text-sm font-medium">¿Qué resultado confirmó el cliente o el equipo?</p>}

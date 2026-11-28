@@ -9,10 +9,12 @@ export const operationalDayAfter = (day, count) => new Date(Date.parse(`${day}T1
 export const isOperationalNotice = n => String(n?.kind || '').startsWith('OPERACION_');
 // La revisión de mitad de ciclo (Rodny, 19 de noviembre de 2026: «al darle al botón de revisar pues ya debería cerrarse
 // la banda»): a esa altura el cierre todavía no se puede confirmar, así que el aviso no tenía salida y volvía en cada
-// lectura. Abrirla deja un acuse personal (REVISADO) para esa persona y ese ciclo. El del cierre no se acusa: se va
-// solo cuando el cierre queda confirmado en su registro.
-export const isMidCycleReview = n => n?.kind === 'OPERACION_CICLO' && String(n.subjectId || '').endsWith(':MITAD');
-export const operationalNoticeAcknowledges = n => ['OPERACION_SUSPENSION', 'OPERACION_REACTIVACION'].includes(n?.kind) || isMidCycleReview(n);
+// lectura. Abrirla deja un acuse personal (REVISADO) para esa persona y ese ciclo.
+// El aviso del cierre se porta igual desde el 28 de noviembre de 2026 (Rodny: «cuando le doy "revisar" sigue abierto, no
+// se quita»): abrirlo lo cierra para esa persona. Si el día del corte el cierre sigue sin confirmar vuelve con otro
+// asunto (`:CORTE`), y ese ya no se acusa: se va solo cuando el cierre queda confirmado en su registro.
+export const isCycleReview = n => n?.kind === 'OPERACION_CICLO' && /:(MITAD|CIERRE)$/.test(String(n.subjectId || ''));
+export const operationalNoticeAcknowledges = n => ['OPERACION_SUSPENSION', 'OPERACION_REACTIVACION'].includes(n?.kind) || isCycleReview(n);
 export const operationalCycleSubject = notice => {
     if (notice?.kind !== 'OPERACION_CICLO') return null;
     const parts = String(notice.subjectId).split(':');
@@ -78,10 +80,11 @@ export function clientOperationalNotices(client, today, { isPm = false, projects
         const closing = today >= operationalDayAfter(end, -CLOSE_OPENS_DAYS_BEFORE);
         const report = (client.monthlyReports || []).find(r => r.year === cycle.year && r.month === cycle.month);
         const reportDue = isPm && contract.monthlyReport && report?.status !== 'ENVIADO' && today >= operationalDayAfter(end, -2);
-        add('CICLO', `${contract.id}:${cycle.start}:${closing ? 'CIERRE' : 'MITAD'}`,
+        const cutDay = closing && today >= end;
+        add('CICLO', `${contract.id}:${cycle.start}:${cutDay ? 'CORTE' : closing ? 'CIERRE' : 'MITAD'}`,
             closing ? `Cierre del ${dayLabel(end)}` : 'Revisión de mitad de ciclo',
             `${closing ? 'Revisa contenidos, jornadas y servicios contratados antes del cierre.' : 'Revisa el avance y la planificación de este período: contenidos, jornadas y servicios contratados.'}${reportDue ? '\nEl informe sigue pendiente de envío.' : ''}`,
-            closing, { cycle: { year: cycle.year, month: cycle.month }, actionLabel: 'Revisar operación', ...(closing ? {} : { acknowledge: true }) });
+            closing, { cycle: { year: cycle.year, month: cycle.month }, actionLabel: 'Revisar operación', ...(cutDay ? {} : { acknowledge: true }) });
     }
     return rows;
 }
