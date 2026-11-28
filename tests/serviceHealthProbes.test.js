@@ -290,3 +290,26 @@ test('a probe that throws becomes a failure with a human message, never a crash'
   assert.equal(result.errorCode, 'NETWORK');
   assert.equal(result.critical, false);
 });
+
+test('las hojas de MIO no avisan en fin de semana ni antes de la primera lectura del día', async () => {
+  const sheetsAt = (nowIso, lastIso, rows) => createServiceHealthProbes({
+    env: {}, now: () => new Date(nowIso),
+    db: {
+      client: { findMany: async () => [{ name: 'Verona' }] },
+      externalPlanSnapshot: {
+        findFirst: async () => (lastIso ? { readAt: new Date(lastIso) } : null),
+        findMany: async () => rows || [{ problem: null, okAt: new Date(lastIso), readAt: new Date(lastIso), client: { name: 'Verona' } }]
+      }
+    }
+  })['google-sheets']();
+  // Sábado 8:45 a. m. en Bogotá, última lectura el viernes a las 5:40 p. m.
+  assert.equal((await sheetsAt('2026-11-28T13:45:00Z', '2026-11-27T22:40:00Z')).status, 'OK');
+  // Lunes 8:10 a. m., todavía sin la primera lectura del día.
+  assert.equal((await sheetsAt('2026-11-30T13:10:00Z', '2026-11-27T22:40:00Z')).status, 'OK');
+  // Viernes 3:00 p. m. y la última lectura fue a las 9:00 a. m.: sí falta.
+  assert.equal((await sheetsAt('2026-11-27T20:00:00Z', '2026-11-27T14:00:00Z')).status, 'WARN');
+  // Una hoja que Google no dejó leer en la última tanda se sigue avisando.
+  const failed = await sheetsAt('2026-11-28T13:45:00Z', '2026-11-27T22:40:00Z', [{ problem: 'No pudimos conectarnos con Google.', okAt: new Date('2026-11-27T20:00:00Z'), readAt: new Date('2026-11-27T22:40:00Z'), client: { name: 'Verona' } }]);
+  assert.equal(failed.status, 'WARN');
+  assert.match(failed.message, /Verona/);
+});

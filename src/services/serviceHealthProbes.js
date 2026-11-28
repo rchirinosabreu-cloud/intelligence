@@ -28,6 +28,7 @@ const ERROR_RATE_WARN = 0.3;
 const SLOW = { database: 2000, http: 5000 };
 const CALENDAR_STALE_MS = 30 * 60 * 1000;
 const MAIL_STALE_MS = 45 * 60 * 1000;
+const SHEETS_STALE_MS = 3 * 60 * 60 * 1000;
 const TRM_STALE_DAYS = 5;
 // El vigilante externo corre cada 10 minutos, pero GitHub puede retrasar una corrida programada.
 const UPTIME_WORKFLOW_FILE = 'uptime.yml';
@@ -221,11 +222,17 @@ export const createServiceHealthProbes = ({
     async 'google-sheets'() {
       const clients = await db.client.findMany({ where: { isArchived: false, externalPlanUrl: { not: null } }, select: { name: true } });
       if (!clients.length) return notConfigured('Ningún cliente tiene su parrilla en una hoja de Google.');
+      // Las hojas solo se leen en horario hábil, cada dos horas. Mirar «las últimas 6 horas» avisaba cada noche, cada fin
+      // de semana y cada mañana antes de la primera lectura, con las hojas al día (Rodny, 28 de noviembre de 2026). Se
+      // juzga la última tanda de lecturas, y solo se echa de menos una lectura cuando ya van tres horas hábiles sin ella.
+      const last = await db.externalPlanSnapshot.findFirst({ orderBy: { readAt: 'desc' }, select: { readAt: true } });
+      const lastAt = last?.readAt ? new Date(last.readAt).getTime() : 0;
+      const overdue = isWorkingTime(now()) && isWorkingTime(new Date(now().getTime() - SHEETS_STALE_MS)) && now().getTime() - lastAt > SHEETS_STALE_MS;
+      if (!lastAt || overdue) return result('WARN', lastAt ? 'Las hojas de MIO no se han leído en las últimas 3 horas hábiles.' : 'Las hojas de MIO todavía no se han leído.');
       const rows = await db.externalPlanSnapshot.findMany({
-        where: { readAt: { gte: new Date(now().getTime() - 6 * 60 * 60 * 1000) } },
+        where: { readAt: { gte: new Date(lastAt - 30 * 60 * 1000) } },
         select: { problem: true, okAt: true, readAt: true, client: { select: { name: true } } }
       });
-      if (!rows.length) return result('WARN', 'Las hojas de MIO no se han leído en las últimas 6 horas.');
       const failing = [...new Set(rows.filter((row) => row.problem && (!row.okAt || row.okAt < row.readAt)).map((row) => row.client?.name).filter(Boolean))];
       if (failing.length) return result('WARN', `No se pudo leer la hoja de ${failing.join(', ')}.`);
       return result('OK', `${plural(clients.length, 'hoja leída', 'hojas leídas')} sin problema.`);
